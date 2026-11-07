@@ -1,6 +1,7 @@
 {
   // 只用来做类型检查（npm run types），不编译、不输出文件。
-  // Scope: game code (games/*, the engine examples packages/engine/examples/), each with its own style/ folder (games/*/style/, examples/*/style/).
+  // Scope: ALL .js of every game (games/*/**) except its assets and tests (public, tests, art, docs, shots), and the engine examples packages/engine/examples/.
+  // A list of known folders used to be here: a game with another folder (landmarks/, data/) was never type-checked and `check` still said passed.
   // three.js 的类型来自 @types/three（引擎包的依赖，版本跟 three 对齐），THREE.* 是真类型，不是 any。
   // 引擎自己的 .js 不在 include 里，游戏代码通过 packages/engine/index.d.ts 拿到引擎接口的类型
   // Engine .js that the examples import (threedog/tsl's render/fx/*.tsl.js, render/cascades.tsl.js and the files they import) is still
@@ -29,15 +30,10 @@
   },
   "include": [
     "packages/engine/examples/**/*.js",
-    "games/*/style/**/*.js",
-    "games/*/*.js",
-    "games/*/*.d.ts",
-    "games/*/content/**/*.js",
-    "games/*/game/**/*.js",
-    "games/*/picture/**/*.js",
-    "games/*/plugins/**/*.js",
+    "games/*/**/*.js",
+    "games/*/**/*.d.ts",
     "packages/engine/index.d.ts",
     "packages/engine/types/**/*.d.ts"
   ],
-  "exclude": ["**/node_modules", "**/dist", "**/.threedog", "games/*/vite.config.js", "packages/engine/{core,modules,render,ui}/**/*.js", "packages/engine/index.js"]
+  "exclude": ["**/node_modules", "**/dist", "**/.threedog", "games/*/vite.config.js", "games/*/public/**", "games/*/tests/**", "games/*/docs/**", "games/*/shots/**", "packages/engine/{core,modules,render,ui}/**/*.js", "packages/engine/index.js"]
 }

@@ -419,4 +419,23 @@ export const specs = [
       check('no budget line under the limits', !r.sharp.budget && !r.filled.budget);
     },
   },
+  {
+    name: '[guard] picture check: meshes beyond camera.far are counted (far-clip), a raised plane or a sky dome is not',
+    url: PAGE, software: true,
+    async run({ check, ev }) {
+      const ground = `const g = new T.Mesh(new T.PlaneGeometry(40, 40), new T.MeshLambertMaterial({ color: 0x889988 })); g.rotation.x = -Math.PI / 2; E.scene.add(g); const near = new T.Mesh(new T.BoxGeometry(2, 2, 2), new T.MeshLambertMaterial({ color: 0xaa6644 })); near.position.set(0, 1, 0); E.scene.add(near);`;
+      const far = `const f = new T.Mesh(new T.BoxGeometry(20, 20, 20), new T.MeshLambertMaterial({ color: 0x6688aa })); f.position.set(0, 10, -3000); E.scene.add(f);`;
+      const r = await shootCases(ev, {
+        cut: `(T, E) => { ${ground} ${far} }`,
+        raised: `(T, E) => { ${ground} ${far} E.autoView.manual('far'); E.camera.far = 5000; E.camera.updateProjectionMatrix(); }`,
+        dome: `(T, E) => { ${ground} const d = new T.Mesh(new T.SphereGeometry(4000, 8, 6), new T.MeshBasicMaterial({ side: T.BackSide })); d.position.set(0, 0, -3000); E.scene.add(d); }`,
+        none: `(T, E) => { ${ground} }`,
+      });
+      const N = { luminance: 0.5, saturation: 0.2, contrast: 0.15, range: 0.4, overexposed: 0, dark: 0 };
+      check('[guard] a mesh 3000 m away with the default far plane: counted once, with the plane and the distance', r.cut.far?.beyond === 1 && r.cut.far.far === 1500 && r.cut.far.nearest > 2900 && r.cut.far.nearest < 3000 && pictureHints({ numbers: N, probe: r.cut }).some(h => h.id === 'far-clip'), JSON.stringify(r.cut.far ?? null));
+      check('[guard] the same mesh with the plane raised past it: nothing reported', !r.raised.far && !ids(r.raised).includes('far-clip'), JSON.stringify(r.raised.far ?? null));
+      check('[guard] a BackSide sky dome far away is not counted (it is meant to be seen from inside)', !r.dome.far, JSON.stringify(r.dome.far ?? null));
+      check('[guard] a scene with everything in range: nothing reported, and the probe put every value back', !r.none.far && ['cut', 'raised', 'dome', 'none'].every(k => r[k].kept), JSON.stringify({ far: r.none.far ?? null, kept: ['cut', 'raised', 'dome', 'none'].map(k => r[k].kept) }));
+    },
+  },
 ];

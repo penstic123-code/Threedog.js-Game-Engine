@@ -12,6 +12,6 @@
     "resolveJsonModule": true,
     "types": []
   },
-  "include": ["main.js", "game/**/*", "content/**/*", "picture/**/*", "plugins/**/*", "*.d.ts"],
-  "exclude": ["node_modules", "dist", "vendor", ".threedog"]
+  "include": ["**/*.js", "**/*.d.ts"],
+  "exclude": ["node_modules", "dist", "vendor", ".threedog", "public", "tests", "vite.config.js"]
 }

@@ -3,7 +3,7 @@
 import { list } from './hint-text.mjs';
 import { readEdgeMask, cascadeWayOf, shadowInvisible, shadowBlack, shadowEdgeHints } from './hints-shadow.mjs';
 import { timeFlat, lightNoEffect, clipped, glare, overBudget, lightBalance } from './hints-light.mjs';
-import { cameraInside, blackFrame, fogCover, shaderFacts, lightLayout, transparentOrder, crushed, unknownIntentWords } from './hints-scene.mjs';
+import { cameraInside, blackFrame, farClip, fogCover, shaderFacts, lightLayout, transparentOrder, crushed, unknownIntentWords } from './hints-scene.mjs';
 
 const LEVERS = {
   luminance: ['exposure', 'sun', 'hemi', 'env'],
@@ -40,7 +40,7 @@ function referenceDiff({ P, ref, add }) {
 }
 
 const HINTS = [shadowInvisible, timeFlat, lightNoEffect, clipped, glare, shadowBlack, shadowEdgeHints, overBudget, lightBalance, cameraInside, blackFrame,
-  fogCover, shaderFacts, lightLayout, transparentOrder, crushed, unknownIntentWords, designWords, referenceDiff];
+  farClip, fogCover, shaderFacts, lightLayout, transparentOrder, crushed, unknownIntentWords, designWords, referenceDiff];
 
 /**
  * Hints from the screenshot numbers, the page probe (probe.mjs) and the declared intent.

@@ -20,7 +20,7 @@ export async function run({ check }) {
     check(`${t}: Esc pauses, not only opens the menu`, /settings(\(|: )\{ freezeWorld: true \}/.test(main));
   }
   check('the template names no style folder or style key: its picture is picture/', !/style\/|style\.\w/.test(read('game', 'DESIGN.md') + read('game', 'tsconfig.json') + read('game', 'assets.js'))
-    && read('game', 'tsconfig.json').includes('"picture/**/*"'));
+    && read('game', 'tsconfig.json').includes('"**/*.js"'));   // every game .js is type-checked, picture/ included (a list of known folders let other folders go unchecked)
   const blank = code(read('game', 'main.js'));
   check('blank assumes no player, camera rig or ground', !/createPlayer|followCamera|characters\(|openWorld|terrain|setGround/.test(blank));
 

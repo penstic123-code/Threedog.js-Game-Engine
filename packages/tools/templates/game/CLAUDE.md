@@ -3,11 +3,13 @@
 **Before writing a system, in any file:** name the engine system for it, or the `threedog how` result that found none.
 `threedog check` hints at hand-rolled systems: use them or `// hint-off(kind)`.
 
+Helpers skip this file: tell them `threedog how` first, recipes 60 + 62, a clean `check`.
+
 __GAMEPLAY_NOTE__
 
 ## Already here
-The engineering is the engine's: start screen, autosave, Esc pause and quality settings are wired in `main.js` (commented lines to copy);
-keep, replace (`engine.ui.set`) or delete each (a hand-written one needs its own save and test hooks). Docs: `node_modules/threedog/docs/` in the nearest parent folder that has `node_modules`.
+The engineering is the engine's: start screen, autosave, Esc pause and quality settings are wired in `main.js`;
+keep, replace (`engine.ui.set`) or delete each (a hand-written one needs its own save and test hooks). Docs: `node_modules/threedog/docs/` (nearest parent with `node_modules`).
 **Not in this table: `threedog how "<task words>"` (no words: browse) first.**
 __DEFAULT_LAYER__
 

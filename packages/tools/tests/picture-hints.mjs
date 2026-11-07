@@ -119,6 +119,9 @@ export async function run({ check }) {
     intent: readIntent(design('strong-light')) }).find(h => h.id === 'light-balance');
   check('light-balance: a contradiction only under a DESIGN.md strong-light the numbers do not show',
     lbStrong?.kind === 'contradiction' && /you wrote 'strong-light'/.test(lbStrong.text) && lbStrongOk?.kind === 'fact', JSON.stringify([lbStrong, lbStrongOk]));
+  const farH = pictureHints({ numbers: soft, probe: { params: {}, far: { far: 1500, beyond: 12, total: 40, nearest: 1800, fogFar: 2600 } } }).find(h => h.id === 'far-clip');
+  check('far-clip: a fact with the counts, the plane and the fog, naming the documented way, no target', farH?.kind === 'fact' && /12 of 40 visible meshes/.test(farH.text) && /camera\.far \(1500 m/.test(farH.text) && /scene\.fog far \(2600 m\)/.test(farH.text) && /autoView\.manual\('far'\)/.test(farH.text) && !/should|target/.test(farH.text), JSON.stringify(farH));
+  check('far-clip: nothing beyond the plane (no probe field) -> no hint', !pictureHints({ numbers: soft, probe: { params: {} } }).some(h => h.id === 'far-clip'));
   const inside = pictureHints({ numbers: soft, probe: { params: {}, cameraInside: { name: 'house_walls', camera: [3, 1.6, -2] } } }).find(h => h.id === 'camera-inside');
   check('camera-inside: a fact naming the mesh and the camera position', inside?.kind === 'fact' && /inside mesh 'house_walls'/.test(inside.text) && /\(3, 1\.6, -2\)/.test(inside.text), JSON.stringify(inside));
   const tEx = (en, em) => formatPicture(soft, { params: {}, time: { noon: 0.64, midnight: 0.22, at: { noon: { exposure: { value: en } }, midnight: { exposure: { value: em } } } } }, [], null)[0];
@@ -188,6 +191,7 @@ export async function run({ check }) {
   const lineOf = re => fogLines.findIndex(l => re.test(l));
   check('[guard] fog over a large share is printed before "brightness stays with the lights off", and that line names the fog first',
     fogH.find(h => h.id === 'time-flat')?.kind === 'contradiction' && lineOf(/fog covers/) > 0 && lineOf(/fog covers/) < lineOf(/time barely|not dark from lighting/) && /the fog first \(it covers 60\.0%/.test(fogLines.join('\n')), fogLines.join(' | '));
+  check('time-flat says it is the calendar time that was varied, and that lights switched by the game own presets are not moved by it', /engine\.calendar\.timeOfDay to 12:00 and 00:00/.test(fogH.find(h => h.id === 'time-flat')?.text ?? '') && /your own presets/.test(fogH.find(h => h.id === 'time-flat')?.text ?? ''));
   const thin = pictureHints({ numbers: soft, probe: { ...fogT, fog: { ...fogT.fog, share: 0.1 } } });
   check('a little fog changes neither the time line nor the order', !thin.some(h => h.id === 'fog-cover') && !/the fog first/.test(thin.find(h => h.id === 'time-flat')?.text));
   // [guard] no way around the check: every command that takes a picture of the running game calls the one pagePicture, and a saved picture has shot --image

@@ -28,7 +28,7 @@ function timeCause({ P }, t, tn, at, unlitNight) {
     cause = `the 00:00 brightness is not lighting: with every light and the environment at 0 it is still ${r2(t.unlit)}. ` +
       (fogPart ? `Most of it is the fog: ${said(t.at.midnight.fog)} at 00:00 (fog color black gives ${r2(t.noFog)}; scene.fog)` :
         `What stays lit without light: emissive or unlit materials${t.glow ? ` (switched on by the game at night: ${list(t.glow)})` : ''}, the sky / background${t.at.midnight.background ? ` (${said(t.at.midnight.background)})` : ''}${t.at.midnight.fog ? `, ${said(t.at.midnight.fog)}` : ''}, post effects${P.post ? ` (${said(P.post)})` : ''}`);
-  } else cause = `what lights the scene does not follow the time (the sky moves no light: your picture/ code reads engine.uniforms.uDaylight and writes it, recipe 62). At 12:00 ${at(t.at.noon)}; at 00:00 ${at(t.at.midnight)}${t.envSource ? `; ${said(t.envSource)}` : ''}`;
+  } else cause = `what lights the scene does not follow the calendar's time (the sky moves no light: your picture/ code reads engine.uniforms.uDaylight and writes it, recipe 62). At 12:00 ${at(t.at.noon)}; at 00:00 ${at(t.at.midnight)}${t.envSource ? `; ${said(t.envSource)}` : ''}`;
   // brief: the one cause that measured, without the long lists (every post pass, every glowing material) the full text keeps
   const glowShort = t.glow?.length ? `glow ${t.glow.slice(0, 2).map(said).join(', ')}${t.glow.length > 2 ? ` +${t.glow.length - 2}` : ''}` : null;
   const brief = unlitNight
@@ -54,14 +54,14 @@ export function timeFlat(h) {
   if (!(flatTime || (unlitNight && t.unlit >= 0.5 * tn.noon))) return;
   const at = w => list([w.sun, w.hemi, w.env, w.exposure]);
   const drv = t.driven?.length ? `, without the ${t.driven.length} light(s) the game switches with the time (${t.driven.slice(0, 4).join(', ')}): ${r2(tn.noon)} / ${r2(tn.midnight)}` : '';
-  const fact = `${flatTime ? 'time of day barely changes the picture' : 'the night is not dark from lighting'}: mean luminance ${r2(t.noon)} at 12:00, ${r2(t.midnight)} at 00:00 (same view, same weather)${drv}`;
+  const fact = `${flatTime ? "the calendar's time barely changes the picture (the check sets engine.calendar.timeOfDay to 12:00 and 00:00 and renders both; lights you switch by your own presets are not moved by it, so a game that does that can ignore this line)" : 'the night is not dark from lighting'}: mean luminance ${r2(t.noon)} at 12:00, ${r2(t.midnight)} at 00:00 (same view, same weather)${drv}`;
   const { cause, brief } = timeCause(h, t, tn, at, unlitNight);
   // much fog in this very picture: the time line says so itself, the fog comes first (formatPicture prints fog-cover before this line)
   const fogLead = probe?.fog?.share >= FOG_MUCH ? `the fog first (it covers ${pc(probe.fog.share)}), then: ` : '';
   // a fact unless DESIGN.md wants dark nights: a game may want a bright, readable night (fog color or an unlit sky on purpose)
   const darkNight = intent.find(a => a.want === 'dark' && a.when === 'night');
   add(darkNight ? 'contradiction' : 'fact', 'time-flat', `${wrote(darkNight)}${fact}. What makes it: ${fogLead}${cause}.`, 1 - Math.abs(tn.noon - tn.midnight) / Math.max(tn.noon, tn.midnight, 0.01),
-    `${wrote(darkNight)}${flatTime ? 'time barely changes the picture' : 'the night is not dark from lighting'}: luminance ${r2(t.noon)} at 12:00, ${r2(t.midnight)} at 00:00; from: ${fogLead}${brief}.`);
+    `${wrote(darkNight)}${flatTime ? 'calendar time barely changes the picture' : 'the night is not dark from lighting'}: luminance ${r2(t.noon)} at 12:00, ${r2(t.midnight)} at 00:00; from: ${fogLead}${brief}.`);
 }
 
 /** Outshone: it does change pixels once the sun / sky fill / environment are dimmed (a lamp at dusk under a strong sun): no contradiction */

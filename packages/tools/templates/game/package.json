@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "three": "~0.187.0",
-    "threedog": "^1.0.1",
-    "@threedog/tools": "^1.0.1"
+    "threedog": "^1.1.0",
+    "@threedog/tools": "^1.1.0"
   }
 }

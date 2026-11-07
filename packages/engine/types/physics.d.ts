@@ -506,9 +506,9 @@ export interface FollowCameraOptions {
   smoothing?: number;
   /** Drag sensitivity, default 1 */
   sensitivity?: number;
-  /** Pitch range (radians) */
+  /** Pitch range (radians), default 0.05 to 1.35. The camera never goes below the look point, so the view cannot look up (a tall building's roof stays out of sight); a negative minPitch looks up (recipe 21 section 4b) */
   minPitch?: number;
-  /** @experimental */ maxPitch?: number;
+  /** Upper pitch limit (looking down), default 1.35 (about 77 degrees, not straight down) @experimental */ maxPitch?: number;
   /** Zoom ratio per wheel notch, default 0.1 @experimental */
   zoomStep?: number;
   /** Minimum camera height above the ground (meters), default 1.2 @experimental */

@@ -2,6 +2,15 @@
 
 What changed in each version and how a game upgrades.
 
+## 1.1.0 (2026-11-08)
+
+- `threedog check` type-checks every `.js` of a game, not a list of known folders (`main.js`, `game/`, `content/`, `picture/`, `plugins/`). Code in another folder (`landmarks/`, `data/`, ...) was skipped while `check` said it passed, and a mistake there only failed in the build. Those files now count, so a game can show type errors it did not show before. Assets and tests (`public/`, `tests/`, `docs/`, `shots/`) are still left out. The game template's `tsconfig.json` includes all `.js` the same way.
+- `threedog shot --cam x,y,z,targetX,targetY,targetZ[,fov]` places the camera at a pose without a view declared in the game (a facade, a roofline, a far backdrop). It cannot be combined with `--view`.
+- The picture check reports meshes that lie entirely beyond `camera.far` (never drawn from there) as a fact, with the documented way to move the plane: `engine.autoView.manual('far')`.
+- The picture check's "time barely changes the picture" line says it varied `engine.calendar.timeOfDay`; a game that switches its lights by its own presets can ignore it.
+- API page of `followCamera`: `minPitch` and `maxPitch` state their defaults (0.05 and 1.35) and that the view cannot look up unless `minPitch` is negative.
+- The game template's `CLAUDE.md` tells a helper's brief to start with `threedog how`, recipes 60 and 62 for the picture and a clean `check`.
+
 ## 1.0.1 (2026-11-07)
 
 - Docs only: the install lines in the package READMEs name 1.0 (0.9 was never on npm).

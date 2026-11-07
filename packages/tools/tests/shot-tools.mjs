@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { launchBrowser, newGamePage, orphanPids } from '../browser.mjs';
 import { waitEngine, waitLoaded } from '../wait-engine.mjs';
-import { shotName, shotFile, viewSize, wrongServer } from '../lib/shot-name.mjs';
+import { camPose, shotName, shotFile, viewSize, wrongServer } from '../lib/shot-name.mjs';
 import { pictureArgs, paletteText } from '../picture.mjs';
 
 import { compareImages } from '../picture/compare.mjs';
@@ -25,9 +25,14 @@ const { describeText } = await import(pathToFileURL(join(ENGINE, 'core/inspect/d
 export const name = 'shot / picture / new-game / R40 friction fixes';
 
 const CJK = /[㐀-鿿]/;
+const throwsWithSync = (fn, re) => { try { fn(); return false; } catch (e) { return re.test(e.message); } };
 const throwsWith = async (fn, re) => { try { await fn(); return false; } catch (e) { return re.test(e.message); } };
 
 export async function run({ check }) {
+  // --cam: a camera pose in the form views.define takes (position, target, optional fov); anything else is refused naming the option and the form
+  const pose = camPose('-30,30,-440,0,-1,-492,60'), noFov = camPose('0,5,10,0,1,0');
+  check('--cam: negative numbers and a fov are read; the fov is optional', JSON.stringify(pose) === '{"position":[-30,30,-440],"target":[0,-1,-492],"fov":60}' && JSON.stringify(noFov) === '{"position":[0,5,10],"target":[0,1,0]}', JSON.stringify([pose, noFov]));
+  check('--cam: wrong counts, empty parts and words are refused with the option and the form', ['1,2', '1,2,3,4,5', '1,2,3,4,5,6,7,8', '1,,3,4,5,6', 'a,b,c,d,e,f', true, undefined].every(v => throwsWithSync(() => camPose(v), /--cam .*x,y,z,targetX,targetY,targetZ\[,fov\]/)));
   // ── a dead browser's children are stopped, a live browser's are not ──
   const win = '"C:\\Program Files\\pw\\chrome-headless-shell.exe"', shells = [
     '1 9 /pw/chrome-linux/headless_shell --no-sandbox', '2 1 /pw/chrome-linux/headless_shell --type=renderer', '3 77 /pw/chrome-linux/headless_shell --type=renderer', '4 8 /pw/chrome-linux/headless_shell',

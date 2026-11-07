@@ -31,6 +31,13 @@ export function fogCover({ probe, add }) {
       `fog covers ${pc(fg.share)} of the picture (scene.fog ${fg.setting}, color ${fg.color}): colors and lights there barely show.`);
 }
 
+/** Meshes beyond camera.far: a fact (a game may want a short view), with the documented ways to move the plane */
+export function farClip({ probe, add }) {
+  const f = probe?.far;
+  if (f) add('fact', 'far-clip', `${f.beyond} of ${f.total} visible meshes lie entirely beyond camera.far (${f.far} m, the nearest ${f.nearest} m from the camera): they are never drawn from here${f.fogFar ? `, and scene.fog far (${f.fogFar} m) is past the cut` : ''}. To draw them, own the plane with engine.autoView.manual('far') and write engine.camera.far (recipe 52 "Taken").`,
+    f.beyond / f.total, `${f.beyond} of ${f.total} meshes are farther than camera.far ${f.far} m and never drawn (engine.autoView.manual('far'), then engine.camera.far).`);
+}
+
 /** Hand-written materials: what was measured, and where the pixels gave no clear answer it says so */
 export function shaderFacts({ P, probe, add }) {
   const sd = probe?.shaders;

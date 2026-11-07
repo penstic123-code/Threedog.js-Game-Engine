@@ -80,6 +80,25 @@ export function probeKey({ scene, sun, hemi, base, mean, grab, out }) {
 }
 
 /**
+ * Beyond the far plane: a visible mesh whose whole bounding sphere is farther than camera.far from the camera is never drawn from here. Why: a flat world with
+ * no terrain keeps the engine's default far plane, and distant buildings were cut off with no message anywhere. No render. BackSide meshes (a sky dome is meant to
+ * be seen from inside) are skipped. The fog's far is reported beside it when it lies past the cut.
+ */
+export function probeFar({ T, scene, cam, out }) {
+  const cp = cam.getWorldPosition(new T.Vector3()), s = new T.Sphere(), far = cam.far;
+  let total = 0, beyond = 0, nearest = Infinity;
+  scene.traverseVisible(o => {
+    if (!o.isMesh || !o.geometry || [].concat(o.material).some(m => m?.side === T.BackSide)) return;
+    total++;
+    if (o.isInstancedMesh) { if (!o.boundingSphere) o.computeBoundingSphere(); s.copy(o.boundingSphere); }
+    else { if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere(); s.copy(o.geometry.boundingSphere); }
+    const d = cp.distanceTo(s.applyMatrix4(o.matrixWorld).center) - s.radius;
+    if (d > far) { beyond++; nearest = Math.min(nearest, d); }
+  });
+  if (beyond) out.far = { far, beyond, total, nearest: Math.round(nearest), fogFar: scene.fog?.far > far ? scene.fog.far : null };
+}
+
+/**
  * Camera inside a mesh: the first shot of a demo stood inside a building and the output only gave the camera position. A mesh counts when the camera is
  * inside its world box AND rays along the six axes all leave it through a back face (closed around the camera). BackSide materials are skipped: a sky
  * dome is meant to be seen from inside. No render; material.side is put back right after the ray.

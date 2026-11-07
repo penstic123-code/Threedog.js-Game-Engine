@@ -22,6 +22,7 @@
 //   --weather name  clear / cloudy / overcast / rain / storm / snow / fog (needs the weather module)
 //   --pos x,z      put the player here (on the ground; the same pos as applyState({ pos }) and ?pos=). The camera's own spot is --view
 //   --view name    a named camera view: engine.views.define(name, { position, target, fov }) (camera position and target [x, y, z]) in any game, or a page's own ?view= (the style test: overview, character, water, room, path, ui)
+//   --cam x,y,z,tx,ty,tz[,fov]  a camera pose (position, target, optional fov in degrees) without declaring a view: judge a building or backdrop from outside. Not with --view
 //   --wait seconds  real seconds to advance after setup (default 1)
 //   --load-timeout s  wall seconds to wait for loading (engine.loading) to finish before the shot, default 120; on timeout it fails naming what is pending
 //   --size WxH      screenshot resolution, default 960x540
@@ -51,7 +52,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { cli, rel } from './paths.mjs';
 import { waitEngine, waitLoaded, sceneCounts, refuseState } from './wait-engine.mjs';
-import { shotName, shotFile, viewSize, wrongServer } from './lib/shot-name.mjs';
+import { camPose, shotName, shotFile, viewSize, wrongServer } from './lib/shot-name.mjs';
 import { formatPicture, pagePicture, imagePicture, NO_PAGE } from './picture/check.mjs';
 import { PICTURE, TITLE_COVERS } from './threedog/pageFns.mjs';
 import { drawnBy, headlessUrl } from './lib/page-url.mjs';
@@ -60,11 +61,11 @@ const t0 = Date.now();
 
 // switches never take a value (so `--keep /page` keeps /page as the page); an unknown option fails naming the closest one
 let { dir, page: url, pageArg, opt } = cli(process.argv.slice(2), { page: '/', flags: ['keep', 'no-picture', 'json', 'describe-only', 'no-build', 'keep-cutscene', 'gpu', 'software', 'play'],
-  values: ['time', 'weather', 'pos', 'at', 'view', 'wait', 'load-timeout', 'size', 'compare', 'out', 'ref', 'tier', 'image'],
+  values: ['time', 'weather', 'pos', 'at', 'view', 'cam', 'wait', 'load-timeout', 'size', 'compare', 'out', 'ref', 'tier', 'image'],
   // an option the other switches off used to be dropped without a word (--ref under --no-picture compared nothing)
-  conflicts: [['ref', 'no-picture', 'the reference is compared inside the picture check'],
+  conflicts: [['ref', 'no-picture', 'the reference is compared inside the picture check'], ['cam', 'view', 'a view and a pose both place the camera'],
     ...['ref', 'compare', 'out', 'keep'].map(k => [k, 'describe-only', 'describe-only takes no screenshot']),
-    ...['time', 'weather', 'pos', 'view', 'wait', 'size', 'out', 'keep', 'compare', 'no-picture', 'describe-only', 'tier', 'play'].map(k => [k, 'image', '--image reads a saved picture, there is no page to set up'])] });
+    ...['time', 'weather', 'pos', 'view', 'cam', 'wait', 'size', 'out', 'keep', 'compare', 'no-picture', 'describe-only', 'tier', 'play'].map(k => [k, 'image', '--image reads a saved picture, there is no page to set up'])] });
 const json = !!opt.json;
 if (opt.image !== undefined) process.exit(await imageOnly(opt));
 
@@ -87,6 +88,7 @@ if (!['low', 'high'].includes(tier)) { console.log(`✗ --tier ${opt.tier}: use 
 const say = json ? () => {} : (...a) => console.log(...a), result = {};   // --json: stdout is the one JSON object
 if (/^[\p{L}\p{N}_-]+$/u.test(url)) url = `/${url}.html`;   // a bare name is a page: shot styletest
 let W, H; try { [W, H] = viewSize(opt.size); } catch (e) { console.log('✗ ' + e.message); process.exit(1); }
+let pose = null; if (opt.cam !== undefined) { try { pose = camPose(opt.cam); } catch (e) { console.log('✗ ' + e.message); process.exit(1); } }
 const wait = opt.wait !== undefined ? +opt.wait : 1;
 const loadTimeout = opt['load-timeout'] !== undefined ? +opt['load-timeout'] : 120;
 if (!(loadTimeout > 0)) { console.log(`✗ --load-timeout ${opt['load-timeout']}: a number of seconds`); process.exit(1); }   // NaN never times out
@@ -118,6 +120,8 @@ try {
   await waitEngine(page, { timeout: 60000, errors });
   await refuseState(page, ['time', 'weather', 'pos', 'at', 'view']);
   const ev = (fn, arg) => page.evaluate(fn, arg);
+  // --cam: a throwaway view through the engine's own views (the camera is taken over, and the world loads around the target), before waiting for loading
+  if (pose) await ev(p => { engine.views.define('shot-cam', p); engine.views.show('shot-cam'); }, pose);
   // A picture taken while terrain / models are still arriving shows a half-built world that looks like an art bug, so finish loading first.
   // Headless only advances on step, so step (no render) until engine.loading says nothing is pending; past the limit fail with what it is still waiting for
   // then the game's own code after `await engine.start()` (lamps added after a later await): a shot never shows the scene before it ran

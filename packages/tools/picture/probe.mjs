@@ -39,6 +39,7 @@ async function probePicture(e, { time = 'auto', size = [240, 135], hot = { chann
     probeShadows(c);
     probeKey(c);
     if (c.T) probeCameraInside(c);
+    if (c.T) probeFar(c);
     probeLights(c);
     probeTime(c, time);
   } catch (err) { out.error = String(err?.message ?? err); } finally { e._tools.probing = false; }

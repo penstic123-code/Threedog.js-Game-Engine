@@ -13,8 +13,8 @@ Current camera (one of followCamera / firstPersonCamera / fixedCamera / rtsCamer
   - `height?: number` How high above the character to look at (meters), default 1.4
   - `smoothing?: number` (experimental) Follow smoothing, default 10
   - `sensitivity?: number` Drag sensitivity, default 1
-  - `minPitch?: number` Pitch range (radians)
-  - `maxPitch?: number` (experimental) 
+  - `minPitch?: number` Pitch range (radians), default 0.05 to 1.35. The camera never goes below the look point, so the view cannot look up (a tall building's roof stays out of sight); a negative minPitch looks up (recipe 21 section 4b)
+  - `maxPitch?: number` (experimental) Upper pitch limit (looking down), default 1.35 (about 77 degrees, not straight down)
   - `zoomStep?: number` (experimental) Zoom ratio per wheel notch, default 0.1
   - `groundClearance?: number` (experimental) Minimum camera height above the ground (meters), default 1.2
   - `invertY?: boolean` (experimental) Invert vertical

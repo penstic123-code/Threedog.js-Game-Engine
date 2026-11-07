@@ -33,6 +33,17 @@ export function viewSize(size) {
   return [+m[1], +m[2]];
 }
 
+/**
+ * --cam x,y,z,targetX,targetY,targetZ[,fov]: a camera pose, in the form engine.views.define takes. Why: --view needs a view the game declared first, and judging a building from
+ * outside (a facade, a roofline, a far backdrop) needs a camera that --pos (the player) cannot give. The page declares it as a throwaway view and shows it.
+ * @param {string | boolean | undefined} cam @returns {{ position: number[], target: number[], fov?: number }}
+ */
+export function camPose(cam) {
+  const n = cam === true || cam === undefined ? [] : String(cam).split(',').map(s => (s.trim() === '' ? NaN : Number(s)));
+  if (![6, 7].includes(n.length) || !n.every(Number.isFinite)) throw new Error(`--cam ${cam === true ? '' : cam}: give x,y,z,targetX,targetY,targetZ[,fov] as numbers (meters, fov in degrees), e.g. --cam 0,20,-300,0,15,-500,50`);
+  return { position: n.slice(0, 3), target: n.slice(3, 6), ...(n.length === 7 && { fov: n[6] }) };
+}
+
 const samePath = (a, b) => { const n = p => resolve(p).replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase(); return n(a) === n(b); };
 /**
  * Before `shot <url>` trusts a page on this machine: is that server this game's? A leftover dev server on 5173 was another game, and the shot

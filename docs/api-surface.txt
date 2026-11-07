@@ -63,6 +63,7 @@ CLI options | --average |
 CLI options | --backends |
 CLI options | --browse |
 CLI options | --budget |
+CLI options | --cam |
 CLI options | --card |
 CLI options | --check |
 CLI options | --ci |
