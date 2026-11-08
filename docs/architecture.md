@@ -11,7 +11,7 @@ One fact, one place:
 | Every file, one line each | [CODEMAP.md](../packages/engine/docs/CODEMAP.md) (generated) |
 | Plain three.js against the engine, line by line | [THREE.md](../packages/engine/docs/THREE.md) |
 | Which entry to use for a customization | [CONVENTIONS.md](../packages/engine/docs/CONVENTIONS.md), "Customization ladder" |
-| How contributors work | [workflow.md](workflow.md) |
+| How contributors work | [CLAUDE.md](../CLAUDE.md) and `.claude/rules/` (the maintainer's own `workflow.md` is not in the public repository) |
 
 Paths below are relative to `packages/engine/` unless they start with `packages/` or `docs/`. Each source file's header carries the detail; this page says where to look and what must hold.
 
@@ -432,7 +432,7 @@ A tool that needs more than the public entries goes through `engine._tools` (`co
 
 `packages/tools/rules/R*.mjs` holds one file per rule, with a header `Detection:` saying what it flags and its limits, registered in `rules/index.mjs`. `check.mjs` runs hard rules, rules, the type check, content validation and "generated docs up to date", and ends with one line. `bin/threedog.mjs` leads to `threedog/` (dispatch, commands, dev bridge, mcp). `lib/cli-args.mjs` is the one option parser for page-taking commands. Generated docs (`GAMEMAP`, `API.md`, `api/`, `CODEMAP`, `types/generated/`) come from `npm run map`.
 
-The test runner finds tests by itself (`packages/tools/lib/specs.mjs`): every `tests/specs/*.mjs` exporting `specs`, and every `packages/tools/tests/*.mjs` exporting `name` and `run`. A spec is `{ name, url, run({ ev, check, page }) }`. A malformed file or a repeated name stops the run before any browser starts. `software: true` forces software rendering, and is implied when `run()` calls a pixel API; `serial: true` runs a spec alone. A filter that matches nothing fails loudly. Results are logged in `docs/testing/runs.md`.
+The test runner finds tests by itself (`packages/tools/lib/specs.mjs`): every `tests/specs/*.mjs` exporting `specs`, and every `packages/tools/tests/*.mjs` exporting `name` and `run`. A spec is `{ name, url, run({ ev, check, page }) }`. A malformed file or a repeated name stops the run before any browser starts. `software: true` forces software rendering, and is implied when `run()` calls a pixel API; `serial: true` runs a spec alone. A filter that matches nothing fails loudly. The maintainer logs results in `docs/testing/runs.md` (not in the public repository).
 
 ## 16. The 30 module directories
 

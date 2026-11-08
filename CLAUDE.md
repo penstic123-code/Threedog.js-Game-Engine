@@ -5,10 +5,10 @@ threedog.js is a web 3D game engine on top of three.js 0.187 (plain three.js, no
 ## Read in this order (stop when you have enough)
 1. `docs/design.md`: why the engine is built this way, and its principles. It wins over every other document.
 2. `docs/architecture.md`: how the engine is built now, each part with its files, its one rule, and the test that guards it.
-3. `docs/workflow.md`: helpers and worktrees, merging, testing, commits, reporting.
+3. `docs/workflow.md`, only when it is present (maintainer copy; the public repository does not ship it): helpers and worktrees, merging, testing, commits, reporting.
 4. `HANDOFF.md`, only when it is present (it stays local; the public repository does not ship it): current status and what runs next.
 5. `.claude/rules/*.md`: loaded by path when you touch matching files (core and modules, API design, docs and tests, styles and i18n, performance, tools).
-6. `docs/plans/`: only the open plans (`done/README.md` lists the finished ones); `docs/testing/`: test log `runs.md`, reviews, usability runs.
+6. `docs/plans/`: only the open plans (`done/README.md` lists the finished ones); `docs/testing/`: see its `README.md` for which records are public (the test log `runs.md`, reviews and usability runs stay in the maintainer copy).
 
 ## Hard rules (`npm run check` verifies them)
 1. **The engine provides mechanisms, never hard-coded art.** Colors, models, sky, lighting, particles and UI colors come from the game (its `picture/` code, names in `assets.js`, or plain three.js); without them the engine shows neutral gray. Engine modules build plain three.js through `render/neutral.js` and hand it out as `engine.<module>.material`.
@@ -21,7 +21,7 @@ threedog.js is a web 3D game engine on top of three.js 0.187 (plain three.js, no
 packages/engine/         threedog: core/ modules/ render/ ui/ examples/ docs/ tests/ types/ (no art)
 packages/terrain-noise/  optional terrain generator @threedog/terrain-noise
 packages/tools/          @threedog/tools: CLI `threedog`, paths.mjs, rules/ (R1...), generators, templates/
-docs/                    design.md, architecture.md, workflow.md, plans/, testing/
+docs/                    design.md, architecture.md, testing/ (part public); workflow.md, plans/ (maintainer copy only)
 games/<game>/            none in this repo (`threedog new-game <name>` creates one)
 ```
 

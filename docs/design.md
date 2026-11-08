@@ -11,7 +11,7 @@ Other documents own other facts, and this one links to them instead of copying t
 | Exact API names and options | [API.md](../packages/engine/docs/API.md) and the generated `api/` pages |
 | How plain three.js meets the engine, line by line | [THREE.md](../packages/engine/docs/THREE.md) |
 | Which entry to use for a customization | [CONVENTIONS.md](../packages/engine/docs/CONVENTIONS.md), "Customization ladder" |
-| How contributors work on the engine | [workflow.md](workflow.md) |
+| How contributors work on the engine | [CLAUDE.md](../CLAUDE.md) and `.claude/rules/` (the maintainer's own `workflow.md` is not in the public repository) |
 
 When another document disagrees with this one about why something should be so, this one wins. When it disagrees about what exists today, the code wins, and whichever document is wrong gets fixed.
 

@@ -1,7 +1,7 @@
 # Starter pictures
 
 Does a copyable starter picture help an AI make a better-looking game, or just make every game look alike? This folder holds library entries so that question
-can be tested, and any game can use them today. The trial plan is `docs/testing/usability/2026-11-05-starter-kit-trial.md`. Until the trial says otherwise these are an option, not a recommended way to start.
+can be tested, and any game can use them today. The trial plan is in the maintainer's test records (not in the public repository). Until the trial says otherwise these are an option, not a recommended way to start.
 
 This is an ordinary threedog library folder. It sits in the repository, outside the engine package, the tools package and the template, because the engine ships no look: `npm install threedog` does not bring it.
 A game that does not pull an entry gets nothing from it, and new games do not see it. There are two entries, far apart on purpose:
@@ -30,4 +30,4 @@ To see all of it at once, call `sampler(engine, picture)` from `picture/sampler.
 `picture/index.js` next: they say what each file controls and what to change first.
 
 The entry's `kind` is `picture`, which normally means one file. It holds several, so storing a new version needs `lib add picture --kind picture --force`.
-Screenshots from real WebGPU are in `docs/testing/field/2026-11-05-starter-kit/` and `docs/testing/field/2026-11-05-ascii-meadow/`.
+Screenshots from real WebGPU are kept with the maintainer's test records (not in the public repository).

@@ -1,22 +1,19 @@
-# 测试记录放在哪
+# Test records
 
-| 内容 | 位置 |
+The tests themselves live in `packages/engine/tests/` and `packages/tools/tests/`; how to run them is in [COMMANDS.md](../../packages/engine/docs/COMMANDS.md) and [architecture.md](../architecture.md) section 15.
+
+This folder holds written records of test runs. The public repository keeps only the ones the README cites and the performance reference numbers:
+
+| Record | What it is |
 |---|---|
-| 每次全量测试、合并后复核、实测的总结（一行一次） | [runs.md](runs.md) |
-| 易用性测试的题目和跑法 | [usability-tasks.md](usability-tasks.md) |
-| 每轮易用性测试的详细记分表、卡点原文、按根因的归类 | `usability/<日期>-<提交号>.md` |
-| 与纯 three.js 的对比实测、画面实测（WebGL / WebGPU 截图） | `field/<日期>-<名字>.md`，截图放在同名文件夹 |
-| 审查报告（整份原文，按根因分组的问题和建议） | `review/<日期>-<编号>-<范围>.md` |
-| 工具输出长度的测量 | [tool-output-sizes.md](tool-output-sizes.md) |
+| [capability/](capability/) | 85 single tasks and the composite rounds, each judged by a script or a stated screenshot |
+| [field/2026-11-05-city/](field/2026-11-05-city/) | The large-city acceptance run |
+| [perf.md](perf.md) | How to measure performance, and the reference numbers |
 
-怎么跑：
-- `npm test` 跑全部；`npm test -- 名字` 只跑名字里含这段文字的测试（不分大小写）。每个词都必须匹配到测试，有一个词什么也没匹配到就大声报 "NOTHING MATCHED" 并以失败退出，打错字不会看起来像通过。
-- 默认只打印失败的测试项和其中失败的检查、一行进度、最后的失败清单和 `Total:` 总数；`npm test -- --verbose`（或 `-v`）把通过的检查也全打出来。
-- 失败后重跑才通过的测试项，不管加不加 `--verbose`，都会在汇总里按名字列在 "passed on retry" 下，并写明第一次怎么失败的。通过和失败的判定不变。
-- 新测试文件放进 `packages/engine/tests/specs/`（游戏放 `tests/specs/`），导出 `specs` 数组即可，不用登记到任何清单。文件里没有可跑的测试项、或者两个测试同名，会在开浏览器之前直接报错。
+Everything else (the run log `runs.md`, reviews, usability runs, other field tests and their screenshots) stays in the maintainer's copy. Comments in the code that name such a file point there.
 
-规矩：
-- 新的一行加在 runs.md 表格的最上面（越新越靠上）。
-- 每次结果都要写明**日期、引擎提交号、命令或做法、通过 / 失败数、失败项各自怎么处理的**（已修、属于已知问题、负载下偶发并附证据）。
-- 只写结论和证据。整份日志不进仓库；需要引用原始输出时，摘出失败的那几行。
-- 失败项如果当时没修，要写清楚它被排在哪一项工作里，下次跑时对照看是否已经消失。
+## Maintainer copy
+
+- Each full run, post-merge check or field test adds one row at the top of `runs.md`: date, engine commit, command, passed / failed counts, and what happened to each failure (fixed, known issue, or flaky under load with evidence).
+- Conclusions and evidence only; quote the failing lines, never a whole log.
+- A failure not fixed at the time names the piece of work it is queued in, so the next run can check it is gone.
