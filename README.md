@@ -48,30 +48,18 @@ These games run on one engine. AI agents built each from a short brief in about 
 
 You need [Node.js](https://nodejs.org) 20.19+ (20.x) or 22.12+.
 
-### Create a project from source
+Making a game: use the first route. Clone this repository only to change the engine itself.
 
-Use this route until 1.0.0 is published. The project lands in `games/my-game/`, linked to the engine source, and F2 opens the editor on the dev server.
+### Create a project
 
-```sh
-git clone https://github.com/penstic123-code/Threedog.js-Game-Engine.git
-cd Threedog.js-Game-Engine
-npm install
-npm run new-game -- my-game
-npm run dev -- my-game
-```
-
-For a start with ground, sky, a follow camera and a player, add `--open-world` to the `new-game` line.
-
-### Create a standalone project
-
-Once 1.0.0 is published, install it like this:
+Install the published packages. They carry what an AI agent needs to make a game (`node_modules/threedog/docs/AI.md` and the recipes it points to) and none of the engine's maintainer documents.
 
 ```sh
 mkdir my-game
 cd my-game
 npm init -y
-npm install threedog@1.0.0 three@~0.187.0
-npm install -D @threedog/tools@1.0.0
+npm install threedog@1 three@~0.187.0
+npm install -D @threedog/tools@1
 npx threedog init
 npm install
 npm run dev
@@ -88,6 +76,20 @@ Open the address the terminal prints. The default template is an empty scene wit
 | `--webgl` | WebGL and GLSL shaders instead of the default WebGPU and TSL |
 
 The two render routes use different picture code, so the choice is made when the project is created. `createEngine()` itself defaults to WebGL, and the project template sets WebGPU.
+
+### Work on the engine itself
+
+Clone this repository only to change the engine. It holds the engine source and its maintainer documents (`CLAUDE.md`, `docs/design.md`, `docs/architecture.md`, `.claude/rules/`), which a game does not need. A project made here lands in `games/my-game/`, linked to the engine source, and F2 opens the editor on the dev server.
+
+```sh
+git clone https://github.com/penstic123-code/Threedog.js-Game-Engine.git
+cd Threedog.js-Game-Engine
+npm install
+npm run new-game -- my-game
+npm run dev -- my-game
+```
+
+For a start with ground, sky, a follow camera and a player, add `--open-world` to the `new-game` line.
 
 ### Where to start changing things
 

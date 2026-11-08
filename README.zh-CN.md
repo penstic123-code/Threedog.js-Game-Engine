@@ -48,30 +48,18 @@ Threedog 让 AI 用普通 JavaScript 和 three.js 做游戏。引擎负责时间
 
 需要 [Node.js](https://nodejs.org) 20.19+（20.x）或 22.12+。
 
-### 从引擎源码创建项目
+做游戏用第一种方式。只有要修改引擎本身时，才下载这个仓库。
 
-1.0.0 发布之前用这个方式。项目建在 `games/my-game/`，连到引擎源码，开发服务器上按 F2 打开编辑器。
+### 创建项目
 
-```sh
-git clone https://github.com/penstic123-code/Threedog.js-Game-Engine.git
-cd Threedog.js-Game-Engine
-npm install
-npm run new-game -- my-game
-npm run dev -- my-game
-```
-
-想要带地形、天空、跟随相机和玩家的起点，在 `new-game` 那一行末尾加 `--open-world`。
-
-### 创建独立项目
-
-1.0.0 发布后可以这样安装：
+安装已发布的包。包里带着 AI 做游戏需要的东西（`node_modules/threedog/docs/AI.md` 和它指向的做法示例），不含引擎维护者的文档。
 
 ```sh
 mkdir my-game
 cd my-game
 npm init -y
-npm install threedog@1.0.0 three@~0.187.0
-npm install -D @threedog/tools@1.0.0
+npm install threedog@1 three@~0.187.0
+npm install -D @threedog/tools@1
 npx threedog init
 npm install
 npm run dev
@@ -88,6 +76,20 @@ npm run dev
 | `--webgl` | 用 WebGL 和 GLSL 着色器，代替默认的 WebGPU 和 TSL |
 
 两条渲染路线的画面代码写法不同，所以要在创建项目时选。`createEngine()` 本身默认用 WebGL，项目模板默认配置成 WebGPU。
+
+### 修改引擎本身
+
+只有要修改引擎时才下载这个仓库。里面是引擎源码和维护者文档（`CLAUDE.md`、`docs/design.md`、`docs/architecture.md`、`.claude/rules/`），做游戏用不到。在这里建的项目放在 `games/my-game/`，连到引擎源码，开发服务器上按 F2 打开编辑器。
+
+```sh
+git clone https://github.com/penstic123-code/Threedog.js-Game-Engine.git
+cd Threedog.js-Game-Engine
+npm install
+npm run new-game -- my-game
+npm run dev -- my-game
+```
+
+想要带地形、天空、跟随相机和玩家的起点，在 `new-game` 那一行末尾加 `--open-world`。
 
 ### 从哪里开始修改
 
