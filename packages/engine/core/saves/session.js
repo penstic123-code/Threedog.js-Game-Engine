@@ -20,7 +20,7 @@
 // A replacement that fails (a save part's load() threw: saveApply rolled the data back) keeps the old playthrough: tracked handles, function timers
 // and clocks stay as they were, background results still land, no 'session:start' or title follows, 'session:failed' { kind, slot? } fires instead (flow goes back to the state it left).
 // What session:end already ended stays ended (the music stopped, a running cutscene was skipped to its end).
-import { codedError } from '../base/errorHints.js';
+import { codedError, coded } from '../base/errorHints.js';
 import { removeEach, reportError } from '../base/errors.js';
 import { DEV as IS_DEV, fmt } from '../base/validate.js';
 import { applySave, partData } from './saveApply.js';
@@ -28,6 +28,7 @@ import { readSave } from './saveVersions.js';
 
 const DEV = {
   early: 'engine.session.{fn}() was called before engine.start() finished: the new-game state is captured when loading completes. Call it from a button or after `await engine.start()`.',
+  missed: "a 'session:start' listener was added after engine.start() returned, but the playthrough had already started inside start() (?play, or newGame / load during start): it waits for the next new game and did not run for this one. Add it before `await engine.start()`, or read the state after start (engine.session.playing, engine.events.recent('session:start')).",
   badHandle: 'engine.session.track(handle): handle must have remove(), like the result of engine.events.on / onFixed / clock.after. Got {got}.'
 };
 
@@ -197,6 +198,9 @@ export class Session {
     const ok = await this._reset(fn, apply);
     if (ok) this._started();
     this.engine.events.emit(ok ? 'session:start' : 'session:failed', info);
+    // ?play starts the first run inside engine.start(), so a session:start listener attached after `await engine.start()` misses it silently; hint once.
+    // Mark only when fired during start(), and hint only once start() returned (phase 'running') with no tick yet; later listeners are waiting for the next run.
+    if (ok && this.engine.phase !== 'running') this.engine.events._firedNow('session:start', () => this.engine.phase === 'running', coded('session-start-missed', DEV.missed));
     return ok;
   }
 

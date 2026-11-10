@@ -13,10 +13,13 @@
 // An entry { id: 'graphics', omit: ['pixelRatio', 'antialias'] } in that list leaves rows out of the graphics tab.
 // The whole menu is replaceable: skip this module and build your own (register it as the Esc root with uiFocus(engine).setRoot(() => myMenu.open())).
 //
-// A game's own settings page (e.g. "Gameplay"):
+// A game's own settings (each one a menu row the engine draws, in the 'options' tab unless menu names another; label is an i18n key or text, else the key):
 //   engine.settings.define('subtitles', true, on => game.subtitles = on);   // custom setting: default value + apply function, autosaved
-//   engine.settings.define('volfog', true, { limits: 'post.volfog.enabled' });   // off holds the game's own effect off, like the shadows row
+//   engine.settings.define('volfog', true, { limits: 'post.volfog.enabled', menu: 'graphics' });   // off holds the game's own effect off, like the shadows row
+//   engine.settings.define('difficulty', 'normal', { options: ['easy', 'normal', 'hard'], label: 'my.difficulty', apply });   // number rows: { min, max, step? }
 // The bloom and ao rows follow post effects by the role they declare (about.acts "glow" / "ao"), whatever the effect is named; every effect with the role follows its row, and the shadows row shows only while a light casts.
+// A tab that draws its rows itself (menu: false on those rows, or the engine draws them a second time):
+//   engine.settings.define('subtitles', true, { menu: false, apply: on => game.subtitles = on });
 //   engine.settings.addSection('gameplay', {
 //     title: e => e.t('my.gameplay'),
 //     render: (tools, e, s) => tools.row(tools.t('my.subtitles'), tools.toggle('subtitles', s.get('subtitles'))),
@@ -31,7 +34,7 @@
 // controls just carry the attributes data-tab / data-set+data-value / data-range / data-rebind / data-reset / data-locale / data-save-export / data-save-import
 // (see sections.js)
 import { makeWindow, injectUICSS, uiFocus } from '../../ui/UI.js';
-import { BUILTIN_SECTIONS } from './sections.js';
+import { BUILTIN_SECTIONS, rowKindProblem } from './sections.js';
 import { STRINGS, CSS } from './strings.js';
 import { SettingsView } from './view.js';
 import { applySetting, allowed, checkLimits, releaseLimits, releaseRow, ROLE_ROWS, roleEffects } from './apply.js';
@@ -54,6 +57,8 @@ const PRESETS = {
 const SHARES = { pixelRatio: n => +n.toFixed(2), viewChunks: n => Math.max(1, Math.round(n)), density: n => +n.toFixed(2) };
 // Settings keys that switch a post effect of the same name; a key whose effect the game did not add is hidden and ignored
 const POST_KEYS = Object.keys(ROLE_ROWS);
+// settings.define's options: a typo (lable, men) throws in dev instead of silently drawing the key as the label
+const DEFINE_KEYS = keysSchema(['apply', 'limits', 'menu', 'label', 'options', 'min', 'max', 'step']);
 
 /**
  * The graphics rows a game left out: the { id: 'graphics', omit } entry of sections. An omitted row is the game's value: no control, and no preset or stored value moves it.
@@ -122,6 +127,8 @@ export class Settings extends SettingsView {
     // Tabs: true = the default set; a list picks built-in and optional tabs by name (optional ones register their own settings in setup)
     if (sections === true) for (const [id, s] of Object.entries(BUILTIN_SECTIONS)) this.sections.set(id, s);
     else if (sections) for (const s of sections) this._builtin(s.id ?? s);
+    // whatever tabs the game picked: a defined row must have a place to show (the tab hides while it has none)
+    if (sections) this._builtin('options');
     if (stored.locale && engine.i18n.languages.includes(stored.locale) && stored.locale !== engine.i18n.locale) engine.i18n.setLocale(stored.locale);
 
     this.win = makeWindow(engine, {
@@ -187,21 +194,33 @@ export class Settings extends SettingsView {
    * value(s) the row restricts on the settings layer, the same way the built-in shadows row does: off holds the value off (a cutscene or the
    * scene cannot turn it back on), on allows what the scene chose; a number row from 0 to 1 is a factor on a number value.
    * A row a module defines from its install, init or a hook leaves with that module and gives its limits back; the player's choice waits for its return.
+   * The menu draws the row (a switch for true/false, a slider for a number with min/max, buttons for options) in the tab menu names, default
+   * 'options'; label is an i18n key or text, else the key. menu: false = a tab of the game's own draws it.
    * @param {string} key @param {any} def
-   * @param {((value: any, engine: any) => void) | { apply?: (value: any, engine: any) => void, limits?: string | string[] }} [apply]
+   * @param {((value: any, engine: any) => void) | { apply?: (value: any, engine: any) => void, limits?: string | string[], menu?: string | false, label?: string, options?: any[], min?: number, max?: number, step?: number }} [apply]
    * @example engine.settings.define('volfog', true, { limits: 'post.volfog.enabled' });   // after engine.post.add(volFog)
    */
   define(key, def, apply) {
-    const o = typeof apply === 'function' || apply == null ? { apply } : apply;
+    const o = readParams(`settings.define('${key}')`, DEFINE_KEYS, typeof apply === 'function' || apply == null ? { apply } : apply);
     const limits = o.limits == null ? null : [].concat(o.limits);
     if (limits) checkLimits(this, key, def, limits);
-    const row = { def, apply: o.apply, limits };
+    if (o.menu !== undefined && o.menu !== false && typeof o.menu !== 'string') throw codedError('module-params', `settings.define('${key}', ..., { menu }): menu is a tab id ('options', 'graphics', your own) or false when your own tab draws the row; got ${JSON.stringify(o.menu)}`);
+    // a limits number row is a factor from 0 to 1, so its slider has its ends already
+    const factor = limits && typeof def === 'number';
+    const row = { def, apply: o.apply, limits, label: o.label, options: o.options, min: o.min ?? (factor ? 0 : undefined), max: o.max ?? (factor ? 1 : undefined), step: o.step, menu: o.menu ?? 'options' };
+    // a choice value is a string, number or boolean: a click and the saved file give back a JSON copy, and an object copy never equals the
+    // option again, so its button would lose the selected state (no deep compare: a plain value is the whole rule)
+    const odd = Array.isArray(o.options) ? o.options.map(x => Array.isArray(x) ? x[0] : x).find(v => !['string', 'number', 'boolean'].includes(typeof v)) : undefined;
+    if (odd !== undefined) throw codedError('settings-row', `settings.define('${key}', ..., { options }): a choice value is a string, number or boolean; got ${JSON.stringify(odd) ?? typeof odd}. Name the choice ('large') and map it in apply`);
+    const why = row.menu === false ? '' : rowKindProblem(row);
+    if (why) { warnOnce(coded('settings-row', `settings.define('${key}', ${JSON.stringify(def)}): the menu cannot draw this row (${why}), so the player has no control for it. Or menu: false when your own tab draws it`)); row.menu = false; }
     this.custom.set(key, row);
     const picked = this._picked();   // a preset's share of this row is only known now that the row says what it is a share of
     if (key in picked) this._values[key] = picked[key];
     else if (!(key in this._values)) this._values[key] = def;
     this._apply(key, this._values[key]);
     if (this._ready) this._values.quality = this._matchPreset();
+    this.win?.refresh();   // an open menu shows the new row now (the camera tab defines its rows before the window exists)
     this._leavesWithModule(() => {
       if (this.custom.get(key) !== row) return;   // the name was defined again: that row is someone else's
       this.custom.delete(key);

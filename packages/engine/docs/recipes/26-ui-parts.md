@@ -11,10 +11,11 @@ Every piece of UI the engine draws is a named **part** with a plain default:
 The engine keeps the behavior (when to show, the UI focus stack and Esc, input lock, i18n); a part only draws the data it gets.
 Each name takes one value: `false` off · `true` default · `{ ...options }` default with options ·
 `(engine, options) => ({ show, update, hide, dispose })` your own (any verb may be omitted).
+An end screen is a flow state (`engine.flow.define('gameOver', { freeze: true, lockInput: true })`, recipe 07 §1) showing a window with `closable: false` ("A window: results, game over", below).
 Only want different colors / layout? Use "Reskin" below, not a new part.
 
 ## Reskin: your picture on every default part, in one place
-The default parts are neutral gray on purpose. About ten lines give all of them the game's picture; do this before writing a dialogue box or HUD of your own:
+The default parts are neutral gray on purpose. About ten lines give all of them the game's picture; do this before writing your own dialogue box or HUD:
 ```js
 const theme = {  // picture/ui.js
   bg: 'rgba(38,28,20,.94)',  // panels: dialogue, prompt, toast, windows; the HUD uses it slightly see-through
@@ -174,7 +175,7 @@ engine.ui.open('title');  // show it again (the settings 'game' tab has a "Back 
 ```
 While the title is open gameplay is frozen, input is locked, and Esc goes to it (the settings menu does not open).
 
-**A custom item closes the title itself.** The built-in `continue` / `start` call `e.ui.close('title')` after they load; an item you write does not, so `flow` can reach `playing` with the title still on top and no warning. End every item that leaves the title with `e.ui.close('title')`:
+**A custom item closes the title itself.** The built-in `continue` / `start` call `e.ui.close('title')` after loading; yours does not, so `flow` can reach `playing` with the title still on top, no warning. End every item that leaves the title with `e.ui.close('title')`:
 ```js fragment
 { label: 'Tutorial', run: async e => { await e.session.newGame(); e.ui.close('title'); } }
 ```
@@ -200,14 +201,24 @@ engine.settings.addSection('camera');
 // leave graphics rows out: the entry { id: 'graphics', omit } in the list; an omitted row stays the game's value, and no preset or stored value moves it
 settings({ sections: [{ id: 'graphics', omit: ['pixelRatio', 'antialias', 'adaptive'] }, 'audio', 'controls', 'language', 'saves'] });
 
-// a tab of your own: render gets tools with the control helpers (row / toggle / range / segmented) already bound
-engine.settings.define('subtitles', true, on => { document.body.dataset.subtitles = String(on); });
+// a setting of your own is a menu row the engine draws, in the 'options' tab unless menu names another tab
+// (true/false: a switch; a number: a slider from min to max; options: buttons). label: an i18n key or text, else the key
+engine.settings.define('subtitles', true, { label: 'my.subtitles', apply: on => { document.body.dataset.subtitles = String(on); } });
+engine.settings.define('lampShadows', true, { menu: 'graphics', apply: on => { lamp.castShadow = on; } });
+engine.settings.define('difficulty', 'normal', { options: ['easy', 'normal', 'hard'], apply: d => game.setDifficulty(d) });
+engine.settings.define('hudScale', 1, { min: 0.5, max: 2, step: 0.1, apply: v => hud.scale(v) });
+
+// a tab of your own: render gets tools with the control helpers (row / toggle / range / segmented) already bound;
+// the rows it draws itself say menu: false, or the engine draws them a second time (it warns once when it sees that)
+engine.settings.define('vibration', true, { menu: false, apply: on => { game.vibration = on; } });
 engine.settings.addSection('gameplay', {
   title: 'Gameplay',
-  render: (tools, e, s) => tools.row('Subtitles', tools.toggle('subtitles', s.get('subtitles'))),
+  render: (tools, e, s) => tools.row('Vibration', tools.toggle('vibration', s.get('vibration'))),
   order: 50,
 });
 ```
+`settings.define` draws the row itself, in the 'options' tab (`menu: '<tab>'` picks another tab), labelled by `label` (text, or an i18n key such as `settings.subtitles` in `strings`). With `menu: false` it draws nothing: the row is what your own tab's `render` returns, labelled by the first argument of `tools.row` (text, or `e.t('settings.subtitles')`).
+
 A row that switches off an effect of your own (a post effect, a picture value): name the shared value it limits, and it works like the
 built-in shadows row. Off holds the value off on the settings layer, so a later scene, weather or cutscene cannot turn it back on; on
 allows whatever the scene chose. A number row from 0 to 1 is a factor on a number value. Define the row after the effect exists. `bloom` and `ao` already have rows of their own (limiting `post.bloom.enabled` / `post.ao.enabled`), so `settings.define('bloom', ...)` throws: switch them with `engine.settings.set('bloom', false)`, or in a preset.
@@ -226,6 +237,6 @@ A completely different menu: don't install `settings()`; open your own with `uiF
 Check what is in use: `engine.ui.describe()` → `{ loading: 'default', toast: 'off', 'hud.bar': 'custom', ... }`.
 
 ## 7. Keys, and UI that follows the world
-- Bind keys and read them by action name (recipe 58): gameplay keys (attack, jump) in the fixed step, UI keys in the frame hook. Never `addEventListener('keydown')`, and never read `pointer.clicked` for gameplay; bind a `Mouse0` action instead.
+- Read keys by bound action name (recipe 58): gameplay keys in the fixed step, UI keys in the frame hook; no `keydown` listeners, no `pointer.clicked` for gameplay (bind `Mouse0`).
 - A label over a world position: `worldToScreen(engine, pos)` gives screen coordinates for an HTML element.
 - A counter bound to an item count: recipe 22 section 4.

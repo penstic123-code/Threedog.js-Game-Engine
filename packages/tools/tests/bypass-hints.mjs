@@ -39,9 +39,15 @@ export async function run({ check }) {
   check('Math.random tagged presentation is fine (line and line above)', kinds('const j = Math.random();   // presentation\n') === '' && kinds('// presentation: pitch jitter\nconst j = Math.random();\n') === '');
 
   // inventory
-  check('a hand-made inventory array -> inventory', kinds('const inventory = [];\nfunction pick(i) { inventory.push(i); }\n') === 'inventory');
-  check('this.backpack = {} counts too', kinds('class P { constructor() { this.backpack = {}; } }\n') === 'inventory');
+  check('a hand-made inventory array with a named cap -> inventory', kinds('const inventory = [];\nfunction pick(i) { if (inventory.length >= MAX_ITEMS) return; inventory.push(i); }\n') === 'inventory');
+  check('this.backpack = {} beside a maxSlots check counts too', kinds('class P { constructor() { this.backpack = {}; if (n > this.maxSlots) full(); } }\n') === 'inventory');
+  // Both signals are required: without a comparison to a named capacity it is some other bag / list
+  check('tetris bags, ammo counts and a weight that is physics are not inventory', ['function refill(bag, pieces) { bag.push(...shuffle(pieces)); }', 'bag.push(...shuffle(pieces));\nconst hud = { count: ammo };', 'bag.push(p);\nconst weight = body.mass * gravity;', 'if (bag.length < 7) bag.push(...shuffle(pieces));', 'const inventory = [];\nfunction pick(i) { inventory.push(i); }'].every(t => kinds(t + '\n') === ''));
   check('a file that uses engine.inventory is not flagged', kinds('const bag = {};\nengine.inventory.add("gem", 1);\n') === '');
+  // Shape: the bag is a state-object field used as a list via push / reduce; matching only const declarations missed it (reverting to the old check turns this red)
+  check('a bag kept as a state field, filled beside a summed weight checked against a named capacity -> inventory (old-mine shape)', kinds("const fresh = () => ({ oil: 3, bag: /** @type {string[]} */ ([]) });\nif (load() > RULES.capacity) return;\n") === 'inventory'
+    && kinds("if (load() + o.weight > RULES.capacity) { toast('Bag full'); return; }\nS.mined.push(o.id); S.bag.push(o.type);\n") === 'inventory');
+  check('other lists, and words that only contain bag, are not inventory', kinds('const pts = [];\npts.push(v);\nconst airbag = [];\nairbag.push(1);\nconst baggage = { };\n') === '');
   check('inventory() installed in the file is not flagged', kinds('const inv = [];\nengine.use(inventory({}));\n') === '');
   check('unrelated arrays are not flagged', kinds('const items = [];\nconst bagOfTricks = foo();\nconst invoice = {};\n') === '');
 
@@ -85,9 +91,18 @@ export async function run({ check }) {
 
   // reach
   check('a distance check beside the interact key -> reach', kinds("if (key === 'KeyE' && player.position.distanceTo(npc.position) < 2) talk();\n") === 'reach'
-    && kinds('const near = Math.hypot(dx, dz) < 3;\nif (pressed.interact) open();\n') === 'reach');
+    && kinds("const near = Math.hypot(dx, dz) < 3;\nif (near && e.code === 'KeyE') open();\n") === 'reach');
   check('a distance check with no interact word, or with engine.interactions, is not flagged', kinds('if (a.position.distanceTo(b.position) < 2) bump();\n') === ''
     && kinds("engine.interactions.add(npc, {});\nif (p.distanceTo(npc) < 2 && key === 'KeyE') talk();\n") === '');
+
+  // Shape: the threshold is a constant name, with an engine.hud.hint prompt nearby and no E key or interact word (reverting to the old check turns this red)
+  check('a distance against a named reach beside a hud prompt -> reach (old-mine shape)', kinds("const nearCart = Math.hypot(p.x - cart.x, p.z - cart.z) < RULES.cartReach, ore = nearestOre();\nif (nearCart) engine.hud.hint('use', { action: 'mine', label: 'Sell ore' });\n") === 'reach'
+    && kinds("const near = Math.hypot(dx, dz) < R.reach;\nif (near) engine.hud.hint('use', { action: 'mine' });\n") === 'reach');
+  // Distance plus a key or action name is not enough: combat attack reach is not interaction, even when the action is named 'use'
+  check('a combat range check beside an attack or use press is not reach', kinds("if (engine.input.pressed('attack') && player.position.distanceTo(enemy.position) < weapon.range) hit(enemy);\n") === ''
+    && kinds("if (engine.input.pressed('use') && player.position.distanceTo(enemy.position) < weapon.range) hit(enemy);\n") === ''
+    && kinds("const nearCart = Math.hypot(p.x - cart.x, p.z - cart.z) < RULES.cartReach;\nif (engine.input.pressed('mine')) sell();\n") === '');
+  check('a named-range distance check with no prompt near (a hazard and its toast) is not reach', kinds("if (Math.hypot(p.x - r.x, p.z - r.z) < RULES.rockRadius) hurt();\ntoast(engine, 'A rock hit you', { kind: 'error' });\n") === '');
 
   // collision
   check('a hand-written box overlap -> collision', kinds('if (Math.abs(p.x - w.x) < w.hw && Math.abs(p.z - w.z) < w.hd) block();\n') === 'collision'

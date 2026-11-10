@@ -32,6 +32,7 @@ const STRINGS = {
   cast: `${WHERE}(light): set light.castShadow = true first; the engine does not write that on your light`,
   twice: `${WHERE}(light): this engine already has a cascades handle; change it with handle.set({ ... }) or call handle.remove() first (an engine draws one set)`,
   boxed: `${WHERE}(light): this light has a shadow box, and both place the light; call the box handle's remove() first`,
+  other: `${WHERE}(light): {got} also casts a directional shadow; on WebGLRenderer the cascades must be the scene's only shadow-casting DirectionalLight. Set castShadow = false on it (engine.lights.sun.castShadow = false for the engine sun) or put the cascades on that light instead`,
   split: `${WHERE}: split must be ${CASCADE_SPLITS.map(s => `'${s}'`).join(' | ')} or a function (count, near, far, out) => void; got {got}`,
   low: `${WHERE}: low must be { count } with a whole number 1 to 4; got {got}`,
 };
@@ -348,6 +349,13 @@ export function defineShadows(e, { owned }) {
       if (live) fail('twice');
       if (caches.has(light)) refuse(`${WHERE}(light): this light keeps a cached shadow, which works on one plain map; call the cache handle's remove() first`);
       if (boxes.has(light) && light !== e.lights.sun) fail('boxed');
+      // three's WebGL CSM shader (lights_fragment_begin) reads CSM_cascades[i] for every shadow-casting DirectionalLight, so one more than the cascades
+      // indexes past the array and every patched material fails to compile. Refused here, by name, instead of a shader error on the first frame
+      if (!e.renderer.isWebGPURenderer) {
+        let other = null;
+        e.scene.traverse(o => { if (!other && o.isDirectionalLight && o !== light && o.castShadow) other = o; });
+        if (other) fail('other', other === e.lights.sun ? 'engine.lights.sun' : other.name || 'another DirectionalLight');
+      }
       const set = ownCascades(e, light, options, () => boxes.get(light)?.options?.extent);
       live = set;
       const remove = () => { e.signal.removeEventListener('abort', remove); if (live !== set) return; set.remove(); live = null; };

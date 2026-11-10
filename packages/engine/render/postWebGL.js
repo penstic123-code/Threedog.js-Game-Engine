@@ -19,6 +19,24 @@ import { holdShadowRedraw, MSAA_SAMPLES, borrowRenderer } from './backend.js';
 import { notePatch, patchOn } from '../core/scene/threePatches.js';
 
 // One FusedPass per group of neighboring fuse effects, kept while the same effects stay grouped (a changed group recompiles once)
+/**
+ * Does this effect swap the composer's buffers (so a depth reader after it finds another target's depth)? A fuse group always does (one FusedPass).
+ * An effect never on yet has no pass: one is built to read its flags and disposed (a game's own pass is read as it is), and the answer is kept on the handle.
+ * @param {any} post @param {any} e @returns {boolean}
+ */
+function swaps(post, e) {
+  if (e._def.fuse) return true;
+  const p = e._impl ?? e._def._pass;
+  if (p) return !!(p.needsSwap && !p.keepsDepth);
+  if (e._swaps !== undefined) return e._swaps;
+  if (typeof e._def.create !== 'function') return false;   // node-only: sync names it when it is on
+  const { scene, camera } = post.engine, size = post._size();
+  const probe = e._def.create({ engine: post.engine, scene, camera, width: size.x, height: size.y, params: e.params, borrowRenderer });
+  e._swaps = !!(probe?.needsSwap && !probe.keepsDepth);
+  probe?.dispose?.();
+  return e._swaps;
+}
+
 function fuseEntry(post, group, used) {
   const key = group.map(e => e.name).join('+'), old = post._fused.get(key);
   let pass = old && old.items.every((e, i) => e === group[i]) ? old : null;
@@ -175,6 +193,21 @@ export const webglPost = {
   },
   // Rebuild the pass chain from the list: scene (or the default RenderPass) -> hdr -> tone (or the default OutputPass) -> ldr -> final.
   // Only enabled effects are in the chain; an implementation is built the first time its effect is on and kept after.
+  /**
+   * The depth-order rule, the one copy, over the chain as it can run in any on / off state: every added effect counts as on, the scene slot as the
+   * worse of its effect and the plain RenderPass (which never swaps), the tone slot as the worse of its effect and the default OutputPass (which always
+   * swaps, and runs whenever the tone effect is off), keeping the tone effect's own depth read. Why every state: an order that breaks only once a held
+   * effect turns on (ao held by a low preset, outline after it) was accepted at add() and threw later inside the settings switch that turned ao on,
+   * half-applied. Its one caller is PostFX._change, the gate every list or params change goes through, so the refusal lands at that call.
+   */
+  checkOrder(post) {
+    const all = post._sorted();
+    if (!all.some(e => e._def.needsDepth)) return;
+    const by = s => all.filter(e => e.slot === s), flag = e => ({ name: e.name, _def: e._def, _impl: { needsSwap: swaps(post, e), keepsDepth: false } });
+    const scene = by('scene')[0], tone = by('tone')[0];
+    checkDepthOrder([scene ? flag(scene) : { name: 'scene render', _impl: { needsSwap: false } }, ...by('hdr').map(flag),
+      { name: tone ? tone.name : 'output (tone mapping)', _def: { needsDepth: !!tone?._def.needsDepth }, _impl: { needsSwap: true, keepsDepth: false } }, ...by('ldr').map(flag), ...by('final').map(flag)]);
+  },
   sync(post) {
     const { renderer, scene, camera } = post.engine, size = post._size();
     if (!post.composer) {
@@ -198,7 +231,6 @@ export const webglPost = {
     const named = [slot('scene')[0] ?? { name: 'scene render', _impl: post._scenePass }, ...slot('hdr'),
       slot('tone')[0] ?? { name: 'output (tone mapping)', _impl: post._output }, ...slot('ldr'), ...slot('final')];
     for (const [k, p] of post._fused) if (!used.has(k)) { p.dispose(); post._fused.delete(k); }
-    checkDepthOrder(named);
     // Effects reading depth (outline) need a depth texture on both ping-pong targets; added once, kept
     if (on.some(e => e._def.needsDepth)) for (const rt of [c.renderTarget1, c.renderTarget2]) if (!rt.depthTexture) { rt.depthTexture = new THREE.DepthTexture(size.x, size.y); rt.dispose(); }
     c.passes = named.map(e => e._impl);

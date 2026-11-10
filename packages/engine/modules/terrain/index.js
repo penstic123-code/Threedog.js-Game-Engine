@@ -39,7 +39,8 @@ export { createTerrain, DEFAULT_TERRAIN } from './terrainGen.js';
 
 const VIEW = { viewChunks: 4, density: 1 };
 /** The rows this ground offers the settings menu; a preset's share is of the value the game gave it. Writing density places plants again, so an unchanged value stays unwritten */
-const offerGroundRows = (e, T) => e.settings?.define('viewChunks', T.viewChunks, v => { if (T.viewChunks !== v) T.viewChunks = v; }).define('density', T.density, v => { if (T.density !== v) T.density = v; });
+// menu: false: the graphics tab draws these two itself (its slider ends follow the game's value)
+const offerGroundRows = (e, T) => e.settings?.define('viewChunks', T.viewChunks, { menu: false, apply: v => { if (T.viewChunks !== v) T.viewChunks = v; } }).define('density', T.density, { menu: false, apply: v => { if (T.density !== v) T.density = v; } });
 const TERRAIN_PARAMS = keysSchema(['viewChunks', 'density', 'material', 'effects', 'detail', 'variation', 'viewFog', 'part', ...Object.keys(DEFAULT_TERRAIN)], { ...DEFAULT_TERRAIN, ...VIEW, viewFog: false });   // defaults shown in the catalog; createTerrain applies the real ones
 
 export function terrain(opts = {}) {

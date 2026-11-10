@@ -32,7 +32,7 @@ export class Particles {
      */
     has(name: string): boolean;
     /**
-     * Burst: emit count particles at once (default 10) at position (Vector3 / Object3D / [x, y, z] / {x, y, z}). overrides affect this batch only (color, speed, direction...; max/texture/blending/soft cannot be changed temporarily)
+     * Burst: emit count particles at once (default 10) at position (Vector3 / Object3D / [x, y, z] / {x, y, z}). overrides affect this batch only (color, speed, direction...; max/texture/blending/soft/lit cannot be changed temporarily)
      * @param {string} name
      * @param {PositionLike} position
      * @param {{ count?: number, overrides?: ParticleOptions | null }} [opts]

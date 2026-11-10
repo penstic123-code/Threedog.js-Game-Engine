@@ -37,7 +37,7 @@
 - [`engine.vars`](api/vars.md) story flags and counters (autosaved): flag setFlag counter bump
 - [`engine.saves`](api/saves.md) engine.saves handles saving: define putAttachment removeAttachment attachments storageKey flush collect check apply save load list remove export …
 - [`engine.assets`](api/assets.md) Assets: manifest builder paramsOf setParams preload font model lod modelNow onModel geometry gridFromImage texture useTexture …
-- [`engine.audio`](api/audio.md) buses: addBus setVolume duck condition measure value matches volumeOf sfx noiseBurst tone load play
+- [`engine.audio`](api/audio.md) buses: addBus setVolume reverb duck condition measure value matches volumeOf sfx noiseBurst tone load play
 - [`engine.i18n`](api/i18n.md) string tables: add setLocale has
 - [`engine.rays`](api/rays.md) engine.rays is the ray registry…: addStatic addProvider
 - [`engine.jobs`](api/jobs.md) engine.jobs queues build work in a binary heap: add run

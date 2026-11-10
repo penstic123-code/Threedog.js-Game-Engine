@@ -1,7 +1,8 @@
 // UI part of the settings menu (tabs, redraw, click/slider events); Settings inherits it.
-import { formatValue, BUILTIN_SECTIONS, OPTIONAL_SECTIONS, settingsTools } from './sections.js';
+import { formatValue, BUILTIN_SECTIONS, OPTIONAL_SECTIONS, settingsTools, definedRows } from './sections.js';
 import { esc } from '../../ui/UI.js';
-import { codedError } from '../../core/base/errorHints.js';
+import { codedError, coded } from '../../core/base/errorHints.js';
+import { warnOnce } from '../../core/base/validate.js';
 import { reportError } from '../../core/base/errors.js';
 
 const CSS_ESC = s => (globalThis.CSS?.escape ? globalThis.CSS.escape(s) : String(s).replace(/["\\]/g, '\\$&'));
@@ -25,7 +26,21 @@ export class SettingsView {
     const sec = this.sections.get(this.current);
     let body = '';
     try { body = sec ? sec.render(tools, this.engine, this) : ''; } catch (err) { reportError(this.engine, err, `settings tab '${this.current}' render`, { soft: true }); }
+    this._checkDefinedRows(body);
+    body += definedRows(tools, this.engine, this, this.current);   // the rows define() put in this tab, drawn by the same helpers as the built-in rows
     return { sections: list.map(([id, s]) => ({ id, title: s.title(this.engine), active: id === this.current })), current: this.current, body, values: { ...this.values } };
+  }
+  /**
+   * @internal The two ways a defined row still goes wrong, said once each instead of drawn wrong in silence: a tab the game draws itself also
+   * draws a row the engine draws (two rows, pass menu: false), and a row names a tab the menu does not have (no row at all)
+   * @param {string} body the current tab's own HTML
+   */
+  _checkDefinedRows(body) {
+    for (const [key, r] of this.custom) {
+      if (r.menu === false) continue;
+      if (!this.sections.has(r.menu)) warnOnce(coded('settings-row', `settings.define('${key}', ..., { menu: '${r.menu}' }): the menu has no tab '${r.menu}', so the row shows nowhere. Tabs: ${[...this.sections.keys()].join(', ')}`));
+      else if (body.includes(`data-set="${esc(key)}"`) || body.includes(`data-range="${esc(key)}"`)) warnOnce(coded('settings-row', `settings tab '${this.current}' draws '${key}' itself and the engine draws it too (in '${r.menu}'): pass settings.define('${key}', ..., { menu: false, apply })`));
+    }
   }
   _tools() { return settingsTools(this.engine, esc); }
   _render({ sections, body }, { esc }) {

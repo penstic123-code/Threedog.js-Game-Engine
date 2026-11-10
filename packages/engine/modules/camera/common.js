@@ -18,6 +18,7 @@
 import * as THREE from 'three';
 import { defineOwned, dropOwned } from '../../core/ops/owned.js';
 import { readParams, keysSchema } from '../../core/base/params.js';
+import { pointSpotLights } from '../../core/scene/gameLights.js';
 import { setFov, setProjection } from '../../core/scene/view.js';
 import { codedError, coded } from '../../core/base/errorHints.js';
 import { warnOnce } from '../../core/base/validate.js';
@@ -79,10 +80,54 @@ export const HIDE_RIG = {
       if ((o.isMesh || o.isSkinnedMesh || o.isPoints || o.isLine) && !o.layers.isEnabled(this.hideLayer)) { this._hidden.push([o, o.layers.mask]); o.layers.set(this.hideLayer); }
     });
   },
-  _unhide() { for (const [o, mask] of this._hidden) o.layers.mask = mask; this._hidden.length = 0; },   // follow calls it every frame
-  // Lights present now (the sky module has built them by onEnter); a light added later calls shadow.camera.layers.enable(hideLayer) itself
-  _shadowLayers() { this.engine.scene.traverse(o => { if (o.isLight && o.shadow?.camera) o.shadow.camera.layers.enable(this.hideLayer); }); },
+  _unhide() {   // follow calls it every frame
+    for (const [o, mask] of this._hidden) o.layers.mask = mask; this._hidden.length = 0;
+    // the body shows again: carried lights get hideLayer back (a body that is seen casts its shadow from every light, as in plain three.js)
+    if (this._lightTook?.size) { for (const l of this._lightTook) hideBit(l, this.hideLayer, true); this._lightTook.clear(); }
+  },
+  // Every light present now gets the hidden layer; point / spot lights added later get it from _carriedLights on the frame they show up
+  _shadowLayers() { this.engine.scene.traverse(o => { if (o.isLight && o.shadow?.camera) hideBit(o, this.hideLayer, true); }); },
+  /**
+   * A light the player carries (head lamp, torch, flashlight) is not shadowed by the player's own hidden body; the sun and other lights still are.
+   * Why: the hidden body still casts shadows on purpose (you see your shadow from the sun), but a lamp that sits in or right next to the body
+   * sees that body fill half its view, so every frame shows a hard black wedge the player cannot explain (the body they would explain it with is hidden).
+   * Rule, automatic, no new option: while the body is hidden, a casting point / spot light whose world position is inside the body's box,
+   * grown by one body width on every side, is "carried", and its shadow camera drops hideLayer. Both renderers then draw that light's shadow
+   * with the view camera's layers (three.js: a shadow camera with only layer 0 falls back to the camera's layers, WebGLShadowMap and ShadowNode alike),
+   * and the view camera does not see hideLayer, so the body is left out. A sun / directional light is never carried.
+   * The engine writes only the hideLayer bit, and only puts it back on a light it took it from; a game that clears the bit itself keeps it cleared.
+   * Cost: per frame one loop over the scene's point / spot lights (gameLights keeps the set) and, while hidden with a casting one, one box of the body.
+   */
+  _carriedLights() {
+    const lights = pointSpotLights(this.engine), seen = this._lightSeen ??= new WeakSet(), took = this._lightTook ??= new Set(), bit = this.hideLayer;
+    // a carried light that left the scene gets its bit back now: it may come back later, or be added to another scene, as the game left it
+    for (const l of took) if (!lights.has(l)) { hideBit(l, bit, true); took.delete(l); }
+    if (!lights.size) return;
+    let box = null;
+    for (const l of lights) {
+      const c = l.shadow?.camera; if (!c) continue;
+      if (!seen.has(l)) { seen.add(l); hideBit(l, bit, true); }   // a light added after onEnter also gets the body's shadow
+      let carried = false;
+      if (l.castShadow && this._hidden.length) {
+        if (!box) {
+          box = (this._carrierBox ??= new THREE.Box3()).setFromObject(this.target);
+          if (!box.isEmpty()) { const s = box.getSize(_sz); box.expandByScalar(Math.max(s.x, s.z)); }
+        }
+        carried = !box.isEmpty() && box.containsPoint(l.getWorldPosition(_lp));
+      }
+      if (carried && c.layers.isEnabled(bit)) { hideBit(l, bit, false); took.add(l); }
+      else if (!carried && took.delete(l)) hideBit(l, bit, true);
+    }
+  },
 };
+const _sz = new THREE.Vector3(), _lp = new THREE.Vector3();
+/** Set or clear the hidden layer on a light's shadow camera; only a real change asks for a redraw (needsUpdate), so a light whose game redraws it
+ *  rarely (autoUpdate off, a shadow budget) does not keep the old shadow (a wedge, or no body) until its next turn, and one that did not change costs nothing */
+function hideBit(l, bit, on) {
+  const ly = l.shadow.camera.layers; if (ly.isEnabled(bit) === on) return;
+  if (on) ly.enable(bit); else ly.disable(bit);
+  l.shadow.needsUpdate = true;
+}
 
 /**
  * Click-to-lock the mouse for a camera with a pointerLock flag (first person, over-the-shoulder follow); call from onEnter.

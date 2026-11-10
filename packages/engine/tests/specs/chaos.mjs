@@ -3,16 +3,31 @@
 //   npm test -- "Chaos"                                      the fixed seeds
 //   CHAOS_SEEDS=50 CHAOS_FROM=1000 CHAOS_LENGTH=120 npm test -- "Chaos"    50 seeds from 1000, 120 actions each
 //   CHAOS_REPLAY='[{"a":"newGame","p":[]}]' npm test -- "Chaos"  one list, as a failure prints it
+//   CHAOS_RENDERER=webgpu npm test -- "Chaos"                 one renderer only (webgl | webgpu); by default every seed runs on both, the same list on each
 // A failure prints the seed, the failure, the list shrunk to what still fails, and a row to paste into REGRESSIONS below, where it stays as a guard.
+import { readFileSync } from 'node:fs';
 import { plan, line } from '../chaos/plan.js';
 
 const PAGE = '/tests/chaos/';
+// the project's route switch (?renderer=webgpu, as perf.mjs uses it): the page builds a renderer: 'webgpu' engine, everything else is the same list
+const RENDERERS = process.env.CHAOS_RENDERER ? [process.env.CHAOS_RENDERER] : ['webgl', 'webgpu'];
+const pageOf = renderer => (renderer === 'webgpu' ? `${PAGE}?renderer=webgpu` : PAGE);
 const SEEDS = Number(process.env.CHAOS_SEEDS) || 3;
 const FROM = Number(process.env.CHAOS_FROM) || 1;
 const LENGTH = Number(process.env.CHAOS_LENGTH) || 60;
 const ACTION_MS = Number(process.env.CHAOS_ACTION_MS) || 45000;    // one action past this is a hang: the page may be stuck in a loop and cannot answer
 const SHRINK_MS = Number(process.env.CHAOS_SHRINK_MS) || 90000;
-const REPLAY = process.env.CHAOS_REPLAY ? JSON.parse(process.env.CHAOS_REPLAY) : null;
+// CHAOS_REPLAY='@file.json' reads the list from a file: a shrunk list of 60 actions is too long for a shell line
+const REPLAY = process.env.CHAOS_REPLAY ? JSON.parse(process.env.CHAOS_REPLAY.startsWith('@') ? readFileSync(process.env.CHAOS_REPLAY.slice(1), 'utf8') : process.env.CHAOS_REPLAY) : null;
+
+/**
+ * Seeds a known engine bug stops, by renderer: { seed: 'finding' }. The seed still runs elsewhere; here it is listed, not run, so the suite stays green on
+ * every other seed while the bug waits. Each row names its finding in docs/plans/research/2026-11-10-chaos-picture.md; delete the row when it is fixed.
+ */
+const SKIP_SEEDS = {
+  webgl: {},
+  webgpu: {},
+};
 
 /** Shrunk failures kept as guards: { name, list }. A row goes when its bug is fixed only if the list stops meaning anything; a passing row stays */
 const REGRESSIONS = [
@@ -59,7 +74,7 @@ async function runList(page, list, seed) {
 
 /** A page of its own, for runs after a hang (the first page may be dead) and so one run's page state cannot reach the next */
 async function freshPage(old) {
-  const url = new URL(PAGE, old.url()).href, page = await old.context().browser().newPage();
+  const url = new URL(old.url()).href, page = await old.context().browser().newPage();
   await page.goto(url);
   await page.waitForFunction(() => window.threedogChaos, null, { timeout: 30000 });
   return page;
@@ -107,23 +122,25 @@ async function chaos({ page, check }, seed, list) {
   await page.waitForFunction(() => window.threedogChaos, null, { timeout: 30000 });
   const r = await runList(page, list, seed);
   const refused = Object.entries(r.refusals).map(([k, n]) => `${k} x${n}`).join(', ');
-  if (process.env.CHAOS_TRACE) console.log(`  seed ${seed}: ran ${r.ran} of ${list.length}, slowest ${r.slow.join(' ms ')}, refused ${refused || 'nothing'}`);
+  if (process.env.CHAOS_TRACE) console.log(`  seed ${seed} (${r.backend}): ran ${r.ran} of ${list.length}, ${r.frames} frames read, slowest ${r.slow.join(' ms ')}, refused ${refused || 'nothing'}`);
   if (!r.fails.length) { check(`${list.length} actions, every invariant held`, true); return; }
   const first = r.fails[0], { list: small, trials } = await shrink(page, list.slice(0, r.ran), seed, first.kind);
   check(`seed ${seed}: ${first.kind}`, false, report(seed, first, small, trials));
 }
 
-const seedSpec = seed => ({
-  name: `Chaos: seed ${seed}, ${LENGTH} random actions on a composite game keep every invariant`, url: PAGE, timeout: 300000, serial: SEEDS <= 3 ? false : undefined,
-  run: ctx => chaos(ctx, seed, plan(seed, { length: LENGTH })),
-});
+const seedSpec = (seed, renderer) => {
+  const why = SKIP_SEEDS[renderer]?.[seed], name = `Chaos (${renderer}): seed ${seed}, ${LENGTH} random actions on a composite game keep every invariant`;
+  if (why) return { name: `${name} [skipped: ${why}]`, url: pageOf(renderer), timeout: 30000, run: ({ check }) => check(`skipped seed: ${why}`, true) };
+  return { name, url: pageOf(renderer), timeout: 600000, software: true,   // the frame check reads pixels: only all-black or all-white fails, the same on every machine
+    serial: SEEDS <= 3 ? false : undefined, run: ctx => chaos(ctx, seed, plan(seed, { length: LENGTH })) };
+};
 
-export const specs = REPLAY ? [{ name: 'Chaos: replay of CHAOS_REPLAY', url: PAGE, timeout: 300000, run: ctx => chaos(ctx, 1, REPLAY) }] : [
-  ...Array.from({ length: SEEDS }, (_, i) => seedSpec(FROM + i)),
-  ...REGRESSIONS.map(({ name, list }) => ({ name: `Chaos regression: ${name}`, url: PAGE, timeout: 300000, run: ctx => chaos(ctx, 1, list) })),
+export const specs = REPLAY ? RENDERERS.map(r => ({ name: `Chaos (${r}): replay of CHAOS_REPLAY`, url: pageOf(r), timeout: 300000, software: true, run: ctx => chaos(ctx, 1, REPLAY) })) : [
+  ...RENDERERS.flatMap(r => Array.from({ length: SEEDS }, (_, i) => seedSpec(FROM + i, r))),
+  ...REGRESSIONS.map(({ name, list }) => ({ name: `Chaos regression: ${name}`, url: PAGE, timeout: 300000, software: true, run: ctx => chaos(ctx, 1, list) })),
   {
     name: '[guard] Chaos: a seed replays exactly, and a planted bug is caught and shrunk to its cause',
-    url: PAGE, timeout: 180000,
+    url: PAGE, timeout: 180000, software: true,
     async run({ page, check }) {
       await page.waitForFunction(() => window.threedogChaos, null, { timeout: 30000 });
       const list = plan(FROM, { length: 15 }), a = await runList(page, list, FROM), b = await runList(page, list, FROM);
@@ -134,7 +151,10 @@ export const specs = REPLAY ? [{ name: 'Chaos: replay of CHAOS_REPLAY', url: PAG
       check('a planted held input or freeze fails the audit', /locked|frozen/.test(kind), JSON.stringify(r.fails));
       const { list: small } = await shrink(page, planted, FROM, kind);
       check('shrinking keeps the cause and drops the rest', small.map(x => x.a).join() === 'fault,audit', small.map(line).join(' '));
-      for (const [a, want] of [['faultStale', /stale provider: weather/], ['faultLeak', /counter grew: sceneObjects/], ['faultLost', /record lost/]]) {
+      // a refused wild value marks nothing: after weather.set refuses NaN seconds the black-frame check still watches
+      const refused = await runList(page, [{ a: 'weatherTo', p: [0, 4] }, { a: 'faultBlack', p: [] }, { a: 'audit', p: [1] }], FROM);
+      check('a refused wild value leaves the frame check on', /frame all black/.test(refused.fails[0]?.kind ?? ''), JSON.stringify(refused.fails));
+      for (const [a, want] of [['faultBlack', /frame all black/], ['faultStale', /stale provider: weather/], ['faultLeak', /counter grew: sceneObjects/], ['faultLost', /record lost/]]) {
         const got = await runList(page, [{ a, p: [] }, { a: 'audit', p: [1] }], FROM);
         check(`planted ${a} fails with ${want.source}`, want.test(got.fails[0]?.kind ?? ''), JSON.stringify(got.fails));
       }

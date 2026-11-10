@@ -10,7 +10,7 @@
 // In dev (npm run dev) event names are checked: a name never seen before that is one or two letters off a known event warns "did you mean xxx".
 /** @import { Handle } from '../../types/common' */
 /** @import { EventName, EventArgs } from '../../types/core' */
-import { checkEventName, syncOnly } from './validate.js';
+import { checkEventName, syncOnly, warnOnce } from './validate.js';
 
 // Event names the engine and modules emit (for spelling checks): generated from EventMap in packages/engine/types/core.d.ts, never a hand-written second copy
 import { ENGINE_EVENTS } from './events.generated.js';
@@ -28,6 +28,7 @@ export class Events {
     /** How many history entries to keep, default 200; 0 records nothing */
     this.historySize = 200;
     /** @internal >0 while an atomic rollback reloads state: emit does nothing */ this.muted = 0;
+    /** @internal name -> { tick, when, msg }: events their owner marked as already fired this step (_firedNow) */ this._fired = null;
     /** @internal save loads in flight (saveApply.js), each an array of the listener errors it collected; the last one gets a listener error
      *  instead of the error report, so the load fails and rolls back (reported on its own, the load would carry on half-applied: a world:load
      *  listener that throws mid-load froze the game). A load stays here until it settled, async parts and afterLoad included */ this._scopes = [];
@@ -100,7 +101,7 @@ export class Events {
    * @example const h = engine.events.on('item:add', ({ id, count }) => console.log(id, count));
    * h.remove();
   */
-  on(name, fn) { this.seen && this._check(name); if (!this.map.has(name)) this.map.set(name, new Set()); this.map.get(name).add(fn); return { remove: () => this._off(name, fn) }; }
+  on(name, fn) { this.seen && this._check(name); this._fired && this._lateOn(name); if (!this.map.has(name)) this.map.set(name, new Set()); this.map.get(name).add(fn); return { remove: () => this._off(name, fn) }; }
   /**
    * Listen once; returns a handle { remove() } (can be removed before it fires)
    * @template {EventName} K
@@ -109,6 +110,15 @@ export class Events {
    * @returns {Handle}
   */
   once(name, fn) { const h = this.on(name, (...a) => { h.remove(); return fn(...a); }); return h; }   // returns fn's result: a once-listener is guarded in a load scope like any other
+  /**
+   * @internal Owner marks "this already fired this tick": a listener attached later in the same tick (when() true) never hears it, so the owner calls warnOnce(msg).
+   * Why detection lives here and the message with the owner: only on() sees a late listener; only the owner (e.g. session) knows whether it will fire again and how to fix it.
+   * Event semantics unchanged: no replay, no queue, just a hint; once the tick moves on the mark is void and a later listener is simply waiting for the next one.
+   * @param {string} name @param {() => boolean} when @param {string} msg
+   */
+  _firedNow(name, when, msg) { (this._fired ??= new Map()).set(name, { tick: this.now(), when, msg }); }
+  /** @internal @param {string} name */
+  _lateOn(name) { const m = this._fired.get(name); if (!m) return; if (m.tick !== this.now()) this._fired.delete(name); else if (m.when()) warnOnce(m.msg); }
   /** @internal Total listeners (used by engine.counts()) */
   get size() { let n = 0; for (const s of this.map.values()) n += s.size; return n; }
   /** @internal Remove all listeners (engine.dispose calls it) */

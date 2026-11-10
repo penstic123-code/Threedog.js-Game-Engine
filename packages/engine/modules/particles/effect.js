@@ -8,13 +8,13 @@ import { isWebGPU, webgpuPart, onRendererSwap } from '../../render/backend.js';
 export const NEUTRAL = {
   max: 120, lifetime: [1, 2], rate: 10, speed: [0.5, 1.5], direction: [0, 1, 0], spread: 0.5, area: 0,
   gravity: -2, drag: 0.5, wind: 0, windDir: [1, 0, 0.3], size: [0.3, 0.3], color: [0xcccccc, 0xcccccc], opacity: [0.8, 0],
-  texture: null, blending: 'normal', spin: 0, worldSpace: true, fog: true, maxPixels: 512, ratePerMeter: 0, soft: 0,
+  texture: null, blending: 'normal', spin: 0, worldSpace: true, fog: true, maxPixels: 512, ratePerMeter: 0, soft: 0, lit: false,
 };
 export const KEYS = Object.keys(NEUTRAL);
 const pair = v => Array.isArray(v) ? v : [v, v];
 /** Numbers per stop of the values that change over life */
 export const OVER_LIFE = { size: 1, opacity: 1, color: 3 };
-const _col = new THREE.Color();
+const _col = new THREE.Color(), _lit = [1, 1, 1];
 /**
  * A value over life as { t, v, w }: stop times (0 birth, 1 death) and w numbers per stop. Given as one value, [birth, death], evenly spaced
  * [a, b, c...] or timed [[0, a], [0.2, b], [1, c]] (before the first time and after the last the end stop holds). Throws on anything else.
@@ -175,7 +175,8 @@ export class Effect {
     this.points.visible = true;
   }
 
-  update(dt) {
+  /** @param {number} dt @param {import('./lit.js').ParticleLights | null} [lights] the scene's lights this frame, for a lit effect */
+  update(dt, lights = null) {
     if (!this.alive) { this.points.visible = false; return; }
     const N = this.max, P = this.pos, V = this.vel, ap = this.aPos.array, as = this.aSize.array, aa = this.aAlpha.array, ac = this.aColor.array, ag = this.aAngle.array, al = this.aLife.array, { size, opacity, color } = this.overLife;
     const w = this.o.windDir, wl = Math.hypot(w[0], w[2]) || 1, wind = this.sys.engine.uniforms.uWind.value, wx = w[0] / wl * wind, wz = w[2] / wl * wind;
@@ -192,6 +193,7 @@ export class Effect {
       ap[i3] = P[i3] += V[i3] * dt; ap[i3 + 1] = P[i3 + 1] += V[i3 + 1] * dt; ap[i3 + 2] = P[i3 + 2] += V[i3 + 2] * dt;
       al[i] = k; as[i] = sample(size[i], k); aa[i] = sample(opacity[i], k);
       ac[i3] = sample(color[i], k); ac[i3 + 1] = sample(color[i], k, 1); ac[i3 + 2] = sample(color[i], k, 2);
+      if (lights) { lights.at(P[i3], P[i3 + 1], P[i3 + 2], _lit); ac[i3] *= _lit[0]; ac[i3 + 1] *= _lit[1]; ac[i3 + 2] *= _lit[2]; }   // lit: true (lit.js)
       if (this.spinV[i]) ag[i] += this.spinV[i] * dt;
     }
     this.alive = alive;

@@ -112,5 +112,9 @@ export function watchGameLights(e) {
     idled: l => idled.has(l),
   };
 }
+/** @internal Every point / spot light in the scene (a live set, for reading; empty before the watch starts): for modules, which do not reach into e._gameLights */
+export function pointSpotLights(e) { return e._gameLights?.all() ?? EMPTY; }
+const EMPTY = new Set();
+
 notePatch('light-idle-shadow', "shadow.autoUpdate of the game's own shadow-casting point / spot lights: off while intensity is 0, back on when lit (core/scene/gameLights.js)",
   () => {}, { scope: 'objects in the scene', lost: 'a casting light at intensity 0 redraws its shadow map every frame, as in plain three.js' });

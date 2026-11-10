@@ -10,11 +10,7 @@ knobs, what each one changes on screen and how to tell it is right. **It is not 
 your style needs and leave the rest alone. There are no values to copy on purpose; the right value depends on the style, the camera and the
 time of day, so every row says what to look for instead.
 
-Where the rest lives (one home each, this page only points there):
-- the calls, their parameters and who writes what: [recipe 52](52-around-the-picture.md) (reading the picture, the post chain, the ownership table);
-- the plain three.js way and how the engine yields to it: [THREE.md](../THREE.md);
-- questions about the whole picture (light roles, readability, consistency) and the numbers each shot prints: [recipe 35](35-picture-from-reference.md) "Picture questions" and "Picture check after every shot";
-- a whole picture: the game's `picture/` code ([recipe 62](62-picture-code.md), materials and lights in [recipe 09](09-materials-lights-models.md)).
+Where the rest lives (one home each): calls, parameters and who writes what: [recipe 52](52-around-the-picture.md); the plain three.js way: [THREE.md](../THREE.md); whole-picture questions and the numbers each shot prints: [recipe 35](35-picture-from-reference.md) "Picture questions" and "Picture check after every shot"; a whole picture: `picture/` code ([62](62-picture-code.md), materials and lights [09](09-materials-lights-models.md)).
 
 ## How to judge, in one loop
 Change one knob, take a shot (`threedog shot`, or `threedog snap` on a running page), compare with the one before, keep or undo. Shoot the
@@ -50,7 +46,7 @@ shadow. `threedog examples pull sun-and-key-light` shows three routes side by si
 | Ambient occlusion | darker creases and contact corners | objects sit on the ground and corners have weight; no dark halo around thin things | `engine.post.add(ao())` ([52 Post chain](52-around-the-picture.md#post-effect-chain)) |
 | Outline | lines around shapes | lines help read shapes at play distance and match the style's line weight | `engine.post.add(outline())` ([52 Post chain](52-around-the-picture.md#post-effect-chain)), or three/addons `OutlinePass` |
 | Surface shading | how light falls across a surface (smooth, banded, flat) | materials that should differ (wood, stone, metal, cloth) differ in response, not only in color | `new THREE.MeshToonMaterial({ gradientMap })` or any material of yours; `applyEffects(mat, { lighting })`, `rampTexture` ([43](43-shader-patches-surfaces.md), [09](09-materials-lights-models.md)) |
-| God rays, volumetric fog | light shafts, fog thick in the air | shafts come from where the light is and fade when it leaves the screen | your own depth effect ([59](59-depth-post-effects.md)) |
+| God rays, volumetric fog | light shafts, fog thick in the air | shafts come from where the light is and fade when it leaves the screen | `lightShaft`, `sunShafts`, `lightVolumes` ([34](34-environment-lighting.md)); haze by depth ([59](59-depth-post-effects.md)) |
 
 ## When the picture check names a feature
 The check printed after every shot states a fact and, where the engine has a feature for it, one line of usage. Each is a way out, not a request: a

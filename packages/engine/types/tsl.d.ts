@@ -141,3 +141,48 @@ export function waterSurface(spec?: { depth?: { shallow?: any, deep?: any, curve
   (base: Node, wave: Node, facing: Node, worldPos: Node, time: Node) => Node;
 /** The water's fresnel blend: color mixed toward `towards` (the engine uses the fog color) by pow(1 - |viewDir . normal|, 3) * strength, view space @experimental */
 export function waterFresnel(color: Node, normal: Node, viewDir: Node, strength: Node | number, towards: Node): Node;
+/** lightShaft options: shape and look are the game's; nothing here has a finished look */
+export interface LightShaftOptions {
+  /** Follow this light every frame: a SpotLight gives position, aim, cone width and colour; a DirectionalLight gives aim and colour (the game places the opening) */
+  light?: import('three').SpotLight | import('three').DirectionalLight;
+  /** metres from the opening to the far end (default: the spot light's distance, else 4) */
+  length?: number;
+  /** radius at the opening in m (0.3) */
+  radiusTop?: number;
+  /** radius at the far end in m (default: from the spot light's angle, else radiusTop) */
+  radiusBottom?: number;
+  /** beam colour (default: the light's colour, followed live; else white) */
+  color?: import('three').ColorRepresentation;
+  /** brightness added at the core (1) */
+  intensity?: number;
+  /** 0 hard sides .. 1 fades to the centre (0.6) */
+  softness?: number;
+  /** how much dimmer the far end is, 0..1 (0.5) */
+  fallOff?: number;
+  /** metres over which it fades into walls and floor (0.5); 0 = off and no depth read (fixed at creation) */
+  fadeAtGeometry?: number;
+  /** metres in front of the camera over which it fades out (1) */
+  fadeNear?: number;
+  /** drifting dust in the beam, 0..1 (0); off on engine.tier 'low' */
+  dust?: number;
+  /** dust size: higher = finer (2) */
+  dustScale?: number;
+  /** dust drift down the beam, m/s (0.3) */
+  dustSpeed?: number;
+  /** sides of the cone (24) */
+  segments?: number;
+}
+/** The returned beam: a plain Mesh; `shaft` holds its numbers as { value } objects to change live (shape is fixed: make a new one) */
+export type LightShaft = import('three').Mesh & { shaft: { color: { value: import('three').Color }; intensity: { value: number }; softness: { value: number };
+  fallOff: { value: number }; fadeAtGeometry: { value: number }; fadeNear: { value: number }; dust: { value: number }; dustScale: { value: number }; dustSpeed: { value: number } } };
+/**
+ * A cheap visible light beam (ceiling hole, window, stage light): an additive open cone, top at the mesh origin pointing down -Y, sides softened by view angle,
+ * faded where it meets geometry and near the camera, dimmed (not tinted) by scene fog. Occluders do not cut it (for that: sunShafts / lightVolumes).
+ * WebGPURenderer only (both backends); WebGLRenderer throws by name. Add / move / remove it like any mesh; engine.remove frees it.
+ * @example
+ * const beam = lightShaft(engine, { radiusTop: 0.6, radiusBottom: 1.2, length: 5, color: 0xfff1d0, intensity: 0.4, dust: 0.5 });
+ * beam.position.set(0, 5, 0); engine.scene.add(beam);
+ * beam.shaft.intensity.value = 0.2;   // live
+ * @experimental
+ */
+export function lightShaft(engine: { renderer: any; uniforms: object; tier: string }, opts?: LightShaftOptions): LightShaft;

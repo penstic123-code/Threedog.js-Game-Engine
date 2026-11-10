@@ -425,3 +425,34 @@ window.fxGroupE = async () => {
   } finally { console.error = keep; }
   return out;
 };
+
+// lit: true (tests/specs/group-bt-b.mjs): the same dust on both routes, in the dark, then beside a lamp, then a spot pointed away, then unlit.
+// Reads the uploaded color attribute and the rendered brightness: a lit mode that skipped the GPU copy or one route would show here
+window.fxLit = async () => {
+  const routes = {};
+  const DUST = { max: 40, lifetime: [100, 100], speed: 0, spread: 0, gravity: 0, drag: 0, area: 0.6, size: 0.6, color: 0xc8b89a, opacity: 1, fog: false };
+  for (const [name, h] of [['webgl', HGL], ['webgl2-backend', HGPU]]) {
+    const P = new Particles(h), c = routes[name] = {};
+    const lit = P.define('lit-dust', { ...DUST, lit: true }), flat = P.define('flat-dust', DUST);
+    P.emit('lit-dust', [0, 1.5, 0], { count: 40 }); P.update(0.016);
+    const red = fx => +(fx.aColor.array[0]).toFixed(4), steps = (n, dt = 0.016) => { for (let i = 0; i < n; i++) P.update(dt); };
+    c.dark = { red: red(lit), mean: stats(await shot(h)).mean };
+    const lamp = h.add(new THREE.PointLight(0xffaa66, 30, 0, 2)); lamp.position.set(0, 2, 1); lamp.updateMatrixWorld();
+    steps(16);   // past the light walk interval (frames): the new lamp is found
+    c.lamp = { red: red(lit), uploaded: lit.aColor.version > 0, mean: stats(await shot(h)).mean };
+    // the expected value from three's formula at particle 0: color * intensity / pi / d^2 (d from the lamp)
+    const p0 = new THREE.Vector3().fromArray(lit.pos, 0), d = p0.distanceTo(lamp.position);
+    c.expect = +(srgb(0xc8b89a) * new THREE.Color(0xffaa66).r * 30 / Math.PI / (d * d)).toFixed(4);
+    lamp.intensity = 0; const spot = h.add(new THREE.SpotLight(0xffffff, 30, 0, 0.3, 0, 2)); spot.position.set(0, 2, 1); spot.target.position.set(0, 10, 1);
+    h.add(spot.target); spot.updateMatrixWorld(); spot.target.updateMatrixWorld(); steps(16);
+    c.spotAway = red(lit);
+    h.scene.remove(spot, spot.target, lamp); steps(16);
+    // engine.still (dt 0 for particles): a lamp switched on and then removed during the freeze is still seen both times
+    h.still = true; const late = h.add(new THREE.PointLight(0xffffff, 30, 0, 2)); late.position.set(0, 2, 1); late.updateMatrixWorld(); steps(16);
+    c.still = { on: red(lit) }; h.scene.remove(late); steps(16); c.still.off = red(lit); h.still = false;
+    P.clear('lit-dust'); P.emit('flat-dust', [0, 1.5, 0], { count: 40 }); steps(1);
+    c.unlit = red(flat); c.unlitExpect = +srgb(0xc8b89a).toFixed(4);
+    P.clear();
+  }
+  return { routes };
+};

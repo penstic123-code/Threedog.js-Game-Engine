@@ -45,7 +45,27 @@ export const ACTIONS = {
   weather: { w: 2, p: r => [r.int(3)] },
   frames: { w: 8, p: r => [1 + r.int(40)] },
   recreate: { w: 1, p: () => [] },
+  // ---- the picture (docs/plans/research/2026-11-10-chaos-picture.md). A value a game might pass is an index into WILD (driver.js), because a list must
+  // survive JSON (a failure prints it for CHAOS_REPLAY) and NaN or Infinity does not. Weights put PostFX, sky and weather first: the hotspots list
+  // fx: index into FX (game.js); how: 0 add or remove, 1 on / off, 2 re-add at order o, 3 add the same name twice (a coded refusal is the answer)
+  fx: { w: 7, p: r => [r.int(8), r.int(4), r.int(60) - 10] },
+  fxParam: { w: 5, p: r => [r.int(8), r.int(4), r.int(9)] },
+  fxCombo: { w: 2, p: r => [r.int(256), r.int(1000)] },
+  // 0 low, 1 medium, 2 high: the player's preset; 3 / 4: the device tier low / high under it
+  tier: { w: 4, p: r => [r.int(5)] },
+  // 0 a sky at another time (a slot replace), 1 backdrop on / off, 2 no sky / the dome back, 3 sun brightness, 4 cloud cover, 5 environment map on / off
+  skyLook: { w: 5, p: r => [r.int(6), r.int(9)] },
+  weatherTo: { w: 4, p: r => [r.int(4), r.int(6)], bg: 0.3 },
+  // a weather table with a wild strength in it, swapped in and set at once
+  weatherWild: { w: 1, p: r => [r.int(9)] },
+  // 0 off, 1 linear (near, far), 2 exp2 (density): plain three.js, as a game's picture/sky.js writes it
+  fog: { w: 3, p: r => [r.int(3), r.int(9)] },
+  exposure: { w: 2, p: r => [r.int(9)] },
+  // 0 shadows off / on, 1 cascades on the engine sun on / off, 2 cascades.set({ count }), 3 the sun's mapSize, 4 a second shadow light in / out, 5 cascades on that light
+  shadowsPic: { w: 5, p: r => [r.int(6), r.int(9)] },
+  photo: { w: 2, p: r => [r.int(9)] },
 };
+
 
 /**
  * Named skips: an action turned off because a known bug would stop every run there. The plan keeps drawing it (a seed means the same list before and

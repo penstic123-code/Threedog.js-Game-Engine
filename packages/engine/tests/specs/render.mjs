@@ -28,7 +28,7 @@ export const specs = [
     },
   },
   {
-    name: '[守] 后期深度顺序：读深度的效果排在换缓冲的效果后面时报错给改法，并且不留半加的效果；create 抛错回滚；remove 可重复；enable 拼错有提示',
+    name: '[守] 后期深度顺序：读深度的效果排在换缓冲的效果后面时报错给改法（关着的也算），并且不留半加的效果；create 抛错回滚；remove 可重复；enable 拼错有提示',
     url: '/tests/perf/index.html?mode=city',
     async run({ check, ev }) {
       const r = await ev(() => {
@@ -42,17 +42,16 @@ export const specs = [
         out.lateGone = !p.get('edges');
         const edges = p.add({ name: 'edges', slot: 'hdr', order: 1, needsDepth: true, create: () => pass(true) });   // 先读深度再换缓冲：可以
         out.earlyOk = !!p.get('edges');
-        // enable 打开一个会破坏顺序的效果：报错并保持关着
-        const late2 = p.add({ name: 'late2', slot: 'hdr', order: 60, needsDepth: true, enabled: false, create: () => pass(false) });
-        out.enable = err(() => p.get('late2').enabled = true);
-        out.enableKept = p.get('late2').enabled === false;
-        late2.remove();
+        // 关着加进来、打开才破坏顺序的效果：规则按每种开关状态查（PostFX._change 一处把关），所以在 add 时就报错、不留半加的；
+        // 为什么不等到 enable：等到打开时才报错，会在设置菜单切画质时半途抛出（ao 被低画质关着、描边排在它后面）
+        out.enable = err(() => p.add({ name: 'late2', slot: 'hdr', order: 60, needsDepth: true, enabled: false, create: () => pass(false) }));
+        out.enableKept = !p.get('late2');
         // create 抛错：不留在链里，后面的调用不受影响
         out.create = err(() => p.add({ name: 'boom', create: () => { throw new Error('boom!'); } }));
         out.createGone = !p.get('boom') && err(() => p.antialias = true) === '';
-        // remove 两次只 dispose 一次
-        const d = { n: 0 }, once = p.add({ name: 'once', create: () => pass(false, d) });
-        once.remove(); once.remove(); out.disposed = d.n;
+        // remove 两次只 dispose 一次。只数 remove 之后的：顺序检查在还没建好的效果上会先建一个试探用的 pass 看它换不换缓冲、随即释放，那一次不算这个句柄的
+        const d = { n: 0 }, once = p.add({ name: 'once', create: () => pass(false, d) }), probed = d.n;
+        once.remove(); once.remove(); out.disposed = d.n - probed;
         // handle.set 拼错：报错并列出它有的参数
         const typed = p.add({ name: 'typed', params: { amount: 1 }, create: () => pass(false) });
         out.typo = err(() => typed.set({ amout: 2 })); typed.remove();
@@ -63,7 +62,7 @@ export const specs = [
       check('读深度的效果排在换缓冲的效果后面：报错说明谁换了缓冲、怎么改', /'edges' reads scene depth.*after 'grade'.*lower order/.test(r.late), r.late);
       check('报错后这个效果没加进去；排在前面就可以', r.lateGone && r.earlyOk, JSON.stringify(r));
       check('ldr 槽读深度：报错（色调映射输出已换缓冲）', /after 'output \(tone mapping\)'/.test(r.ldr), r.ldr);
-      check('enable 打开会破坏顺序的效果：报错并保持关着', /'late2' reads scene depth/.test(r.enable) && r.enableKept, r.enable);
+      check('关着加进来、打开才破坏顺序的效果：add 时就报错并且没加进去', /'late2' reads scene depth/.test(r.enable) && r.enableKept, r.enable);
       check('create 抛错：效果被移除，别的调用照常', /boom!/.test(r.create) && r.createGone, JSON.stringify(r));
       check('句柄 remove() 可重复调用，只 dispose 一次', r.disposed === 1, String(r.disposed));
       check('handle.set 拼错名字：报错并点出这个键和能用的键', /takes amount; unknown: amout/.test(r.typo), r.typo);

@@ -47,6 +47,33 @@ export function settingsTools(engine, esc) {
   };
 }
 
+/** A defined row's text: an i18n key when one exists, else the text itself (the audio tab names a bus the same way) */
+const labelOf = (e, text) => e.i18n.has(text) ? e.t(text) : text;
+/**
+ * The rows settings.define() draws itself, in the tab its menu option names (default 'options'). Why the engine draws them: a row defined
+ * and drawn by no tab was a setting the player could never reach, and nothing said so (old-mine's two quality rows). menu: false = the game draws it.
+ * @param {any} tools @param {any} e @param {any} s @param {string | null} tab @returns {string}
+ */
+export function definedRows(tools, e, s, tab) {
+  let h = '';
+  for (const [key, r] of s.custom) {
+    if (r.menu !== tab) continue;
+    const v = s.values[key], label = labelOf(e, r.label ?? key);
+    const ctl = r.options ? segmented(key, v, r.options.map(o => Array.isArray(o) ? [o[0], labelOf(e, String(o[1]))] : [o, labelOf(e, String(o))]), tools)
+      : typeof r.def === 'boolean' ? toggle(key, v, tools)
+      : range(key, v, r.min, r.max, r.step ?? (r.max - r.min) / 20, tools);
+    h += row(label, ctl, tools.esc);
+  }
+  return h;
+}
+/** Why the menu cannot draw a defined row ('' = it can). A number row needs its ends: a guessed range would cut off the game's own value */
+export function rowKindProblem(r) {
+  if (r.options) return Array.isArray(r.options) && r.options.length ? '' : 'options is a non-empty list of values or [value, label] pairs';
+  if (typeof r.def === 'boolean') return '';
+  if (typeof r.def === 'number') return Number.isFinite(r.min) && Number.isFinite(r.max) && r.max > r.min ? '' : 'a number row needs { min, max } (a limits row from 0 to 1 has them already)';
+  return `a ${typeof r.def} default is drawn as a choice: pass options: [...]`;
+}
+
 export const BUILTIN_SECTIONS = {
   graphics: {
     order: 10, title: e => e.t('settings.graphics'),
@@ -122,6 +149,9 @@ export const BUILTIN_SECTIONS = {
 // settings({ sections: ['graphics', 'audio', 'controls', 'game', 'camera'] }) or engine.settings.addSection('camera').
 // setup(s) runs once when the tab is added and registers the tab's own settings (saved like any other).
 export const OPTIONAL_SECTIONS = {
+  // The tab defined rows land in unless they name another. Settings adds it whatever list the game picked and it shows only while a row is in it;
+  // it sits in this one lookup so naming it (sections: ['options'], addSection('options')) works like any other tab name
+  options: { order: 60, title: e => e.t('settings.options'), when: e => [...(e.settings?.custom.values() ?? [])].some(r => r.menu === 'options'), render: () => '' },
   // Resume / load a slot / back to title (only when the game turned the title part on)
   game: {
     order: 5, title: e => e.t('settings.game'),
@@ -149,9 +179,10 @@ export const OPTIONAL_SECTIONS = {
     order: 25, title: e => e.t('settings.camera'), when: e => !!e.cameraRig,
     setup(s) {
       const e = s.engine, rig = () => e.cameraRig;
-      s.define('camera.sensitivity', rig()?.sensitivity ?? 1, v => { if (rig() && 'sensitivity' in rig()) rig().sensitivity = v; });
-      s.define('camera.invertY', rig()?.invertY ?? false, v => { if (rig() && 'invertY' in rig()) rig().invertY = v; });
-      s.define('camera.fov', lensFov(e) ?? 50, v => setFov(e, v));   // the player's slider: yields to a fov the game took (engine.autoView.manual('fov'))
+      // menu: false: this tab draws the three rows itself, with their own ranges
+      s.define('camera.sensitivity', rig()?.sensitivity ?? 1, { menu: false, apply: v => { if (rig() && 'sensitivity' in rig()) rig().sensitivity = v; } });
+      s.define('camera.invertY', rig()?.invertY ?? false, { menu: false, apply: v => { if (rig() && 'invertY' in rig()) rig().invertY = v; } });
+      s.define('camera.fov', lensFov(e) ?? 50, { menu: false, apply: v => setFov(e, v) });   // the player's slider: yields to a fov the game took (engine.autoView.manual('fov'))
       // a new rig starts from its own defaults (and setCamera resets the fov): put the player's choices back on it
       s._track(e.events.on('camera:change', () => { for (const k of ['camera.sensitivity', 'camera.invertY', 'camera.fov']) s.custom.get(k)?.apply(s.values[k], e); }));
     },

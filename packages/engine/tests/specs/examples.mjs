@@ -142,6 +142,58 @@ export const specs = [
     },
   },
   {
+    // 为什么：old-mine 用 settings.define 加了两行画质开关，菜单里却没有任何一页画它们，玩家够不着、也没人报错。
+    // 这里守住一条不变式：每个没写 menu: false 的定义行，菜单所有页扫一遍后一定画出来；画不了、页不存在、被画两遍都要说一次。
+    name: 'settings.define rows: the menu draws every defined row once, or says why not',
+    url: '/tests/settings/index.html',
+    async run({ check, ev }) {
+      const r = await ev(() => {
+        const S = engine.settings, out = { warns: [] }, warn = console.warn;
+        console.warn = (...a) => { out.warns.push(a.join(' ')); warn(...a); };
+        const err = f => { try { f(); return ''; } catch (x) { return x.message; } };
+        const applied = [];
+        S.define('tRowSwitch', true, v => applied.push(v));                       // 默认进 options 页，标签回落为键名
+        S.define('tRowLabel', false, { label: 'settings.shadows', menu: 'graphics' });   // i18n 键做标签，进图形页
+        S.define('tRowNum', 2, { min: 1, max: 4, step: 0.5 });
+        S.define('tRowPick', 'b', { options: ['a', ['b', 'Bee']] });
+        S.define('tRowOwn', true, { menu: false });                             // 游戏自己的页画
+        S.define('tRowNoEnds', 3);                                              // 画不了：数字没有两端
+        S.define('tRowNowhere', true, { menu: 'nope' });
+        S.addSection('tOwnTab', { title: 'Own', render: (t, e, s) => t.row('own', t.toggle('tRowOwn', s.get('tRowOwn'))) + t.row('dup', t.toggle('tRowSwitch', s.get('tRowSwitch'))) });
+        out.typo = err(() => S.define('tRowTypo', true, { lable: 'x' }));
+        // 'options' 是查找表里的页名：settings({ sections: ['options'] }) 和 addSection('options') 走同一个 _builtin
+        out.named = err(() => S.addSection('options'));
+        // 选项值只能是字符串/数字/布尔：对象在点击或读档后变成 JSON 副本，=== 永远不等，按钮就丢了选中状态
+        out.objChoice = err(() => S.define('tRowObj', 'a', { options: ['a', [{ size: 2 }, 'Big']] }));
+        // 全页扫描：每页的 HTML 拼起来，按不变式核对
+        const html = {};
+        for (const [id] of S._visibleSections()) { S.current = id; html[id] = S._data().body; }
+        const all = Object.values(html).join('');
+        const drawn = k => (all.match(new RegExp(`data-(set|range)="${k}"`, 'g')) || []).length;
+        out.missing = [...S.custom].filter(([k, row]) => row.menu !== false && S.sections.has(row.menu) && !drawn(k)).map(([k]) => k);
+        out.options = html.options || '';
+        out.graphicsHasLabel = (html.graphics || '').includes(engine.t('settings.shadows')) && (html.graphics || '').includes('data-set="tRowLabel"');
+        out.ownOnce = drawn('tRowOwn'); out.noEnds = drawn('tRowNoEnds');
+        S.current = 'options'; S.open(); S.win.refresh();
+        S.win.el.querySelector('[data-set="tRowSwitch"]')?.click(); out.after = S.get('tRowSwitch'); out.applied = applied.join();
+        S.win.el.querySelector('[data-set="tRowPick"][data-value="\\"a\\""]')?.click(); out.pick = S.get('tRowPick');
+        S.close(); console.warn = warn;
+        return out;
+      });
+      check("'options' is a tab name the menu knows (sections list, addSection)", r.named === '', r.named);
+      check('a choice value that is not a string, number or boolean throws at define', /choice value is a string, number or boolean/.test(r.objChoice), r.objChoice);
+      check('every defined row without menu: false is drawn in some tab (scan of every tab)', r.missing.length === 0, r.missing.join());
+      check('kinds: switch, slider with the given ends, buttons with [value, label]; label falls back to the key',
+        /data-set="tRowSwitch"/.test(r.options) && />tRowSwitch</.test(r.options) && /min="1" max="4" step="0.5" value="2" data-range="tRowNum"/.test(r.options) && />Bee</.test(r.options), r.options.slice(0, 600));
+      check('menu names the tab and label is an i18n key', r.graphicsHasLabel);
+      check('a click on a drawn row sets it and runs its apply', r.after === false && r.applied === 'true,false' && r.pick === 'a', JSON.stringify(r));
+      check('menu: false is left to the own tab (once); a row the menu cannot draw is not drawn', r.ownOnce === 1 && r.noEnds === 0, JSON.stringify(r));
+      check('warns once each: undrawable row, missing tab, row drawn twice; a typo in the options throws',
+        r.warns.some(w => /tRowNoEnds.*min, max/.test(w)) && r.warns.some(w => /no tab 'nope'/.test(w)) && r.warns.some(w => /draws 'tRowSwitch' itself/.test(w)) && /lable/.test(r.typo),
+        JSON.stringify({ warns: r.warns, typo: r.typo }));
+    },
+  },
+  {
     name: '状态描述与确定性步进（开放世界）',
     url: '/',
     async run({ check, ev }) {

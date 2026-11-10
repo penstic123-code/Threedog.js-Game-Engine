@@ -735,8 +735,11 @@ export interface AudioVolumeData { base?: number; add?: Record<string, number>; 
 export type AudioVolume = number | AudioVolumeData | ((e: Engine, ...extra: any[]) => number);
 /** One ambience rule: while `when` holds, `sound` plays at `volume`. With `every` it is a one-shot repeated at random gaps, else a loop */
 export interface AmbienceRule {
-  sound: string;
+  /** A name from audio.sounds; required unless the rule is a reverb rule */
+  sound?: string;
   when?: AudioCondition;
+  /** Instead of a sound: the reverb's wet (0-1, or the volume forms) while `when` holds; the highest holding one wins, none gives engine.audio.reverb's own wet back. Not with sound / volume / every / bus @experimental */
+  reverb?: number | AudioVolumeData | ((e: Engine, ambience: import('./gameplay').Ambience) => number);
   /** 0-1, data { base, add: { measure: factor }, min, max }, or a function of the moment (e, ambience) => 0-1 (code only) */
   volume?: number | AudioVolumeData | ((e: Engine, ambience: import('./gameplay').Ambience) => number);
   /** Fade seconds when the rule turns on / off (1) */
@@ -2103,7 +2106,8 @@ export declare class Engine {
   /**
    * Around the main frame render, after the camera update and batching. when 'before' (default): render into your own render target here
    * (mirror, minimap, portal, picking); the render target is reset to the screen afterwards. 'after': right after the frame (read pixels).
-   * The main frame render itself stays the engine's (post chain). Returns a handle { remove() }
+   * The main frame render itself stays the engine's (post chain). fn gets { renderer, scene, camera, dt }: dt is this frame's seconds, the same
+   * value onFrame gets (no performance.now() bookkeeping needed). Returns a handle { remove() }
    * @example const rt = new THREE.WebGLRenderTarget(256, 256);
    * engine.onRender(({ renderer, scene }) => { renderer.setRenderTarget(rt); renderer.render(scene, mapCam); });
    */

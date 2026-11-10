@@ -14,7 +14,7 @@ Rules (correctness, not taste): `import 'threedog/tsl'` comes first in `main.js`
 `onBeforeCompile`, three.js `Pass` objects, GLSL-only patches and hooks), and each one fails by name instead of drawing nothing.
 
 ## WebGPU or WebGL
-`threedog new-game` and `threedog init` start a game on WebGPU with TSL (`main.js` imports `threedog/tsl` first and calls `createEngine({ renderer: 'webgpu' })`). `--webgl` starts it on GLSL instead. `createEngine` called without `renderer` still builds a WebGL renderer. When the browser has no WebGPU the game keeps running on three's WebGL2 backend, and `engine.describe().renderer` says why. How to decide:
+`threedog new-game` and `threedog init` start a game on WebGPU with TSL (`main.js` imports `threedog/tsl` first and calls `createEngine({ renderer: 'webgpu' })`). `--webgl` starts it on GLSL. `createEngine` without `renderer` builds a WebGL renderer. Without browser WebGPU the game runs on three's WebGL2 backend (`engine.describe().renderer` says why). How to decide:
 - WebGPU + TSL (the default): shaders are JavaScript functions you compose, three's WebGPU examples apply, and node-only effects are open to you.
 - `--webgl` + GLSL (recipe 43): the game already has GLSL (ShaderMaterials, `onBeforeCompile`, a three.js `Pass`), must run best on modest hardware, or start-up time matters more.
 - Measure on the hardware you care about (`threedog inspect perf`, both routes, same scene): on an integrated GPU expect WebGPU slower per frame than plain WebGL, the WebGL2 backend slower still, and a later first frame (shader compilation).
@@ -143,7 +143,7 @@ engine.add(new THREE.Mesh(new THREE.DodecahedronGeometry(1), rock));
 ```
 
 ## Half-transparent surfaces differ from plain WebGL, fog does not
-Fog is mixed in linear space before tone mapping on every path (WebGPU, WebGL with an effect on, and WebGL straight to the canvas, where the engine's `fog-linear` patch moves three's fog mix before the tone curve), so fog does not change colour when the first post effect turns on. Half-transparent and additive surfaces still differ: WebGL straight to the canvas blends them in display values after tone mapping; WebGPU, and WebGL with any `engine.post` effect on, blend in linear and tone-map once. They shift a little on the straight WebGL path (more in dim scenes), and turning the first post effect on there can move them. This is three.js's own model, not a fault in your scene.
+Fog is mixed in linear space before tone mapping on every path (WebGPU, WebGL with an effect on, and WebGL straight to the canvas, where the engine's `fog-linear` patch moves three's fog mix before the tone curve), so fog does not change colour when the first post effect turns on. Half-transparent and additive surfaces still differ: WebGL straight to the canvas blends them in display values after tone mapping; WebGPU, and WebGL with any `engine.post` effect on, blend in linear and tone-map once. They shift a little on the straight WebGL path (more in dim scenes), and the first post effect can move them there. This is three.js's own model, not a fault in your scene.
 
 ## Sky and fog hooks
 The engine's sky dome has a node version; nothing changes in how you set it (recipe 08). The GLSL hooks (`engine.sky.clouds`, `engine.sky.layer`

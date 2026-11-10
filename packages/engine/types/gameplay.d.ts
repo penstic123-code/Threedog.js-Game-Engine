@@ -297,6 +297,8 @@ export interface ParticleOptions {
   ratePerMeter?: number;
   /** Meters over which a particle fades where it meets what writes depth; default 0, off. Set at define, not in overrides. On WebGLRenderer it costs one depth-only draw of the scene per render while such an effect is on screen @experimental */
   soft?: number;
+  /** The scene's lights tint each particle's color (dust a lamp lights): point, spot, directional, ambient, hemisphere, as a matte card facing each light. No shadows, environment map or probes. Default false (the color is drawn as given). Set at define, not in overrides; costs live particles x lights per frame on the CPU, the same on both renderers @experimental */
+  lit?: boolean;
 }
 /** Continuous emitter returned by attach() (a handle) */
 export interface ParticleEmitter extends Handle {
@@ -444,8 +446,14 @@ export interface Settings {
   preset(name: 'low' | 'medium' | 'high' | (string & {})): void;
   /** Game-defined setting: default value + apply function (saved automatically), or { apply, limits }. limits names the shared value(s) the row
    * restricts on the settings layer, like the built-in shadows row: off holds it off (the scene, weather or a cutscene cannot turn it back on),
-   * on allows what the scene chose; a number row from 0 to 1 is a factor on a number value. Define it after the effect exists */
-  define<T = any>(key: string, def: T, apply?: ((value: T, e: Engine) => void) | { apply?: (value: T, e: Engine) => void; limits?: string | string[] }): this;
+   * on allows what the scene chose; a number row from 0 to 1 is a factor on a number value. Define it after the effect exists.
+   * The menu draws the row itself in the tab menu names (default 'options', shown while it has a row): a switch for true/false, a slider for a
+   * number (min/max; a limits row has 0..1), buttons for options. label: an i18n key or text, else the key. menu: false when your own tab draws it;
+   * a row the menu cannot draw, a missing tab or a row drawn twice warns once */
+  define<T = any>(key: string, def: T, apply?: ((value: T, e: Engine) => void) | {
+    apply?: (value: T, e: Engine) => void; limits?: string | string[];
+    menu?: string | false; label?: string; options?: (T | [T, string])[]; min?: number; max?: number; step?: number;
+  }): this;
   /** Add a tab of your own, or a built-in / optional one by name: addSection('camera') */
   addSection(id: string, section?: SettingsSection): this;
   open(): void;

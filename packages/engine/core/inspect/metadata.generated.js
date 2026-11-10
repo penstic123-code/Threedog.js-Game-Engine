@@ -3977,7 +3977,14 @@ export const metadata = {
    "seen": "a hand-made inventory (items kept in your own array / object)",
    "use": "the inventory module: engine.use(inventory()), engine.inventory.add / remove / has (counts, containers, events, saved with the game)",
    "quiet": "/\\b(engine|e|eng)\\.inventory\\b|\\binventory\\(\\s*[{)]/",
-   "code": "/(?:\\b(?:const|let|var)\\s+|\\bthis\\.)(inventory|backpack|bag|pockets|inv)(?:Items|Slots|List|Contents|Data|Map|Counts?|s)?\\s*=\\s*(\\[\\s*\\]|\\{\\s*\\}|new Map\\b|new Set\\b)/i",
+   "code": "/\\b(?:inventory|backpack|bag|pockets|inv)(?:Items|Slots|List|Contents|Data|Map|Counts?|s)?\\s*(?:[=:]\\s*\\(?\\s*(?:\\[\\s*\\]|\\{\\s*\\}|new Map\\b|new Set\\b)|\\.(?:push|splice|unshift|reduce)\\()/i",
+   "near": [
+    {
+     "re": "/[<>]=?\\s*(?:[\\w$]+\\.)*(?:capacity|cap|max\\w*|slots?|limit)\\w*\\b(?!\\s*\\()/i",
+     "lines": 3,
+     "on": "code"
+    }
+   ],
    "tags": false,
    "file": "packages/engine/modules/gameplay/Inventory.js"
   },
@@ -4102,10 +4109,10 @@ export const metadata = {
    "seen": "a hand-made reach check for interacting",
    "use": "engine.interactions.add(target, { ... }): prompt, range and the interact action are handled (recipe 20)",
    "quiet": "/\\b(engine|e|eng|ctx)\\.interactions\\b/",
-   "code": "/(?:\\bdistanceTo(?:Squared)?\\(|\\bMath\\.hypot\\(|\\bdist(?:ance)?\\w*)[^;]*<=?\\s*\\d/",
+   "code": "/(?:\\bdistanceTo(?:Squared)?\\(|\\bMath\\.hypot\\(|\\bdist(?:ance)?\\w*)[^;]*<=?\\s*[\\w.]/",
    "near": [
     {
-     "re": "/KeyE|['\"]e['\"]|interact|press e\\b|talk/i",
+     "re": "/KeyE|['\"]e['\"]|press e\\b|\\.hud\\.hint\\(/i",
      "lines": 3,
      "on": "raw"
     }

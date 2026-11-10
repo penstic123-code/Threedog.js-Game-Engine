@@ -11,6 +11,7 @@ sun.position.set(40, 80, 30);
 sun.castShadow = true;
 sun.shadow.mapSize.setScalar(engine.tier === 'low' ? 1024 : 2048);
 engine.scene.add(sun);
+if (engine.lights.sun) engine.lights.sun.castShadow = false;  // WebGL: cascades must be the only shadowing DirectionalLight (or createEngine({ lights: false }))
 
 const shadows = engine.shadows.cascades(sun, { count: 3, maxFar: 150 });
 engine.onRender(() => sun.position.copy(engine.uniforms.uSunDir.value).multiplyScalar(100));  // aim it as usual
@@ -67,6 +68,7 @@ lights). The cascade shadow cameras reach `lightMargin + 2 * maxFar` meters, as 
 ## Rules of the entry
 It works with and without a sky, on both renderers (WebGPU needs `import 'threedog/tsl'`, or the call says so).
 - The light must be a DirectionalLight, a direct child of `engine.scene`, with `castShadow = true`; anything else throws at the call.
+- On WebGL the cascades must be the only shadow-casting DirectionalLight: cascades on your own light while `engine.lights.sun` (or any other DirectionalLight) casts throws at the call (`shadow-cascades`), because three's CSM shader reads one cascade per shadow-casting directional light. Set `engine.lights.sun.castShadow = false` first, or put the cascades on the sun. Turning such a light's `castShadow` on later is not caught: the patched materials then fail to compile.
 - Color, intensity, `visible`, `castShadow` and `light.shadow` values stay yours and are read every frame. The cascades only place the light. On WebGL, while they are on,
   `light.position` and `light.target` hold that placement: writes to `light.position` or a new `light.target` still set the direction, and
   `remove()` puts both back as you left them, with the shadow camera box. A `light.target` you assigned (your player, say) is never moved.

@@ -494,4 +494,7 @@ function defineUse(e, ctx, i) {
   });
 }
 
-export const handRolled = [{ kind: 'reach', seen: 'a hand-made reach check for interacting', use: 'engine.interactions.add(target, { ... }): prompt, range and the interact action are handled (recipe 20)', quiet: /\b(engine|e|eng|ctx)\.interactions\b/, code: /(?:\bdistanceTo(?:Squared)?\(|\bMath\.hypot\(|\bdist(?:ance)?\w*)[^;]*<=?\s*\d/, near: [{ re: /KeyE|['"]e['"]|interact|press e\b|talk/i, lines: 3, on: 'raw' }] }];
+// Why this detection: hand-written interaction often compares Math.hypot(...) < RULES.cartReach next to engine.input.pressed('mine') and engine.hud.hint; a check limited to numeric thresholds and E / interact words missed it.
+// Two signals needed: a distance comparison (threshold may be a name or a number) plus a nearby player-facing hud.hint, or an E key itself.
+// Not matched: arbitrary action names or keys: pressed('attack' / 'use') && distanceTo(enemy) < weapon.range is combat reach; toast is a result, not a prompt (it caused a false report on a falling-rock handler).
+export const handRolled = [{ kind: 'reach', seen: 'a hand-made reach check for interacting', use: 'engine.interactions.add(target, { ... }): prompt, range and the interact action are handled (recipe 20)', quiet: /\b(engine|e|eng|ctx)\.interactions\b/, code: /(?:\bdistanceTo(?:Squared)?\(|\bMath\.hypot\(|\bdist(?:ance)?\w*)[^;]*<=?\s*[\w.]/, near: [{ re: /KeyE|['"]e['"]|press e\b|\.hud\.hint\(/i, lines: 3, on: 'raw' }] }];

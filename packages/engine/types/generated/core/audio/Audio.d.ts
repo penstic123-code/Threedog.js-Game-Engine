@@ -46,6 +46,23 @@ export class Audio {
     */
     setVolume(bus: string, v: number): void;
     /**
+     * The one reverb: a send/return any bus can feed (a cave, a hall, a bathroom). Off until called: nothing is built or heard before. Each call
+     * changes only the keys given (sends merge per bus; 0 stops one); null turns it off. The echo of a bus follows its slider and its ducks, and
+     * comes back through master. The impulse is generated (decaying noise, no file): changing size or decay rebuilds it, wet and sends only fade.
+     * Called before the first click it waits for audio to unlock. Places: an ambience rule { reverb: 0.6, when: { zone: 'cave' } } sets wet while it holds (recipes/31 §9)
+     * @param {{ wet?: number, decay?: number, size?: number, sends?: Record<string, number>, fade?: number } | null} opts wet 0-1 (0.3), decay seconds to -60 dB (2), size 0-1 (0.5), fade seconds
+     * @returns {void}
+     * @example engine.audio.reverb({ sends: { sfx: 0.5, ambience: 0.8 }, decay: 3, size: 0.8, wet: 0.4 });
+     * @experimental
+     */
+    reverb(opts: {
+        wet?: number;
+        decay?: number;
+        size?: number;
+        sends?: Record<string, number>;
+        fade?: number;
+    } | null): void;
+    /**
      * Lower buses until the handle is removed (dialogue, pause menu, a cutscene). Several ducks stack (their levels multiply).
      * @param {Record<string, number>} levels bus -> multiplier 0-1
      * @param {{ fade?: number }} [opts] fade seconds both ways (0.3)
@@ -128,7 +145,8 @@ export class Audio {
     /**
      * What is playing (describe().audio shows it while something is ducked or playing): bus levels, the duck multiplier per bus, live voices per sound name.
      * ducks is the level the active ducks ask for (1 = not lowered), read at once even while a fade is still ramping or the audio clock does not run (headless page).
-     * @returns {{ running: boolean, state: string | null, levels: Record<string, number>, ducks: Record<string, number>, voices: Record<string, number> }}
+     * reverb (only once reverb() was called): its targets, `place` while an ambience rule sets wet, `built` once audio unlocked.
+     * @returns {{ running: boolean, state: string | null, levels: Record<string, number>, ducks: Record<string, number>, voices: Record<string, number>, reverb?: { wet: number, decay: number, size: number, sends: Record<string, number>, place?: number, built: boolean } }}
      * @example engine.audio.duck({ music: 0.3 }); engine.audio.info.ducks.music   // 0.3
      */
     get info(): {
@@ -137,6 +155,14 @@ export class Audio {
         levels: Record<string, number>;
         ducks: Record<string, number>;
         voices: Record<string, number>;
+        reverb?: {
+            wet: number;
+            decay: number;
+            size: number;
+            sends: Record<string, number>;
+            place?: number;
+            built: boolean;
+        };
     };
     /**
      * Synth building block: a burst of filtered noise (footsteps, shutter, rain, thunder). dur seconds, freq Hz, vol 0-1; out: the node to

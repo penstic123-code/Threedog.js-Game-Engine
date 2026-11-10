@@ -29,12 +29,12 @@ Taking over a game: its status notes first. A new feature: docs/AI.md or threedo
 - Own material or shader (toon, cel shading): docs/recipes/43-shader-patches-surfaces.md §"Your own material", 56-webgpu-tsl.md §"A minimal TSL material"
 - WebGPU (new games' default), TSL node materials, WebGL fallback: docs/recipes/56-webgpu-tsl.md §"WebGPU or WebGL"
 - three.js idioms, own renderer: docs/recipes/50-own-renderer.md
-- Dust, smoke: docs/recipes/64-particles.md
+- Dust, smoke (lit: true): docs/recipes/64-particles.md
 - Sky, season tints, weather, wet roads: docs/recipes/08-weather-sky.md §1
 - Water, rain, snow cover (own rain: THREE.md): docs/recipes/44-water-weather-hooks.md
 - Shadows: blur, follow, cost: docs/recipes/45-cascaded-shadows.md
 - Own far, fov; clouds: docs/recipes/52-around-the-picture.md §"Atmosphere"
-- Environment light, reflections, probes, lightmaps, GI, culling: docs/recipes/34-environment-lighting.md §"Environment maps"
+- Environment light, reflections, probes, lightmaps, GI, culling, shafts: docs/recipes/34-environment-lighting.md §"Environment maps"
 - Post passes: color grading, bloom, outline, depth, AO: docs/recipes/52-around-the-picture.md §"Post effect chain", 59-depth-post-effects.md
 - Many lights (torches); windows, signs at night: docs/recipes/09-materials-lights-models.md §1b
 - Picture from a reference; judge: docs/recipes/35-picture-from-reference.md §"The loop", 60-judge-the-picture.md

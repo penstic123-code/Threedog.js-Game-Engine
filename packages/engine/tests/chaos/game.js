@@ -1,10 +1,16 @@
 // The composite game the chaos driver plays: one small world built only through the public API, with every system the driver touches in it at once, because
 // the bugs worth finding sit between systems. Level, player, NPCs, a car, templates with bodies, solid and tilted props, content, inventory, quests, a
 // camera with shots, post effects, particles, weather and sky. Everything is code-built, so no run waits on a file.
-import { createEngine, presets, THREE, world, content, sky, weather, collision, rigid, followCamera, characters, inventory, pickups, quests, triggers, particles, interactions, dialogue, timeline } from '../../index.js';
+import { createEngine, presets, THREE, world, content, sky, weather, collision, rigid, followCamera, characters, inventory, pickups, quests, triggers, particles, interactions, dialogue, timeline, settings, photo } from '../../index.js';
 import { level } from '../../modules/level/index.js';
 import { nav } from '../../modules/nav/index.js';
-import { bloom, grain } from '@threedog/post-effects';
+import { bloom, grain, vignette, chromatic, ao, dof, outline, lut } from '@threedog/post-effects';
+
+// The renderer route: ?renderer=webgpu gives a renderer: 'webgpu' engine (its WebGL2 backend where the browser has no WebGPU), else WebGL. The same switch as
+// perf.mjs, so the spec changes only the page address and every action runs unchanged on both
+export const RENDERER = new URLSearchParams(location.search).get('renderer') === 'webgpu' ? 'webgpu' : 'webgl';
+/** Post effects the picture actions add, by name: the public factories a game calls, with no wrapper of the harness's own */
+export const FX = { bloom, grain, vignette, chromatic, ao, dof, outline, lut };
 
 const grey = c => new THREE.MeshLambertMaterial({ color: c });
 
@@ -44,13 +50,16 @@ function makeRig() {
   return g;
 }
 
+/** Weather types: clear and wet for the old actions; white and storm give the picture actions other strengths (storm is the preset row: lightning, fog, wind) */
+export const WEATHER = { clear: {}, wet: { rain: 1 }, white: { snow: 1 }, storm: { ...presets.weather.temperate.types.storm } };
+
 /** Fresh module instances by slot: the driver swaps and reinstalls through these. name is the module's installed name */
 export const MODS = [
   { slot: 'collision', name: 'collision', make: () => collision() },
   { slot: 'rigid', name: 'rigid', make: () => rigid() },
   { slot: 'nav', name: 'nav', make: () => nav({ agentRadius: 0.4 }) },
   { slot: 'cameraRig', name: 'cameraRig', make: () => followCamera({ distance: 6 }) },
-  { slot: 'weather', name: 'weather', make: () => weather({ types: { clear: {}, wet: { rain: 1 } } }) },
+  { slot: 'weather', name: 'weather', make: () => weather({ types: WEATHER }) },
   { slot: 'sky', name: 'sky', make: () => sky({ time: 0.4 }) },
   { slot: 'quests', name: 'quests', make: () => quests({ notify: false }) },
   { slot: 'particles', name: 'particles', make: () => particles() },
@@ -81,8 +90,9 @@ export const NPCS = [
 /** Build and start one game. saveKey keeps runs apart; seed feeds engine.random */
 export async function buildGame({ saveKey, seed }) {
   const canvas = Object.assign(document.createElement('canvas'), { width: 96, height: 64 });
-  const E = createEngine({ canvas, pixelRatio: 1, adaptiveResolution: false, antialias: false, ui: { loading: false }, urlState: false, headless: true, saveKey, seed, bindings: { ...presets.bindings.walk } });
-  E.use(world(), content(), level({ scene: levelScene(0) }), ...MODS.map(m => m.make()), characters({ npcs: true }), inventory(), pickups(), triggers(), interactions({ ...presets.interactions.nearest }), dialogue(), timeline());
+  if (RENDERER === 'webgpu') await import('threedog/tsl');   // what a WebGPU game imports first (node post backend, TSL patches)
+  const E = createEngine({ canvas, ...(RENDERER === 'webgpu' ? { renderer: 'webgpu' } : {}), pixelRatio: 1, adaptiveResolution: false, antialias: false, ui: { loading: false }, urlState: false, headless: true, saveKey, seed, bindings: { ...presets.bindings.walk } });
+  E.use(world(), content(), level({ scene: levelScene(0) }), ...MODS.map(m => m.make()), characters({ npcs: true }), inventory(), pickups(), triggers(), interactions({ ...presets.interactions.nearest }), dialogue(), timeline(), settings(), photo());
   E.assets.manifest({ name: 'chaos', models: {
     'chaos-box': () => new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), grey(0x996633)),
     'chaos-slab': () => new THREE.Mesh(new THREE.BoxGeometry(3, 2, 0.4), grey(0x667788)),

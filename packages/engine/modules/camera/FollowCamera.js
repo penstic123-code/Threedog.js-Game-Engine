@@ -135,6 +135,7 @@ export class FollowCamera {
     }
     this.arm = cam.position.distanceTo(pivot);
     if (this.hideTargetNear > 0 && this.arm < this.hideTargetNear) this._hide(); else this._unhide();
+    this._carriedLights();   // close-up hides the body too: a torch in hand is then not shadowed by it (common.js HIDE_RIG)
     cam.lookAt(fx, fy, fz);
   }
 

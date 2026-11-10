@@ -4,6 +4,8 @@
 // Import only three/tsl, three/webgpu and engine files that pull in nothing WebGL-only (effects.js registers ShaderChunks, so it stays out).
 export * from './library.tsl.js';
 export { uniforms } from './uniforms.tsl.js';
+// A mesh maker, not an Fn: lists here and not in library.tsl.js, so patch code's `fx` (Fn only) does not offer it
+export { lightShaft } from './lightShaft.tsl.js';
 // Registers what a patch's `tsl` field does on a NodeMaterial (render/patches.js looks it up; nothing to call)
 import './patchNodes.tsl.js';
 // Registers the node versions of the particle / weather shaders (modules/particles and modules/weather drawing them up on WebGPURenderer)

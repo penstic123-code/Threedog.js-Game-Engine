@@ -43,12 +43,12 @@ A row or `threedog how` -> recipe -> `api/<module>.md`. Also: `CONVENTIONS.md`, 
 | Own material or shader (toon, cel shading) | TSL (WebGPU), `ShaderMaterial` (WebGL), `rampTexture`, `celLighting` | 43-shader-patches-surfaces.md §"Your own material", 56-webgpu-tsl.md §"A minimal TSL material" |
 | WebGPU (new games' default), TSL node materials, WebGL fallback | `renderer: 'webgpu'`, `import 'threedog/tsl'` | 56-webgpu-tsl.md §"WebGPU or WebGL" |
 | three.js idioms, own renderer | the idiom table in `THREE.md`, `createEngine({ renderer })` | 50-own-renderer.md |
-| Dust, smoke | `engine.particles` | 64-particles.md |
+| Dust, smoke (`lit: true`) | `engine.particles` | 64-particles.md |
 | Sky, season tints, weather, wet roads | `engine.sky`, `engine.weather`, `engine.weatherDraw` | 08-weather-sky.md §1 |
 | Water, rain, snow cover (own rain: `THREE.md`) | `engine.water`, `weather({ rain, snow })` | 44-water-weather-hooks.md |
 | Shadows: blur, follow, cost | `engine.shadows` | 45-cascaded-shadows.md |
 | Own far, fov; clouds | `engine.autoView`, `engine.shaderTerms` | 52-around-the-picture.md §"Atmosphere" |
-| Environment light, reflections, probes, lightmaps, GI, culling | `engine.sky.environment`, `engine.bakeProbes`, `engine.loadLightmap`, `engine.occlusion` | 34-environment-lighting.md §"Environment maps" |
+| Environment light, reflections, probes, lightmaps, GI, culling, shafts | `engine.sky.environment`, `engine.bakeProbes`, `engine.loadLightmap`, `engine.occlusion`, `lightShaft` | 34-environment-lighting.md §"Environment maps" |
 | Post passes: color grading, bloom, outline, depth, AO | `engine.post.add(pass)`, `@threedog/post-effects` | 52-around-the-picture.md §"Post effect chain", 59-depth-post-effects.md |
 | Many lights (torches); windows, signs at night | `engine.lightPool`, `uNight` | 09-materials-lights-models.md §1b |
 | Picture from a reference; judge | `threedog picture palette`, `threedog examples list` | 35-picture-from-reference.md §"The loop", 60-judge-the-picture.md |

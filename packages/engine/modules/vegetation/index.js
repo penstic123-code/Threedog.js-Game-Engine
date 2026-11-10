@@ -68,7 +68,7 @@ export function vegetation(opts = {}) {
     async init(e) {
       if (own && e.terrain) throw codedError('module-requires', 'vegetation() was installed before terrain(): put terrain() first, vegetation then grows on its chunks');
       // over a level or a code-built ground these chunks are the only ones: their rows are this module's to offer (on terrain, the terrain's)
-      if (own) e.settings?.define('viewChunks', own.viewChunks, n => { if (own.viewChunks !== n) own.viewChunks = n; }).define('density', own.density, n => { if (own.density !== n) own.density = n; });
+      if (own) e.settings?.define('viewChunks', own.viewChunks, { menu: false, apply: n => { if (own.viewChunks !== n) own.viewChunks = n; } }).define('density', own.density, { menu: false, apply: n => { if (own.density !== n) own.density = n; } });   // the graphics tab draws them
       await v.whenLoaded();   // densityMap.url images of species added before start
     },
     frame(dt, e) { own?.update(e.stream.sources(), e.camera); },

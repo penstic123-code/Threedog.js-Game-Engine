@@ -117,7 +117,7 @@ every id in `describe().owned` (when the engine yields, the warning and `written
 a console write or a bundled build (`threedog shot`, `npm test`) answers `not tracked` with the reason. Nothing is blocked, and an unchanged write is not seen, so no conflict is not proof of none.
 
 **A conflict hint** is one line: `fog.far: two writers in one frame, picture/sky.js:14 and picture/rival.js:3; the last write stands`, and `engine.explain({ value: 'fog.far' })` has the history and the fix.
-Two writers that never share a frame but keep overwriting each other read `taking turns across frames` (one state handing a value to another does not count). Fix: one part owns the value; delete the other write or turn it into a signal or shared value the owner reads. It warns once per value; writes through a shared helper count as the helper's line.
+Two writers that never share a frame but keep overwriting each other read `taking turns across frames` (one state handing a value to another does not count). Fix: one part owns the value; delete the other write or make it a signal or shared value the owner reads. Warns once per value; writes through a shared helper count as the helper's line.
 
 ## 3d. Save to the library, pull it out
 A part of the picture that worked can go into your library (outside the repo, `~/.threedog/library`) and come back in the next game:
@@ -156,7 +156,7 @@ const dusk = engine.mod('sun.level', { owner: 'sunset', mul: 0.6 });
 const hold = engine.mod('sun.level', { owner: 'cutscene', mul: 0.3, for: 4 });  // 0.18 while both are on
 dusk.remove();  // they end in any order
 ```
-An amount that moves takes one entry and changes it: `const wet = ctx.mod('sun.level', { mul: 1 });` once in the install, then `wet.change(1 - 0.5 * rain)` each frame (a `ctx.mod` per frame piles up entries). In a module use `ctx.mod`: the change goes with the module.
+An amount that moves takes one entry and changes it: `const wet = ctx.mod('sun.level', { mul: 1 });` once in the install, then `wet.change(1 - 0.5 * rain)` each frame (a `ctx.mod` per frame piles up entries). In a module use `ctx.mod`: it goes with the module.
 `describe().shared` shows who holds it and why it reads what it reads. A value only one part writes needs none of this: write the light.
 
 ## 3f. Picture parts: three.js code from different sources in one game
@@ -180,7 +180,7 @@ export const harborFog = ({ near = 10, far = 200 } = {}) => ({
   },
 });
 ```
-`ctx.borrow(obj, values)` writes properties on something the part does not own (`scene.fog`, `renderer.toneMapping`, the engine dome's `visible`) and restores them when the part goes or is disabled after an error, or on the handle's `remove()`. A value goes back only while this borrow holds it and it is what the borrow wrote, so a fog the game set meanwhile stands. One property has one holder: a second borrow of it is refused, so a value several parts want goes on a shared point (`engine.mod`).
+`ctx.borrow(obj, values)` writes properties on something the part does not own (`scene.fog`, `renderer.toneMapping`, the engine dome's `visible`) and restores them when the part goes, is disabled after an error, or on the handle's `remove()`. A value goes back only while this borrow holds it and it is what the borrow wrote, so a fog the game set meanwhile stands. One property has one holder (a second borrow is refused): a value several parts want goes on a shared point (`engine.mod`).
 `engine.use(harborFog())` installs it, `engine.unuse('harborFog')` removes it, `engine.use(otherFog(), { replaces: 'fog' })` swaps it. A part may use its own hooks (the single `onRender` of 3c is for one author's folder).
 
 **A value is one of three kinds, and each has one rule:**
@@ -219,7 +219,7 @@ not named `'sun'`, and taste (a warm lamp against a cold sea): that takes a scre
 engine.use(duskPicture(), { replaces: 'picture' });  // the old look's lights, hooks, post effects and borrowed values go first
 for (const m of myMeshes) m.material = engine.picture.materials[m.userData.surface];
 ```
-The old materials are disposed, and the engine cannot know which of your meshes hold them: **a mesh holding an old look's material must take the new one**, by name as above. Everything the look added itself leaves with it, as long as it went through `ctx`.
+The old materials are disposed and the engine cannot know which of your meshes hold them: **a mesh holding an old look's material must take the new one**, by name as above. What the look added through `ctx` leaves with it.
 
 ## 4. A flat illustration (one way among many)
 Light alone turns a warm wall under a cool night fill into mud. An illustrator keeps each surface its own color and only shifts it:
@@ -235,9 +235,9 @@ environment map comes out too dark on faces away from the sun: raise the ambient
 
 ## 4b. Pixel art: low-resolution rendering with sharp scaling
 Pixel art means drawing fewer pixels and then keeping every edge hard when they are enlarged. One engine option does the screen side:
-- **`createEngine({ pixelSize: k })`, or `engine.setPixelSize(k)` during play.** One art pixel is k real screen pixels, every one the same width at any display scale, and it stays so through a page zoom or a move to another display. The canvas gets `image-rendering: pixelated`, and `antialias` defaults to off (it blends the edges you want hard, and can only be set at creation: passing `antialias: true` warns). A whole number of art pixels rarely fills the canvas, so the last few real pixels at the right and bottom, fewer than k, stay empty and show the page behind; the box the page laid out does not change. `engine.setPixelSize(null)` turns it off.
-- **Nothing else changes the size while it is on.** Adaptive resolution stops; the quality tier leaves the ratio alone. `engine.setPixelRatio` throws `pixel-conflict`, and so does `createEngine` given `pixelRatio` or `adaptiveResolution: true` as well. `engine.photo.take()` keeps the art pixels: the picture is the drawing buffer's size, whatever its `scale`. A direct `renderer.setPixelRatio` still wins, as everywhere in three.js: the engine stops fitting the canvas (recipe 52).
-- **The menu follows.** While it is on the settings menu has no render scale or adaptive row, and no preset or stored value moves the ratio. Leave out the anti-aliasing row, which would blend edges: `settings({ sections: [{ id: 'graphics', omit: ['antialias'] }, 'audio', 'controls', 'language', 'saves'] })` (an omitted row keeps your value).
+- **`createEngine({ pixelSize: k })`, or `engine.setPixelSize(k)` during play.** One art pixel is k real screen pixels at any display scale, through a page zoom or a move to another display. The canvas gets `image-rendering: pixelated`, and `antialias` defaults to off (it blends hard edges; creation-time only: `antialias: true` warns). Fewer than k real pixels at the right and bottom stay empty and show the page behind. `engine.setPixelSize(null)` turns it off.
+- **Nothing else changes the size while it is on.** Adaptive resolution stops; the quality tier leaves the ratio alone. `engine.setPixelRatio` throws `pixel-conflict`, and so does `createEngine` given `pixelRatio` or `adaptiveResolution: true` as well. `engine.photo.take()` keeps the art pixels (the drawing buffer's size, whatever its `scale`). A direct `renderer.setPixelRatio` still wins, as in three.js: the engine stops fitting the canvas (recipe 52).
+- **The menu follows.** The settings menu has no render scale or adaptive row, and no preset or stored value moves the ratio. Leave out the anti-aliasing row: `settings({ sections: [{ id: 'graphics', omit: ['antialias'] }, 'audio', 'controls', 'language', 'saves'] })` (an omitted row keeps your value).
 - **Sample sharply.** `engine.assets.texture(name, { pixelated: true })` sets `NearestFilter` for enlarging and `NearestMipmapNearestFilter` for shrinking. On a texture of
   your own, set `magFilter` and `minFilter` to `THREE.NearestFilter`.
 ```js
@@ -251,25 +251,25 @@ resolution. Objects that move by less than an art pixel shimmer; `pixelSnap` and
 engine.use(followCamera({ projection: 'orthographic', yaw: Math.PI / 4, pitch: 0.6, lockPitch: true, mouseLook: false,
   pixelSnap: { pixelsPerMeter: 32, bounds: { minX: -20, maxX: 20, minZ: -20, maxZ: 20 } } }));
 ```
-- **`pixelsPerMeter` decides the view height.** The view must show buffer height / `pixelsPerMeter` world units, or the grid and the picture disagree, so `pixelSnap` sets it, also after a resize. `size` with `pixelSnap` throws `pixel-conflict`; on `fixedCamera` every shot says `projection: 'orthographic'` and has no `size`. The wheel does not zoom: `engine.setPixelSize(k)` is the zoom that keeps art pixels whole, and it needs nothing else. If the game writes `camera.zoom` or `orthoSize` itself, a `pixel-conflict` warning says so, rounding stops, and `describe().camera.pixelSnap.agrees` reads `false` until it is put back.
-- **`bounds`** is a world rectangle (`minY` and `maxY` are optional, 0 by default). The camera does not show past it. It is projected on the screen's axes and rounded inward, the true position is clamped, and only then rounded, so sliding along a bound stays on whole art pixels. On an axis where the level is smaller than the view, the camera centers. Turning the view changes the screen rectangle: at 45 degrees of yaw it is a box around a diamond, so the view can show the empty corners outside the level. Fill them with something, or keep the yaw near a multiple of 90 degrees.
+- **`pixelsPerMeter` decides the view height.** The view must show buffer height / `pixelsPerMeter` world units, so `pixelSnap` sets it, also after a resize. `size` with `pixelSnap` throws `pixel-conflict`; on `fixedCamera` every shot says `projection: 'orthographic'` and has no `size`. The wheel does not zoom: `engine.setPixelSize(k)` is the zoom that keeps art pixels whole. If the game writes `camera.zoom` or `orthoSize` itself, a `pixel-conflict` warning says so, rounding stops, and `describe().camera.pixelSnap.agrees` reads `false` until it is put back.
+- **`bounds`** is a world rectangle (`minY` and `maxY` are optional, 0 by default). The camera does not show past it. It is projected on the screen's axes and rounded inward; the true position is clamped, then rounded, so sliding along a bound stays on whole art pixels. Where the level is smaller than the view, the camera centers. At 45 degrees of yaw the screen rectangle is a box around a diamond and shows empty corners: fill them, or keep yaw near a multiple of 90 degrees.
 - **Turns.** The grid is read fresh each frame, so a turn or a new `pixelSize` needs no reset. While the view is turning, nothing can hold still on a grid that turns with it; a `track: true` shot on `fixedCamera` turns all the time.
 - **A cutscene** holding `engine.takeCamera` is not rounded.
 - **The leftover.** `engine.cameraRig.pixelSnap.error` is the last rounding in art pixels on each screen axis, for a game that wants to slide the final image for smooth scrolling (the engine does not).
 
-**The grid on its own.** `threedog/pixel` is math and plain three.js objects, with no look of its own. `engine.cameraRig.pixelSnap.grid` is the camera's grid; `pixelGrid({ camera, pixelsPerMeter })` makes one for a camera of yours. `snap(world)` rounds a point on the screen's axes and keeps its depth, `error(world)` says by how much, `toScreen` and `toWorld` convert, and `axes()` gives right, up and forward. Round a drawn position with these, not by hand: never move what physics or a save reads.
+**The grid on its own.** `threedog/pixel` is math and plain three.js objects, no look of its own. `engine.cameraRig.pixelSnap.grid` is the camera's grid; `pixelGrid({ camera, pixelsPerMeter })` makes one for a camera of yours. `snap(world)` rounds a point on the screen's axes and keeps its depth, `error(world)` says by how much, `toScreen` and `toWorld` convert, and `axes()` gives right, up and forward. Round a drawn position with these, never what physics or a save reads.
 
-**Sprites in a 3D view: `pixelSprite`.** It returns a plain `THREE.Mesh` with your material: a vertical plane that turns around Y with the camera's forward direction. Its height is stretched by `1 / cos(pitch)`, which the tilt of the view takes back, so one texel is one art pixel.
+**Sprites in a 3D view: `pixelSprite`.** It returns a plain `THREE.Mesh` with your material: a vertical plane that turns around Y with the camera's forward direction. Its height is stretched by `1 / cos(pitch)`, which the view's tilt takes back: one texel is one art pixel.
 ```js fragment
 import { pixelSprite, spriteFrame } from 'threedog/pixel';
 const hero = pixelSprite({ grid: engine.cameraRig.pixelSnap.grid, material, width: 16, height: 24, columns: 4, rows: 3, anchor: [0.5, 0], snap: 'followed' });
 spriteFrame(hero, 5, true);  // frame 5 of the sheet, mirrored
 ```
-- Frames count left to right, top to bottom, and `width` and `height` are one frame in texels. The material is yours: set `alphaTest` for hard edges, and a nearest filter on its texture. The mesh goes in the scene, or is handed to a character as its `model` (recipe 13 section 3c). `mesh.position` stays exact; only the drawn matrix is rounded.
-- `snap: 'world'` (the default) rounds the drawn position to the grid: use it for anything that stands or walks on its own. `snap: 'followed'` is for the one object the camera follows: rounding a follower and its camera separately makes them step on different frames, a one-pixel shake, so this one takes the camera's rounding. On anything else it would creep against the ground.
-- Standing upright is what keeps a head out of the wall behind it: the whole figure has the depth of its feet, so no shader is needed. A plane tilted toward the camera would lean back through that wall. One case still cuts: a wall not parallel to the sprite, with the feet nearer to it than `(sprite width / 2) * |sin(angle between them)|`. Keep the collision radius above that.
+- Frames count left to right, top to bottom, and `width` and `height` are one frame in texels. The material is yours: `alphaTest` for hard edges, a nearest filter on its texture. The mesh goes in the scene or to a character as its `model` (recipe 13 section 3c). `mesh.position` stays exact; only the drawn matrix is rounded.
+- `snap: 'world'` (the default) rounds the drawn position to the grid: use it for anything that stands or walks on its own. `snap: 'followed'` is for the one object the camera follows (rounding both separately steps them on different frames: a one-pixel shake), so it takes the camera's rounding; on anything else it would creep against the ground.
+- Standing upright keeps a head out of the wall behind it: the whole figure has the depth of its feet, no shader needed (a plane tilted toward the camera would lean back through the wall). One case still cuts: a wall not parallel to the sprite, with the feet nearer to it than `(sprite width / 2) * |sin(angle between them)|`. Keep the collision radius above that.
 
-**Lighting a sprite from its silhouette.** A flat plane lights flat. A normal map made from the sprite's own outline gives it a rounded edge, with no drawing work: the height is the distance from each texel to the nearest transparent one, then blurred, and the normal is its slope. This is one way among many; a hand-painted normal map goes in the same slot.
+**Lighting a sprite from its silhouette.** A flat plane lights flat. A normal map made from the sprite's outline rounds its edge with no drawing work: height is the distance from each texel to the nearest transparent one, blurred; the normal is its slope. A painted one goes in the same slot.
 ```js fragment
 // picture/spriteNormals.js
 import * as THREE from 'three';
@@ -311,7 +311,7 @@ export function silhouetteNormals(image, frameWidth, frameHeight, { strength = 1
   return t;
 }
 ```
-Give it to the sprite's material as `normalMap`, on a lit material such as `MeshStandardMaterial`, next to the sheet it was made from. Measured on WebGL and on real WebGPU: a side light brightens the near half about twice as much as the far half. A sprite mirrored with `spriteFrame` lights the right way round with no change, because three.js takes the tangent direction from the UVs. A light straight overhead is the weak case. The plane's own normal is horizontal, so without a normal map the sprite goes black, and with one only its upper half lights. Add an ambient or hemisphere light, or keep the main light in front of the view.
+Give it to the sprite's material as `normalMap`, on a lit material such as `MeshStandardMaterial`, next to the sheet it was made from. Measured on WebGL and WebGPU: a side light brightens the near half about twice as much as the far half. A sprite mirrored with `spriteFrame` lights the right way round (three.js takes the tangent from the UVs). A light straight overhead is the weak case. The plane's normal is horizontal, so without a normal map the sprite goes black, and with one only its upper half lights: add an ambient or hemisphere light, or keep the main light in front of the view.
 
 ## 5. What the engine still does with all of this off
 - `scene.background` starts as a neutral gray: write your own color or sky.

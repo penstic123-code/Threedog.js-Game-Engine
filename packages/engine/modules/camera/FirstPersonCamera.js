@@ -99,6 +99,7 @@ export class FirstPersonCamera {
     cam.position.copy(this.eye);
     cam.position.y += Math.sin(this._bob) * this._bobAmp;
     cam.rotation.set(this.pitch, this.yaw, Math.sin(this._bob * 0.5) * this._bobAmp * 0.15, 'YXZ');
+    this._carriedLights();   // a lamp the player carries is not shadowed by the hidden body (common.js HIDE_RIG)
   }
 
   /** Someone else's view shows while the camera is held: the mouse goes free and the body is back, since the eye it would block is no longer where the camera is */

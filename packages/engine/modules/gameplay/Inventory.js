@@ -259,4 +259,9 @@ export function inventory(opts = {}) {
   };
 }
 
-export const handRolled = [{ kind: 'inventory', seen: 'a hand-made inventory (items kept in your own array / object)', use: 'the inventory module: engine.use(inventory()), engine.inventory.add / remove / has (counts, containers, events, saved with the game)', quiet: /\b(engine|e|eng)\.inventory\b|\binventory\(\s*[{)]/, code: /(?:\b(?:const|let|var)\s+|\bthis\.)(inventory|backpack|bag|pockets|inv)(?:Items|Slots|List|Contents|Data|Map|Counts?|s)?\s*=\s*(\[\s*\]|\{\s*\}|new Map\b|new Set\b)/i, tags: false }];
+// Why detect by behaviour, not declaration: a bag is often a field of a state object ({ bag: [] }, S.bag.push(...)); matching only `const bag = []` missed it.
+// Two signals needed: (1) the name is set to an empty collection (variable, this.x or object field) or used as a list (push, splice, unshift, reduce);
+// (2) within 3 lines it is compared to a named capacity limit (< RULES.capacity, >= this.maxSlots, > limit): refusing to add when full is what a bag is.
+// Numeric literal limits do not count (in a falling-block game `if (bag.length < 7) bag.push(...)` is one round of pieces); count / weight alone do not count (ammo, gravity).
+// Known limit: (2) is tied to (1) by adjacency, not by the same name, since a regex cannot match names across lines; remaining false positives go in the known list.
+export const handRolled = [{ kind: 'inventory', seen: 'a hand-made inventory (items kept in your own array / object)', use: 'the inventory module: engine.use(inventory()), engine.inventory.add / remove / has (counts, containers, events, saved with the game)', quiet: /\b(engine|e|eng)\.inventory\b|\binventory\(\s*[{)]/, code: /\b(?:inventory|backpack|bag|pockets|inv)(?:Items|Slots|List|Contents|Data|Map|Counts?|s)?\s*(?:[=:]\s*\(?\s*(?:\[\s*\]|\{\s*\}|new Map\b|new Set\b)|\.(?:push|splice|unshift|reduce)\()/i, near: [{ re: /[<>]=?\s*(?:[\w$]+\.)*(?:capacity|cap|max\w*|slots?|limit)\w*\b(?!\s*\()/i, lines: 3, on: 'code' }], tags: false }];

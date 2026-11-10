@@ -122,5 +122,5 @@ export function audioInfo(a) {
   // still on a headless page, so the node would read 1 for ever there. The target is what the game asked for, and what the ramp ends at
   for (const b of Object.keys(a._duckNodes)) { let v = 1; for (const d of a._ducks) v *= d.levels[b] ?? 1; ducks[b] = +v.toFixed(3); }
   for (const [name, list] of a._voices) { const n = list.filter(v => v.playing).length; if (n) voices[name] = n; }
-  return { running: a.running, state: a.state, levels: { ...a.levels }, ducks, voices };
+  return { running: a.running, state: a.state, levels: { ...a.levels }, ducks, voices, ...(a._reverb ? { reverb: a._reverb.info } : {}) };
 }

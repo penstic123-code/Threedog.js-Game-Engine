@@ -1,7 +1,10 @@
 // The chaos driver: runs one action at a time against the composite game, on stepped time so a list replays the same, and checks the invariants after each.
 // Node calls begin / act / end one action at a time (tests/specs/chaos.mjs), so a page that hangs is caught at the action that hung it.
 // An error with a code is the engine refusing on purpose: it is counted, not failed. Anything else that throws is a failure.
-import { MODS, NPCS, buildGame, levelScene, makeCar } from './game.js';
+import { MODS, NPCS, FX, WEATHER, RENDERER, buildGame, levelScene, makeCar } from './game.js';
+import { sky, weather } from '../../index.js';
+// the composite game itself, for a spec that drives one call by hand (tests/specs/chaos-picture-fixes.mjs): the page is a build, so game.js has no URL of its own
+export { buildGame, FX } from './game.js';
 import { SKIPS, line } from './plan.js';
 
 const DT = 1 / 30;
@@ -10,6 +13,14 @@ const WALKERS = ['player', 'npc-a', 'npc-b'];
 const TARGETS = ['crate-a', 'crate-b', 'tilted-a', 'post-a', 'npc-a', 'player'];
 const RATES = [null, 0, 60, 0.5];
 const SIZES = [0.3, 0.8, 1.6];
+// Values a game might hand the picture: 0-3 ordinary, 4-8 wild (zero, negative, huge, NaN, Infinity). A wild value the engine takes is marked in G.wild
+// until something ordinary replaces it, and a black or white frame while one is marked is a note, not a failure: fog of density 1e6 is one color by right
+const WILD = [0.5, 1, 2, 0.05, 0, -1, 1e6, NaN, Infinity], wild = v => v >= 4;
+const FX_NAMES = Object.keys(FX), WEATHERS = ['clear', 'wet', 'white', 'storm'];
+const TIMES = [0, 0.25, 0.5, 0.75, 0.99, -1, 2, NaN, Infinity], COUNTS = [1, 2, 3, 4, 0, -1, 99, NaN, Infinity];
+const MAP_SIZES = [512, 1024, 2048, 256, 0, -1, 8192, NaN, Infinity], SECONDS = [0, 0.5, 5, -1, NaN, Infinity];
+const FOG_FAR = [40, 120, 15, 400, 0, -1, 1e6, NaN, Infinity], FOG_DENSITY = [0.02, 0.05, 0.1, 0.005, 0, -1, 1e6, NaN, Infinity];
+const EXPOSURE = [1, 0.6, 1.6, 1.2, 0, -1, 1e6, NaN, Infinity], PHOTO_SCALE = [0.5, 1, 0.25, 2, 0, -1, 64, NaN, Infinity];
 const MAX_WAIT_FRAMES = 1500;   // 50 s of game time: longer than any walk across the level, its repaths and its stuck timer
 
 /** Save fields that may differ between two saves of the same state, each with why. Everything else must come back equal */
@@ -164,14 +175,83 @@ const ACTS = {
     const held = G;
     held.E.dispose();
     const made = await buildGame({ saveKey: held.saveKey, seed: held.seed });
-    Object.assign(held, made, { held: null, rate: null, limp: null, undo: [], quit: false, carOn: made.E.rigid });
+    Object.assign(held, made, { held: null, rate: null, limp: null, undo: [], quit: false, carOn: made.E.rigid, csm: null, csm2: null, env: null, lamp: null, skyOff: null });
+    held.wild.clear(); watchErrors(held.E);
     held.jobs = held.jobs.filter(j => !j.done);
     for (const j of held.jobs) if (!j.done) j.dropped = true;   // whatever the old engine had in flight dies with it, and may fairly never settle
   },
+  // ---- the picture: every call is one a game makes; a coded throw is a refusal (counted), the frame check after it is the real answer
+  fx(k, how, order) {
+    const E = G.E, name = FX_NAMES[k], h = E.post.get(name);
+    if (how === 0) { if (h) { h.remove(); unwild(`fx.${name}`); } else E.post.add(FX[name](), { name }); }
+    if (how === 1 && h) h.enabled = !h.enabled;
+    if (how === 2) { if (h) { h.remove(); unwild(`fx.${name}`); } E.post.add(FX[name](), { name, order }); }
+    if (how === 3) E.post.add(FX[name](), { name });
+  },
+  fxParam(k, key, v) {
+    const E = G.E, name = FX_NAMES[k], h = E.post.get(name) ?? E.post.add(FX[name](), { name });
+    const keys = Object.keys(h.params).filter(n => typeof h.params[n] === 'number');
+    if (!keys.length) return;
+    const p = keys[key % keys.length];
+    h.set({ [p]: WILD[v] });
+    markWild(`fx.${name}.${p}`, v);
+    if (Number.isNaN(h.params[p])) note(`NaN kept: post ${name}.${p}`);
+  },
+  fxCombo(mask, salt) {
+    const E = G.E;
+    for (const name of FX_NAMES) if (E.post.get(name)) { E.post.get(name).remove(); unwild(`fx.${name}`); }
+    FX_NAMES.forEach((name, i) => { if (mask & (1 << i)) E.post.add(FX[name](), { name, order: (salt * (i + 3)) % 97 - 10 }); });
+  },
+  tier(i) {
+    const E = G.E;
+    if (i < 3) E.settings.preset(['low', 'medium', 'high'][i]);
+    else E.tier = i === 3 ? 'low' : 'high';
+  },
+  skyLook(i, v) {
+    const E = G.E, S = E.sky, U = E.uniforms ?? {};
+    if (i === 0) { const old = S; E.use(sky({ time: TIMES[v] }), S ? { replaces: 'sky' } : undefined); if (old) poison(old, 'sky'); markWild('sky.time', v); return E.sky?.ready; }
+    if (!S) return;
+    if (i === 1) S.backdrop = S.backdrop == null ? 0x335577 : null;
+    if (i === 2) { if (G.skyOff === S) { S.replace(null); G.skyOff = null; } else { S.replace(false); G.skyOff = S; } }
+    if (i === 3 && U.uSunBrightness) { U.uSunBrightness.value = WILD[v]; markWild('sky.sun', v); }
+    if (i === 4 && U.uCloudCover) { U.uCloudCover.value = WILD[v]; markWild('sky.cloud', v); }
+    if (i === 5) { if (G.env) { const h = G.env; G.env = null; h.remove(); } else G.env = S.environment({ into: E.scene }); }
+  },
+  // the wild mark only once the engine took the value: a refused call leaves nothing wild, so the frame check keeps watching
+  weatherTo(t, s) { const W = G.E.weather; if (!W) return; const r = W.set(WEATHERS[t], { seconds: SECONDS[s] }); markWild('weather.seconds', s >= 3 ? 4 : 0); return r; },
+  weatherWild(v) {
+    const E = G.E, old = E.weather, x = WILD[v], had = E.has('weather');
+    E.use(weather({ types: { ...WEATHER, wild: { rain: x, snow: x, fog: x, wind: x, cloud: x, lightning: x } } }), had ? { replaces: 'weather' } : undefined);
+    if (had) poison(old, 'weather');
+    markWild('weather.table', v);
+    E.weather.set('wild', { seconds: 0 });
+  },
+  fog(i, v) {
+    const E = G.E;
+    if (i === 0) { E.scene.fog = null; unwild('fog'); return; }
+    E.scene.fog = i === 1 ? new G.THREE.Fog(0x8899aa, 1, FOG_FAR[v]) : new G.THREE.FogExp2(0x8899aa, FOG_DENSITY[v]);
+    markWild('fog', v);
+  },
+  exposure(v) { G.E.renderer.toneMappingExposure = EXPOSURE[v]; markWild('exposure', v); },
+  shadowsPic(i, v) {
+    const E = G.E, sun = E.lights?.sun;
+    if (i === 0) E.shadows.enabled = !E.shadows.enabled;
+    if (i === 1) { if (G.csm) { const h = G.csm; G.csm = null; h.remove(); } else if (sun) G.csm = E.shadows.cascades(sun, { count: COUNTS[v] }); }
+    if (i === 2) { (G.csm ?? G.csm2)?.set({ count: COUNTS[v] }); markWild('cascades.count', v); }
+    if (i === 3 && sun) { sun.shadow.mapSize.set(MAP_SIZES[v], MAP_SIZES[v]); sun.shadow.map?.dispose(); sun.shadow.map = null; markWild('sun.mapSize', v); }   // three.js rebuilds the map only once it is dropped
+    if (i === 4) {
+      if (G.lamp?.parent) { E.scene.remove(G.lamp); return; }   // a game may take the light out with its cascades still on: the engine's to cope or refuse
+      G.lamp ??= Object.assign(new G.THREE.DirectionalLight(0xffeedd, 1.5), { castShadow: true }); G.lamp.position.set(-20, 30, 10); E.scene.add(G.lamp);
+    }
+    if (i === 5) { if (G.csm2) { const h = G.csm2; G.csm2 = null; h.remove(); } else if (G.lamp?.parent) G.csm2 = E.shadows.cascades(G.lamp, { count: COUNTS[v] }); }
+  },
+  photo(v) { const E = G.E; E.renderOnce(); return E.photo?.take({ scale: PHOTO_SCALE[v] }); },
   // Planted bugs for the self-test (never drawn by plan()): they show that the checks can fail and that shrinking keeps the cause
   fault() { G.fault = G.E.freeze('chaos-fault'); },
   faultStale() { const old = G.E.weather; ACTS.mod(4, 0); old.set('wet', { seconds: 0 }); },
   faultLeak() { for (let i = 0; i < 60; i++) G.E.scene.add(new G.THREE.Object3D()); },
+  // everything drawn black behind the harness's back (no sky, a black background, a black override material): no wild mark, so the frame must fail
+  faultBlack() { const E = G.E; E.sky?.replace(false); E.scene.background = new G.THREE.Color(0); E.scene.overrideMaterial = new G.THREE.MeshBasicMaterial({ color: 0 }); },
   faultLost() { const E = G.E; E.ops.allow(() => E.world.remove('post-a')); },
   async audit(final) { await audit(!!final); },
 };
@@ -184,6 +264,48 @@ function sameIds(want, how, baseOnly) {
   const now = new Set(savedIds()), lost = want.filter(id => !now.has(id));
   if (lost.length) fail(`record lost by ${how}`, `missing ${lost.join()}`);
   if (!baseOnly) { const had = new Set(want), extra = [...now].filter(id => !had.has(id)); if (extra.length) fail(`record left over by ${how}`, `extra ${extra.join()}`); }
+}
+
+const note = k => { G.refusals[`note: ${k}`] = (G.refusals[`note: ${k}`] ?? 0) + 1; };
+function markWild(key, v) { if (wild(v)) G.wild.add(key); else G.wild.delete(key); }
+function unwild(prefix) { for (const k of [...G.wild]) if (k === prefix || k.startsWith(`${prefix}.`)) G.wild.delete(k); }
+
+/**
+ * The frame just drawn, read in the task that drew it (no preserveDrawingBuffer on either renderer): all black or all white is a broken frame. Why only
+ * those two: NaN in a shader reads back as black (or white on some drivers), while one flat color can be a wall in front of a first-person camera.
+ * It is excused, and noted, while a wild value is in effect or nothing is there to see (no level, no sky, a quit playthrough).
+ */
+function frameCheck() {
+  const E = G.E, c = E.renderer?.domElement;
+  if (E.disposed || !c?.width) return;
+  const k = G.probe ??= Object.assign(document.createElement('canvas'), { width: 24, height: 16 }).getContext('2d', { willReadFrequently: true });
+  k.clearRect(0, 0, 24, 16); k.drawImage(c, 0, 0, 24, 16);
+  const px = k.getImageData(0, 0, 24, 16).data;
+  let lo = 765, hi = 0;
+  for (let i = 0; i < px.length; i += 4) { const v = px[i] + px[i + 1] + px[i + 2]; if (v < lo) lo = v; if (v > hi) hi = v; }
+  const bad = hi <= 6 ? 'black' : lo >= 759 ? 'white' : null;
+  G.frames++;
+  if (!bad) return;
+  const why = G.wild.size ? `wild ${[...G.wild].join()}` : G.noLevel ? 'no level' : (G.skyOff && G.skyOff === E.sky) ? 'no sky' : G.quit ? 'quit' : null;
+  if (why) note(`${bad} frame under ${why.split(',')[0]}`);
+  else fail(`frame all ${bad}`, `every sampled pixel ${bad} (sum ${lo}..${hi}) on ${RENDERER}; post ${E.post.list?.().map(x => `${x.name}${x.enabled ? '' : '(off)'}`).join(' ') ?? '?'}, tier ${E.tier}`);
+}
+
+/** The picture back to the calm state begin() measured: the harness's effects, cascades, light, fog, exposure, sky look and preset all go */
+function calmPicture() {
+  const E = G.E, U = E.uniforms ?? {};
+  for (const name of FX_NAMES) E.post.get(name)?.remove();
+  for (const k of ['csm', 'csm2', 'env']) { const h = G[k]; G[k] = null; h?.remove(); }
+  if (G.lamp?.parent) E.scene.remove(G.lamp);
+  E.scene.fog = null; E.renderer.toneMappingExposure = G.picBase.exposure;
+  if (E.sky) { E.sky.backdrop = null; if (G.skyOff === E.sky) E.sky.replace(null); }
+  G.skyOff = null;
+  if (U.uSunBrightness) U.uSunBrightness.value = G.picBase.sun;
+  if (U.uCloudCover) U.uCloudCover.value = G.picBase.cloud;
+  const sun = E.lights?.sun;
+  if (sun && sun.shadow.mapSize.x !== G.picBase.mapSize) { sun.shadow.mapSize.set(G.picBase.mapSize, G.picBase.mapSize); sun.shadow.map?.dispose(); sun.shadow.map = null; }
+  E.shadows.enabled = G.picBase.shadows; E.tier = G.picBase.tier; E.settings.reset('quality');
+  G.wild.clear();
 }
 
 /** Cheap checks after every action */
@@ -220,6 +342,7 @@ function measure() {
   const add = (k, v) => { if (typeof v === 'number') flat[k] = v; else if (v && typeof v === 'object') for (const [n, x] of Object.entries(v)) add(`${k}.${n}`, x); };
   for (const [k, v] of Object.entries(c)) add(k, v);
   let objects = 0; E.scene.traverse(() => { objects++; });
+  const info = E.renderer.info?.render; flat.drawCalls = (E.renderer.isWebGPURenderer ? info?.drawCalls : info?.calls) ?? 0;
   flat.sceneObjects = objects; flat.domListeners = window.threedogChaosListeners(); flat.bodyChildren = document.body.children.length;
   return flat;
 }
@@ -256,6 +379,7 @@ async function audit(final) {
   const b = strip(E.saves.collect()), d = diff(a, b);
   if (d.length) fail(`save round trip: ${d[0].split(':')[0]}`, d.join(' ; '));
   if (final) {
+    calmPicture();
     const j = follow('audit newGame', E.session.newGame()); await settle([j], 120); afterSession();
     step(10, true);
     const m = measure();
@@ -269,14 +393,18 @@ const hooks = {
   rejection: ev => { ev.preventDefault?.(); if (G && !ev.reason?.code) fail(`unhandled rejection: ${String(ev.reason?.message ?? ev.reason).slice(0, 80)}`, String(ev.reason?.stack ?? ev.reason).split('\n').slice(0, 4).join(' | ')); },
 };
 let consoleError = null;
+/** engine:error is the engine saying a hook or a frame failed: always a failure (console.error and engine.error catch most of it too; this one names the site) */
+function watchErrors(E) { const run = G; E.events.on('engine:error', info => { if (G === run) fail(`engine:error at ${info?.where ?? '?'}: ${String(info?.message).slice(0, 60)}`, JSON.stringify(info).slice(0, 400)); }); }
 
 export async function begin({ seed, saveKey }) {
   if (G) await end();
   consoleError = console.error;
   console.error = (...a) => { const m = a.map(x => (x?.stack ?? String(x))).join(' '); if (G) fail(`console.error: ${m.slice(0, 80)}`, m.split('\n').slice(0, 4).join(' | ')); };
   window.addEventListener('error', hooks.error); window.addEventListener('unhandledrejection', hooks.rejection);
-  G = { seed, saveKey, fails: [], refusals: {}, log: [], jobs: [], undo: [], saved: {}, held: null, rate: null, limp: null, quit: false, current: 'setup', baseIds: [] };
+  G = { seed, saveKey, fails: [], refusals: {}, log: [], jobs: [], undo: [], saved: {}, held: null, rate: null, limp: null, quit: false, current: 'setup', baseIds: [], wild: new Set(), frames: 0, csm: null, csm2: null, env: null, lamp: null, skyOff: null };
   Object.assign(G, await buildGame({ saveKey, seed }));
+  watchErrors(G.E);
+  { const E = G.E; G.picBase = { exposure: E.renderer.toneMappingExposure, sun: E.uniforms?.uSunBrightness?.value, cloud: E.uniforms?.uCloudCover?.value, mapSize: E.lights?.sun?.shadow.mapSize.x, shadows: E.shadows.enabled, tier: E.tier }; }
   G.carOn = G.E.rigid;
   step(5, true);
   G.baseIds = recordIds();
@@ -297,9 +425,13 @@ export async function act(x) {
     else if (r && typeof r.then === 'function') { const j = follow(line(x), r); if (!x.bg) await settle([j], 300); }
   } catch (e) { coded(e, x.a); }
   step(1, true);
+  frameCheck();
   quick();
   return { fails: G.fails };
 }
+
+/** Which backend drew: webgl, webgpu, or webgpu's WebGL2 fallback (headless Chrome often has no adapter) */
+const backendName = E => (E.renderer?.isWebGPURenderer ? (E.renderer.backend?.isWebGPUBackend ? 'webgpu' : 'webgpu-webgl2') : 'webgl');
 
 /** What a run ended as, in parts: two runs of one list must give the same parts */
 export function endState() {
@@ -309,7 +441,7 @@ export function endState() {
 }
 
 export async function end() {
-  const run = G, out = { fails: run?.fails ?? [], refusals: run?.refusals ?? {}, log: run?.log ?? [], state: run ? endState() : [] };
+  const run = G, out = { fails: run?.fails ?? [], refusals: run?.refusals ?? {}, log: run?.log ?? [], state: run ? endState() : [], frames: run?.frames ?? 0, backend: run ? backendName(run.E) : '' };
   try { run?.E.dispose(); } catch (e) { out.fails.push({ kind: `dispose threw: ${e.message}`.slice(0, 90), detail: String(e.stack).split('\n').slice(0, 3).join(' | ') }); }
   G = null;
   if (consoleError) console.error = consoleError;

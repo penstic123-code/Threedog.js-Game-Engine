@@ -11,6 +11,7 @@ import { codedError, coded } from '../base/errorHints.js';
 import { missingText, warnOnce } from '../base/validate.js';
 import { readParams } from '../base/params.js';
 import { SoundHandle, playSound, placeListener, synthNoise, synthTone, loadSound, playFile, soundDef } from './audioVoice.js';
+import { Reverb } from './audioReverb.js';
 import { matchesWhen, volumeOf, checkRuleName, packAudio, applyDucks, audioInfo } from './audioRules.js';
 // createEngine({ audio }) schema: unknown keys throw in dev with did-you-mean. Object / array defaults are not kept here: they would be shared by all engines as one object
 const AUDIO_PARAMS = { levels: 'object?', sounds: 'object?', ambience: 'array?', music: 'object?', footsteps: 'object?' };
@@ -58,6 +59,7 @@ export class Audio {
     /** @internal */ this._voices = new Map();      // name -> live voices (voice limit, info)
     /** @internal */ this._last = new Map();        // name -> { at, variant } (cooldown, no-repeat)
     /** @internal */ this._spatial = new Set();     // positional voices: the listener and followed objects update only while any exist
+    /** @internal the one reverb send/return (audioReverb.js), made by the first reverb() call */ this._reverb = null;
     /** @internal */ this._readySent = false;
     /** @internal the game is held by the page (core/engine/page.js): the sound waits with it */ this._held = false;
     // Create or resume audio on a click/keypress (a context created earlier is suspended and must be resumed inside a user gesture). Every press, not only the first:
@@ -80,6 +82,7 @@ export class Audio {
     this.master = this.buses.master = ctx.createGain(); this.master.gain.value = this.levels.master; this.master.connect(ctx.destination);
     for (const name of Object.keys(this.levels)) if (name !== 'master') this._makeBus(name);
     this._applyDucks(0);
+    this._reverb?.build();
     const len = ctx.sampleRate * 2, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;   // presentation
     /** 2 s of white noise, reused by synthesized sounds @type {any} */
@@ -92,6 +95,7 @@ export class Audio {
     const ctx = this.ctx, g = ctx.createGain(), d = ctx.createGain();
     g.gain.value = this.levels[name]; g.connect(d).connect(this.master);
     this.buses[name] = g; this._duckNodes[name] = d;
+    this._reverb?.busMade(name);
   }
   /** Is audio usable (the player has clicked/pressed a key)? @returns {boolean} @experimental */
   get running() { return this.ctx?.state === 'running'; }
@@ -124,6 +128,7 @@ export class Audio {
       handles.delete(name);
       delete this.levels[name];
       if (this.ctx) { this.buses[name].disconnect(); this._duckNodes[name].disconnect(); }   // sounds still playing on this bus are cut with the node (bus gone, no sound should linger)
+      this._reverb?.busGone(name);
       delete this.buses[name]; delete this._duckNodes[name];
     } };
     handles.set(name, h);
@@ -141,6 +146,27 @@ export class Audio {
     this.levels[bus] = v; if (!this.ctx) return;
     (bus === 'master' ? this.master : this.buses[bus]).gain.value = v;
   }
+
+  /**
+   * The one reverb: a send/return any bus can feed (a cave, a hall, a bathroom). Off until called: nothing is built or heard before. Each call
+   * changes only the keys given (sends merge per bus; 0 stops one); null turns it off. The echo of a bus follows its slider and its ducks, and
+   * comes back through master. The impulse is generated (decaying noise, no file): changing size or decay rebuilds it, wet and sends only fade.
+   * Called before the first click it waits for audio to unlock. Places: an ambience rule { reverb: 0.6, when: { zone: 'cave' } } sets wet while it holds (recipes/31 §9)
+   * @param {{ wet?: number, decay?: number, size?: number, sends?: Record<string, number>, fade?: number } | null} opts wet 0-1 (0.3), decay seconds to -60 dB (2), size 0-1 (0.5), fade seconds
+   * @returns {void}
+   * @example engine.audio.reverb({ sends: { sfx: 0.5, ambience: 0.8 }, decay: 3, size: 0.8, wet: 0.4 });
+   * @experimental
+   */
+  reverb(opts) {
+    if (opts === null) { this._reverb?.off(); this._reverb = null; return; }
+    const first = !this._reverb, r = this._reverb ??= new Reverb(this);
+    try { r.configure(opts ?? {}, 'audio.reverb()'); } catch (err) { if (first) this._reverb = null; throw err; }
+    if (this.ctx) r.build();
+  }
+  /** @internal ambience reverb rules: the wet a place asks for, null when none holds */
+  reverbPlace(v, fade) { this._reverb?.setPlace(v, fade); }
+  /** @internal has the game turned the reverb on (ambience warns when a reverb rule would echo nothing) */
+  get reverbOn() { return !!this._reverb; }
 
   /**
    * Lower buses until the handle is removed (dialogue, pause menu, a cutscene). Several ducks stack (their levels multiply).
@@ -260,7 +286,8 @@ export class Audio {
   /**
    * What is playing (describe().audio shows it while something is ducked or playing): bus levels, the duck multiplier per bus, live voices per sound name.
    * ducks is the level the active ducks ask for (1 = not lowered), read at once even while a fade is still ramping or the audio clock does not run (headless page).
-   * @returns {{ running: boolean, state: string | null, levels: Record<string, number>, ducks: Record<string, number>, voices: Record<string, number> }}
+   * reverb (only once reverb() was called): its targets, `place` while an ambience rule sets wet, `built` once audio unlocked.
+   * @returns {{ running: boolean, state: string | null, levels: Record<string, number>, ducks: Record<string, number>, voices: Record<string, number>, reverb?: { wet: number, decay: number, size: number, sends: Record<string, number>, place?: number, built: boolean } }}
    * @example engine.audio.duck({ music: 0.3 }); engine.audio.info.ducks.music   // 0.3
    */
   get info() { return audioInfo(this); }

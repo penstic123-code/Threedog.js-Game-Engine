@@ -8,6 +8,45 @@ const PAGE = '/tests/threads/';
 
 export const specs = [
   {
+    // ?play starts the first run inside start(), so a session:start listener attached afterwards silently misses it. Pins that a hint is given while event semantics stay unchanged (no replay).
+    // Fails if the _firedNow mark in session.js is removed; only hints in the tick right after start() returns: attaching after a tick (waiting for the next run) gives no hint.
+    name: 'Lifecycle: a session:start listener added after a ?play start says it missed the playthrough (no replay); one added later stays quiet',
+    url: PAGE + '?play=1',
+    async run({ check, ev }) {
+      const r = await ev(async () => {
+        const { mk, createEngine } = threedogThreads;
+        const E = mk(createEngine, 'lc-missed', { urlState: true, ui: { loading: false, title: { title: 'T' } } });   // ?play presses the title's Start
+        let early = 0, late = 0;
+        E.events.on('session:start', () => { early++; });
+        await E.start();
+        const a = await __t.warns(() => { E.events.on('session:start', () => { late++; }); });
+        const out = { early, late, said: a.warns.some(w => w.includes('[session-start-missed]')), playing: E.session.playing };
+        E.dispose();
+        return out;
+      });
+      check('the playthrough started inside start() (the listener added before start heard it)', r.early === 1 && r.playing === true, JSON.stringify(r));
+      check('a listener added right after start() is told it missed it, and is not called back', r.said && r.late === 0, JSON.stringify(r));
+    },
+  },
+  // Two no-hint cases (each on its own page: warnOnce speaks once per page, so a prior hint would hide a false positive). newGame resets tick to 0; a mark compared only by tick would false-report.
+  ...[['after a step (waiting for the next new game)', ''], ['right after a later newGame (tick back to 0)', 'newGame'], ['on the title screen right after quit (tick back to 0)', 'quit']].map(([when, renew]) => ({
+    name: `Lifecycle: a session:start listener added ${when} after a ?play start is not warned`,
+    url: PAGE + '?play=1',
+    async run({ check, ev }) {
+      const said = await ev(async renew => {
+        const { mk, createEngine } = threedogThreads;
+        const E = mk(createEngine, 'lc-quiet', { urlState: true, ui: { loading: false, title: { title: 'T' } } });
+        await E.start();
+        E.step(0.1, { render: false });
+        if (renew) await E.session[renew]();
+        const w = await __t.warns(() => { E.events.on('session:start', () => {}); });
+        E.dispose();
+        return w.warns.some(x => x.includes('[session-start-missed]'));
+      }, renew);
+      check(`no session-start-missed ${when}`, said === false, String(said));
+    },
+  })),
+  {
     name: 'Lifecycle: no fixed step while loading (real-time loop path simulated), no hook before init, phase order',
     url: PAGE,
     async run({ check, ev }) {

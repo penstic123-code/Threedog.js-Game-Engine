@@ -2,6 +2,7 @@
 
 - `audio.addBus(name: string, opts?: { level?: number; owner?: string }) → { owner?: string; remove(): void }` — Add a bus of your own (routed to master). It gets a settings slider like the others (label key settings.vol.<name>) until the handle is removed (the one give-back form, like every other handle). A name that is already a bus throws: two owners of one bus could not both remove it. Example: `const voice = engine.audio.addBus('voice', { level: 1 }); engine.audio.sfx('line-01', { bus: 'voice' }); voice.remove();`
 - `audio.setVolume(bus: string, v: number)` — Set a bus volume 0-1 ('master' for the total). Example: `engine.audio.setVolume('music', 0.3);`
+- `audio.reverb(opts: { wet?, decay?, size?, sends?, fade? } | null)` — (experimental) The one reverb: a send/return any bus can feed (a cave, a hall, a bathroom). Off until called: nothing is built or heard before. Each call changes only the keys given (sends merge per bus; 0 stops one); null turns it off. The echo of a bus follows its slider and its ducks, and comes back through master. The impulse is generated (decaying noise, no file): changing size or decay rebuilds it, wet and sends only fade. Called before the first click it waits for audio to unlock. Places: an ambience rule { reverb: 0.6, when: { zone: 'cave' } } sets wet while it holds (recipes/31 §9). Example: `engine.audio.reverb({ sends: { sfx: 0.5, ambience: 0.8 }, decay: 3, size: 0.8, wet: 0.4 });`
 - `audio.duck(levels: Record<string, number>, opts?: { fade?: number }) → { remove(fade?: number): void }` — Lower buses until the handle is removed (dialogue, pause menu, a cutscene). Several ducks stack (their levels multiply). Example: `const d = engine.audio.duck({ music: 0.3, ambience: 0.5 }); engine.events.once('dialogue:end', () => d.remove());`
 - `audio.condition(name: string, test: (value: any, e: any) => boolean) → { remove(): void }` — Add a condition key for music / ambience rule lists: `when: { [name]: value }` calls test(value, engine). Modules add theirs (calendar: time, weather: weather, triggers: zone); the engine has `state` (engine.audio.state). Example: `engine.audio.condition('inside', v => engine.vars.flag('indoors') === v);`
 - `audio.measure(name: string, fn: (e: any) => number) → { remove(): void }` — Add a measure: a number rule data compares (`when: { daylight: { gt: 0.15 } }`; gt / gte / lt / lte) and adds up (`volume: { add: { wind: 0.08 } }`). calendar adds daylight, weather rain / snow / wind, ambience nearWater / altitude. A name is a condition or a measure, not both. Example: `engine.audio.measure('danger', e => e.vars.counter('alarm') / 10);   // data: when: { danger: { gt: 0.5 } } Measures are not only for sound: render/daylight.js reads 'daylight' for night glow, so the calendar (or the sky without one) registers it once and nothing else has to know which module tells day from night. remove() drops only this registration (a later one under the name stays).`
@@ -21,7 +22,7 @@
   - `master: any` The master GainNode (every bus ends here)
   - `noise: any` 2 s of white noise, reused by synthesized sounds
   - `running: boolean` (experimental) Is audio usable (the player has clicked/pressed a key)?
-  - `info: { running, state, levels, ducks, voices }` What is playing (describe().audio shows it while something is ducked or playing): bus levels, the duck multiplier per bus, live voices per sound name. ducks is the level the active ducks ask for (1 = not lowered), read at once even while a fade is still ramping or the audio clock does not run (headless page). Example: `engine.audio.duck({ music: 0.3 }); engine.audio.info.ducks.music   // 0.3`
+  - `info: { running, state, levels, ducks, voices, reverb? }` What is playing (describe().audio shows it while something is ducked or playing): bus levels, the duck multiplier per bus, live voices per sound name. ducks is the level the active ducks ask for (1 = not lowered), read at once even while a fade is still ramping or the audio clock does not run (headless page). Example: `engine.audio.duck({ music: 0.3 }); engine.audio.info.ducks.music   // 0.3`
 
 ## Data structures
 - **AudioConfig** The game's sound config: createEngine({ audio }), read back as engine.audio.config (merged with content packs' ContentAudio).
@@ -42,8 +43,9 @@
   - `loop?: boolean`
   - `distance?: { ref?: number; max?: number; rolloff?: number }` 3D falloff for sfx(name, { at }): ref meters at full volume (2), max meters (60), rolloff (1)
 - **AmbienceRule** One ambience rule: while `when` holds, `sound` plays at `volume`. With `every` it is a one-shot repeated at random gaps, else a loop
-  - `sound: string`
+  - `sound?: string` A name from audio.sounds; required unless the rule is a reverb rule
   - `when?: AudioCondition`
+  - `reverb?: number | AudioVolumeData | ((e, ambience) => number)` (experimental) Instead of a sound: the reverb's wet (0-1, or the volume forms) while `when` holds; the highest holding one wins, none gives engine.audio.reverb's own wet back. Not with sound / volume / every / bus
   - `volume?: number | AudioVolumeData | ((e, ambience) => number)` 0-1, data { base, add: { measure: factor }, min, max }, or a function of the moment (e, ambience) => 0-1 (code only)
   - `fade?: number` Fade seconds when the rule turns on / off (1)
   - `every?: number[]` One-shot: [shortest, longest] seconds between plays

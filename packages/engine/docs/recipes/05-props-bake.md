@@ -157,9 +157,9 @@ engine.batching.enabled = false;  // global switch; createEngine({ batching: fal
 ### Render bundles: three's BundleGroup, for static meshes that cannot batch
 WebGPU only, no engine API: `BundleGroup` (`three/webgpu`) is plain three.js. Batch first: batching removes objects, a bundle only removes the command recording of objects
 that stay (three still refreshes each every pass). Compare before you keep it.
-- **It replays what it recorded.** A child's `visible`, an added or removed child and `castShadow` show only after `bundle.needsUpdate = true`, and recording costs a frame hitch on a big bundle, so several small bundles beat one huge one if parts change. `bundle.visible` works at once.
+- **It replays what it recorded.** A child's `visible`, an added or removed child and `castShadow` show only after `bundle.needsUpdate = true`; recording hitches a frame on a big bundle, so several small bundles beat one huge one if parts change. `bundle.visible` works at once.
 - **Nothing inside is culled**, in the shadow pass too: size groups so `visible` can drop a whole one.
-- **One owner per mesh.** A mesh under a `BundleGroup` is the bundle's: `engine.batching` leaves it alone (`userData.batch = true` on the group warns once) and `hlod.add` skips it with a warning, since neither could hide it. Occlusion culling does not reach it either. `engine.stream` works as usual, a build may return a `BundleGroup`.
+- **One owner per mesh.** A mesh under a `BundleGroup` is the bundle's: `engine.batching` leaves it alone (`userData.batch = true` on the group warns once) and `hlod.add` skips it with a warning (neither could hide it); occlusion culling does not reach it. `engine.stream` works as usual, a build may return a `BundleGroup`.
 - On a WebGL backend it is a plain group: correct, no gain. `describe().render.bundles` gives `{ groups, meshes, replayed }`; `engine.inspect.scene()` adds the reason `in-bundle`.
 
 ## 2c. Art iteration loop: edit -> hot swap -> gallery -> compare
@@ -173,7 +173,7 @@ proportions first, and look at the model on its own afterwards, not only inside 
   copies (`engine.assets.setParams(name, values)`). "write back", then `threedog tune write` (dry run; `--apply`) puts the values into the
   schema's `default` where the model is registered.
 - **Review all at once**: `?gallery=1` on the dev page, or `threedog gallery`, puts every registered model and texture on a turntable;
-  `--shots` writes one page of pictures, `--mode silhouette,value` adds outline and grayscale shots with measurements (`../COMMANDS.md`). Measurements, not grades: a shape recognized at play distance should still read as a silhouette, a narrow p5-p95 value spread means hue carries the form, and assets that must be told apart are compared with each other, not with a fixed number.
+  `--shots` writes one page of pictures, `--mode silhouette,value` adds outline and grayscale shots with measurements (`../COMMANDS.md`). Measurements, not grades: a shape should still read as a silhouette at play distance, a narrow p5-p95 value spread means hue carries the form, and assets to tell apart are compared with each other, not a fixed number.
 - **Compare with the reference**: `threedog picture compare <reference.png> .threedog/gallery/<name>-midday.png --out diff.png` gives numbers
   for one asset against its reference crop, the same way as for a whole screenshot (`recipes/35-picture-from-reference.md`).
 
@@ -199,7 +199,7 @@ the DESIGN.md "Asset sources" row, and every source ends up the same way, as a n
 | Your own earlier games | an effect, material, model or texture you already made and liked | `threedog lib list` / `lib pull` (below), or `threedog art copy ../earlier-game name` |
 | AI-generated 3D / textures | one-off props, texture variations | export glTF / PNG, then the same checks as any file: `threedog assets check`, scale, origin, triangle count, UVs |
 
-**Your own library** (`threedog lib add / list / pull / check`, flags in `../COMMANDS.md`): look there before writing an effect from scratch. Each entry has a card measured at `lib add` (needs, provides, shared three.js values it writes, size, usage; `lib list <word> --card`); tag its style with `--style` in your own words, and two pulled entries with no tag in common are reported. A pulled entry is a copy with no link back: change it to fit this game, or every game ends up looking alike.
+**Your own library** (`threedog lib add / list / pull / check`, flags in `../COMMANDS.md`): look there before writing an effect from scratch. Each entry has a card measured at `lib add` (needs, provides, shared three.js values it writes, size, usage; `lib list <word> --card`); tag its style with `--style` (two pulled entries with no tag in common are reported). A pulled entry is a copy with no link back: change it to fit this game, or every game looks alike.
 
 **Rules (correctness and licensing):**
 - Read the license of every asset you did not make, on the page you downloaded it from, before it goes into the game; a library can mix

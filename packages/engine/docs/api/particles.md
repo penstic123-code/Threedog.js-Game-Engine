@@ -9,7 +9,7 @@ Particles (particles() module)
 ## Methods and properties
 - `particles.define(name: string, opts?: ParticleOptions) → ParticleEffect` — Define an effect (same name replaces it, and emitters attached to it move to the new definition); params sit on top of particles({ effects, default }). Returns the effect object: .points is its THREE.Points (a Sprite on WebGPURenderer); .material is its plain three.js material (set your own and it is drawn as given, null gives the engine's back); .uniforms are the engine material's { value } objects (uMap, uHasMap, uScale, uMaxPx), which a ShaderMaterial of yours can share. A material of yours lasts until the effect is defined again. Example: `engine.particles.define('sparks', { blending: 'additive' }).material = myMaterial;`
 - `particles.has(name: string) → boolean` — Whether this effect has been defined
-- `particles.emit(name: string, position: PositionLike, opts?: { count?, overrides? })` — Burst: emit count particles at once (default 10) at position (Vector3 / Object3D / [x, y, z] / {x, y, z}). overrides affect this batch only (color, speed, direction...; max/texture/blending/soft cannot be changed temporarily)
+- `particles.emit(name: string, position: PositionLike, opts?: { count?, overrides? })` — Burst: emit count particles at once (default 10) at position (Vector3 / Object3D / [x, y, z] / {x, y, z}). overrides affect this batch only (color, speed, direction...; max/texture/blending/soft/lit cannot be changed temporarily)
 - `particles.attach(name: string, object3d: THREE.Object3D, opts?: { rate?, ratePerMeter?, offset?, overrides? }) → ParticleEmitter` — Keep emitting while following an object: rate per second, ratePerMeter per meter it moves (spread along the path, on top of rate), offset in the object's local coordinates [x, y, z] (meters). Returns a handle { remove(), rate, ratePerMeter, active } (active = false pauses)
 - `particles.count(name?: string) → number` — Live particle count (no name = all)
 - `particles.clear(name?: string)` — Clear one effect's (or all) particles
@@ -40,6 +40,7 @@ Particles (particles() module)
   - `maxPixels?: number` Largest on-screen size of one particle in pixels (smoke drifting past the camera stays bounded), default 512
   - `ratePerMeter?: number` (experimental) Default particles per meter the emitter moves for attach, on top of rate, spread along the path it moved; default 0
   - `soft?: number` (experimental) Meters over which a particle fades where it meets what writes depth; default 0, off. Set at define, not in overrides. On WebGLRenderer it costs one depth-only draw of the scene per render while such an effect is on screen
+  - `lit?: boolean` (experimental) The scene's lights tint each particle's color (dust a lamp lights): point, spot, directional, ambient, hemisphere, as a matte card facing each light. No shadows, environment map or probes. Default false (the color is drawn as given). Set at define, not in overrides; costs live particles x lights per frame on the CPU, the same on both renderers
 - **ParticleEmitter** (extends Handle) Continuous emitter returned by attach() (a handle)
   - `rate: number` Particles per second (can be changed at any time)
   - `ratePerMeter: number` (experimental) Particles per meter the object moves, on top of rate (can be changed at any time)

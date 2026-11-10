@@ -25,6 +25,7 @@ export const specs = [
         const sun = new THREE.DirectionalLight(0xffffff, 2); sun.position.set(40, 80, 30); sun.castShadow = true; E.scene.add(sun, sun.target);
         await E.start(); E.step(0.05);
         E.shadows.enabled = false;
+        E.lights.sun.castShadow = false;   // on WebGL the cascades must be the only shadow-casting DirectionalLight (render/shadows.js 'other')
         const h = E.shadows.cascades(sun, { count: 3, low: { count: 3 } }); E.step(0.05);
         out.hidden = h.csm.lights.filter(l => l !== sun).map(l => l.visible);
         E.shadows.enabled = true; E.step(0.05);

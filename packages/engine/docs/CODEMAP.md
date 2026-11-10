@@ -59,7 +59,7 @@ Type = what the module may own (core/engine/moduleTypes.js): world, picture, act
 
 **core/**
 - assets/ Asset management: Asset manifest: register every model, tex… — Animator.js, Assets.js, Baked.js, assetEntry.js, assetHot.js, assetLoad.js, assetLod.js, assetManifest.js, assetPart.js, assetReport.js, ik.js, modelNeeds.js, namedModel.js, nodeVisibility.js
-- audio/ Audio core: buses (master, music, sfx, ambience, ui + the g… — Audio.js, audioRules.js, audioVoice.js
+- audio/ Audio core: buses (master, music, sfx, ambience, ui + the g… — Audio.js, audioReverb.js, audioRules.js, audioVoice.js
 - base/ Stable error codes: errors the engine raises by name end th… — Events.js, I18n.js, Random.js, Vars.js, docRef.js, easing.js, errorCodes.js, errorHints.js, errors.js, events.generated.js, follows.js, freeParts.js, math.js, mulberry32.js, params.js, saveValues.js, sections.js, spelling.js, util.js, validate.js
 - engine/ Module installation (part of Engine, mixed into Engine.prot… — Engine.js, Loading.js, copies.js, headlessLoad.js, lifecycle.js, loop.js, moduleSlots.js, moduleTypes.js, modules.js, page.js, plugins.js, services.js, startup.js
 - input/ Input: read by "action", not by "key" — Input.js, inputContext.js, inputDefaults.js, inputKeyboard.js, inputPad.js, inputPointer.js, inputSeat.js, inputTouch.js
@@ -89,7 +89,7 @@ Type = what the module may own (core/engine/moduleTypes.js): world, picture, act
 - music/ Background music module entry — Music.js, rules.js
 - nav/ Navmesh (Recast): generated after a level loads; engine.charact… — navPath.js
 - net/ net() module: optional co-op multiplayer, host-authoritative st… — Client.js, Host.js, Net.js, sync.js, transports.js
-- particles/ Particles module: dust, falling leaves, splashes, chimney smoke… — Particles.js, effect.js, shaders.js
+- particles/ Particles module: dust, falling leaves, splashes, chimney smoke… — Particles.js, effect.js, lit.js, shaders.js
 - photo/ Photo mode: a sharper shot, then restore — Photo.js, pathTrace.js
 - rigid/ Real physics (Rapier): objects that topple, roll, get pushed an… — RigidBodies.js, Vehicles.js, collider3d.contract.js, ragdoll.js, ragdollBones.js, refresh.js, sync.js
 - settings/ Settings menu module entry — Settings.js, apply.js, sections.js, strings.js, view.js
@@ -114,7 +114,7 @@ Type = what the module may own (core/engine/moduleTypes.js): world, picture, act
 - engineUniforms.js: Engine uniforms (helper of patches.js)
 - fogLook.js: What fog a scene is drawn with, for the parts that match so…
 - fuse.js: Fused post pass
-- fx/ threedog/tsl entry: the TSL Fn library — cel.tsl.js, cloudShadow.tsl.js, detail.tsl.js, library.tsl.js, lighting.tsl.js, nodeErrors.tsl.js, noise.tsl.js, objectOrigin.tsl.js, particles.tsl.js, patchNodes.tsl.js, pcss.tsl.js, postWebGPU.tsl.js, season.tsl.js, sky.tsl.js, uniforms.tsl.js, water.tsl.js, wind.tsl.js
+- fx/ threedog/tsl entry: the TSL Fn library — cel.tsl.js, cloudShadow.tsl.js, detail.tsl.js, library.tsl.js, lightShaft.tsl.js, lighting.tsl.js, nodeErrors.tsl.js, noise.tsl.js, objectOrigin.tsl.js, particles.tsl.js, patchNodes.tsl.js, pcss.tsl.js, postWebGPU.tsl.js, season.tsl.js, sky.tsl.js, uniforms.tsl.js, water.tsl.js, wind.tsl.js
 - fxNumbers.js: The numbers inside the engine's shared shader functions, wr…
 - hotGlsl.js: Shader hot reload in dev
 - impostor.tsl.js: Impostor cards for far plants (vegetation.define({ impostor…
@@ -316,7 +316,7 @@ Modules declare actions without keys; the game binds them (createEngine({ bindin
 - modules/photo/Photo.js: module.* (1), photo.* (1)
 - modules/rigid/RigidBodies.js: module.* (1)
 - modules/rigid/Vehicles.js: vehicle.* (2)
-- modules/settings/strings.js: settings.* (43), title.* (1), module.* (1)
+- modules/settings/strings.js: settings.* (44), title.* (1), module.* (1)
 - modules/sky/skyModule.js: module.* (1)
 - modules/swarm/Swarm.js: module.* (1)
 - modules/terrain/index.js: module.* (2)

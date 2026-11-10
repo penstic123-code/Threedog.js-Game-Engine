@@ -3,7 +3,7 @@
 > **Covers:** particles: dust, smoke, sparks, splashes; values over life, emitters, soft edges.
 > **Use when:** short-lived effects in numbers.
 > **Shortest:** `engine.use(particles({ effects: { dust: { … } } }))`, then `engine.particles.emit('dust', p)`.
-> **Sections:** Where a value comes · Values over life · Fast emitters · Soft edges · The material · Weather
+> **Sections:** Where a value comes · Values over life · Fast emitters · Soft edges · Lit particles · The material · Weather
 
 ```js fragment
 import { particles } from 'threedog';
@@ -51,6 +51,13 @@ What it costs, only while a soft effect is on screen. On WebGPU, one copy of the
 cannot read the depth it draws into, so the scene is drawn once more, depth only, per render, shared the same way: that is real cost in a large scene, and it sees surfaces without their
 wind, displacement or alphaTest. On WebGPURenderer's WebGL2 backend (the fallback where WebGPU is missing) three's depth copy works only with post and antialias on; elsewhere there the
 particles draw hard and the console says so. `soft` applies to the engine's material, not to one of yours.
+
+## Lit particles
+By default a particle's color is drawn as given (dust looks the same in a dark mine and in a bright spot). `lit: true` lets the scene's lights tint it:
+```js
+engine.particles.define('dust', { max: 300, color: 0xc8b89a, opacity: [0.6, 0], lit: true });   // dark away from the light, warm beside it
+```
+Each particle gets what a matte card facing every light would show (Lambert, no facing). Shadows, environment map, probes and area lights do not count: dust behind a wall still sees the light, and with only an environment map it goes dark (add an ambient or hemisphere light). CPU cost: live particles x lights per frame, same on both renderers; set at `define`, not per batch.
 
 ## The material
 ```js

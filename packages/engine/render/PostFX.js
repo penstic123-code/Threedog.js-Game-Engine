@@ -211,6 +211,7 @@ export class PostFX {
     if (other) throw codedError('post-effect', `post slot '${s}' already holds '${other.name}'; remove it first (only one effect can ${EXCLUSIVE[s]})`);
     const odd = Object.keys(effect.cheaper ?? {}).filter(k => !(k in (effect.params ?? {})));
     if (odd.length) throw codedError('post-effect', `post effect '${effect.name}': cheaper names ${odd.join(', ')}, not in its params (${Object.keys(effect.params ?? {}).join(', ') || 'none'}); cheaper holds lower values of its own params`);
+    finiteParams(effect.name, effect.params, 'params');
     const post = this, point = this.switchPoint(`post.${effect.name}.enabled`);
     point.release('game'); point.base = effect.enabled ?? true;   // only the game's own word starts over: the player's off and any other owner's hold stay on the effect that comes back
     let on = !!point.value();
@@ -229,27 +230,34 @@ export class PostFX {
         if (h._removed) return;
         const unknown = Object.keys(p ?? {}).filter(k => !(k in h.params));
         if (!p || typeof p !== 'object' || unknown.length) throw codedError('post-effect', `post effect '${h.name}': set(params) takes ${Object.keys(h.params).join(', ') || 'nothing, it has no params'}; unknown: ${unknown.join(', ') || JSON.stringify(p)}${unknown.includes('enabled') ? ' (on / off: handle.enabled = false)' : ''}`);
+        finiteParams(h.name, p, 'set(params)');
         const changed = Object.fromEntries(Object.entries(p).filter(([k, v]) => h.params[k] !== v));
         if (!Object.keys(changed).length) return;
         const was = Object.fromEntries(Object.keys(changed).map(k => [k, h.params[k]]));
-        try { h._apply(changed); } catch (err) { h._apply(was); throw err; }
+        // through the one gate: an update() in place may change the pass's needsSwap, a rebuilt pass is probed; a refusal puts the old params back
+        let rebuild = false;
+        post._change(() => { rebuild = h._apply(changed); }, () => { h._apply(was); }, () => rebuild);
       },
+      /** New params on the built part; true when the pass was dropped to be built again (the caller's sync builds it, after the order check) */
       _apply(p) {
         Object.assign(h.params, p);
-        if (post._be.set?.(post, h, p)) return;   // WebGPU: live uniforms, or a rebuild of the node graph
-        if (effect.fuse) { post._be.refresh(post, h); return; }
-        if (!h._impl) return;
-        if (effect.update) effect.update(h._impl, h.params); else { freeImpl(h); post._sync(); }
+        h._swaps = undefined;   // the order rule's probe of a pass never built yet was made from the old params
+        if (post._be.set?.(post, h, p)) return false;   // WebGPU: live uniforms, or a rebuild of the node graph
+        if (effect.fuse) { post._be.refresh(post, h); return false; }
+        if (!h._impl) return false;
+        if (effect.update) { effect.update(h._impl, h.params); return false; }
+        freeImpl(h); return true;
       },
       remove() {
         if (h._removed) return;
         h._removed = true;
         point.onChange = null; point.release('game');
-        freeImpl(h);
-        post._list = post._list.filter(e => e !== h);
-        if (!post._kept.has(h.name)) post._seq.delete(h.name);   // removed for good: a later effect of that name starts at the end (plugins keep theirs)
-        const i = post._plain.indexOf(h._entry); if (i >= 0) post._plain.splice(i, 1);
-        post._sync();
+        post._change(() => {
+          freeImpl(h);
+          post._list = post._list.filter(e => e !== h);
+          if (!post._kept.has(h.name)) post._seq.delete(h.name);   // removed for good: a later effect of that name starts at the end (plugins keep theirs)
+          const i = post._plain.indexOf(h._entry); if (i >= 0) post._plain.splice(i, 1);
+        }, () => {});   // a removal cannot break depth order: nothing to put back
       },
     };
     // a settings restriction or a hold ending turns it on or off here; a rebuild that throws leaves it as it was
@@ -328,9 +336,15 @@ export class PostFX {
   /** @internal */
   _size() { return this.engine.renderer.getSize(new THREE.Vector2()).multiplyScalar(this.engine.renderer.getPixelRatio()); }
   /** Apply a list change, rebuild the chain, and undo the change when the rebuild throws (then rethrow) @internal */
-  _change(apply, undo) {
-    apply();
-    try { this._sync(); } catch (err) { undo(); this._sync(); throw err; }
+  /**
+   * The one gate for every change to the effect list or to a pass's swap / depth behaviour (add, remove, on / off, a slot move, set): apply, then the
+   * depth-order rule over the candidate chain (always, also while the game owns the chain or nothing is built), then the rebuild. A refusal undoes
+   * before anything is built; apply is inside the same try, so a throw from apply itself (an effect's update() half-done) is undone too. rebuild() says
+   * whether this change needs the chain built again (a set() through update() in place does not).
+   * @param {() => void} apply @param {() => void} undo @param {() => boolean} [rebuild]
+   */
+  _change(apply, undo, rebuild = () => true) {
+    try { apply(); this._be.checkOrder?.(this); if (rebuild()) this._sync(); } catch (err) { undo(); this._sync(); throw err; }
   }
   // Rebuild the chain from the list (the backend does it)
   /** @internal */
@@ -406,6 +420,16 @@ export class PostFX {
  * _impl is the engine's record of the nodes it built (bloom's mip targets), and skipping it leaked them on every off / on
  * @param {any} h
  */
+/**
+ * Both ways a param value comes in (the effect's params at add, handle.set later) go through here: NaN or Infinity in a uniform turns the whole frame
+ * black or white with no word, so it is refused by name. A finite value stays the game's, negative and huge included: no clamp (a negative vignette brightens).
+ * @param {string} name @param {Record<string, any> | undefined} p @param {string} where
+ */
+function finiteParams(name, p, where) {
+  const bad = Object.entries(p ?? {}).filter(([, v]) => typeof v === 'number' && !Number.isFinite(v));
+  if (bad.length) throw codedError('post-effect', `post effect '${name}': ${where} takes finite numbers; got ${bad.map(([k, v]) => `${k}: ${v}`).join(', ')}`);
+}
+
 function freeImpl(h) {
   if (h._impl !== h._def._pass) h._impl?.dispose?.();
   h._impl = null;
@@ -421,13 +445,13 @@ const skipped = remove => /** @type {any} */ ({ name: null, enabled: false, set(
 
 /** hdr or ldr for each plain pass by its place among the game's OutputPass markers, as in the game's hand-built composer */
 function reslot(post) {
-  let after = false, changed = false;
+  let after = false; const moved = [];
   for (const e of post._plain) {
     if (e.output) { after = true; continue; }
     const h = post._list.find(x => x._def === e.def), s = after ? 'ldr' : 'hdr';
-    if (h && h.slot !== s) { h.slot = s; changed = true; }
+    if (h && h.slot !== s) moved.push([h, h.slot, s]);
   }
-  if (changed) post._sync();
+  if (moved.length) post._change(() => { for (const [h, , s] of moved) h.slot = s; }, () => { for (const [h, was] of moved) h.slot = was; });
 }
 
 /** A three.js Pass that draws the scene itself (RenderPixelatedPass, SSAARenderPass, TAARenderPass, a RenderPass): it replaces the scene render */

@@ -1,9 +1,9 @@
 # Lights, fog, exposure and environment lighting
 
-> **Covers:** lights, fog, exposure, environment maps, probes, lightmaps, light you can see in the air.
+> **Covers:** lights, fog, exposure, environment maps, probes, lightmaps, light you can see in the air (light beams, shafts).
 > **Use when:** lighting a scene or making its light change.
 > **Shortest:** your own `THREE.DirectionalLight` added in `picture/`.
-> **Sections:** Lights the placeholders, and · Fog plain three.js, signals · Exposure and the tone · Environment maps · Light probes baked indirect · Lightmaps baked light on · Real-time bounced light WebGPU · Reflections · Light you can see · Soft shadows, area lights · Occlusion culling
+> **Sections:** Lights the placeholders, and · A light the player carries · Fog plain three.js, signals · Exposure and the tone · Environment maps · Light probes baked indirect · Lightmaps baked light on · Real-time bounced light WebGPU · Reflections · Light you can see · Soft shadows, area lights · Occlusion culling
 
 Lights, fog and exposure are your own three.js code ([recipe 62](62-picture-code.md)): the sky computes signals and draws its dome, it writes none of them. The sky itself is `08-weather-sky.md`.
 
@@ -21,6 +21,22 @@ const torch = new THREE.PointLight(0xffa040, 6, 12); engine.add(torch);
 - `createEngine({ lights: false })`: the placeholders never enter the scene; `engine.lights.sun` / `hemi` stay as detached objects so nothing reads `undefined`.
 - Shadows: only the engine sun's box is managed. Your own `castShadow` lights work as in three.js (one shadow pass each); `engine.shadows` (recipe 45) takes those you hand in, and `engine.shadows.enabled = false` turns every shadow off.
 - Add or remove lights before `engine.start()`; what a change costs mid-play, and many lamps with `lightPool`: recipe 09 "Lights and stalls".
+- A light the player carries (head lamp, torch, flashlight): place it every frame next to `engine.camera` or parent it to the player, as in three.js; nothing to call. While the camera hides the body (first person, a follow close-up), a shadow-casting point or spot light within one body width of the body is not shadowed by it, on both renderers, so the lamp pool has no black wedge; the sun and the other lights still cast the body's shadow. A body that is seen (third person) shadows every light, a torch in the hand too, as in plain three.js. The lamp's own fixture mesh is yours: give it `castShadow = false`, or it shadows its own light.
+
+## A light the player carries (headlamp, lantern, flashlight): one spot that follows, with a shadow
+One plain three.js `SpotLight`, moved with the view each frame (also a car's beam). `lightPool` is for many cheap lights sharing a few real ones (recipe 09), not for this.
+```js
+const beam = new THREE.SpotLight(0xffd8a0, 80, 18, 0.6, 0.5, 2);  // color, intensity (candela), distance, angle, penumbra, decay
+beam.castShadow = true; beam.shadow.mapSize.set(1024, 1024); beam.shadow.camera.near = 0.2;
+engine.scene.add(beam, beam.target);   // add before engine.start(), like any light
+const ahead = new THREE.Vector3();
+engine.onRender(() => {   // after the camera moved this frame: the light never lags the view
+  const cam = engine.camera; beam.position.copy(cam.position);
+  beam.target.position.copy(cam.getWorldDirection(ahead)).multiplyScalar(4).add(cam.position);
+});
+```
+- **Intensity is candela** (decay 2): a lantern with a short `distance` takes tens to a few hundred. Judge it in a shot of the darkest place.
+- **Shadow cost**: one extra caster render per frame (a point light: six). Keep `distance` short (it bounds the shadow camera), `mapSize` modest; make it a quality setting. For a hand or shoulder, use that object's `getWorldPosition`.
 
 ## Fog: plain three.js, signals, your own math
 ```js
@@ -47,7 +63,7 @@ engine.renderer.toneMapping = THREE.NeutralToneMapping;  // the curve; materials
 ```
 The engine picks no curve: `renderer.toneMapping` stays three.js's default (`NoToneMapping`) until your code writes it. A curve of your own is a post effect in the `'tone'` slot (recipe 52).
 
-Exposure that adapts like an eye (WebGPU): `engine.post.add(autoExposure({ min: 0.25, max: 4 }))` from `@threedog/post-effects/tsl` measures the average brightness on the GPU and eases toward `key`. It multiplies after everything that adds light, before tone mapping (`toneMappingExposure` still applies on top). Bloom runs before it, so in bright daylight large areas glow and are then darkened: raise bloom's `threshold`, or give bloom an `order` above 800. Narrow `min` / `max` for an authored look; `speedUp` / `speedDown` set how fast, on `engine.time`; a chain rebuild keeps the adapted value. It measures a 64x64 sample, so a small, very bright thing can nudge it. To judge: walk from daylight into a dark room; it should open up over a second or two.
+Exposure that adapts like an eye (WebGPU): `engine.post.add(autoExposure({ min: 0.25, max: 4 }))` from `@threedog/post-effects/tsl` measures the average brightness on the GPU and eases toward `key`. It multiplies after everything that adds light, before tone mapping (`toneMappingExposure` still applies on top). Bloom runs before it, so in bright daylight large areas glow and are then darkened: raise bloom's `threshold` or give it an `order` above 800. Narrow `min` / `max` for an authored look; `speedUp` / `speedDown` set the speed, on `engine.time`; a chain rebuild keeps the adapted value. It measures a 64x64 sample: a small, very bright thing can nudge it.
 
 ## Environment maps
 `scene.environment` is plain three.js and stays `null` until your code writes it. The background (the sky dome or a skybox) and the environment lighting are two separate fields.
@@ -91,8 +107,8 @@ probes.remove();
   `priority` and `visible` are yours; `intensity` works on WebGPU only.
 - **Outside the grid there is no probe light** (half a step past `bounds`), and with no other ambient light a mesh goes black there: size `bounds` to where things are.
 - **Light counted twice**: the bake saw the hemisphere light, the environment and any `material.lightMap`, and they still add at run time. Lower them where the probes take over, or bake without them (a warning and describe say so).
-- Dark bake indoors: `scene.background` is a display color, far weaker than the sun. Raise it (or `backgroundIntensity`) just for the bake, and keep a little fill for walls no window sees.
-- Cost: 6 renders per probe, a few per task, so the page keeps drawing (`probes.bakeMs`). Bake once and ship the JSON: phones often cannot bake, all read the file. Meshes `include` rejects are hidden only while the cubes render. Adding a grid recompiles lit materials once: at start-up.
+- Dark bake indoors: `scene.background` is a display color, far weaker than the sun. Raise it (or `backgroundIntensity`) for the bake only, and keep a little fill for walls no window sees.
+- Cost: 6 renders per probe, a few per task, so the page keeps drawing (`probes.bakeMs`). Bake once and ship the JSON (phones often cannot bake, all read the file). Adding a grid recompiles lit materials once: at start-up.
 - Check it: `engine.describe().render.probes` (count, step, source, owner, `outside`: lit objects the grid does not hold, `doubled`: what counts twice) and `engine.debug.view('probes')` (a dot per probe in its average color).
 
 ## Lightmaps (baked light on what never moves)
@@ -107,8 +123,8 @@ if (!baking) {
 }
 floor.material.lightMapIntensity = 1.2;  // plain three.js, yours
 ```
-- What is baked: sky and bounced light, by rays traced from every lightmap texel through the static meshes, so light stops at walls and a pillar shades what stands behind it. The sun stays real-time where it lands, so moving things keep their shadows, and its bounce is in the map. The game's hemisphere or ambient light is the sky during the bake, at the same strength: an open floor comes out as bright as under that light.
-- Turning the ambient off: picture code that writes `intensity` every frame (the template's `picture/lights.js`) undoes a one-off write, so hide the light (`visible = false`) behind a URL flag as above, never in the palette: the next bake would see no sky. A bake that sees no light stops and writes nothing.
+- Baked: sky and bounced light, by rays from every texel through the static meshes (walls stop light, a pillar shades what is behind it). The sun stays real-time, so moving things keep their shadows; its bounce is in the map. The game's hemisphere or ambient light is the sky during the bake, at the same strength.
+- Turning the ambient off: picture code that writes `intensity` every frame (the template's `picture/lights.js`) undoes a one-off write, so hide the light (`visible = false`) behind a URL flag as above, never in the palette (the next bake would see no sky; a bake that sees no light writes nothing).
 - Instanced and skinned meshes and anything moving cannot hold a lightmap: give them `engine.bakeProbes`. A grid also lights the baked meshes, so where the two overlap the light doubles; keep the grid's `bounds` to where the moving things go, or turn `lightMapIntensity` down.
 - Files are large (half precision): 8 MB at 1024, 32 MB at 2048 before compression. Start small.
 - Check it: `engine.describe().render.lightmap` lists `skipped` (instanced), `missing` (not found, or changed since the bake: bake again), `moved`, `doubled` (ambient light or a grid on top) and `shared` (an unbaked mesh on a baked material: give it its own).
@@ -116,7 +132,7 @@ floor.material.lightMapIntensity = 1.2;  // plain three.js, yours
 
 ## Real-time bounced light (WebGPU games only)
 
-Bake first when the scene holds still: probes and lightmaps cost nearly nothing. Real-time bounce is for light that changes while the world stands (a moving sun, a carried lamp, a door opening). WebGPU only (table below).
+Bake first when the scene holds still (probes and lightmaps cost nearly nothing). Real-time bounce is for light that changes while the world stands (moving sun, carried lamp, opening door). WebGPU only (table below).
 
 ```js fragment
 import { voxelGI, temporalAA } from '@threedog/post-effects/tsl';
@@ -124,12 +140,12 @@ engine.post.add(voxelGI({ bounds: new THREE.Box3(min, max), intensity: 1 }));
 engine.post.add(temporalAA());  // clears the dots; it replaces MSAA while it is on
 ```
 
-- `bounds` is the world box to voxelize. Keep it tight: the same voxels spread over a town are too coarse for a room. `describe().render.post` gives `voxelSize`; judge it against the smallest thing that should throw color.
+- `bounds` is the world box to voxelize. Keep it tight: the same voxels over a town are too coarse for a room. `describe().render.post` gives `voxelSize`; judge it against the smallest thing that should throw color.
 - Lights can move every frame. Geometry cannot: moving things go outside the volume (`setup: gi => gi.volume.layers...`), and a rare change (a wall falls) calls `gi.needsUpdate = true`, a stall.
-- It bounces direct light only; sky light stays yours (a low hemisphere or environment light). To judge: a colored wall should tint what stands next to it, and a sunlit floor should lift the ceiling, without the shadows turning flat. A toon look may want only one soft bounce; a realistic interior more, with less fill.
-- A chain change at or before it (add, remove, on / off, a rebuilding setting, MSAA or a new scene buffer) voxelizes the scene again, a stall: set the chain at a scene change. Effects after it (a vignette, grain) switch freely: the chain is rebuilt only from the first changed place.
+- It bounces direct light only; sky light stays yours (a low hemisphere or environment light). Judge: a colored wall tints what stands next to it and a sunlit floor lifts the ceiling, shadows not flat.
+- A chain change at or before it (add, remove, on / off, a rebuilding setting, MSAA, a new scene buffer) voxelizes again, a stall: set the chain at a scene change. Effects after it (vignette, grain) switch freely.
 - `occlusion` (0 to 1) darkens corners, direct light too, so it starts at 0.
-- Where it is held (table below), give those players probes or a lightmap as the base.
+- Where it is held (table below), give those players probes or a lightmap.
 - Does not work: metal bounces as diffuse; moving and transparent things are not in the bounce; one volume cannot cover a big open world.
 
 What runs where (held: the game's `enabled` stays, the effect costs nothing, `describe().render.post` says why):
@@ -155,9 +171,27 @@ shine.set({ intensity: 0.8 });  // in place
 - Known limits: where a ray hits, the environment's specular stays and the reflection adds on top (indoors lower the mirror's `envMapIntensity`, under open sky `intensity`, until a dark thing on it reads dark). Added after fog, a far wet road shows through thick fog: lower `intensity` or `maxDistance`.
 - Cost: a screen-filling mirror at 1080p on an integrated GPU: +2.9 ms at the default `resolutionScale: 0.5`, +12.5 at 1 (sharp). It grows with pixels (pixel ratio too), `maxDistance` and `quality`.
 
-## Light you can see in the air: sun shafts through a window, lamp cones
+## Light you can see in the air: a beam of daylight through a hole or window, sun shafts, lamp cones
 
-Pick by the light. These two are WebGPU only; a WebGL game keeps the depth haze of recipe 59.
+Pick by cost and by what must cut the light. All three need WebGPURenderer; a game on `WebGLRenderer` keeps the depth haze of recipe 59.
+
+| Want | Use | Cost |
+|---|---|---|
+| One beam you place: a ceiling hole, window, stage light, lighthouse, torch | `lightShaft(engine, …)` from `threedog/tsl`, a mesh | one transparent draw; any tier |
+| Sun through every gap, cut by what stands in it | `sunShafts` (post effect) | high |
+| Spot cones and point glows with shadows, in a box of air | `lightVolumes` (post effect) | high |
+
+```js fragment
+import { lightShaft } from 'threedog/tsl';
+const beam = lightShaft(engine, { radiusTop: 0.6, radiusBottom: 1.1, length: 5, color: 0xfff0d0, intensity: 0.5, dust: 0.6 });
+beam.position.set(2, 5, -3);   // the opening (top) at the hole; it points down its -Y axis
+engine.scene.add(beam);
+beam.shaft.intensity.value = 0.3;   // numbers live (`beam.shaft.*.value`); size and segments are fixed, make a new one
+// lightShaft(engine, { light: spot })  follows a SpotLight (position, aim, cone width, colour) or a DirectionalLight (aim, colour)
+```
+
+- An additive cone, not a volume (fades: `softness`, `fadeAtGeometry`, `fadeNear`; api/tools.md). **What stands in it does not cut it** (that is `sunShafts`).
+- Start `intensity` low (0.2 to 0.5 over a dark cave) and raise it until the beam reads; with `bloom` it wants less. `dust` is skipped on `engine.tier` 'low'; floating motes are particles (recipe 64).
 
 ```js fragment
 import { sunShafts, lightVolumes } from '@threedog/post-effects/tsl';
@@ -165,7 +199,7 @@ engine.post.add(sunShafts({ light: engine.lights.sun }));  // sun through gaps
 engine.post.add(lightVolumes({ bounds: new THREE.Box3(min, max) }));  // spot cones, point glows
 ```
 
-- `sunShafts` (three's `GodraysNode`) marches the sun's shadow map, so the sun and whatever makes the gaps must cast shadows. It is made for air mostly in shadow (a room with a window, a forest); open daylight reads as haze, so lower `density` or leave it out. Raise `density` until the beam reads against the dark behind it, and stop before the far wall washes out.
+- `sunShafts` (three's `GodraysNode`) marches the sun's shadow map, so the sun and whatever makes the gaps must cast shadows. Made for air mostly in shadow (a room with a window, a forest); open daylight reads as haze, so lower `density`. Raise it until the beam reads against the dark, before the far wall washes out.
 - `lightVolumes` (three's `VolumeNodeMaterial`) fills a box of air and lights it from point and spot lights, shadows included. **The sun does nothing here**, three skips lights at infinity. It is dithered, so run `temporalAA` after it. `scattering: (tsl, { positionRay, density }) => ...` gives density per point for smoke or ground fog; times `uWeatherFog` (recipe 62) to follow the weather.
 - Does not work: shafts from more than one light at once, cones through transparent glass. For crisp beams in open air, aim a spot light along the sun under `lightVolumes`.
 
@@ -177,14 +211,14 @@ const sun = new THREE.DirectionalLight(0xffffff, 3);
 sun.shadow.filterNode = pcss({ lightSize: 0.04, samples: 16 });  // before the first frame, as any filterNode
 ```
 
-- `pcss` (WebGPU, DirectionalLight, cascades included): the edge widens with the caster-receiver distance, by `lightSize` per world unit (the sun about 0.01) up to `maxDistance`. About ten times PCF's lookups at `samples: 16`. The caster distance is found at four depths, each jittered per pixel, so a sloped caster's edge widens smoothly, with a fine static grain in wide edges.
+- `pcss` (WebGPU, DirectionalLight, cascades included): the edge widens with the caster-receiver distance, by `lightSize` per world unit (the sun about 0.01) up to `maxDistance`. About ten times PCF's lookups at `samples: 16`. The caster distance is found at four depths, jittered per pixel: a sloped caster's edge widens smoothly, with a fine static grain in wide edges.
 - `RectAreaLight`: just add it, the engine loads three's tables for it on both renderers. No shadow; lights only MeshStandard / MeshPhysical.
 - Light through skin, leaves, wax: three's `MeshSSSNodeMaterial` (`thicknessColorNode` ...), cheap, per light; three's `SSSNode` is screen-space shadows, not this. Glass, jade, liquid: `transmission` + `thickness` + `attenuationColor` on MeshPhysicalMaterial.
 - Lens flare: three's `LensflareNode` (`three/addons/tsl/display/`) fed by `ctx.display.bloom` in a post effect of your own (recipe 52), or `LensflareMesh` on a light.
 
 ## Occlusion culling
 
-`engine.occlusion.enabled = true` skips the engine's big things while something hides them: hlod cells and `engine.batching` groups. Works on both renderers. Ordinary objects are not watched. Turn it on only when heavy things stand behind others (a walled town, a building full of rooms). In a scene of many small things it is a loss: each box costs CPU, more so on WebGPU. Measure with `describe().render.occlusion` (`hidden`, `trianglesSkipped`) and the frame time, on and off.
+`engine.occlusion.enabled = true` skips the engine's big things while something hides them: hlod cells and `engine.batching` groups. Works on both renderers. Ordinary objects are not watched. Only for heavy things behind others (a walled town, a building of rooms); with many small things it is a loss (each box costs CPU, more on WebGPU). Measure with `describe().render.occlusion` (`hidden`, `trianglesSkipped`) and frame time, on and off.
 
 - Not to be confused with `cameraOcclusion` of `collision()` (recipe 21: walls between camera and player) or `voxelGI`'s `occlusion` (darker corners).
 - Culling hides things from `engine.camera` alone. Every other camera (a minimap, a mirror), shadows, `engine.rays`, a `THREE.Raycaster` of your own and `voxelGI`'s volume see them as ever; `visible` and `layers` stay yours.

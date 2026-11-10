@@ -22,7 +22,7 @@ Starting in first person and switching later: `openWorld({ camera: 'firstPerson'
 
 ## 2. What the engine does for you when switching
 - **Target and heading carry over** (the followed character and `yaw`; pitch is not, it means different things per camera).
-- **First person hides the body but keeps the shadow**: the model moves to `hideLayer` (default 30), which the shadow camera still sees; a model loaded later too.
+- **First person hides the body but keeps the shadow**: the model moves to `hideLayer` (default 30), which the shadow camera still sees; a model loaded later too. A light the player carries (within one body width of the body) leaves the hidden body out of its shadow: recipe 34.
 - **Mouse lock**: switching to first person by a key press locks the mouse, Esc leaves, switching away releases it. No lock on phones.
 - **Field of view**: switching away returns to the value from install; first-person and strategy cameras set their own `fov` option.
 - **Settings are kept**: switching back keeps the zoom and pitch; pass options to rebuild that camera with new ones:
@@ -33,16 +33,14 @@ engine.setCamera('follow', { distance: 8, pitch: 0.3 });
 - A wrong kind name throws and lists the valid ones; a wrong option name gets the closest name suggested in development.
 
 ## 3. Other common things
-- **Cycling through several**:
-  `const VIEWS = ['follow', 'firstPerson', 'rts']; engine.setCamera(VIEWS[(VIEWS.indexOf(engine.cameraRig.kind) + 1) % VIEWS.length]);`
+- **Which way yaw points**: first person and follow, yaw 0 looks toward -z, `Math.PI / 2` toward -x, `Math.PI` toward +z (forward = -(sin yaw, cos yaw)). Facing +z: `engine.cameraRig.yaw = Math.PI` (recipe 63 §7).
+- **Cycling**: find `engine.cameraRig.kind` in a list of kinds, `setCamera` the next.
 - **A fixed camera needs shots first**: `engine.setCamera('fixed', { shots: { hall: { position: [0, 6, 12], lookAt: [0, 0, 0] } }, start: 'hall' })`. A shot stays where it was placed; a view that pans at a fixed angle is the follow camera (section 6).
 - **Camera-specific methods** exist only after switching: `engine.cameraRig.lookAt(position)` (first person), `cut('name')` (fixed shots),
   `screenToGround(...)` (rts). Check `kind` before calling.
 - **Teleport, then lookAt**: `await engine.stream.teleport(p); engine.cameraRig.lookAt(target);` in that order: `lookAt` aims once from the body's current position.
-- **Saves and new games**: a save holds the view (`yaw`, `pitch`), and `session.load` / `saves.load` put it back. A new playthrough rebuilds the installed camera on the same object, so a kept `const rig = engine.cameraRig` stays valid (one from `setCamera` with options does not). A kind switched to with `setCamera` is not restored: only the heading carries, so call `setCamera` again on `session:start` if the game keeps that choice.
-- **Player movement direction follows the camera**: `engine.cameraRig.forward()` / `right()` change automatically after switching.
+- **Saves and new games**: a save holds the view (`yaw`, `pitch`), and `session.load` / `saves.load` put it back. A new playthrough rebuilds the installed camera on the same object: a kept `engine.cameraRig` stays valid (one from `setCamera` with options does not). A kind switched to with `setCamera` is not restored (only the heading carries): call `setCamera` again on `session:start` to keep the choice.
 - **Cutscene takeover**: while anyone holds `engine.takeCamera(owner)` (`engine.cameraOverride` is not null) the camera module leaves the camera alone; see [the engine API](../api/engine.md).
-- **Shooting games**: bind first-person firing to a mouse-button action, see `19-shooting-picking.md`.
 
 ## 4. Over the shoulder, lock-on framing, mouse lock (follow camera)
 ```js fragment
@@ -51,7 +49,7 @@ engine.cameraRig.shoulder = -0.7;  // switch shoulders at any time (plain proper
 engine.cameraRig.frame(enemy.root);  // lock-on: turn to "behind the player, looking at the enemy"; frame(null) lets go
 ```
 - **`shoulder`**: meters the aim point (and so the camera) moves to the right along `right()`; negative = left, 0 = centered (default).
-- **`pointerLock`** (default false): a click on the canvas locks the mouse, so moving it turns the view with no dragging; Esc releases, and `engine.page.releaseLock()` releases from code without opening the pause menu. Not on phones. If the browser refuses the lock the camera falls back to dragging; `describe().camera.pointerLock` is a state machine: `state` is `off` / `unsupported` / `waiting-click` / `requesting` / `locked` / `refused`, plus `covered` (what sits on the canvas centre and eats the click), `cameraOverride` (a takeover blocks locking) and `lastFailure { reason, agoSec }`; the text line shows the same.
+- **`pointerLock`** (default false): a click on the canvas locks the mouse, so moving it turns the view with no dragging; Esc releases, and `engine.page.releaseLock()` releases from code without opening the pause menu. Not on phones. If the browser refuses the lock the camera falls back to dragging; `describe().camera.pointerLock` has `state` (`off` / `unsupported` / `waiting-click` / `requesting` / `locked` / `refused`), `covered` (what sits on the canvas centre and eats the click), `cameraOverride` (a takeover blocks locking) and `lastFailure { reason, agoSec }`; the text line shows the same.
   The press that locks is swallowed (no `Mouse0`, no click) so it cannot attack or fire; `swallowLockClick: false` delivers it.
   Leave it off when the mouse buttons are for UI or clicking the ground.
 - **`yaw` is which side of the player the camera is on**: `camera = focus + (sin yaw, cos yaw) * distance`, looking along `forward() = -(sin yaw, cos yaw)`; prefer `frame(target)` to computing it.
@@ -75,7 +73,7 @@ engine.use(followCamera({ minPitch: -0.9, ground: 'shorten' }));  // or the same
   **What blocks by default**: every `addCircle` / `addBox` / `addSegment` collider, over its footprint and up to its height, and every mesh registered
   with `engine.rays.addStatic(mesh, { occluder: true })` (`level()` registers its buildings and `col_` meshes). A mesh alone blocks nothing (a crown or eave past its collider lets the camera in): registering it stops the arm without a gameplay collider (it does
   join `engine.raycast`). `collision({ cameraOcclusion: 'colliders' })` tests colliders only.
-  A content prop or template with `collide` blocks with its whole mesh, crown and eaves included, with no game code. A hand-written mesh stays opt-in: `addStatic(mesh, { occluder: true })`. In a level, `userData.occluder = false` on a node (or a parent) keeps it from blocking, and a hidden mesh does not block (`col_` meshes do). `addStatic` skips `InstancedMesh` and `SkinnedMesh` (dev warns once): rays do not hit them, so give them a collider or register a plain stand-in mesh.
+  A content prop or template with `collide` blocks with its whole mesh, crown and eaves included, with no game code. A hand-written mesh stays opt-in: `addStatic(mesh, { occluder: true })`. In a level, `userData.occluder = false` on a node (or a parent) stops it blocking; a hidden mesh does not block (`col_` meshes do). `addStatic` skips `InstancedMesh` and `SkinnedMesh` (dev warns once; rays do not hit them): give them a collider or a plain stand-in mesh.
   Give the colliders the camera may pass through `occluder: false`
   (`engine.collision.addCircle(tree, { radius: 0.4, occluder: false })`, or `collide: { circle: 0.4, occluder: false }` / `occluder: false` on a content prop or template): walkers are still stopped, the arm ignores them. A dense forest of
   blocking trunks collapses the camera onto the player; `collision({ canopyHeight })` covers only the terrain's own trees.
@@ -192,7 +190,7 @@ engine.camera = ortho;  // rendering, post, picking, shadows, audio and the came
 ```
 
 The aspect follows the canvas, on assignment and on every resize: an orthographic camera keeps its height and its width follows. `engine.autoView.manual('aspect')` before assigning keeps your own frustum. The engine leaves `far` and `fov` of a real orthographic camera alone.
-A camera module goes on placing the camera you assigned, and a camera you assign during a shot stays until the next view is asked for. `projection: 'orthographic', size` sets the height of a real orthographic camera; on a real perspective one the rig's own orthographic camera stands in until the next perspective view, which brings yours back. `pixelSnap` writes the height it needs. A chain taken with `engine.post.own()` is yours to point at the new camera, and a `pixelGrid` you made yourself keeps the camera you gave it.
+A camera module goes on placing the camera you assigned, and one assigned during a shot stays until the next view is asked for. `projection: 'orthographic', size` sets the height of a real orthographic camera; on a real perspective one the rig's own orthographic camera stands in until the next perspective view brings yours back. `pixelSnap` writes the height it needs. A chain taken with `engine.post.own()` is yours to point at the new camera; a `pixelGrid` you made keeps the camera you gave it.
 
 **Side view (side-scroller).** `presets.player.sideScroller` moves the player along world X only (A / D, `z` stays) and turns it toward the move. Face the camera along -Z with `yaw: 0`, so +X is screen right (`yaw: Math.PI` looks from the far side and flips left and right), on `followCamera`:
 ```js fragment

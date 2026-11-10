@@ -199,6 +199,8 @@ export class Time {
   _restart() {
     const was = [this._tick, this._carry, this._amb], real = this.now('real'), S = this.engine.stacks;
     this._tick = 0; this._carry = 0; this._setAmbient(0);
+    // Only place tick resets to 0 (newGame, load, quit): the event layer's "already fired this tick" marks are keyed by tick, so they are all void after a reset (Events._firedNow)
+    this.engine.events._fired = null;
     S._rebase('real', -real);   // an entry no save holds (a system-layer mod, a gate) keeps its time left
     return () => { [this._tick, this._carry] = was; this._setAmbient(was[2]); S._rebase('real', real); };
   }

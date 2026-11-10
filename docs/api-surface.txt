@@ -388,7 +388,7 @@ engine sub-objects | audio.condition | (name: string, test: (value: any, e: any)
 engine sub-objects | audio.config | { sounds: any; ambience: any; music: any; footsteps: any; }
 engine sub-objects | audio.ctx | any
 engine sub-objects | audio.duck | (levels: Record<string, number>, opts?: { fade?: number; }) => { remove(fade?: number): void; }
-engine sub-objects | audio.info | { running: boolean; state: string | null; levels: Record<string, number>; ducks: Record<string, number>; voices: Record<string, number>; }
+engine sub-objects | audio.info | { running: boolean; state: string | null; levels: Record<string, number>; ducks: Record<string, number>; voices: Record<string, number>; reverb?: { wet: number; decay: number; size: number; sends: Record<string, number>; place?: number; built: boolean; }; }
 engine sub-objects | audio.levels | Record<string, number>
 engine sub-objects | audio.load | (url: string) => Promise<any>
 engine sub-objects | audio.master | any
@@ -397,6 +397,7 @@ engine sub-objects | audio.measure | (name: string, fn: (e: any) => number) => {
 engine sub-objects | audio.noise | any
 engine sub-objects | audio.noiseBurst | (opts?: { dur?: number; type?: string; freq?: number; vol?: number; bus?: string; out?: any; rate?: number; delay?: number; }) => void
 engine sub-objects | audio.play | (url: string, opts?: { bus?: string; volume?: number; loop?: boolean; fadeIn?: number; pitch?: number; at?: any; }) => Promise<SoundHandle | null>
+engine sub-objects | audio.reverb | (opts: { wet?: number; decay?: number; size?: number; sends?: Record<string, number>; fade?: number; } | null) => void @experimental
 engine sub-objects | audio.running | boolean @experimental
 engine sub-objects | audio.setVolume | (bus: string, v: number) => void
 engine sub-objects | audio.sfx | (name: string, opts?: { volume?: number; pitch?: number; at?: any; bus?: string; loop?: boolean; params?: Record<string, any>; fadeIn?: number; }) => SoundHandle | null
@@ -946,6 +947,7 @@ error codes | save-value |
 error codes | save-version |
 error codes | save-write |
 error codes | session-early |
+error codes | session-start-missed |
 error codes | settings-row |
 error codes | settings-tab |
 error codes | shader-patch |
@@ -1196,6 +1198,7 @@ exports threedog/tsl | detailBump | (surfPos: Node, surfNorm: Node, h: Node, k: 
 exports threedog/tsl | detailNoise | (p: Node, kind: Node | 0 | 1 | 2 | 3, octaves: Node | number) => Node @experimental
 exports threedog/tsl | hash | (p: Node) => Node @experimental
 exports threedog/tsl | instanceOffset | (offset: Node) => Node @experimental
+exports threedog/tsl | lightShaft | (engine: { renderer: any; uniforms: object; tier: string; }, opts?: LightShaftOptions) => LightShaft @experimental
 exports threedog/tsl | noise | (p: Node) => Node @experimental
 exports threedog/tsl | objectOrigin | () => Node @experimental
 exports threedog/tsl | pcss | (o?: { lightSize?: number; samples?: number; maxDistance?: number; }) => any @experimental
@@ -1447,7 +1450,7 @@ module APIs | rigid.world | any @experimental
 module APIs | settings.actionList | () => any[] @experimental
 module APIs | settings.addSection | (id: string, section?: SettingsSection) => Settings
 module APIs | settings.close | () => void
-module APIs | settings.define | <T = any>(key: string, def: T, apply?: ((value: T, e: Engine) => void) | { apply?: (value: T, e: Engine) => void; limits?: string | string[]; }) => Settings
+module APIs | settings.define | <T = any>(key: string, def: T, apply?: ((value: T, e: Engine) => void) | { apply?: (value: T, e: Engine) => void; limits?: string | string[]; menu?: string | false; label?: string; options?: (T | [T, string])[]; min?: number; max?: number; step?: number; }) => Settings
 module APIs | settings.get | (key: string) => any
 module APIs | settings.isOpen | boolean
 module APIs | settings.open | () => void

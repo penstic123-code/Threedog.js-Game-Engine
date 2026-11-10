@@ -51,6 +51,9 @@ export const ERROR_CODES = {
   'session-early': {
     docs: ['recipes/20-content-actions-save.md §4', 'api/engine.md'],
     fix: 'engine.session needs the new-game state that start() captures: call it from a button or after `await engine.start()`.' },
+  'session-start-missed': {
+    docs: ['recipes/20-content-actions-save.md §4', 'api/engine.md'],
+    fix: "The first playthrough began inside engine.start() (?play, or newGame / load during start), so a session:start listener added after `await engine.start()` missed it. Add the listener before start(), or read the state after it: engine.session.playing, engine.events.recent('session:start')." },
   'clock-interval': {
     docs: ['recipes/06-clock-events.md', 'api/clock.md'],
     fix: 'clock.after / every take a finite number of calendar seconds (every needs > 0). For every fixed step use engine.onFixed.' },
@@ -425,7 +428,7 @@ export const ERROR_CODES = {
     fix: "The message says which: an id already used by another body or vehicle (give each its own id); a mesh that another body or a character already owns (one object, one physics owner: remove the first, or give the second its own object); joints lost when newGame / a load rebuilt the physics world (re-create them in a rigid:rebuilt listener, recipe 11 section 3 \"Joints\"); rigid.ragdoll() got something it cannot drive (a skinned character out of its vehicle, with the bones named when they cannot be read); or a moving body left the terrain colliders and froze (raise rigid({ terrainRing }) if it must keep moving there, recipe 11 section 3)." },
   'settings-row': {
     docs: ['api/settings.md'],
-    fix: 'settings.set() names a key no row owns, so nothing would apply it. Use a listed key, add the tab that has the row (settings({ sections })) or define the row: settings.define(key, default, apply).' },
+    fix: 'A settings row nobody owns or nobody draws. settings.set() with a key no row owns: use a listed key, add the tab that has the row (settings({ sections })) or define it: settings.define(key, default, apply). A defined row the menu cannot draw, in a missing tab, or drawn twice: give it min/max or options, a tab that exists, or menu: false when your own tab draws it.' },
   'settings-tab': {
     docs: ['api/settings.md'],
     fix: 'settings({ sections }) contains a built-in section that does not exist. Use a listed name, or register one with engine.settings.addSection(id, { title, render }).' },

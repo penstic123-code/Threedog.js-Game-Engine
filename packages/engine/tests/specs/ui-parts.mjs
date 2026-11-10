@@ -118,7 +118,7 @@ export const specs = [
       check('camera 分页的灵敏度 / 反转 Y / 视野写到当前相机', s.sens === 2.5 && s.inv === true && s.fov === 80, JSON.stringify(s));
       check('切换相机发 camera:change，camera 分页的设置重新套到新相机上', s.switched.changed?.kind === 'firstPerson' && s.switched.changed?.previous === 'follow' && s.switched.sens === 2.5 && s.switched.inv === true && s.switched.fov === 80, JSON.stringify(s.switched));
       check('game 分页"回到标题"关菜单并打开标题画面', s.toTitleBtn && s.backToTitle, JSON.stringify(s));
-      check('写错分页名报错并列出可选项和改法', /optional: game, camera/.test(s.err || '') && /addSection\('nope', \{ title, render \}\)/.test(s.err || ''), s.err);
+      check('写错分页名报错并列出可选项和改法', /optional: options, game, camera/.test(s.err || '') && /addSection\('nope', \{ title, render \}\)/.test(s.err || ''), s.err);
     },
   },
   {

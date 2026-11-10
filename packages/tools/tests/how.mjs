@@ -163,6 +163,10 @@ export async function run({ check }) {
     ['push boxes with physics puzzle', /engine\.rigid|11-vehicles/],
     ['can the player push rigid bodies', /11-vehicles/],
     ['third person character running and jumping on terrain', /addPlayer|presets\.player/],
+    // Phrasings that earlier blind tests asked but only got third-person results for, or nothing (2026-11-10)
+    ['first person walk collide custom geometry walls', /63-third-person-start\.md §7/],
+    ['cave echo dripping sounds by place', /31-audio\.md §3/],
+    ['spot light lamp that follows the player with shadows', /A light the player carries/],
     ['my own toon material with color bands and outline', /ShaderMaterial|43-shader/],
     ['rainy night street with wet ground, street lamps and fog', /weather|lightPool/],
     ['sky color for my shader', /uSkyHorizon|Sky color for my shader/],

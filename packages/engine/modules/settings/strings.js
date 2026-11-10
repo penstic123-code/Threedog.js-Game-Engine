@@ -16,6 +16,7 @@ export const STRINGS = {
     'settings.langName.zh-CN': '简体中文', 'settings.langName.en': 'English',
     'settings.game': '游戏', 'settings.resume': '继续游戏', 'settings.load': '读档', 'settings.toTitle': '回到标题',
     'settings.camera': '镜头', 'settings.sensitivity': '鼠标灵敏度', 'settings.invertY': '反转 Y 轴', 'settings.fov': '视野',
+    'settings.options': '选项',
   },
   en: {
     'title.settings': 'Settings', 'module.settings': 'settings',
@@ -32,6 +33,7 @@ export const STRINGS = {
     'settings.langName.zh-CN': '简体中文', 'settings.langName.en': 'English',
     'settings.game': 'Game', 'settings.resume': 'Resume', 'settings.load': 'Load', 'settings.toTitle': 'Back to title',
     'settings.camera': 'Camera', 'settings.sensitivity': 'Mouse sensitivity', 'settings.invertY': 'Invert Y', 'settings.fov': 'Field of view',
+    'settings.options': 'Options',
   },
 };
 

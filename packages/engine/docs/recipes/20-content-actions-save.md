@@ -55,7 +55,7 @@ Data the engine never reads (translated story text) belongs outside `content/`, 
 ## 1b. Content packs: several data sets in one load
 A pack with a `level` commits when its file is here. If a newer `level.load`, save load or unload comes first, the newest level stands and only the pack's `level` gives way: the rest goes in once that load has ended, on the level that won. A place only the pack's level had fails with `content-place`, as any unknown place does, and the pack goes back whole.
 
-`content.load` answers for its own load. Bad data throws on the line. The Promise it returns resolves once the pack committed, and rejects when it failed, after the old level and registrations are back; saves and loads asked meanwhile wait for that. If the old level could not come back, `err.notRestored` lists why. A load nobody awaits is reported all the same.
+Bad data throws on the line. The Promise `content.load` returns resolves once the pack committed and rejects when it failed, after the old level and registrations are back; saves and loads asked meanwhile wait. A load nobody awaits is reported all the same. `err.notRestored` lists why the old level could not come back. 
 
 ```js fragment
 try { await engine.content.load(dlc); }

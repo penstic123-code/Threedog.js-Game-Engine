@@ -1,9 +1,9 @@
 # Sound: buses, sounds by name, ambience rules, music, footsteps, ducking
 
-> **Covers:** sound: buses, sounds by name, ambience rules, music, footsteps, ducking, settings.
+> **Covers:** sound: buses, sounds by name, ambience rules, music, footsteps, ducking, settings, reverb.
 > **Use when:** anything the player hears.
 > **Shortest:** `createEngine({ audio: { levels: { music: 0.4 } } })`, then sounds by name.
-> **Sections:** 1 Config in one · 2 Buses and sounds · 3 Ambience a rule · 4 Music rules, cross-fade · 5 Footsteps by surface · 6 Ducking · 7 Settings · 8 Sounds as content
+> **Sections:** 1 Config in one · 2 Buses and sounds · 3 Ambience sounds by place · 4 Music rules, cross-fade · 5 Footsteps by surface · 6 Ducking · 7 Settings · 8 Sounds as content · 9 Reverb
 
 Everything you hear is the game's. The engine ships no sound files and plays nothing the game did not name; built-in synths (`footstep`, `shutter`,
 `thunder`, `wind`, `rain`, `water`, `birds`, `crickets`) stay silent until `audio.sounds` asks for them. Signatures: `api/audio.md`,
@@ -57,8 +57,8 @@ until the rules load again, instead of refetching.
 
 A synth with default params is `{ build: synthFn, params }` in the manifest.
 
-## 3. Ambience: a rule table
-Each rule names a sound and says when and how loud. A rule with `every` is a one-shot at random gaps; without, a loop that fades in and out (and stops
+## 3. Ambience: sounds by place (a rule table)
+Drips in a cave, a river near water, birds by day: one rule each, no per-frame code, naming a sound, when and how loud. A rule with `every` is a one-shot at random gaps; without, a loop that fades in and out (and stops
 when silent, so idle rules cost nothing).
 ```js
 ambience: [
@@ -88,7 +88,7 @@ engine.music.intensity = 0.8;  // stems fade in as it rises through their at ran
 ```
 The same `when` keys as ambience. Tracks cross-fade (`fade`, default 2 s); a new rule result must hold `hold` seconds before switching.
 `engine.music.override('boss')` picks by hand; `override(null)` hands back to the rules. `engine.music.stinger('win')` plays a short piece over the music.
-Decoded music is large (about 21 MB a stereo minute), so it lives like any asset: `assets.release(name)` and `assets.trim()` (a level change calls it) free it, the longest-unused long sounds go by themselves over a memory budget, sounds still playing play on, and a freed sound loads again when played; effects under 10 s stay cached, and `preload: true` keeps a track.
+Decoded music is large (about 21 MB a stereo minute): `assets.release(name)` and `assets.trim()` (a level change calls it) free it, the longest-unused long sounds go by themselves over a memory budget, playing sounds play on, a freed sound loads again when played; effects under 10 s stay cached, and `preload: true` keeps a track.
 
 ## 5. Footsteps by surface
 The player's footstep rhythm follows its speed (one step per foot landing). Each step plays the sound named by `footsteps[groundType]`, else
@@ -137,3 +137,15 @@ engine.content.load([base, forest]);  // each pack's audio merges in
   `createEngine({ audio })` or `music({ tracks })` is an error (`[audio-name-clash]`). `ambience` and `music.rules` concatenate after the game's own.
   Loading a named pack again replaces its rules (hot reload).
 - `levels` (bus volumes) stay in `createEngine({ audio })`: they are settings, not content.
+
+## 9. Reverb (echo of a cave or a hall)
+One reverb send/return on the buses, off until asked:
+```js
+engine.audio.reverb({ sends: { sfx: 0.5, ambience: 0.8 }, decay: 3, size: 0.8, wet: 0.4 });  // which buses echo and how much; the room
+engine.audio.reverb({ wet: 0.1, fade: 1 });   // later calls change only what they name; null turns it off
+```
+`decay` is the seconds to fall 60 dB, `size` (0-1) the pre-gap and build-up, `wet` how much comes back (api/audio.md). Size or decay rebuilds the impulse; wet and sends only fade. Cost: one convolution for any number of sounds. A place can set wet with an ambience rule (same `when`; content packs too):
+```js fragment
+{ reverb: 0.7, when: { zone: 'cave' }, fade: 2 },   // in audio.ambience; the highest holding rule wins, none gives the game's wet back
+```
+`engine.audio.info.reverb` shows the targets (`place` while a rule holds). A reverb rule plays no sound (no sound / volume / every / bus on it).

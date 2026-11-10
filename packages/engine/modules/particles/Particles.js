@@ -32,6 +32,8 @@
 //   maxPixels 512   largest on-screen size of one particle (pixels), so smoke drifting past the camera does not fill the screen
 //   ratePerMeter 0  with attach, particles per meter the emitter moves, on top of rate, spread along the path it moved (no beads behind a fast emitter)
 //   soft 0          meters over which a particle fades where it meets opaque geometry; 0 is off. Set at define, not per batch
+//   lit false       the scene's lights tint the color: dust a lamp lights, smoke dark away from the fire (point, spot, directional, ambient,
+//                   hemisphere; no shadows, environment map or probes; cost live particles x lights on the CPU, lit.js). Set at define, not per batch
 // size, color and opacity also take more stops: evenly spaced [0, 0.8, 0], or timed [[0, 0], [0.1, 0.8], [1, 0]] (time 0 birth, 1 death).
 // Each particle's life fraction (0 birth, 1 death) is the geometry attribute aLife, for a game's own material.
 //
@@ -47,10 +49,12 @@ import { readParams, keysSchema } from '../../core/base/params.js';
 import { isOptions, isUnder } from '../../core/base/util.js';
 import { codedError } from '../../core/base/errorHints.js';
 import { borrowRenderer } from '../../render/backend.js';
+import { ParticleLights } from './lit.js';
 // one schema per public entry (unknown keys throw in dev with did-you-mean). Effect param values come in many shapes (number or [min, max], color), so most are only checked by key name
 const FX_PARAMS = keysSchema(KEYS, {}, {
   ratePerMeter: { type: 'number', optional: true, min: 0, desc: 'particles per meter the emitter moves' },
   soft: { type: 'number', optional: true, min: 0, desc: 'meters over which a particle fades into opaque geometry' },
+  lit: { type: 'bool', optional: true, desc: "the scene's lights tint the color (lamp-lit dust); off: the color is drawn as given" },
 });
 /** Check one table of effect params: the schema, then the values over life (at the call, not on a later emit) */
 function readFx(where, o) {
@@ -126,7 +130,7 @@ export class Particles {
   }
 
   /**
-   * Burst: emit count particles at once (default 10) at position (Vector3 / Object3D / [x, y, z] / {x, y, z}). overrides affect this batch only (color, speed, direction...; max/texture/blending/soft cannot be changed temporarily)
+   * Burst: emit count particles at once (default 10) at position (Vector3 / Object3D / [x, y, z] / {x, y, z}). overrides affect this batch only (color, speed, direction...; max/texture/blending/soft/lit cannot be changed temporarily)
    * @param {string} name
    * @param {PositionLike} position
    * @param {{ count?: number, overrides?: ParticleOptions | null }} [opts]
@@ -243,7 +247,12 @@ export class Particles {
       h.object.getWorldQuaternion(this._q);
       h.fx.spawn(p, n, o, o.worldSpace === false ? this._q : null, path);
     }
-    for (const fx of this.effects.values()) { fx.uniforms.uScale.value = scale; fx.update(dt); }
+    // lit effects share one read of the scene's lights per frame, made only while one of them has live particles
+    let lights = null;
+    for (const fx of this.effects.values()) {
+      if (fx.o.lit && fx.alive && !lights) (lights = this._lights ??= new ParticleLights(this.engine)).refresh();
+      fx.uniforms.uScale.value = scale; fx.update(dt, fx.o.lit ? lights : null);
+    }
   }
 }
 
