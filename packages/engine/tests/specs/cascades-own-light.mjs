@@ -107,7 +107,7 @@ export const specs = [
         light.castShadow = true;
         e.tier = 'low';
         // one map, far from the origin: the box's shadow must still be there, so the map has to follow the camera
-        box.position.set(200, 5, 200); e.camera.position.set(200, 30, 245); e.camera.lookAt(200, 0, 200);
+        box.position.set(200, 5, 200); e.camera.position.set(200, 30, 225); e.camera.lookAt(200, 0, 200);
         const cast = () => { box.castShadow = false; const a = shot(); box.castShadow = true; return changed(a, shot()); };
         const low = e.shadows.cascades(light, { count: 3, maxFar: 90 }), sc = light.shadow.camera;
         out.low = { csm: low.csm, cast: cast(), right: sc.right, far: sc.far, depth: light.position.distanceTo(light.target.position), refused: err(() => e.shadows.box(light)) };
@@ -118,6 +118,13 @@ export const specs = [
         out.lowCount = low.csm?.lights.length;
         low.set({ low: { count: 1 } });
         shot();
+        // the one map's size reads count (it was left out of the rebuild key): 60 / 4, then a game's own count 1 is all of maxFar with no forward shift
+        const shift = () => Math.hypot(light.target.position.x - e.camera.position.x, light.target.position.z - e.camera.position.z);
+        low.set({ count: 4 }); shot(); out.count4 = { right: sc.right, shift: shift() };
+        low.set({ count: 1 }); shot(); out.count1 = { right: sc.right, shift: shift() };
+        // a maxFar under count meters worked before the cut: the derived size stays at the box's 1 m minimum, it does not throw
+        out.tiny = err(() => low.set({ count: 3, maxFar: 1 })); out.tinyRight = sc.right;
+        low.set({ count: 3, maxFar: 60 });
         low.remove();
         out.lowOff = { pos: light.position.toArray(), target: light.target === player, box: ['left', 'right', 'top', 'bottom', 'near', 'far'].every(k => near(sc[k], box0[k])) };
         e.tier = 'high';
@@ -127,6 +134,11 @@ export const specs = [
         free.remove();
         out.boxKept = sc.right;
         sc.right = box0.right;
+        // ahead follows the level part of the view continuously: straight down shifts 0, a hair off straight down shifts a hair (it jumped the whole 10 m)
+        const fwd = e.shadows.box(light, { follow: 'camera', ahead: 10, snap: 0 });
+        const aheadAt = (x, y) => { e.camera.position.set(0, 40, 0); e.camera.lookAt(x, y, 0); shot(); return Math.hypot(light.target.position.x, light.target.position.z); };
+        out.ahead = [aheadAt(0, 0), aheadAt(0.2, 0), aheadAt(10, 40)];   // straight down, 0.3 degrees off it, level
+        fwd.remove();
 
         // cascades on, a chunk's material leaves the scene and is disposed: nothing here may hold it (the spec collects garbage and looks)
         window.liveCascades = e.shadows.cascades(light, { count: 2 });
@@ -192,11 +204,16 @@ export const specs = [
       check('handle.set rebuilds with the light still cascade 0', r.set.lights === 2 && r.set.first, JSON.stringify(r.set));
       check('[guard] remove gives everything back: position, target, shadow box; extras and patch gone; a second remove is harmless',
         r.off.pos.join() === '-60,50,10' && r.off.target && r.off.player.join() === '3,0,-2' && r.off.csm === null && r.off.handle === null && r.off.gone && !r.off.patch && r.off.box && r.off.owned === null, JSON.stringify(r.off));
-      check('[guard] low tier: one map that follows the camera, sized by maxFar, so a shadow 280 m from the origin is drawn; low: { count } opts in',
-        r.low.csm === null && r.low.cast > 0.5 && r.low.right === 90 && r.low.far === 280 && Math.abs(r.low.depth - 190) < 1e-6 && r.lowSet === 60 && r.lowCount === 2, JSON.stringify([r.low, r.lowSet, r.lowCount]));
+      // [guard] the low tier must not trade sharpness for reach: its one map is maxFar / count each way (90 / 3), the texel size of an average cascade; stretched
+      // over all of maxFar it had 3x the texels and PCF's blur grows with them (the low-tier soft smear)
+      check('[guard] low tier: one map that follows the camera, maxFar / count each way (cascade-sized texels), so a shadow 280 m from the origin is drawn; low: { count } opts in',
+        r.low.csm === null && r.low.cast > 0.5 && r.low.right === 30 && r.low.far === 160 && Math.abs(r.low.depth - 130) < 1e-6 && Math.abs(r.lowSet - 20) < 1e-9 && r.lowCount === 2, JSON.stringify([r.low, r.lowSet, r.lowCount]));
       check('[guard] that map is a placement like the cascades: engine.shadows.box on the light is refused by name, remove() gives position, target and shadow box back',
         /has cascades/.test(r.low.refused) && r.lowOff.target && r.lowOff.box && r.lowOff.pos.join() === '-60,50,10', JSON.stringify([r.low.refused, r.lowOff]));
       check('a box with no extent leaves a later write to the shadow camera alone at remove()', r.boxKept === 33, String(r.boxKept));
+      check('[guard] low tier one map follows count: 60 / 4 shifted ahead, count 1 back to all 60 m on the camera; maxFar 1 at count 3 does not throw',
+        r.count4.right === 15 && r.count4.shift > 1 && r.count1.right === 60 && r.count1.shift < 1 && r.tiny === '' && r.tinyRight === 1, JSON.stringify([r.count4, r.count1, r.tiny, r.tinyRight]));
+      check('[guard] box ahead is continuous: 0 looking straight down, under 0.1 m a hair off it, about 10 m level', r.ahead[0] < 0.01 && r.ahead[1] < 0.1 && Math.abs(r.ahead[2] - 10) < 0.01, JSON.stringify(r.ahead));
       check('[guard] the engine sun under a sky takes the same entry: same class, 3 lights, and its box follows the focus again after remove()', r.sky.sameClass && r.sky.lights === 3 && r.sky.boxBack === 40, JSON.stringify(r.sky));
       check('[guard] one set per engine, named at the second call', /already/.test(r.sky.taken) && r.sky.kept.handle, JSON.stringify(r.sky));
       check('[guard] lights: false under a sky: the sun is refused by name (not in the scene), and a game light works beside the sky', /engine\.scene\.add/.test(r.noSun) && r.noSunWorks === 2, r.noSun);

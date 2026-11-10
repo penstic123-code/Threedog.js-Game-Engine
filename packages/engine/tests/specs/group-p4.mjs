@@ -135,7 +135,7 @@ export const specs = [
     },
   },
   {
-    name: '[guard] group P4 6: cascades on the engine sun keep maxFar on a low-tier single map, and remove puts the 30 m box back',
+    name: '[guard] group P4 6: cascades on the engine sun size a low-tier single map maxFar / count (cascade-sized texels), and remove puts the 30 m box back',
     url: PAGE,
     async run({ check, ev }) {
       const r = await ev(() => {
@@ -150,7 +150,7 @@ export const specs = [
         E.dispose();
         return { base, during, set, after };
       });
-      check('30 m baseline, 90 then 60 with the cascades, 30 again after remove', r.base === 30 && r.during === 90 && r.set === 60 && r.after === 30, JSON.stringify(r));
+      check('30 m baseline, 90 / 3 then 60 / 3 with the cascades, 30 again after remove', r.base === 30 && r.during === 30 && Math.abs(r.set - 20) < 1e-9 && r.after === 30, JSON.stringify(r));
     },
   },
   {

@@ -24,7 +24,7 @@ const PARAMS = {
   split: { type: 'any', default: CASCADE_DEFAULTS.split, desc: "'practical' | 'uniform' | 'logarithmic' | (count, near, far, out) => void" },
   fade: { type: 'bool', default: CASCADE_DEFAULTS.fade, desc: 'cross-fade at the borders' },
   lightMargin: { type: 'number', default: CASCADE_DEFAULTS.lightMargin, min: 0, desc: 'meters behind each cascade box toward the light still caught as casters' },
-  low: { type: 'object', optional: true, desc: 'on low-tier devices: { count } (default 1, one map that follows the camera)' },
+  low: { type: 'object', optional: true, desc: 'on low-tier devices: { count } (default 1, one map that follows the camera and reaches maxFar / count, as sharp as an average cascade)' },
 };
 const STRINGS = {
   light: `${WHERE}(light): needs a three.js DirectionalLight (cascades split a parallel light's shadow); got {got}`,
@@ -44,7 +44,7 @@ const BOX_PARAMS = {
   follow: { type: 'any', default: 'focus', desc: "what the box centers on: 'focus' (engine.focus) | 'camera' | an Object3D | () => Vector3 | false (it stays on the light's target)" },
   extent: { type: 'number', optional: true, min: 1, desc: "half size of the box in meters; left out: the light's own shadow camera stays as it is" },
   snap: { type: 'any', default: 0.5, desc: "center snap grid in meters, or 'texel' (one shadow pixel: no shimmer on a moving camera)" },
-  ahead: { type: 'number', default: 0, desc: 'meters the center is shifted in front of the view' },
+  ahead: { type: 'number', default: 0, desc: 'meters the center is shifted in front of a level view (less as the view tilts down, 0 straight down)' },
 };
 const BUDGET = 'engine.shadows.budget';
 const MAP = 'engine.shadows.mapSize';
@@ -69,7 +69,9 @@ function boxCenter(e, light) {
     else if (o.follow?.isObject3D) o.follow.getWorldPosition(at);
     else if (typeof o.follow === 'function') at.copy(o.follow());
     else at.copy(e.focus);
-    if (o.ahead) { cam.getWorldDirection(ahead); ahead.y = 0; if (ahead.lengthSq() > 1e-6) at.addScaledVector(ahead.normalize(), o.ahead); }
+    // ahead along the level part of the view, scaled by it (not normalized): a view tilting toward straight down slides the shift to 0 smoothly. Normalized
+    // with a cut-off, a near-vertical camera jumped the whole shift for a tiny turn and a straight-down one got none
+    if (o.ahead) { cam.getWorldDirection(ahead); ahead.y = 0; at.addScaledVector(ahead, o.ahead); }
     let now;
     if (o.snap === 'texel') {
       // the light-space right and up axes (matching the shadow camera lookAt), rounded to one shadow pixel along each
@@ -221,18 +223,23 @@ function ownCascades(e, light, first, gameExtent = () => undefined) {
   };
   const sync = () => {
     const n = e.tier === 'low' ? o.low?.count ?? 1 : o.count;   // low tier: one map unless the game says so
-    const want = (n > 1 ? [n, o.maxFar, o.fade, o.lightMargin, o.split] : [o.maxFar, o.lightMargin]).join('|');
+    const want = (n > 1 ? [n, o.maxFar, o.fade, o.lightMargin, o.split] : [o.count, o.maxFar, o.lightMargin]).join('|');   // one map's size reads count too
     if (want === key) return;
     off();
     key = want;
     if (n <= 1) {
-      // one map still has to cover what the cascades would: left alone it stays three's default 10 m box where the game put the light. Centered on the camera, as far
-      // as maxFar each way and lightMargin behind, as the cascades reach. The engine sun is placed by a sky's box or the baseline follow (render/lights.js), so it only gets the size
-      if (light !== e.lights?.sun) box = gameBox(e, light, { follow: 'camera', extent: o.maxFar, snap: 'texel' }, o.lightMargin + o.maxFar);
+      // one map still has to reach out from the camera: left alone it stays three's default 10 m box where the game put the light. It follows the camera, lightMargin
+      // behind. Its size keeps the texel size of the maps it stands in for: maxFar x n / count each way, i.e. all of maxFar when the game asked for one map, maxFar / count
+      // when the low tier cut the count. Why: the low tier saves the extra shadow passes, not texels; one map stretched over all of maxFar had count times the texels of an
+      // average cascade (120 m on 2048: 12 cm texels, and PCF's blur is radius x texel), a soft smear near the camera. The low tier draws shadows less far instead, and
+      // shifts the box half its size ahead so fewer texels go behind the view (half, not all: a steep camera still sees the ground just behind its feet).
+      // The engine sun is placed by a sky's box or the baseline follow (render/lights.js), so it only gets the size
+      const ext = Math.min(o.maxFar, Math.max(1, o.maxFar * n / o.count));   // the cut size never under the box's 1 m minimum, so a small maxFar that worked still works
+      if (light !== e.lights?.sun) box = gameBox(e, light, { follow: 'camera', extent: ext, ahead: n < o.count ? ext / 2 : 0, snap: 'texel' }, o.lightMargin + ext);
       else if (gameExtent() === undefined) {
-        // the engine sun gets the same reach: its placement stays with the sky or the baseline follow, only the box grows from the 30 m baseline to maxFar (and goes back with remove).
+        // the engine sun gets the same reach: its placement stays with the sky or the baseline follow, only the box goes from the 30 m baseline to ext (and back with remove).
         // Like gameBox: an extent the game set with engine.shadows.box(sun, { extent }) wins, and if it sets one meanwhile, remove leaves it as the game left it
-        const sc = light.shadow.camera, was = { left: sc.left, right: sc.right, top: sc.top, bottom: sc.bottom }, ext = o.maxFar;
+        const sc = light.shadow.camera, was = { left: sc.left, right: sc.right, top: sc.top, bottom: sc.bottom };
         setExtent(light, ext);
         sunSize = () => { if (sc.right !== ext) return; Object.assign(sc, was); sc.updateProjectionMatrix(); };
       }
@@ -333,7 +340,7 @@ export function defineShadows(e, { owned }) {
     },
     /**
      * Cascaded shadows for a DirectionalLight: sharp near the camera, wide far away, following the camera. The light stays yours: color, intensity and shadow
-     * values are read from it. Low-tier devices get one map, which follows the camera, unless `low: { count }` says otherwise. WebGPURenderer needs `import 'threedog/tsl'`.
+     * values are read from it. Low-tier devices get one map, which follows the camera and reaches maxFar / count (shadows nearer, as sharp as an average cascade), unless `low: { count }` says otherwise. WebGPURenderer needs `import 'threedog/tsl'`.
      * @example
      * const sun = new THREE.DirectionalLight('#fff4e0', 3); sun.position.set(40, 80, 30); sun.castShadow = true; engine.scene.add(sun);
      * const shadows = engine.shadows.cascades(sun, { count: 3, maxFar: 150 });

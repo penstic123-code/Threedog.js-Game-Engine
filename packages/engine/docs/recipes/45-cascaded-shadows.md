@@ -72,8 +72,10 @@ It works with and without a sky, on both renderers (WebGPU needs `import 'threed
 - Color, intensity, `visible`, `castShadow` and `light.shadow` values stay yours and are read every frame. The cascades only place the light. On WebGL, while they are on,
   `light.position` and `light.target` hold that placement: writes to `light.position` or a new `light.target` still set the direction, and
   `remove()` puts both back as you left them, with the shadow camera box. A `light.target` you assigned (your player, say) is never moved.
-- `engine.tier === 'low'` gets one map unless you pass `low: { count: 2 }`. On a game's light that map follows the camera and covers `maxFar` each way, so it is blurrier than cascades but never stops at the
-  origin; like cascades it places the light, so `engine.shadows.box` on that light is refused. On `engine.lights.sun` the one map stays the engine's own box around the focus, with its size. `handle.csm` is null while there is one map.
+- `engine.tier === 'low'` gets one map unless you pass `low: { count: 2 }`. That map covers `maxFar / count` each way, so its texels are as small as an average cascade's: the low tier
+  saves shadow passes and draws shadows less far, not blurrier (one map over all of `maxFar` has `count` times the texels, and the PCF blur is `radius` x texel). On a game's light it follows the
+  camera, shifted half its size ahead of the view, and never stops at the origin; like cascades it places the light, so `engine.shadows.box` on that light is refused. On `engine.lights.sun` the
+  one map stays the engine's own box around the focus, sized the same way. `count: 1` (one map on every tier) covers all of `maxFar`. `handle.csm` is null while there is one map.
 - An engine draws one set of cascades: a second handle throws. A box on the same light throws too, except the engine's own box on `engine.lights.sun`, which waits
   until `remove()`.
 - Another shadow-casting DirectionalLight next to cascades breaks the cascade order on WebGL (three sorts shadow casters first): one warning
@@ -98,7 +100,7 @@ box.remove();  // position, target and the shadow camera come back
 | `follow` | `'focus'` | `'focus'` (`engine.focus`), `'camera'`, an Object3D, `() => Vector3`, or `false` (it stays on the light's target) |
 | `extent` | left out | half size in meters, written on `light.shadow.camera`; left out, the camera stays as you set it |
 | `snap` | 0.5 | center snap grid in meters, or `'texel'`: one shadow pixel, no shimmer on a moving camera |
-| `ahead` | 0 | meters the center is shifted in front of the view |
+| `ahead` | 0 | meters the center is shifted in front of a level view; less as the view tilts down, 0 straight down |
 
 - A game light gets no box unless you call this. The light keeps its direction, which is its position minus its target, so aim it as usual. `position`, `target` and a `light.target` you assigned work as under cascades above.
 - The engine's placeholder sun under `sky()` has a box already, following `engine.focus`, 30 m each way. `engine.shadows.box(engine.lights.sun, { follow: false, extent: 9 })` changes that one
@@ -174,6 +176,9 @@ sun.shadow.radius = 3; sun.shadow.blurSamples = 8;  // softness (pcf, vsm); blur
 sun.shadow.bias = -0.0001; sun.shadow.normalBias = 0.03;
 sun.shadow.mapSize.setScalar(2048);  // before the first frame; later also sun.shadow.map?.dispose(); sun.shadow.map = null;
 ```
+
+PCF's `radius` is in shadow texels, so the blur in meters is `radius x 2 x extent / mapSize`: halve the map (a low-tier size) and keep the radius, and the blur doubles. Scale them
+together, `sun.shadow.radius = Math.max(Math.min(R, 2), R * size / 2048)` for a radius `R` tuned on the 2048 map, as the engine's own sun does (`R` = 3): under about 2 texels PCF shows the map's stair steps.
 
 Changing the type later:
 - WebGLRenderer does the work itself on the next frame that draws a shadow, only for lights that draw on that frame. A light under `engine.shadows.budget` is redrawn

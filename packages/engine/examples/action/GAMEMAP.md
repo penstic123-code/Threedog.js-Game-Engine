@@ -59,7 +59,7 @@ content/*.js is content data: how to write it in `node_modules/threedog/docs/rec
 | main.js | 136 | @ts-check Action example: one room, one player, one slime, one drop. Shows how an action game wires… |
 | models.js | 25 | Models this example builds in code (floor, wall, pillar, enemy), registered by name through assets.… |
 | picture/index.js | 14 | @ts-check The action room's picture: wiring only. No sky.js: the engine's dome is what shows beyond… |
-| picture/lights.js | 36 | @ts-check Sun or moon and the ambient, from the signals. The ambient's sky half follows the engine'… |
+| picture/lights.js | 38 | @ts-check Sun or moon and the ambient, from the signals. The ambient's sky half follows the engine'… |
 | picture/materials.js | 9 | @ts-check Materials by name. Module level, because models.js is an asset generator that `npm run ch… |
 | picture/palette.js | 34 | @ts-check The action room's palette: every color and key value of the picture, one copy; the other … |
 

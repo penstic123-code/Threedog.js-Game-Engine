@@ -20,7 +20,8 @@ export function createLights(engine, { night, fill, windowOpening }) {
   const { extent: e, distance } = SHADOW;
   Object.assign(sun.shadow.camera, { left: -e, right: e, top: e, bottom: -e, near: 1, far: distance * 2 });
   // three adds bias in the shadow camera's 0-1 depth, i.e. a world offset of bias x (far - near)
-  Object.assign(sun.shadow, { normalBias: SHADOW.normalBias, bias: -SHADOW.biasCm / 100 / (distance * 2 - 1), radius: SHADOW.radius });
+  // radius is in shadow texels: scaled with the map so the low tier's half-size map blurs the same meters, never under 2 texels (stair steps) unless set lower
+  Object.assign(sun.shadow, { normalBias: SHADOW.normalBias, bias: -SHADOW.biasCm / 100 / (distance * 2 - 1), radius: Math.max(Math.min(SHADOW.radius, 2), SHADOW.radius * sun.shadow.mapSize.x / SHADOW.mapSize.high) });
   scene.add(hemi, sun, sun.target);
 
   if (windowOpening && !night) windowLight(engine, { ...windowOpening, ...WINDOW_LIGHT });

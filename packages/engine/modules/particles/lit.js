@@ -25,10 +25,11 @@ export class ParticleLights {
     /** the constant part (ambient, hemisphere, directional), summed once */ this.base = [0, 0, 0];
   }
 
-  /** Once per frame, before lit effects update */
-  refresh() {
-    if (++this.since > GATHER) {
-      this.since = 0; const f = this.found = [];
+  /** Once per frame, before lit effects update. force: walk the scene now (the picture check, which changes lights between captures) */
+  refresh(force = false) {
+    if (force || ++this.since > GATHER) {
+      if (!force) this.since = 0;   // a forced walk (picture check) keeps the normal schedule
+      const f = this.found = [];
       this.engine.scene.traverseVisible(o => { if (o.isLight && !o.isLightProbe && !o.isLightProbeGrid && !o.isRectAreaLight) f.push(o); });
     }
     const b = this.base; b[0] = b[1] = b[2] = 0;

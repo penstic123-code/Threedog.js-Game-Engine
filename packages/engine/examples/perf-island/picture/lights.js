@@ -11,7 +11,8 @@ export function createLights(engine) {
   sun.castShadow = true;
   sun.shadow.mapSize.setScalar(engine.tier === 'low' ? SHADOW.lowMapSize : SHADOW.mapSize);
   Object.assign(sun.shadow.camera, { left: -SHADOW.extent, right: SHADOW.extent, top: SHADOW.extent, bottom: -SHADOW.extent, near: 1, far: 420 });
-  sun.shadow.radius = SHADOW.radius;
+  // radius is in shadow texels: scaled with the map so the low tier's half-size map blurs the same meters, never under 2 texels (stair steps) unless set lower
+  sun.shadow.radius = Math.max(Math.min(SHADOW.radius, 2), SHADOW.radius * sun.shadow.mapSize.x / SHADOW.mapSize);
   sun.shadow.bias = -0.00005;
   sun.shadow.normalBias = 0.04;
   scene.add(hemi, sun, sun.target);   // the target stays at the origin: the island is the whole world

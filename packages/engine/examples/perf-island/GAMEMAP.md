@@ -52,7 +52,7 @@ content/*.js is content data: how to write it in `node_modules/threedog/docs/rec
 | models.js | 49 | perf-island procedural models: a round tree, a sheep, a wheat tuft. Built in code, no files; regist… |
 | params.js | 26 | URL parameters of the perf island page. Import this file first in main.js: it rewrites word values … |
 | picture/index.js | 21 | @ts-check The picture of perf island: wiring only. Each part writes plain three.js from the signals… |
-| picture/lights.js | 35 | @ts-check Sun or moon and ambient, both from the day table in palette.js. |
+| picture/lights.js | 36 | @ts-check Sun or moon and ambient, both from the day table in palette.js. |
 | picture/materials.js | 62 | @ts-check Materials by name. All matte Lambert with two shader additions: soft light (the wrap and … |
 | picture/palette.js | 61 | @ts-check Perf island palette: every color and key value of the picture, one copy. A soft painted d… |
 | picture/sky.js | 21 | @ts-check A flat painted backdrop: one color at every height, the same as the fog, so the island fl… |

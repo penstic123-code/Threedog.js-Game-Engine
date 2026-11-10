@@ -352,6 +352,35 @@ export const specs = [
     },
   },
   {
+    // why: lit: true particles take their light on the CPU inside particles.update, which the probe's bare renders never ran, so a lamp that
+    // lights only those particles read "changes no pixel". The probe now steps particles by 0 s before each capture; a lamp whose range holds no particle must still be reported
+    name: '[guard] picture check: a light that lights only lit particles is not reported as useless; one that reaches nothing still is',
+    software: true,
+    url: PAGE,
+    async run({ check, ev }) {
+      await ev(src => { window.__probePicture = (0, eval)('(' + src + ')'); }, probeSource);
+      const run = (z) => ev(async (z) => {
+        const { mk, THREE } = threedogThreads, T = threedogThreads.all, { createEngine } = T;
+        const E = mk(createEngine, 'picture-check-lit-particles');
+        E.use(T.particles()); E.renderer.setSize(320, 180, false);
+        const lamp = new THREE.PointLight(0xffffff, 20, 6, 2); lamp.name = 'dustLamp'; lamp.position.set(0, 0, 2); E.scene.add(lamp);
+        E.particles.define('dust', { max: 40, lit: true, color: 0xffffff, size: [3, 3], opacity: 1, lifetime: [50, 60], speed: [0, 0], spread: 0 });
+        await E.start();
+        E.camera.position.set(0, 0, 6); E.camera.lookAt(0, 0, 0); E.camera.updateMatrixWorld();
+        E.particles.emit('dust', { x: 0, y: 0, z }, { count: 40 });
+        E.step(1 / 30);
+        const p = await window.__probePicture(E, { time: false });
+        E.dispose();
+        return { lights: p.lights, error: p.error ?? null };
+      }, z);
+      const hit = await run(0), miss = await run(-30);
+      const ids = r => pictureHints({ numbers: { luminance: 0.5, saturation: 0.2, contrast: 0.15, range: 0.4, overexposed: 0, dark: 0 }, probe: { lights: r.lights } }).map(h => h.id);
+      const lampHit = hit.lights.find(l => l.name === 'dustLamp');
+      check('a lamp that lights lit particles is measured, changes pixels, no error: no light-no-effect', !hit.error && lampHit?.changed === true && !ids(hit).includes('light-no-effect'), JSON.stringify(hit));
+      check('a lamp whose range holds no particle is still reported', ids(miss).includes('light-no-effect'), JSON.stringify(miss));
+    },
+  },
+  {
     // [guard] the game's own lights, measured by the real probe: createEngine({ lights: false }) with plain three.js lights is how a new game starts,
     // so the budget, the near-black shadow and the stripe / stepped edge facts must read those lights, not engine.lights. Real renders: a fake mask
     // would pass while the probe reads the wrong pixels

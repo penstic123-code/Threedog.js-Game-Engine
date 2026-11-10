@@ -10,7 +10,9 @@ export function probeTools(e, [W, H], hot) {
   // put back the light a probe had just turned off and every light read "changes no pixel". true only right after the probe moved the time,
   // so the picture code maps the new time to its lights once (then the renders after it keep what the probe writes)
   const lumaOf = d => { const L = new Float32Array(d.length / 4); for (let i = 0; i < L.length; i++) L[i] = (0.2126 * d[i * 4] + 0.7152 * d[i * 4 + 1] + 0.0722 * d[i * 4 + 2]) / 255; return L; };
-  const grab = (hooks = false) => { e._tools.render(0, hooks); g.drawImage(R.domElement, 0, 0, W, H); return lumaOf(c.raw = g.getImageData(0, 0, W, H).data); };
+  // lit particles take their light on the CPU in particles.update (modules/particles/lit.js), which a bare render never runs: recolor them
+  // first (colors only: no motion, emission or visibility changes), else a probe that changes a light would see no change in them and call the light useless
+  const grab = (hooks = false) => { e.particles?._relight?.(); e._tools.render(0, hooks); g.drawImage(R.domElement, 0, 0, W, H); return lumaOf(c.raw = g.getImageData(0, 0, W, H).data); };
   // near-white pixels of the last grab (HOT in numbers.mjs, passed in: this runs in the page)
   const clipped = L => { const m = new Uint8Array(L.length); for (let i = 0; i < L.length; i++) m[i] = Math.max(c.raw[i * 4], c.raw[i * 4 + 1], c.raw[i * 4 + 2]) >= hot.channel && L[i] >= hot.luma ? 1 : 0; return m; };
   const mean = L => { let s = 0; for (const v of L) s += v; return s / L.length; };

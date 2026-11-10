@@ -223,6 +223,12 @@ export class Particles {
     return d.target.depthTexture;
   }
 
+  /** Recolor live lit particles from the lights as they are now, touching nothing else (the picture check, after it changes a light) */
+  _relight() {
+    const lights = (this._lights ??= new ParticleLights(this.engine)); let walked = false;
+    for (const fx of this.effects.values()) if (fx.o.lit && fx.alive) { if (!walked) { lights.refresh(true); walked = true; } fx.relight(lights); }
+  }
+
   /**
    * Update all effects every frame (called by the module each frame)
    * @param {number} dt

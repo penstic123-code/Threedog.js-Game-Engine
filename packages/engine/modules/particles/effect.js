@@ -175,10 +175,24 @@ export class Effect {
     this.points.visible = true;
   }
 
+  /** Color of particle i at life fraction k into aColor, times the scene's light for a lit effect (lit: true, lit.js) */
+  _paint(i, k, lights) {
+    const i3 = i * 3, ac = this.aColor.array, c = this.overLife.color[i], P = this.pos;
+    ac[i3] = sample(c, k); ac[i3 + 1] = sample(c, k, 1); ac[i3 + 2] = sample(c, k, 2);
+    if (lights) { lights.at(P[i3], P[i3 + 1], P[i3 + 2], _lit); ac[i3] *= _lit[0]; ac[i3 + 1] *= _lit[1]; ac[i3 + 2] *= _lit[2]; }
+  }
+
+  /** Rewrite only the colors of the live particles from the lights as they are now: no motion, age, visibility or spawning change (the picture check, which changes lights between captures) */
+  relight(lights) {
+    if (!this.alive) return;
+    for (let i = 0; i < this.max; i++) if (this.life[i] !== 0 && this.age[i] < this.life[i]) this._paint(i, this.age[i] / this.life[i], lights);
+    const a = this.aColor; a.clearUpdateRanges(); a.addUpdateRange(0, this.max * 3); a.needsUpdate = true;
+  }
+
   /** @param {number} dt @param {import('./lit.js').ParticleLights | null} [lights] the scene's lights this frame, for a lit effect */
   update(dt, lights = null) {
     if (!this.alive) { this.points.visible = false; return; }
-    const N = this.max, P = this.pos, V = this.vel, ap = this.aPos.array, as = this.aSize.array, aa = this.aAlpha.array, ac = this.aColor.array, ag = this.aAngle.array, al = this.aLife.array, { size, opacity, color } = this.overLife;
+    const N = this.max, P = this.pos, V = this.vel, ap = this.aPos.array, as = this.aSize.array, aa = this.aAlpha.array, ag = this.aAngle.array, al = this.aLife.array, { size, opacity } = this.overLife;
     const w = this.o.windDir, wl = Math.hypot(w[0], w[2]) || 1, wind = this.sys.engine.uniforms.uWind.value, wx = w[0] / wl * wind, wz = w[2] / wl * wind;
     let alive = 0, hi = -1;
     for (let i = 0; i < N; i++) {
@@ -192,8 +206,7 @@ export class Effect {
       V[i3] = V[i3] * dr + wx * wd * dt; V[i3 + 1] = V[i3 + 1] * dr + g * dt; V[i3 + 2] = V[i3 + 2] * dr + wz * wd * dt;
       ap[i3] = P[i3] += V[i3] * dt; ap[i3 + 1] = P[i3 + 1] += V[i3 + 1] * dt; ap[i3 + 2] = P[i3 + 2] += V[i3 + 2] * dt;
       al[i] = k; as[i] = sample(size[i], k); aa[i] = sample(opacity[i], k);
-      ac[i3] = sample(color[i], k); ac[i3 + 1] = sample(color[i], k, 1); ac[i3 + 2] = sample(color[i], k, 2);
-      if (lights) { lights.at(P[i3], P[i3 + 1], P[i3 + 2], _lit); ac[i3] *= _lit[0]; ac[i3 + 1] *= _lit[1]; ac[i3 + 2] *= _lit[2]; }   // lit: true (lit.js)
+      this._paint(i, k, lights);
       if (this.spinV[i]) ag[i] += this.spinV[i] * dt;
     }
     this.alive = alive;

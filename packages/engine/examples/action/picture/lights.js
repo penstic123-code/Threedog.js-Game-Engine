@@ -13,7 +13,9 @@ export function createLights(engine) {
   sun.shadow.mapSize.setScalar(engine.tier === 'low' ? 1024 : 2048);
   Object.assign(sun.shadow.camera, { left: -SHADOW.extent, right: SHADOW.extent, top: SHADOW.extent, bottom: -SHADOW.extent, near: 1, far: SHADOW.far });
   sun.shadow.camera.updateProjectionMatrix();   // three does not redo it for a light's shadow camera: without this line the box stays at its 10 m default
-  sun.shadow.bias = SHADOW.bias; sun.shadow.normalBias = SHADOW.normalBias; sun.shadow.radius = SHADOW.radius;
+  sun.shadow.bias = SHADOW.bias; sun.shadow.normalBias = SHADOW.normalBias;
+  // radius is in shadow texels: scaled with the map so the low tier's half-size map blurs the same meters, never under 2 texels (stair steps) unless set lower
+  sun.shadow.radius = Math.max(Math.min(SHADOW.radius, 2), SHADOW.radius * sun.shadow.mapSize.x / 2048);
   scene.add(hemi, fill, sun, sun.target);
 
   const dir = new THREE.Vector3();

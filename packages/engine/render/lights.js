@@ -18,19 +18,27 @@ export function createDefaultLights(engine, { add = true } = {}) {
   // the one place these defaults live: nothing writes them later, a sky included, so what a game writes on engine.lights.sun stays.
   // baseline shadow box: 2048 map over 60 m around engine.focus (~3 cm texels; 1024 on a low-tier device, a quarter of the fill cost), PCF with a small blur
   // radius = soft edges; bias / normalBias keep acne off flat ground and slopes without visible peter-panning at this texel size. bias is in the shadow
-  // camera's 0-1 depth (near 1 - far 250 m): -0.0001 = 2.5 cm; the old -0.0005 was 12 cm and cut the shadow at the base of things standing on the ground
-  const sc = sun.shadow.camera, sizeFor = () => engine.tier === 'low' ? 1024 : 2048;
+  // camera's 0-1 depth (near 1 - far 250 m): -0.0001 = 2.5 cm; the old -0.0005 was 12 cm and cut the shadow at the base of things standing on the ground.
+  // radius is in texels (three's PCF offsets are radius x texel), so it scales with the map: ~9 cm of blur in meters on both tiers. A fixed 3 doubled the
+  // blur with the low tier's twice-as-large texels, the soft smear of low-tier shadows. Never under 2 texels: below that PCF's few taps no longer cover the
+  // map's own grid and the edges show stair steps (the picture check's shadow-jag fires at 1.5 on the 1024 map), so the low tier blurs ~12 cm, not 18
+  const sc = sun.shadow.camera, sizeFor = () => engine.tier === 'low' ? 1024 : 2048, radiusFor = size => Math.max(2, 3 * size / 2048);
   let map = sizeFor();
   sun.shadow.mapSize.set(map, map);
   sc.left = sc.bottom = -BOX; sc.right = sc.top = BOX; sc.near = 1; sc.far = 250; sc.updateProjectionMatrix();
-  sun.shadow.bias = -0.0001; sun.shadow.normalBias = 0.04; sun.shadow.radius = 3;
+  sun.shadow.bias = -0.0001; sun.shadow.normalBias = 0.04; sun.shadow.radius = radiusFor(map);
   // add: false (createEngine({ lights: false })): the objects still exist so engine.lights.sun / hemi and the sky module never hit undefined, but they
   // are not in the scene, so nothing is lit by them and they cost no shader light slots; the game brings all its own lights
   // the size is a tier default: it follows the tier (a stored preset arrives after this runs, settings installs last) unless the game wrote another size
   // on the sun, which stays. engine.shadows.mapSize is the one resize path (reallocates the map on WebGL, the cascades' maps too); the engine lives as long as this listener
+  // One rule for both tier defaults, size and radius: a value still at the engine's default for the old tier follows the tier, any other value is the
+  // game's and stays. Known edge: a game that writes exactly the engine's default reads as untouched and still follows (no accessor: it would hide the
+  // value from engine.debug.watch / explain, which only hook plain properties)
   onTierChange(engine, () => {
-    const was = map, next = map = sizeFor();
-    if (sun.shadow.mapSize.x === was && sun.shadow.mapSize.y === was && next !== was) (engine.shadows ? engine.shadows.mapSize(sun, next) : sun.shadow.mapSize.set(next, next));
+    const was = map, next = map = sizeFor(), s = sun.shadow;
+    if (next === was) return;
+    if (s.mapSize.x === was && s.mapSize.y === was) { if (engine.shadows) engine.shadows.mapSize(sun, next); else s.mapSize.set(next, next); }
+    if (s.radius === radiusFor(was)) s.radius = radiusFor(next);
   });
   engineOwned('lights', hemi, sun, sun.target);   // the module's, not the game's, when the scene adopts what is added (core/scene/things.js)
   if (add) engine.scene.add(hemi, sun, sun.target);

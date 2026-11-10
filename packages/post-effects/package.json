@@ -1,6 +1,6 @@
 {
   "name": "@threedog/post-effects",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Optional post effects for threedog: bloom, ambient occlusion, outline, LUT color grading, film grain, vignette, chromatic aberration and depth of field (light ldr effects are fused into one fullscreen pass)",
   "license": "MIT",
   "repository": {
@@ -31,7 +31,7 @@
     "*.d.ts"
   ],
   "peerDependencies": {
-    "threedog": "^1.1.0",
+    "threedog": "^1.2.0",
     "three": "^0.187.0"
   }
 }

@@ -372,13 +372,25 @@ export const specs = [
         out.late = err([row(0.2), row(1)]); out.unsorted = err([row(0), row(0.6), row(0.4), row(1)]); out.dup = err([row(0), row(0.5), row(0.5), row(1)]);
         out.ok = err([row(0), row(0.5), row(1)]);
         out.tier = engine.tier;
-        out.mapSize = engine.lights.sun.shadow.mapSize.x;
+        const sh = engine.lights.sun.shadow;
+        out.mapSize = sh.mapSize.x; out.radius = sh.radius;
+        // the blur radius is in texels: it follows the tier's map size, so the blur in meters stays; a game's own radius stays through a tier change
+        engine.tier = 'high'; out.high = [sh.mapSize.x, sh.radius];
+        engine.tier = 'low'; out.back = [sh.mapSize.x, sh.radius];
+        // one rule for size and radius: a value other than the engine's default stays through tier changes both ways (writing exactly the default is a known edge)
+        // engine.debug.watch / explain hook plain data properties only (pictureWriters.slot; dev builds, so not reachable on this built page): the radius must stay one
+        const d = Object.getOwnPropertyDescriptor(sh, 'radius'); out.watch = !!d && 'value' in d && d.writable && d.configurable;
+        sh.radius = 5; engine.tier = 'high'; out.kept = [sh.mapSize.x, sh.radius]; engine.tier = 'low'; out.kept.push(sh.mapSize.x, sh.radius);
+        sh.mapSize.set(512, 512); engine.tier = 'high'; out.keptMap = sh.mapSize.x; engine.tier = 'low'; out.keptMap += ',' + sh.mapSize.x; sh.mapSize.set(1024, 1024); sh.radius = 2;
         return out;
       });
       for (const k of ['late', 'unsorted', 'dup']) check(`关键帧${k}：报错说清楚要求`, /sorted by time, starting at 0 and ending at 1/.test(r[k]), r[k]);
       check('合法关键帧不报错', r.ok === '', r.ok);
       check('测试环境是低档设备（软件渲染）', r.tier === 'low', r.tier);
       check('低档设备：阴影贴图默认 1024', r.mapSize === 1024, String(r.mapSize));
+      // [守] 不许绕开：PCF 的模糊 = radius x 纹素，低档贴图小一半，radius 要跟着小（不低于 2 纹素，否则出锯齿），否则低档阴影糊成一片
+      check('[守] 低档阴影不糊：模糊半径随贴图大小（1024 → 2，2048 → 3），切档跟着变，游戏自己写的大小和 radius 两个方向切档都不动，radius 仍是普通属性（watch 能挂上）',
+        r.radius === 2 && r.high.join() === '2048,3' && r.back.join() === '1024,2' && r.kept.join() === '2048,5,1024,5' && r.keptMap === '512,512' && r.watch === true, JSON.stringify(r));
     },
   },
 ];

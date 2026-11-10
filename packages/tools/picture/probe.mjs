@@ -42,7 +42,7 @@ async function probePicture(e, { time = 'auto', size = [240, 135], hot = { chann
     if (c.T) probeFar(c);
     probeLights(c);
     probeTime(c, time);
-  } catch (err) { out.error = String(err?.message ?? err); } finally { e._tools.probing = false; }
+  } catch (err) { out.error = String(err?.message ?? err); } finally { e._tools.probing = false; e.particles?._relight?.(); }   // lit particle colors back to the restored lights
   out.ms = Math.round(performance.now() - t0);
   return out;
 }

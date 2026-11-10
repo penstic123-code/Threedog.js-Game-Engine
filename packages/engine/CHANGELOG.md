@@ -2,7 +2,10 @@
 
 What changed in each version and how a game upgrades.
 
-## Unreleased
+## 1.2.0 (2026-11-10)
+
+- Fixed: shadows on tier 'low' no longer smear. With `engine.shadows.cascades(...)` the single low-tier map now covers `maxFar / count` (shifted toward the view), so its texels are as fine as one cascade's; a game's `count: 1` still covers all of `maxFar`. The engine sun's PCF radius follows its map size (2 on the low-tier 1024 map). A radius or map size the game set (any value other than the engine's default) is kept across tier changes. Trade-off: on tier 'low' far shadows end sooner (recipe 45).
+- Fixed: the picture check no longer calls a light useless when it only lights `lit: true` particles; it recolors them before each capture and puts their colors back after.
 
 - Fixed: in first person (and a follow camera's close-up), a shadow-casting point or spot light the player carries (a head lamp, a torch, within one body width of the body) is no longer shadowed by the player's hidden body, on both renderers; before, its pool had a hard black wedge on one side. The sun and other lights still cast the body's shadow; a body that is seen shadows every light as before. A point / spot light added after the camera started now gets the body's shadow too. Nothing to call (recipe 34).
 - Changed: `settings.define(key, def, apply)` (on `engine.settings`) now draws its row in the settings menu: a switch for true/false, a slider for a number with `{ min, max, step? }` (a `limits` number row has 0..1), buttons for `{ options }`, labelled by `label` (an i18n key or text, else the key), in the tab `menu` names (default a new `options` tab, shown only while it has a row). Before, a defined row was drawn by no tab unless the game's own tab drew it, so it silently never showed. Upgrade: a row your own `addSection` tab draws needs `menu: false` (the menu warns once when it sees a row drawn twice); a row the menu cannot draw (a number without `min`/`max`, a string without `options`) or a `menu` naming a missing tab warns once. Unknown `define` options now throw in dev.
