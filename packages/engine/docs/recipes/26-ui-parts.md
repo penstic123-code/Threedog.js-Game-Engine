@@ -1,10 +1,13 @@
 # UI parts: replace or turn off any piece of the engine's screen UI
 
-**In this recipe**: Reskin · 1. Pick at start · 2. Your own part · 3. Toasts · 4. Dialogue box · The choice cursor · 5. Title screen · 6. Settings menu · 7. Keys, UI that follows the world
+> **Covers:** every piece of the engine's screen UI as a replaceable part, themes, toasts, the dialogue box.
+> **Use when:** restyling or replacing the HUD, menus or dialogue.
+> **Shortest:** a `theme` object of colors and fonts (§"Reskin").
+> **Sections:** Reskin your picture on · 1 Pick at start · 2 Your own part · 3 Toasts filter instead · 4 Dialogue box your · The choice cursor windows · 5 Title screen and · 6 Settings menu only · 7 Keys, and UI
 
 Every piece of UI the engine draws is a named **part** with a plain default:
 `loading`, `toast`, `title` (off by default), `touch` (on-screen stick and buttons),
-`hud.marker`, `hud.counter`, `hud.bar`, `dialogue`, `prompt` ("E · Talk"), `questLog`, `inventory` (with the inventory module).
+`hud.marker`, `hud.counter`, `hud.bar`, `hud.button`, `dialogue`, `prompt` ("E · Talk"), `questLog`, `inventory` (with the inventory module).
 The engine keeps the behavior (when to show, the UI focus stack and Esc, input lock, i18n); a part only draws the data it gets.
 Each name takes one value: `false` off · `true` default · `{ ...options }` default with options ·
 `(engine, options) => ({ show, update, hide, dispose })` your own (any verb may be omitted).
@@ -13,31 +16,31 @@ Only want different colors / layout? Use "Reskin" below, not a new part.
 ## Reskin: your picture on every default part, in one place
 The default parts are neutral gray on purpose. About ten lines give all of them the game's picture; do this before writing a dialogue box or HUD of your own:
 ```js
-const theme = {                               // picture/ui.js
-  bg: 'rgba(38,28,20,.94)',                   // panels: dialogue, prompt, toast, windows; the HUD uses it slightly see-through
-  fg: '#f4e8d0', muted: '#b8a88c',            // text, secondary text
-  accent: '#e8a13a', good: '#9ccf6a',         // names, cursor, toast border, HUD bars; "done"
-  line: 'rgba(244,232,208,.25)',              // borders, dividers
-  font: '"Georgia", serif',                   // a font file: ui.fonts: ['name'] (recipe 05, fonts)
-  radius: '4px', radiusSmall: '2px',          // windows and dialogue; buttons, prompts, toasts, HUD counters
-  loadingBg: '#1c140e',                       // loading and title screens, cutscene bars
+const theme = {  // picture/ui.js
+  bg: 'rgba(38,28,20,.94)',  // panels: dialogue, prompt, toast, windows; the HUD uses it slightly see-through
+  fg: '#f4e8d0', muted: '#b8a88c',  // text, secondary text
+  accent: '#e8a13a', good: '#9ccf6a',  // names, cursor, toast border, HUD bars; "done"
+  line: 'rgba(244,232,208,.25)',  // borders, dividers
+  font: '"Georgia", serif',  // a font file: ui.fonts: ['name'] (recipe 05, fonts)
+  radius: '4px', radiusSmall: '2px',  // windows and dialogue; buttons, prompts, toasts, HUD counters
+  loadingBg: '#1c140e',  // loading and title screens, cutscene bars
 };
-const engine = createEngine({ canvas, ui: { theme } });   // the same ui option as the parts below
+const engine = createEngine({ canvas, ui: { theme } });  // the same ui option as the parts below
 ```
 Each key becomes the CSS variable `--threedog-<key>` (`radiusSmall` -> `--threedog-radius-small`) on `engine.uiRoot`, and no default rule has a color or corner of
 its own. Also there: `shadow` (windows), `shadowSmall` (bubbles, marker labels), `fadeBg` (scene fades), and `hudBg` / `hudFg` / `hudAccent`,
 which follow the main ones unless set. Your own part can read the same variables. Further steps, beside `theme` in the same `ui`: `css` is placed after every default, so it
 overrides the `.threedog-*` classes (sizes, layout); `templates.<window>` replaces a window's HTML (`engine.ui.templates` is the same object, written directly); `fonts` lists
-font assets. Every other key of `ui` is a part name (§1). How high the prompt floats is `interactions({ promptHeight })`. Different behavior, not colors: a part of your own (§2).
+font assets. How high the prompt floats is `interactions({ promptHeight })`.
 
 ## 1. Pick at start (copy it)
 ```js
 const engine = createEngine({
   canvas,
   ui: {
-    loading: { title: 'My Game' },                 // default loading screen with a title
-    title: { title: 'My Game' },                   // turn on the title screen: Continue (when a save exists) / Start / Settings
-    toast: false,                                  // no pop-up messages at all
+    loading: { title: 'My Game' },  // default loading screen with a title
+    title: { title: 'My Game' },  // turn on the title screen: Continue (when a save exists) / Start / Settings
+    toast: false,  // no pop-up messages at all
   },
 });
 ```
@@ -46,14 +49,14 @@ A misspelled name throws at `start()` and lists the names that exist.
 
 ## 2. Your own part (DOM, canvas, a UI library: anything)
 ```js
-engine.ui.set('hud.bar', (engine) => {               // called once per bar
-  const el = document.createElement('progress'); el.max = 1; engine.uiRoot.appendChild(el);   // build under engine.uiRoot: dispose cleans it up
+engine.ui.set('hud.bar', (engine) => {  // called once per bar
+  const el = document.createElement('progress'); el.max = 1; engine.uiRoot.appendChild(el);  // build under engine.uiRoot: dispose cleans it up
   return {
     update: d => { el.value = d.value / (d.max ?? 1); el.title = d.label ?? d.id; },
     dispose: () => el.remove(),
   };
 });
-engine.hud.bar('hp', { value: 80, max: 100, label: 'HP' });   // game code does not change
+engine.hud.bar('hp', { value: 80, max: 100, label: 'HP' });  // game code does not change
 ```
 What each part receives:
 | Part | Created | Calls |
@@ -64,6 +67,8 @@ What each part receives:
 | `hud.marker` | per marker | `update({ x, y, onScreen, arrow, angle, label, icon, distance })` every frame · `hide()` · `dispose()` |
 | `hud.counter` | per counter | `update({ id, label, icon, value, max })` · `dispose()` |
 | `hud.bar` | per bar | `update({ id, label, value, max })` · `dispose()` |
+| `hud.button` | per button | `update({ id, label, icon, run, key? })` · `dispose()` (call `run()` on click; `label` goes through `engine.t`) |
+| `hud.hint` | per key hint | `update({ id, label, key })` · `dispose()` (shows `key · label` like `prompt`, e.g. `Space · Jump`; `key` = `input.label(action)` or `input.noKey`, kept current) |
 | `inventory` | once (on first open; opened by the bound `inventory` key or `engine.ui.open('inventory')`) | `show(d)` · `update(d)` while open · `hide()`; `d = { title, hint, items: [{ key, id, count, data, def }], capacity, used, weight, maxWeight }`; buttons run `inventory.use / drop / transfer` ops (recipe 03) |
 | `touch` | once, if wanted (1) | `show(view)` · `update(view)` (buttons or language changed) |
 | `prompt` | once | `update({ id, action, key, label, text, x, y, onScreen, use(), options })` every frame in reach · `hide()` |
@@ -81,9 +86,9 @@ With every part off (`false`) the engine draws no DOM at all and the logic keeps
 
 ## 3. Toasts: filter instead of all-or-nothing
 ```js
-toast(engine, 'Saved', { kind: 'save' });           // your own message (the engine comes first)
+toast(engine, 'Saved', { kind: 'save' });  // your own message (the engine comes first)
 engine.ui.set('toast', (engine) => ({ show: ({ text, kind }) => { if (kind !== 'quest') myBanner(text); } }));
-engine.use(quests({ notify: false }));               // or only silence quest messages; notify: ({ type, id, text }) => ... shows them your way
+engine.use(quests({ notify: false }));  // or only silence quest messages; notify: ({ type, id, text }) => ... shows them your way
 ```
 
 ## 4. Dialogue box: your own picture, your own fields
@@ -92,7 +97,7 @@ The part draws `view` and answers with `view.advance()` / `view.choose(i)`, whic
 `view = { script, node, speaker, text (typed so far), full, typing, choices: [{ text, key, data }], hint, data, lock, advance(), choose(i) }`
 ```js
 engine.dialogue.define('fisher', {
-  start: { text: 'Quiet day.', data: { portrait: 'fisher.png', mood: 'tired' }, next: 'ask' },   // your own fields go in data
+  start: { text: 'Quiet day.', data: { portrait: 'fisher.png', mood: 'tired' }, next: 'ask' },  // your own fields go in data
   ask: { text: 'Here for photos?', choices: [{ text: 'Yes', next: 'end', data: { icon: '📷' } }] },
 });
 engine.ui.set('dialogue', (engine) => {
@@ -147,25 +152,25 @@ game past it and only your buttons end it. Nothing else closes a window: a game 
 import { makeWindow } from 'threedog';
 const results = makeWindow(engine, {
   id: 'results', title: () => 'Run complete',
-  data: () => ({ score: run.score, best: run.best }),                  // read on every refresh(), so it shows the current values
+  data: () => ({ score: run.score, best: run.best }),  // read on every refresh(), so it shows the current values
   render: (d, { esc }) => `<p>${esc(d.score)} / ${esc(d.best)}</p><button class="threedog-btn" data-act="again">Again</button>`,
-  closable: false,                                                      // a run summary ends the run; for a window Esc may leave, drop this (onCancel changes what Esc does)
+  closable: false,  // a run summary ends the run; for a window Esc may leave, drop this (onCancel changes what Esc does)
 });
-results.el.addEventListener('click', ev => {                           // one listener: refresh() rewrites the content, not this
-  if (ev.target.closest('[data-act="again"]')) { results.toggle(false); startRun(); }   // a click, Enter or pad A on the cursor
+results.el.addEventListener('click', ev => {  // one listener: refresh() rewrites the content, not this
+  if (ev.target.closest('[data-act="again"]')) { results.toggle(false); startRun(); }  // a click, Enter or pad A on the cursor
 });
-let held = null;                                                       // stop gameplay behind it (the picture keeps drawing)
+let held = null;  // stop gameplay behind it (the picture keeps drawing)
 engine.events.on('ui:open', id => { if (id === 'results') held = engine.freeze('results'); });
 engine.events.on('ui:close', id => { if (id === 'results') { held?.remove(); held = null; } });
-engine.events.on('session:start', () => results.toggle(false));        // a new run or a load, however it was started
-results.toggle(true);                                                  // when the run ends; results.refresh() after the data changes
+engine.events.on('session:start', () => results.toggle(false));  // a new run or a load, however it was started
+results.toggle(true);  // when the run ends; results.refresh() after the data changes
 ```
 
 ## 5. Title screen and "back to title"
 ```js
 createEngine({ canvas, ui: { title: { title: 'My Game', items: ['continue', 'start', { label: 'Credits', run: e => showCredits() }] } } });
-engine.events.on('ui:close', id => { if (id === 'title') startIntro(); });   // the player left the title screen
-engine.ui.open('title');                             // show it again (the settings 'game' tab has a "Back to title" button)
+engine.events.on('ui:close', id => { if (id === 'title') startIntro(); });  // the player left the title screen
+engine.ui.open('title');  // show it again (the settings 'game' tab has a "Back to title" button)
 ```
 While the title is open gameplay is frozen, input is locked, and Esc goes to it (the settings menu does not open).
 
@@ -175,17 +180,21 @@ While the title is open gameplay is frozen, input is locked, and Esc goes to it 
 ```
 
 ### Photo mode: the picture without the interface, and hiding the interface
-`engine.photo.take()` (op `photo.take`) draws one frame of the game canvas at a higher pixel ratio and reads it back, so the picture never contains DOM: HUD, toasts and windows are not in it (a HUD drawn into the canvas by your own render code is). To hide the interface on screen for a photo mode, hide the engine's UI root, one element that holds every part:
+`engine.photo.take()` (op `photo.take`) reads back one canvas frame at a higher pixel ratio, so no DOM (HUD, toasts, windows) is in it. To hide the interface on screen, hide the engine's UI root:
 ```js
-const photoMode = on => { engine.uiRoot.style.display = on ? 'none' : ''; };   // engine ui: hud, toasts, windows, title
-engine.photo.take();                                                          // shot.url is the picture, the album keeps it; the DOM was never in it
-photoMode(true);                                                              // the player's screen without interface, e.g. while a photo mode is framing
+const photoMode = on => { engine.uiRoot.style.display = on ? 'none' : ''; };  // hud, toasts, windows, title
+engine.photo.take();  // shot.url is the picture, the album keeps it
+photoMode(true);  // while the player frames a shot
+```
+```js fragment
+engine.use(photo({ pathTracer: () => import('three-gpu-pathtracer/webgpu') }));  // after npm i -D three-gpu-pathtracer three-mesh-bvh
+const still = await engine.photo.trace({ samples: 128 });  // still.pathTraced.untraced: what differs
 ```
 HUD text follows the engine locale (`createEngine({ locale })`, default `'auto'` = the browser language): a game written in English sets `locale: 'en'`, or distance labels read `50 米` on a Chinese browser.
 
 ## 6. Settings menu: only the tabs the game needs
 ```js
-engine.use(settings({ sections: ['game', 'graphics', 'audio', 'controls', 'camera'] }));   // default: graphics, audio, controls, language, saves
+engine.use(settings({ sections: ['game', 'graphics', 'audio', 'controls', 'camera'] }));  // default: graphics, audio, controls, language, saves
 // optional built-ins by name: 'game' (resume / load / back to title), 'camera' (sensitivity, invert Y, field of view; re-applied on 'camera:change')
 engine.settings.addSection('camera');
 // leave graphics rows out: the entry { id: 'graphics', omit } in the list; an omitted row stays the game's value, and no preset or stored value moves it
@@ -203,12 +212,12 @@ A row that switches off an effect of your own (a post effect, a picture value): 
 built-in shadows row. Off holds the value off on the settings layer, so a later scene, weather or cutscene cannot turn it back on; on
 allows whatever the scene chose. A number row from 0 to 1 is a factor on a number value. Define the row after the effect exists. `bloom` and `ao` already have rows of their own (limiting `post.bloom.enabled` / `post.ao.enabled`), so `settings.define('bloom', ...)` throws: switch them with `engine.settings.set('bloom', false)`, or in a preset.
 ```js fragment
-engine.post.add(volFog);                                                     // post.volFog.enabled now exists
-engine.settings.define('volFog', true, { limits: 'post.volFog.enabled' });   // add apply: v => ... too if the game reacts in code
-engine.settings.define('flashCap', 1, { limits: 'sky.flash' });                   // 0.5 = half of any lightning flash
-settings({ presets: { low: { volFog: false } } });                                // a preset can switch the row like any other key
-settings({ presets: { low: { viewChunks: 0.5, density: 0.25 } } });              // viewChunks and density in a preset: shares (0 to 1) of the game's own value; the top preset lets everything through
-settings({ presets: { low: { pixelRatio: 0.5 } } });                              // pixelRatio in a preset: a share (0 to 1) of the ratio the engine picked for this device
+engine.post.add(volFog);  // post.volFog.enabled now exists
+engine.settings.define('volFog', true, { limits: 'post.volFog.enabled' });  // add apply: v => ... too if the game reacts in code
+engine.settings.define('flashCap', 1, { limits: 'sky.flash' });  // 0.5 = half of any lightning flash
+settings({ presets: { low: { volFog: false } } });  // a preset can switch the row like any other key
+settings({ presets: { low: { viewChunks: 0.5, density: 0.25 } } });  // viewChunks and density in a preset: shares (0 to 1) of the game's own value; the top preset lets everything through
+settings({ presets: { low: { pixelRatio: 0.5 } } });  // pixelRatio in a preset: a share (0 to 1) of the ratio the engine picked for this device
 ```
 `engine.describe().shared['post.volFog.enabled']` shows the settings entry and what the scene wanted underneath.
 

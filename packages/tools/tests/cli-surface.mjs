@@ -9,7 +9,7 @@ import { spawnSync } from 'node:child_process';
 import { ROOT, ENGINE, TOOLS, workspaceFor, workspaces, isArtFile } from '../paths.mjs';
 import { devServerInfo } from '../devinfo.mjs';
 import { pagePath, parseOptions } from '../lib/cli-args.mjs';
-import { SCRIPTS, BRIDGE, VITE, main } from '../bin/threedog.mjs';
+import { SCRIPTS, BRIDGE, VITE, main, helpText } from '../bin/threedog.mjs';
 import { BRIEF, atPath } from '../threedog/pageFns.mjs';
 import { errorsCommand, errorMark, errorsSince, markReload, currentErrors } from '../threedog/errorlog.mjs';
 import { oneLine, ONE_LINE_MAX } from '../lib/oneline.mjs';
@@ -179,15 +179,17 @@ export async function run({ check }) {
   const esc = s => s.replace(/[-.]/g, '\\$&');
   const missing = [...Object.keys(SCRIPTS), ...BRIDGE, ...VITE, 'map'].filter(c => !new RegExp(`(threedog(\\.mjs)?|npm run|npm) ${esc(c)}(?![\\w-])`).test(doc));
   check('every threedog command appears in COMMANDS.md as `threedog <cmd>` or `npm run <cmd>`', !missing.length, 'missing: ' + missing.join(', '));
-  // options too, for the tools that declare them through cli() (the declaration is the source): an option nobody can find is not there
+  // options too, for the tools that declare them through cli() (the declaration is the source): an option nobody can find is not there.
+  // Found where: the command's --help (its header comment; the docs trim moved option details there), or COMMANDS.md for the options all
+  // tools share (--gpu / --software are described once there)
   const flagGaps = [];
   for (const tool of ['shot', 'capture', 'gallery']) {
     const src = readFileSync(join(ROOT, `packages/tools/${tool}.mjs`), 'utf8'), decl = src.match(/\bcli\(process\.argv\.slice\(2\), \{([\s\S]*?)\}\s*\)/)?.[1] ?? '';
-    const opts = [...decl.matchAll(/'([\w-]+)'/g)].map(m => m[1]);
+    const opts = [...new Set([...decl.matchAll(/'([\w-]+)'/g)].map(m => m[1]))], helpDoc = helpText([SCRIPTS[tool]]);
     if (!opts.length) flagGaps.push(`${tool}: cli() declaration not found`);
-    for (const o of opts) if (!new RegExp(`--${esc(o)}(?![\\w-])`).test(doc)) flagGaps.push(`${tool} --${o}`);
+    for (const o of opts) if (!new RegExp(`--${esc(o)}(?![\\w-])`).test(helpDoc + doc)) flagGaps.push(`${tool} --${o}`);
   }
-  check('every option shot / capture / gallery declare appears in COMMANDS.md as --<option>', !flagGaps.length, 'missing: ' + flagGaps.join(', '));
+  check('every option shot / capture / gallery declare appears in its --help (or COMMANDS.md, shared options) as --<option>', !flagGaps.length, 'missing: ' + flagGaps.join(', '));
 
   // ── .gitignore: tool output (.threedog/) stays out, a game's own shots/ folder can be committed (0.5 acceptance: a bare `shots` ignored it) ──
   if (existsSync(join(ROOT, '.git'))) {
@@ -222,7 +224,32 @@ export async function run({ check }) {
     const r = spawnSync(process.execPath, [join(TOOLS, 'bin/threedog.mjs'), c, ...(c === 'assets' ? ['report'] : []), '-w', 'no-such-game'], { encoding: 'utf8', cwd: ROOT });
     check(`[guard] ${c} takes the -w its usage line lists: an unknown game is named, the option is not refused`, /no-such-game/.test(r.stdout + r.stderr) && !/unknown option/.test(r.stdout + r.stderr), (r.stdout + r.stderr).slice(0, 200));
   }
+  // perf --size takes the same WxH as shot / capture and refuses a bad one before it builds anything
+  const ps = spawnSync(process.execPath, [join(TOOLS, 'bin/threedog.mjs'), 'perf', '--size', '1280'], { encoding: 'utf8', cwd: ROOT });
+  check('perf --size: a bad value fails at once with the WxH form', ps.status === 1 && /--size 1280: give WxH/.test(ps.stdout + ps.stderr), (ps.stdout + ps.stderr).slice(0, 200));
   check('doctor reports the Node version through the same check', /nodeProblem\(\)/.test(readFileSync(join(TOOLS, 'doctor.mjs'), 'utf8')));
   // [guard] real-webgpu built into dist/ while buildAndPreview served .threedog/tool-build: the pages it opened never had its rewrites
   check('[guard] real-webgpu builds into the folder buildAndPreview serves', /build: TOOL_BUILD/.test(readFileSync(join(TOOLS, 'real-webgpu.mjs'), 'utf8')));
+  // [guard] a mistyped option on a bridge command used to run it the default way (`play --stopp` started a server, `verify --freeze-relod x` ran without the freeze)
+  const { execute } = await import('../threedog/dispatch.mjs'), { options } = await import('../threedog/commands.mjs');
+  const sdir = mkdtempSync(join(tmpdir(), 'td-strict-'));
+  try {
+    for (const [cmd, args] of [['play', ['--stopp']], ['status', ['--verbose']], ['verify', ['--freeze-relod', 'x']], ['scenario', ['--nope', 'x']]]) {
+      const r = await execute(sdir, cmd, args);
+      check(`${cmd} ${args.join(' ')}: an unknown option fails with the parser's list`, !r.ok && /unknown option --/.test(r.text) && /options: /.test(r.text), r.text.slice(0, 160));
+    }
+    check('verify takes one scenario name', /one scenario name/.test((await execute(sdir, 'verify', ['a', 'b'])).text));
+    for (const [cmd, args] of [['play', ['--stop']], ['verify', ['--freeze-reload', 'x']], ['scenario', ['x', '--freeze-reload']]]) {
+      const r = await execute(sdir, cmd, args);
+      check(`${cmd} ${args.join(' ')}: the real options pass the parser`, !/unknown option|one scenario name/.test(r.text), r.text.slice(0, 160));
+    }
+    // commands.mjs run() parses the rest through its OPTIONS table: one unknown flag per group, then the real flags and positionals
+    const bad = (cmd, args) => { try { options(cmd, args); return false; } catch (e) { return /unknown option/.test(e.message); } };
+    for (const [cmd, flag] of [['describe', '--ful'], ['press', '--fro'], ['snap-describe', '--onlyy'], ['catalog', '--fnd'], ['scene', '--hiden'], ['state', '--x']]) check(`${cmd} ${flag}: unknown option fails`, bad(cmd, [flag]));
+    const o = options('describe', ['player.x', '--full', '--max', '99']);
+    check('describe keeps its positional path and real options', o.rest[0] === 'player.x' && o.opt.full === true && o.opt.max === 99);
+    check('press / pick / explain op keep their positionals and options', options('press', ['interact', '--for', '2']).opt.for === '2'
+      && options('pick', ['480,270']).rest[0] === '480,270' && options('explain', ['op', 'shop.buy', 'shop=bakery']).rest.length === 3);
+    check('js passes a dash expression through', options('js', ['-x', '--verbose']).opt.verbose === true);
+  } finally { rmSync(sdir, { recursive: true, force: true }); }
 }

@@ -178,7 +178,8 @@ export class World {
    * Register how a kind of thing looks: models are built automatically within radius meters of any full-detail stream source (engine.stream: player, camera
    * focus, teleport destination) and torn down when far from all of them (radius × 1.25); tearing down never touches the record. Callbacks:
    * build(rec) → three.js object (may be async). world adds it to the scene and places it at rec.position; if it throws / fails / returns a non-object:
-   * reported once, does not block ready, retried when you leave and come back.
+   * reported once, does not block ready, retried when you leave and come back. Only the position is world's: rec.rot / rec.scale are the build's to apply
+   * (rotate the root or a child, in its own units) and update's to follow.
    *   update(rec, obj, dt): called every frame for records that have a model (change the picture from the data, e.g. an opened chest swaps texture).
    *   dispose(rec, obj): called on teardown (record first, model second); if omitted, engine.remove(obj).
    *   show(rec) → false: this record has no model right now (picked up, waiting to respawn); re-evaluated when world.set changes records of this kind.

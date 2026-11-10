@@ -10,7 +10,7 @@ export const specs = [
         const I = engine.interactions, use = id => engine.ops.run('interaction.use', { id }, { source: 'player' });
         const count = () => engine.describe().hud.counters.shells;
         const mesh = (x, name) => { const m = new window.THREE.Mesh(); m.position.set(x, 0, 0); if (name) m.name = name; engine.scene.add(m); return m; };
-        engine.hud.counter('shells', { label: 'Shells', value: 10, max: 14 });
+        engine.hud.addCounter('shells', { label: 'Shells', value: 10, max: 14 });
         let refuse = true;
         const a = mesh(0.5, 'shell-a'), b = mesh(0.6), c = mesh(0.7);
         I.add(a, { label: 'Pick', once: true, counter: 'shells' });

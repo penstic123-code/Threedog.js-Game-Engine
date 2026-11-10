@@ -213,7 +213,7 @@ export async function checkGame(dir) {
   for (const r of await sectionRefs(c)) if (!c[r.names]?.[r.id]) err(r.at.split(/[.[]/)[0], `${r.at} names ${r.names.replace(/s$/, '')} ${r.id}, which does not exist (existing ${r.names}: ${known(c[r.names] || {})})`);
 
   // 9. Containers, vegetation, props
-  checkWorldData({ c, items, err, checkModel, checkPos, isObj, known });
+  checkWorldData({ c, items, err, warn, checkModel, checkPos, isObj, known });
 
   // 10. Audio (sounds by asset name, rules as data)
   checkAudio({ c, err, warn, isObj, known, code, sounds: assets.sounds });

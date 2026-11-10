@@ -44,7 +44,7 @@ export class Audio {
     /** The game's current mode for rule lists, e.g. 'combat' / 'explore' (condition `state` in music and ambience rules) @type {string | null} */
     this.state = null;
     // the mode belongs to the playthrough: a new game opens as the page did, a load in the mode it was saved in
-    engine.saves.register('audio', { notAtomic: 'sound, which an atomic op leaves alone: side effects go in after', save: () => ({ state: this.state }), load: d => { this.state = d.state ?? null; } });
+    engine.saves.define('audio', { notAtomic: 'sound, which an atomic op leaves alone: side effects go in after', save: () => ({ state: this.state }), load: d => { this.state = d.state ?? null; } });
     /** @internal */ this.conditions = new Map([['state', v => [].concat(v).includes(this.state)]]);
     /** @internal name -> (engine) => number: values rule data compares ({ daylight: { gt: 0.15 } }) and data volumes add up */
     this.measures = new Map();
@@ -117,12 +117,17 @@ export class Audio {
     const { level, owner } = readParams('audio.addBus()', BUS_PARAMS, opts);
     if (name === 'master' || name in this.levels) throw codedError('engine-misuse', `audio.addBus('${name}'): '${name}' is already a bus (${Object.keys(this.levels).join(', ')}); use it by name, or remove the handle that added it first`);
     this.levels[name] = level; if (this.ctx) this._makeBus(name);
-    return { owner, remove: () => {
-      if (!(name in this.levels)) return;
+    // identity, not name: a stale handle (already removed, the name taken again by a newer bus) must not delete the newer bus
+    const handles = this._busHandles ??= new Map();
+    const h = { owner, remove: () => {
+      if (handles.get(name) !== h) return;
+      handles.delete(name);
       delete this.levels[name];
       if (this.ctx) { this.buses[name].disconnect(); this._duckNodes[name].disconnect(); }   // sounds still playing on this bus are cut with the node (bus gone, no sound should linger)
       delete this.buses[name]; delete this._duckNodes[name];
     } };
+    handles.set(name, h);
+    return h;
   }
   /**
    * Set a bus volume 0-1 ('master' for the total)

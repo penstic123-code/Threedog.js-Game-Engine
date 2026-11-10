@@ -101,6 +101,20 @@ export function listArt(source, cwd) {
   return { root: src.root, modules, assets };
 }
 
+const LIST_SHOWN = 6;
+/** The lines `art list` prints (CLI and MCP share them): by default the first few entries (modules, then assets) and how to see the rest; full lists everything. @param {ReturnType<typeof listArt>} r */
+export function artListText(r, full, where, source) {
+  const entries = [...r.modules.map(m => ({ m })), ...r.assets.map(a => ({ a }))], shown = full ? entries : entries.slice(0, LIST_SHOWN);
+  const out = [`${where}: ${r.modules.length} module(s), ${r.assets.length} asset file(s)${shown.length < entries.length ? `; showing the first ${shown.length}` : ''}`];
+  for (const { m, a } of shown) {
+    if (!m) { out.push(`  ${a}`); continue; }
+    out.push(`  ${m.file}`);
+    for (const e of m.exports) out.push(`    ${e.name}${e.doc ? '  ' + e.doc : ''}`);
+  }
+  if (shown.length < entries.length) out.push(`${entries.length - shown.length} more: threedog art list ${source} --full`);
+  return out;
+}
+
 /** Pick the files named on the command line (file path with or without extension, or an exported function name) */
 function pick(src, names) {
   const all = src.files ?? packFiles(src.root), code = all.filter(f => CODE.includes(extname(f)));
@@ -133,7 +147,9 @@ export function copyArt(source, names = [], { to = 'art', force = false, dry = f
   const target = f => {
     if (f.startsWith(srcPub + sep)) return join(pub, relative(srcPub, f));
     if (f.startsWith(src.root + sep) || dirname(f) === src.root) return join(dest, relative(src.root, f));
-    return join(dest, 'shared', relative(dirname(src.root), f));
+    // a dependency above the source folder gives '../..' here; that would write outside the project, so each '..' level becomes a folder 'up' (levels stay distinct) and a drive prefix is dropped
+    const rel = relative(dirname(src.root), f).split(/[\\/]/).filter(x => x && !/^[a-z]:$/i.test(x)).map(x => x === '..' ? 'up' : x);
+    return join(dest, 'shared', ...rel);
   };
   const plan = new Map(), packages = new Set(), missing = [], queue = [...picked];
   while (queue.length) {
@@ -162,7 +178,7 @@ export function copyArt(source, names = [], { to = 'art', force = false, dry = f
     plan.set(f, { text, edits });
   }
   // rewrite each relative string to point from the new place to the new place (back to front so offsets stay valid)
-  const writes = [], same = [], conflicts = [];
+  const writes = [], same = [], conflicts = [], landed = new Map();
   for (const [f, p] of plan) {
     let out = p.buf;
     if (!out) {
@@ -171,6 +187,9 @@ export function copyArt(source, names = [], { to = 'art', force = false, dry = f
       out = Buffer.from(t);
     }
     const to = target(f);
+    // two different sources must never land on one target: the second would silently replace the first
+    if (landed.has(to)) throw new Error(`art: ${landed.get(to)} and ${f} would both be copied to ${to}; copy them in separate runs or rename one`);
+    landed.set(to, f);
     if (existsSync(to)) {
       if (readFileSync(to).equals(out)) { same.push(to); continue; }
       if (!force) { conflicts.push(to); continue; }
@@ -200,21 +219,16 @@ export function copyArt(source, names = [], { to = 'art', force = false, dry = f
 
 async function cli(argv) {
   const [sub, ...rest] = argv;
-  const usage = 'Usage: threedog art list <source> · threedog art copy <source> [names...] [--to art/] [--force] [--dry] · threedog art board [-w game] [--out file.html] [--json] [--live] [--lib dir]';
+  const usage = 'Usage: threedog art list <source> [--full] · threedog art copy <source> [names...] [--to art/] [--force] [--dry] · threedog art board [-w game] [--out file.html] [--json] [--live] [--lib dir]';
   const cwd = process.cwd(), show = p => posix(relative(cwd, p)) || '.';
   try {
     if (sub === 'board') return await (await import('./art-board.mjs')).boardCli(rest, cwd);   // imported here: it imports lib.mjs, which imports this file
-    // one strict parse (lib/cli-args.mjs): `art list` takes no options, `art copy` --to / --force / --dry
-    const { opt, rest: pos } = parseOptions(rest, sub === 'copy' ? { positional: true, flags: ['force', 'dry'], values: ['to'] } : { positional: true });
+    // one strict parse (lib/cli-args.mjs): `art list` takes --full, `art copy` --to / --force / --dry
+    const { opt, rest: pos } = parseOptions(rest, sub === 'copy' ? { positional: true, flags: ['force', 'dry'], values: ['to'] } : { positional: true, flags: ['full'] });
     const flags = new Set(Object.keys(opt).map(k => '--' + k)), to = opt.to;
     if (sub === 'list') {
       const r = listArt(pos[0], cwd);
-      console.log(`${show(r.root)}: ${r.modules.length} module(s), ${r.assets.length} asset file(s)`);
-      for (const m of r.modules) {
-        console.log(`  ${m.file}`);
-        for (const e of m.exports) console.log(`    ${e.name}${e.doc ? '  ' + e.doc : ''}`);
-      }
-      for (const a of r.assets) console.log(`  ${a}`);
+      console.log(artListText(r, flags.has('--full'), show(r.root), pos[0]).join('\n'));
       return 0;
     }
     if (sub === 'copy') {

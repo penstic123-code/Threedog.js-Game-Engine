@@ -107,7 +107,7 @@ export const specs = [
         E.use(world(), collision(), characters(), level({ scene: rvFlat(THREE) }));
         await E.start(); await rvWait(E, 2);
         const car = { id: 'rv-boat', object: new THREE.Object3D(), driver: null, passengers: [], seats: 2, speed: 0, seatPosition: () => ({ x: 5, y: 0, z: 5 }), exitPosition: () => ({ x: 7, y: 0, z: 5 }), drive() {}, hideDriver: false };
-        const p = E.characters.createPlayer({ control: 'camera' });
+        const p = E.characters.addPlayer({ control: 'camera' });
         const step = n => { for (let i = 0; i < n; i++) E.step(1 / 60); };
         const out = {};
         p.enter(car); step(3);
@@ -141,7 +141,7 @@ export const specs = [
         E.use(world(), collision(), characters(), level({ scene: s }), nav({ agentRadius: 0.4 }));
         await E.start();
         for (let i = 0; i < 20 && !E.nav.ready; i++) { await new Promise(s => setTimeout(s, 30)); E.step(1 / 60); }
-        const p = E.characters.createPlayer({ control: 'camera' });
+        const p = E.characters.addPlayer({ control: 'camera' });
         const step = n => { for (let i = 0; i < n; i++) E.step(1 / 60); };
         E.ops.allow(() => p.placeAt({ x: -6, y: 0, z: 0 }));
         const wide = E.nav.findPath({ x: -6, z: 0 }, { x: 6, z: 0 }, { radius: 1.2 })?.length;

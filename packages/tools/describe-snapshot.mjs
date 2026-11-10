@@ -14,8 +14,9 @@ import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 /** Paths dropped before saving / comparing: timing and performance numbers are not gameplay */
+// warnings: the engine's dev diagnostics, they change when the engine adds one, not when the game does.
 // loading: file versions and on-demand counts; picture.writers: how many frames each writer has run, which moves with every frame and says nothing about the game
-const DEFAULT_IGNORE = ['perf', 'time.tick', 'time.real', 'time.ambient', 'loading', 'picture.writers'];
+const DEFAULT_IGNORE = ['perf', 'time.tick', 'time.real', 'time.ambient', 'loading', 'picture.writers', 'warnings'];
 /** Also dropped when a command says what it changed: these move on their own in any step, and a list of them would bury the change */
 const MOVES_ALONE = ['time', 'camera', 'nearby', 'actions', 'ops', 'holds', 'shared', 'input', 'picture', 'render', 'weather.progress'];
 const MAX_LINES = 20;
@@ -41,7 +42,10 @@ export function pickGameplay(d, { only, ignore = [] } = {}) {
     }
     return out;
   };
-  const all = walk(JSON.parse(JSON.stringify(d)), '');
+  const copy = JSON.parse(JSON.stringify(d));
+  // ui.parts: only the ones the game replaced ('custom'); 'default' / 'off' are the engine's own list, which grows with the engine (hud.button, hud.hint…)
+  if (isObj(copy.ui?.parts)) copy.ui.parts = Object.fromEntries(Object.entries(copy.ui.parts).filter(([, v]) => v === 'custom'));
+  const all = walk(copy, '');
   if (!only?.length) return all;
   const out = {};
   for (const p of only) {

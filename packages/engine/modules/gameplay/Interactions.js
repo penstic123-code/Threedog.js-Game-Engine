@@ -36,6 +36,7 @@ import { isPlainObject } from '../../core/base/util.js';
 import { DEV, warnOnce } from '../../core/base/validate.js';
 import { vec3 } from '../../core/base/math.js';
 import { Cells } from '../../core/stream/cells.js';
+import { hintKey, keyed } from '../../core/input/inputPad.js';
 
 const PICKS = ['nearest', 'facing', 'aim'];
 // 'facing': within 60° either side of where the actor faces (wide enough for a gamepad stick, narrow enough that doors behind you stay dark)
@@ -59,7 +60,7 @@ export class Interactions {
     // core carries no preset). presets.interactions.* are the picks, presets.bindings.interact the keys (declared here, bound by the game).
     if (pick === undefined) throw codedError('interaction-setup', `interactions(): no pick given; ${SETUP_FIX}`);
     if (typeof pick !== 'function' && !PICKS.includes(pick)) throw codedError('interaction-setup', `interactions({ pick }): '${pick}' is not a pick mode. Use ${PICKS.map(p => `'${p}'`).join(' | ')} or a function (candidates, ctx) => candidate`);
-    ctx.track(engine.input.action(action, { label: 'input.interact', owner: 'interactions' }));
+    ctx.track(engine.input.define(action, { label: 'input.interact', owner: 'interactions' }));
     this.engine = engine;
     this.action = action;
     this.radius = radius;
@@ -98,7 +99,7 @@ export class Interactions {
     /** @internal ids of the once items already used; _counted: counter name -> what uses added. The saved state, so both follow a load and a new game */
     this._spent = new Set(); this._counted = new Map();
     /** @internal ids of the once items whose async onUse has not settled: not spent yet, but not usable twice either */ this._waiting = new Set();
-    ctx.saves.register('interactions', { atomic: true, version: 1, save: () => ({ spent: [...this._spent], counted: Object.fromEntries(this._counted) }), load: d => this._load(d) });
+    ctx.saves.define('interactions', { atomic: true, version: 1, save: () => ({ spent: [...this._spent], counted: Object.fromEntries(this._counted) }), load: d => this._load(d) });
   }
 
   /**
@@ -111,7 +112,7 @@ export class Interactions {
    * once: true hides the object after a use and it cannot be used again (onUse returning { ok: false } leaves it, also when an async onUse resolves to it or rejects: the use is judged
    * when it settles, and the item cannot be used again meanwhile); saved, and back on a new game. The save
    * knows it by id, else the object's name; development throws when it has neither. counter: name of a HUD counter that each use
-   * adds 1 to (hud.bump; nothing without hud()); declare it once at setup with hud.counter(name, { label, value: 0, max }), not on session:start.
+   * adds 1 to (hud.bump; nothing without hud()); declare it once at setup with hud.addCounter(name, { label, value: 0, max }), not on session:start.
    * label, enabled and onUse are called with (object, { actor }): actor is the world record id of who asks / uses it (engine.actor for the local user,
    * a net peer's or an NPC's id when they run interaction.use), so per-actor rules never read engine.player.
    * @example engine.interactions.add(door, { label: (o, { actor }) => owns(actor) ? 'Open' : 'Knock', onUse: (o, { actor }) => engine.ops.run('door.open', { id: o.name }, { actor }) });
@@ -160,8 +161,8 @@ export class Interactions {
     const e = this.engine, r = it.onUse?.(it.object, { actor });
     if (typeof r?.then !== 'function') return this._judge(it, r);
     const state = e.saves.generation;
-    this._waiting.add(it.id);
-    return r.then(v => e.saves.generation === state ? e.ops.allow(() => this._judge(it, v)) : v, err => { reportError(e, err, `interaction '${it.id}' onUse`, { soft: true }); return failure('error'); })
+    this._waiting.add(it.id);   // an item removed (or replaced by a new one of the same id) while it waited spends nothing below: that one is gone
+    return r.then(v => e.saves.generation === state && !it._gone ? e.ops.allow(() => this._judge(it, v)) : v, err => { reportError(e, err, `interaction '${it.id}' onUse`, { soft: true }); return failure('error'); })
       .finally(() => { if (e.saves.generation === state) this._waiting.delete(it.id); });
   }
   /** @internal once and counter count only a use that went through */
@@ -173,7 +174,7 @@ export class Interactions {
     return r;
   }
   /**
-   * @internal Load or new game. A counter gets the difference, not a value: its base is the game's (hud.counter(name, { value })), this module only knows
+   * @internal Load or new game. A counter gets the difference, not a value: its base is the game's (hud.addCounter(name, { value })), this module only knows
    * what uses added. Only things whose state changed are shown or hidden: a once item the game hid itself stays hidden
    */
   _load(d) {
@@ -269,7 +270,7 @@ export class Interactions {
       if (d >= it.radius || !it.enabled(it.object, { actor })) continue;
       let s = d;
       if (aim) s = this._offRay(q, it.height ?? this.promptHeight);
-      else if (obj && d > 0.5) {   // standing on top of it counts as facing it
+      else if (obj && d > 0.5 && Math.hypot(q.x - pos.x, q.z - pos.z) > 1e-6) {   // standing on top of it (also straight above or below: no horizontal direction to compare) counts as facing it
         const c = ((q.x - pos.x) * D.x + (q.z - pos.z) * D.z) / Math.hypot(q.x - pos.x, q.z - pos.z);
         if (c < FACING_COS) continue;
         s = d / it.radius + (1 - c);   // mostly "straight ahead", then "closer"
@@ -318,10 +319,11 @@ export class Interactions {
       return;
     }
     this._pass = ++this._passes;
-    if (this._hold) this._tickHold(dt);
-    this._presses(inp, this.engine.actor);
-    for (const s of inp.seats) if (s.actor) this._presses(s, s.actor);
-    this._pass = 0;
+    try {
+      if (this._hold) this._tickHold(dt);
+      this._presses(inp, this.engine.actor);
+      for (const s of inp.seats) if (s.actor) this._presses(s, s.actor);
+    } finally { this._pass = 0; }   // as update(): a throwing use must not leave the pass open (every later pick would reuse stale positions)
   }
   /** @internal The presses of one input, engine.input or a seat, for the actor it acts for. One hold at a time: a press during someone's hold waits for it to end */
   _presses(input, actor) {
@@ -377,13 +379,12 @@ export class Interactions {
     const input = this.engine.input;
     const part = this.engine.ui.get('prompt');
     if (!best || !input.enabled || !part) { if (this._shown) part?.hide(); this._shown = false; return; }
-    // never an empty name: an action that needs a key says it has none; one with no key on purpose (a touch button, click only) shows just its label
-    const label = labelOf(best, this.engine.actor), key = input.label(best.action) || (input.isUnbound(best.action) ? this.engine.t('input.noKey') : '');
+    const label = labelOf(best, this.engine.actor), key = hintKey(input, best.action);
     best.object.getWorldPosition(V); V.y += best.height ?? this.promptHeight;
     const s = worldToScreen(this.engine, V);
     // progress: the running hold on this one (0-1), 0 for a hold not started, null for a plain press
     const progress = this.holding?.id === best.id ? this.holding.progress : best.hold > 0 ? 0 : null;
-    part.update({ id: best.id, action: best.action, key, label, text: key ? `${key} · ${label}` : label, x: s.x, y: s.y, onScreen: s.onScreen, use: this._use, options: this.options, progress });
+    part.update({ id: best.id, action: best.action, key, label, text: keyed(key, label), x: s.x, y: s.y, onScreen: s.onScreen, use: this._use, options: this.options, progress });
     this._shown = true;
   }
   /** @internal Several actions: fill options, return the default action's pick (else the first found) for the prompt */

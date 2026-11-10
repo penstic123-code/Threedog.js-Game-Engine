@@ -25,8 +25,10 @@
     },
     "./error-hints": "./core/base/errorHints.js",
     "./spelling": "./core/base/spelling.js",
+    "./model-needs": "./core/assets/modelNeeds.js",
     "./metadata": "./core/inspect/metadata.generated.js",
     "./grid": "./core/scene/grid.js",
+    "./draw-only": "./core/scene/drawOnly.js",
     "./layers": "./render/layers.js",
     "./pixel": {
       "types": "./types/pixel.d.ts",
@@ -84,6 +86,7 @@
     "./render/fx/patchNodes.tsl.js",
     "./render/fx/postWebGPU.tsl.js",
     "./render/fx/sky.tsl.js",
+    "./render/impostor.tsl.js",
     "./render/lighting.js",
     "./render/ownFrame.js",
     "./render/patches.js",

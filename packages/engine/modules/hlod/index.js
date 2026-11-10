@@ -95,6 +95,9 @@ export function hlod(opts = {}) {
       // swaying meshes keep their own transform (see header); so do mirrored ones (negative scale): baked into a proxy their faces turn inside out, and only a mesh's own matrix flips the winding back
       for (let i = originals.length; i--;) if (movesVertices(originals[i].material) || originals[i].matrixWorld.determinant() < 0) originals.splice(i, 1);
       for (const m of originals) m.userData.hlod = true;   // engine.batching leaves hlod's meshes alone (marked after the filter: swaying meshes stay batchable)
+      // batching may already track one of them, waiting for copies to reach minCount: re-check it now, or the copies that arrive later
+      // would batch it anyway and a far cell would draw both the proxy and the batch instance
+      if (e.batching) for (const m of originals) e.batching.refresh(m);   // a mesh batching does not track: nothing to re-check
       // the LOD1 copy is only merge material: never drawn, never hit by rays; remove() gives it its visible back
       for (const l of lods.values()) { l.visible = l.node.visible; l.node.visible = false; }
       // split into cells by bounding-box center; where a LOD1 exists, its meshes join the merge instead (each LOD1 used once)
@@ -139,7 +142,7 @@ export function hlod(opts = {}) {
         /** Unregister: restore originals, release proxies */
         remove() {
           h.removed = true; handles.delete(h);
-          for (const c of list) { setFar(c, false); c.watch?.remove(); for (const p of c.proxy) p.geometry.dispose(); for (const m of c.originals) delete m.userData.hlod; }
+          for (const c of list) { setFar(c, false); c.watch?.remove(); for (const p of c.proxy) p.geometry.dispose(); for (const m of c.originals) { delete m.userData.hlod; e.batching?.refresh(m); } }   // unmarked: batching may take them again (as add() re-checks)
           api.cells = api.cells.filter(c => !list.includes(c));
           for (const l of lods.values()) l.node.visible = l.visible;
           group.removeFromParent();   // proxies share the originals' materials and are never ray-registered: geometries were disposed above

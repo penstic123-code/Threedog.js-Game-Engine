@@ -19,7 +19,7 @@ engine.use(world(), collision(), fakes ? fakeCamera() : followCamera(), characte
   fakes ? fakeDialogue() : dialogue({ charsPerSecond: 0 }), fakes ? fakeQuests() : quests(), hud(), content(), timeline(),
   ...(fakes ? [] : [inventory()]));
 engine.add(new THREE.Mesh(new THREE.PlaneGeometry(80, 80).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0x888888 })));
-engine.characters.createPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 0 } });
+engine.characters.addPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 0 } });
 if (!fakes) {
   engine.inventory.define('apple', { name: 'Apple', use: () => true }).define('bread', { name: 'Bread', use: () => true });
   engine.inventory.add('apple', 2); engine.inventory.add('bread', 2);

@@ -95,7 +95,7 @@ export class UIParts {
 
   /**
    * Replace a part with your own, give the default options, or turn it off. Affects parts created after this call (set before engine.start()).
-   * @param {string} name  e.g. 'loading' 'toast' 'title' 'hud.marker' 'hud.counter' 'hud.bar'
+   * @param {string} name  e.g. 'loading' 'toast' 'title' 'hud.marker' 'hud.counter' 'hud.bar' 'hud.button'
    * @param {UIPartValue} value  false off · true default · { ...options } default with options · (engine, options) => ({ show, update, hide, dispose })
    * @returns {void}
    * @example engine.ui.set('toast', (engine) => ({ show: ({ text, kind }) => { if (kind !== 'quest') myToast(text); } }))

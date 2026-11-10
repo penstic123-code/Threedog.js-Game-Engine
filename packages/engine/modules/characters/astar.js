@@ -61,7 +61,12 @@ export function findPath(walkable, sx, sz, gx, gz, { radius, step = defaultStep(
       const ni = s.i + di, nj = s.j + dj, t = reach(ni, nj, s.y);
       if (!t.ok && !(ni === gi && nj === gj)) continue;
       const ng = s.g + c;
-      if (ng < t.g) { t.g = ng; t.from = s; open.push(t, ng + h(ni, nj), ng); }
+      // the cells being free says nothing about the way between them: a thin wall or fence lies between two free cell centres. Checked only for a step that would improve the cell, sampled
+      // every third of a cell (smoothing below samples finer). The first and last leg run from the real start / to the real goal, as the path does: a cell centre may lie behind a wall
+      if (ng < t.g) {
+        const from = s === first ? { x: sx, y, z: sz } : { x: s.i * step, y: s.y, z: s.j * step }, to = ni === gi && nj === gj ? { x: gx, y: t.y, z: gz } : { x: ni * step, y: t.y, z: nj * step };
+        if (lineClear(walkable, floor, level, from, to, step / 3)) { t.g = ng; t.from = s; open.push(t, ng + h(ni, nj), ng); }
+      }
     }
   }
   return null;

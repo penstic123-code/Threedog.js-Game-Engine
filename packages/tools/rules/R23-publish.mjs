@@ -31,7 +31,8 @@ export default {
   run() {
     const out = [];
     const files = [...ROOT_FILES.filter(f => existsSync(abs(f))), ...walk('packages', TEXT)];
-    for (const f of [...readdirSync(abs('.')), ...readdirSync(abs('packages'))].filter(n => /^\.env/.test(n)))
+    // the file NAME is checked at any depth (packages/tools/.env too), whatever its extension: the TEXT filter above only decides which files are read
+    for (const f of [...readdirSync(abs('.')), ...walk('packages', [''])].filter(n => /^\.env/.test(basename(n))))
       out.push({ level: 'error', file: f, line: 0, msg: 'an .env file in a publishable folder', fix: 'delete it or move it out of the repository (.gitignore lists .env*)' });
     for (const f of files) {
       if (basename(f) === 'LICENSE' || /package-lock\.json$/.test(f)) continue;

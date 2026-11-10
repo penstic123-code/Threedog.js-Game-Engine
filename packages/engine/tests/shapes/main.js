@@ -16,12 +16,12 @@ const shapes = {
     const engine = createEngine({ ...base, lights: false, bindings: { ...presets.bindings.walk, ...presets.bindings.interact }, audio: { footsteps: { default: 'step' } } });
     engine.use(world(), collision(), followCamera(), characters(), interactions({ ...presets.interactions.nearest }));
     engine.scene.add(floor(), new THREE.AmbientLight(0xffffff, 1));
-    const p = engine.characters.createPlayer({ ...presets.player.thirdPerson, spawn: [0, 0, 0] });
+    const p = engine.characters.addPlayer({ ...presets.player.thirdPerson, spawn: [0, 0, 0] });
     const used = [], sign = box(0xffcc00, [3, 0.5, 0]);
     engine.scene.add(sign);
     engine.interactions.add(sign, { label: 'sign', radius: 3, onUse: () => { used.push('sign'); } });
     let saved = 0;
-    engine.saves.register('sign', { save: () => ({ used: used.length }), load: d => { saved = d.used; } });
+    engine.saves.define('sign', { save: () => ({ used: used.length }), load: d => { saved = d.used; } });
     // a mover that goes up a wall: the body lies on its side and stays there, nothing pulls it upright or down to a ground height
     const wallMover = c => ({ name: 'wall', move(x, z, run, dt) {
       c.root.position.x += x * 4 * dt; c.root.position.y += z * 4 * dt; c.root.quaternion.setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2); c.grounded = true;

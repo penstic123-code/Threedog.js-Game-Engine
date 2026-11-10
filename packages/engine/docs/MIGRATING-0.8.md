@@ -54,7 +54,7 @@ These do not fail loudly, so search for them.
 | `assets.reportText(name)` | `assets.report(name)` |
 | `assets.users(name)` | no replacement: it was internal |
 | `player.object`, `character.object` | `.root`, the same object (`npc.object` stays) |
-| `character.addTo()` | `engine.add(character.root)` for a `new Character` of your own; `createPlayer` still adds the player |
+| `character.addTo()` | `engine.add(character.root)` for a `new Character` of your own; `addPlayer` still adds the player |
 | `engine.rigid.R` | `engine.rigid.rapier` |
 | `collision.circles`, `collision.boxes` | `collision.forEachStatic((type, data) => ...)` |
 | `engine.stream.readyCheck(name, fn)` | `engine.stream.addReadyCheck(name, fn)` |
@@ -71,7 +71,7 @@ These do not fail loudly, so search for them.
 | `engine.adaptive.paused` | `engine.adaptive.on = false` |
 | `settings.removeSection(id)` | List the tabs you want: `settings({ sections: [...] })` |
 | `sky({ moonSize })`, `sky({ starScale })`, `sky({ gradientCurve })`, `sky({ orbitTilt })`, `sky({ orbitSway })` | Write `engine.uniforms.uMoonSize.value`, `uStarScale.value`, `uSkyCurve.value`, `engine.sky.orbit.tilt`, `engine.sky.orbit.sway` (plain values after `engine.use(sky())`; defaults unchanged) |
-| `saves.register(key, { movedFrom })` | No replacement. Only the calendar used it: the time and day of a 0.2 save, kept under the old `sky` part, are no longer read, and such a save starts from `calendar({ time })` |
+| `saves.define(key, { movedFrom })` | No replacement. Only the calendar used it: the time and day of a 0.2 save, kept under the old `sky` part, are no longer read, and such a save starts from `calendar({ time })` |
 | The old keys of `sky()` and `water()` (`sky({ fog })`, `sky({ sun })`, `sky({ layers })`, `sky({ dayLength })`, `water({ color })`, `water({ glsl })` and the like) | They are ordinary unknown options now: an error with a did-you-mean in development, one warning in a build. Recipes 08, 44 and 62 say where each value lives |
 | `calendar.daysPerSeason` (the field) | Nothing read it and writing it did nothing. The option `calendar({ daysPerSeason })` stays |
 | `ground.navGeometry` on a ground API of your own | Nothing read it: the navmesh comes from `staticTrimeshes()` |

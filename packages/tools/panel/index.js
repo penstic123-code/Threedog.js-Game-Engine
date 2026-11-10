@@ -214,6 +214,13 @@ export async function openPanel(engine) {
     }
   }
 
+  // ---- shared values off their base now: the same rows as describe's "Values being changed now" line (engine.stacks.changed), read only ----
+  const chg = { text: '' }, show = () => { chg.text = engine.stacks.changed().map(c => c.text).join('\n') || '-'; };
+  show();
+  const chgF = pane.addFolder({ title: '正在被改的值 values changed now', expanded: false });
+  const chgMon = chgF.addBinding(chg, 'text', { readonly: true, multiline: true, rows: 5, label: '' });
+  chgF.addButton({ title: '刷新 refresh' }).on('click', () => { show(); chgMon.refresh(); });
+
   // ---- write back: the dev server saves .threedog/tune.json (tools/vite/vite-threedog-live.js); the code change is `threedog tune write <file>` (dry run first) ----
   const out = { text: '' };
   const wb = pane.addFolder({ title: '写回 write back' });

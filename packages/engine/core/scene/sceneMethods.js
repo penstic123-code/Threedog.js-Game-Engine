@@ -7,9 +7,7 @@ import { codedError } from '../base/errorHints.js';
 import { thing } from './thingOps.js';
 import { isUnder } from '../base/util.js';
 import { freshFrame, renderOnce as drawOnce } from '../../render/backend.js';
-
-/** The geometry and materials of one object */
-const parts = o => [o.geometry, ...[].concat(o.material)].filter(Boolean);
+import { freeParts, partsOf as parts, copyOwns, kept } from '../base/freeParts.js';
 /**
  * How many objects in the scene use each geometry and material. Why remove asks: disposing a kit that other streamed blocks still draw makes the renderer
  * rebuild all of them (worst frame 270 ms against 79 in the city stress run). One walk per task, so removing ten thousand objects in a loop walks once; an object
@@ -71,9 +69,12 @@ export const sceneMethods = {
   thingConflict(text) { this._things.conflict(text); },
   /**
    * Delete an object for good: detach it, unregister its rays and dispose the geometries and materials nothing else in the scene uses (textures are kept).
-   * One still used by another object stays, and goes with its last user. Geometry and materials shared by assets model clones are only decremented in use count (see Assets.js)
+   * One still used by another object stays, and goes with its last user. Geometry and materials shared by assets model clones are only decremented in use count (see Assets.js).
+   * The call is the game handing the object over (design.md 6.2), so a part the game made goes too; a model copy's own bones go with the copy
    */
   remove(...objs) {
+    // every root leaves and is uncounted first, then one free over all of them: two roots sharing a material free it once, and a part one root still
+    // drew while the other was freed is not kept by a root that is leaving in the same call
     for (const o of objs) {
       const counted = isUnder(o, this.scene) && !!this._users;   // the count was made while this object was still in the scene
       o.removeFromParent();
@@ -81,19 +82,19 @@ export const sceneMethods = {
       this.rays.forget(o);
       this.assets.forget(o);
       this._poses.forget(o);
-      const shared = this.assets.shared, held = this.batching.held;   // a batch still drawing the same geometry / material keeps it alive
       if (counted) o.traverse(c => { for (const x of parts(c)) this._users.set(x, (this._users.get(x) ?? 0) - 1); });
-      // The whole-scene count only for a part nothing else keeps: unloading a streamed block whose kit is all held by batches walked every object of the district for nothing (7 ms in one frame of the city run)
-      const free = []; o.traverse(c => { for (const x of parts(c)) if (!shared.has(x) && !held.has(x)) free.push(x); });
-      if (free.length) { const users = sceneUsers(this); for (const x of free) if (!(users.get(x) > 0)) x.dispose(); }
     }
+    const shared = this.assets.shared, held = this.batching.held;   // a batch still drawing the same geometry / material keeps it alive
+    // The whole-scene count only for a part nothing else keeps (mine asks the cheap sets first): unloading a streamed block whose kit is all held by batches
+    // walked every object of the district for nothing (7 ms in one frame of the city run). A kept part (keepPart) is its maker's to free
+    freeParts(objs, x => !shared.has(x) && !held.has(x) && !kept(x) && !(sceneUsers(this).get(x) > 0), { own: c => copyOwns(shared, c) || c.isInstancedMesh || c.isBatchedMesh });
   },
   /**
    * Draw one picture now, outside the loop, on either renderer. renderOnce() (target null, the engine camera): the frame the player sees, onto
    * the canvas through engine.post; read the canvas in the same task (canvas.toDataURL / drawImage), as photo mode does.
-   * renderOnce(target): that frame through engine.post into a render target instead (the canvas's pixels: tone mapped, output color space;
-   * with no post work on, three's plain draw into a target). renderOnce(target, camera) with another camera: the scene without post (the chain
-   * is built around the engine camera's screen), into target or, with target null, the canvas. On WebGPURenderer each call is a fresh node frame, so a RenderPipeline's scene
+   * renderOnce(target): that frame into a render target instead, always the canvas's pixels (tone mapped, output color space), whether or not an
+   * effect is on. renderOnce(target, camera) with another camera: the scene without post (the chain is built around the engine camera's screen) and
+   * as three draws into a target, linear and not tone mapped (for data or your own pass); into target or, with target null, the canvas. On WebGPURenderer each call is a fresh node frame, so a RenderPipeline's scene
    * pass, which three draws once per frame, draws again: two calls in one task give two pictures (docs/plans/2026-11-03-webgpu-phase2.md 3).
    * @example engine.renderOnce(); const url = engine.renderer.domElement.toDataURL('image/png');
    * engine.renderOnce(rt, mapCamera);   // a minimap / thumbnail into your own render target
@@ -103,6 +104,7 @@ export const sceneMethods = {
    */
   renderOnce(target = null, camera = this.camera) {
     const own = this._ownFrame;   // an engine draw, not the game taking the canvas over (render/ownFrame.js)
+    this._gameLights?.sync();   // the light watch catches up first: a RectAreaLight added since the last frame gets its tables before this draw (gameLights.js)
     if (own) own.inside++;
     try {
       if (camera === this.camera) { freshFrame(this.renderer); this.post.render(0, target); return; }

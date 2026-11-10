@@ -8,6 +8,7 @@ import { readParams, keysSchema } from '../../core/base/params.js';
 import { isOptions } from '../../core/base/util.js';
 import { codedError } from '../../core/base/errorHints.js';
 import { onRendererSwap } from '../../render/backend.js';
+import { onTierChange } from '../../core/scene/tier.js';
 import { makeSystem, updateSystem, dropSystem, RAIN, SNOW } from './particles.js';
 
 const DRAW_PARAMS = keysSchema(['particles', 'area', 'rain', 'snow']);   // the picture options of weather(): the rest are the state's
@@ -29,7 +30,8 @@ export class WeatherDraw {
     /** @internal */ this._ctx = null; /** @internal */ this._h = {};
     /** @internal */ this._tint = { color: null, amount: 0, horizon: 0 };
     /** Default particle count per system: weather({ particles }), else 6000 (3000 on low-tier devices) @type {number} */
-    this.particles = particles ?? (engine.tier === 'low' ? 3000 : 6000);
+    this.particles = particles ?? this._tierCount();
+    /** @internal the game gave no count: the default follows the tier (follow(), below) */ this._countFollows = particles == null;
     /** @internal */ this.area = area;
     /** Particle systems drawn now: field -> { field, object, material, uniforms, spec } (rain / snow when the table has them, plus fields engine.weather.defineField adds) @type {Map<string, any>} */
     this.systems = new Map();
@@ -46,6 +48,16 @@ export class WeatherDraw {
     }
   }
 
+  /** @internal the default count for the tier */
+  _tierCount() { return this.engine.tier === 'low' ? 3000 : 6000; }
+  /** @internal the tier changed (a stored preset arrives after install): a default count follows it, by building the systems again like a renderer swap does; a count the game gave stays */
+  _tierChanged() {
+    const n = this._tierCount();
+    if (!this._countFollows || n === this.particles) return;
+    this.particles = n;
+    this._rebuild();
+  }
+
   /** @internal the weather table (state half) */
   get types() { return this.state.types; }
   /** @internal the state half, read only and read live: a replaced weather module must not leave the picture on the old one */
@@ -57,7 +69,7 @@ export class WeatherDraw {
   defineField(field, spec) {
     const fields = [...new Set(Object.values(this.types).flatMap(t => Object.keys(t)))];
     if (!fields.includes(field)) throw codedError('weather-option', `weather.defineField('${field}'): no weather type has this field; add it to a type in weather({ types }) (e.g. ashfall: { ${field}: 1 }), or use one of ${fields.join(', ')}`);
-    if (spec !== null && (typeof spec !== 'object' || Array.isArray(spec))) throw codedError('weather-option', `weather.defineField('${field}', spec): spec is an object, e.g. { shape: 'soft', color: 0x555555 } or { create }, or null to give the field back; see recipes/44-water-weather-hooks.md`);
+    if (spec !== null && (typeof spec !== 'object' || Array.isArray(spec))) throw codedError('weather-option', `weather.defineField('${field}', spec): spec is an object, e.g. { shape: 'soft', color: 0x555555 } or { create }, or null to give the field back; see recipes/44-water-weather-hooks.md §"Particles of the game's own weather"`);
     if (spec) return this._build(field, spec, BASE[field]);
     if (BASE[field] && this._used(field)) return this._build(field, this._given[field], BASE[field]);
     const s = this.systems.get(field);
@@ -76,16 +88,17 @@ export class WeatherDraw {
   }
 
   /**
-   * @internal fallback 'webgl': systems built before start() carry WebGPURenderer node materials; rebuild them for the renderer in use, keeping what
+   * @internal build the systems again (fallback 'webgl', or a tier change that moves the default count): systems built before start() carry WebGPURenderer node materials; rebuild them for the renderer in use, keeping what
    * the game wrote since (spec numbers, uniforms, its material). A defineField() create(engine) object is the game's own and stays (the scene check names it
    * if WebGL cannot draw it).
    */
-  _rendererSwapped() {
+  _rebuild() {
     for (const [f, sys] of [...this.systems]) {
       if (sys.own) continue;
       const given = sys.given;
       const next = this._build(f, sys.spec, sys.base);
-      for (const k in sys.uniforms) if (next.uniforms[k]) next.uniforms[k].value = sys.uniforms[k].value;
+      // only what the game gave: a value the old slot owns (particles.tsl.js mapSlot's white stand-in, `.own`) is freed with the old material
+      for (const k in sys.uniforms) if (next.uniforms[k] && !sys.uniforms[k].own) next.uniforms[k].value = sys.uniforms[k].value;
       if (given) next.material = given;
     }
   }
@@ -130,7 +143,8 @@ export function weatherDrawModule(opts) {
     install(e, ctx) { e.i18n.add({ 'zh-CN': { 'module.weatherDraw': '天气外观' }, en: { 'module.weatherDraw': 'weather drawing' } });
       L = new WeatherDraw(e, opts);
       L._ctx = ctx;   // the weather's entries on the shared points go with this module (ctx.mod)
-      ctx.track(onRendererSwap(e, () => L._rendererSwapped()));
+      ctx.track(onRendererSwap(e, () => L._rebuild()));
+      ctx.track(onTierChange(e, () => L._tierChanged()));   // the default particle count follows the tier
       ctx.track(e.audio.condition('weather', v => [].concat(v).includes(e.weather.name)));   // audio rule condition { weather: 'rain' | ['rain', 'storm'] }
       for (const k of ['rain', 'snow', 'wind']) ctx.track(e.audio.measure(k, () => e.weather.current[k]));   // data rules: { rain: { lt: 0.2 } }, volume add: { rain: 0.22 }
       builtInSounds(e.assets, { thunder: (audio, p, out) => { const dur = p.duration ?? 3.5, delay = 0.4 + Math.random() * 1.5;   // presentation: thunder delay

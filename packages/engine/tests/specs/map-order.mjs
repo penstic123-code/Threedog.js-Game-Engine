@@ -63,7 +63,7 @@ export const specs = [
         const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1)); mesh.position.set(0, 3, 0); E.add(mesh);
         const crate = E.ops.allow(() => E.rigid.addBox(mesh, { id: 'crate', size: [1, 1, 1] }));
         let armed = false;
-        E.saves.register('mapBad', { save: () => 1, load() { if (armed) { armed = false; throw new Error('a part that cannot load'); } } });
+        E.saves.define('mapBad', { save: () => 1, load() { if (armed) { armed = false; throw new Error('a part that cannot load'); } } });
         for (let i = 0; i < 60; i++) E.step(1 / 60, { render: false, describe: false });
         E.saves.save('s'); await E.saves.flush();
         crate.body.setLinvel({ x: 7, y: 0, z: 0 }, true);
@@ -90,7 +90,7 @@ export const specs = [
         const E = threedogThreads.mk(T.createEngine, 'map-car-cam', {});
         E.use(T.world(), T.collision(), T.characters({ npcs: false }), T.rigid(), T.followCamera({ distance: 6 }));
         await E.start();
-        const P = E.characters.createPlayer({ control: 'camera', cameraFollow: true, spawn: { x: 0, z: 0 } });
+        const P = E.characters.addPlayer({ control: 'camera', cameraFollow: true, spawn: { x: 0, z: 0 } });
         const wheels = [[-1, 0, 1.5], [1, 0, 1.5], [-1, 0, -1.5], [1, 0, -1.5]].map(position => ({ position, radius: 0.35 }));
         const car = E.ops.allow(() => E.rigid.addWheeled(new THREE.Mesh(new THREE.BoxGeometry(2, 1, 4)), { id: 'map-car', wheels, camera: { distance: 12 } }));
         E.ops.allow(() => P.enter(car)); steps(E, 3);
@@ -193,7 +193,7 @@ export const specs = [
         E.quests.define('q', { title: 'Q', steps: [{ text: 'go', target: { x: 3, y: 0, z: 4 }, done: () => false }] });
         E.quests.start('q');
         let armed = false;
-        E.saves.register('mapBad', { save: () => 1, load() { if (armed) { armed = false; throw new Error('a part that cannot load'); } } });
+        E.saves.define('mapBad', { save: () => 1, load() { if (armed) { armed = false; throw new Error('a part that cannot load'); } } });
         E.step(1 / 60);
         E.saves.save('s'); await E.saves.flush();
         const before = E.hud.markers.length;

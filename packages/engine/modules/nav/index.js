@@ -13,6 +13,9 @@
 // Body sizes: Recast bakes the body's radius into the mesh, so a mesh is good for one size (Recast's own advice, and what Unreal's supported agents do: one mesh per size).
 // api itself is the mesh of agentRadius; a findPath for another radius gets its own, built the first time that size is asked for and kept in api.meshes until the next rebuild or unload.
 // Radii that round to the same cells share one. Each has its own tile cache, obstacles and seated links; revision covers them all, and a game with one size pays for nothing else.
+// Collider layers (collision.addBox { layer }) work the same way: a path for a body that passes some layers gets a mesh where colliders of those layers cut nothing,
+// keyed by size and layer list. Why a mesh and not a Detour query filter: the tile cache cuts an obstacle out of the mesh for every query, and an obstacle that only
+// marks polygons is not in this Recast build; Godot's advice for agents that need different geometry is the same, a map of their own. A game without layers builds none.
 // shortcut: built on the main thread when first asked for, which stalls that step; move to a worker (or a list of sizes built at load) if a real level's build shows up in a frame.
 // Links (Recast off-mesh connections): nav({ links: [{ id, from, to }] }) joins two places a walker cannot walk between, a gap to jump or a ladder to climb.
 // generateTileCache has no offMeshConnections option (generateTiledNavMesh does), so they go in through the tile cache's mesh process, which Detour runs for
@@ -24,6 +27,7 @@ import { navSearch, OPTS } from './navPath.js';
 import { sameFloor } from '../../core/scene/floor.js';
 import { warnOnce } from '../../core/base/validate.js';
 import { coded, codedError } from '../../core/base/errorHints.js';
+import { passesOf, passesThrough } from '../collision/grid.js';
 
 const NAV_PARAMS = keysSchema(['cellSize', 'agentRadius', 'agentHeight', 'maxClimb', 'maxSlope', 'tileSize', 'crowd', 'debug', 'maxObstacles', 'maxAgents', 'arrive', 'links']);
 const LINK_PARAMS = keysSchema(['id', 'from', 'to', 'oneWay', 'radius']);
@@ -66,11 +70,12 @@ export function nav(opts = {}) {
     get revision() { syncObstacles(); return revision; },
     /** @internal a mesh as bytes, imported by the pathfinding worker */
     exportMesh(m = api) { return lib.exportNavMesh(m.navMesh); },
-    /** @internal the mesh for a body of this radius, built the first time it is asked for; no radius: agentRadius. A mesh the build refused has no query, and every path on it is noPath */
-    mesh(radius = agentRadius) {
+    /** @internal the mesh for a body of this radius that goes through colliders of these layers, built the first time it is asked for; no radius: agentRadius. A mesh the build refused has no query, and every path on it is noPath */
+    mesh(radius = agentRadius, passes) {
       if (!(radius >= 0)) throw codedError('character-option', `nav: a path's radius is a number of meters, 0 or more, got ${radius}`);
-      const c = cellsOf(radius), size = c === api.cells && radius <= agentRadius ? BASE : c;
-      return api.meshes.get(size) ?? extraMesh(size);
+      // a structured key: a layer name may hold a comma, and joined text would make the one layer "a,b" the same body as the two layers a and b
+      const c = cellsOf(radius), size = c === api.cells && radius <= agentRadius ? BASE : c, through = passesOf('nav: passes', passes), key = through ? JSON.stringify([size, ...through]) : size;
+      return api.meshes.get(key) ?? extraMesh(key, size, through);
     },
     /**
      * @internal The one rule for a position given to the navmesh (search, links, async paths, crowd goals). No height: the ground. A height picks the nearest surface of the mesh at that
@@ -104,7 +109,7 @@ export function nav(opts = {}) {
 
   function search(from, to, o) {
     if (!api.ready) return { status: 'notReady', path: null };
-    const m = api.mesh(o.radius);
+    const m = api.mesh(o.radius, o.passes);
     return navSearch(m, api.point(from, m), api.point(to, m), api.reach(o.radius), e.movement.height);
   }
 
@@ -190,10 +195,13 @@ export function nav(opts = {}) {
     return true;
   }
 
-  /** The mesh of a size no one asked for before. The whole cell counts as its radius: it stands for every body that rounds to it. It takes no part in revision: nothing walkable changed, and async pathfinding sends each size when a batch first needs it */
-  function extraMesh(size) {
-    const m = { size, cells: size, radius: size * cellSize, links: [], tileCache: null, navMesh: null, query: null, obstacles: null, obstaclesOf: follows(() => e.collision ?? null) };
-    api.meshes.set(size, m);
+  /**
+   * The mesh of a size (and layer list) no one asked for before; key names it in api.meshes. The whole cell counts as its radius: it stands for every body that rounds to it, the agent's own size keeps the agent's.
+   * passes: colliders of these layers cut nothing in it. It takes no part in revision: nothing walkable changed, and async pathfinding sends each mesh when a batch first needs it
+   */
+  function extraMesh(key, size, passes) {
+    const cells = size === BASE ? api.cells : size, m = { size: key, cells, radius: size === BASE ? api.radius : cells * cellSize, passes, links: [], tileCache: null, navMesh: null, query: null, obstacles: null, obstaclesOf: follows(() => e.collision ?? null) };
+    api.meshes.set(key, m);
     if (cut(m, geometry())) syncMesh(m);
     return m;
   }
@@ -207,7 +215,8 @@ export function nav(opts = {}) {
     api.ready = true; api.version++; revision++;
     syncObstacles();
     if (debug) {
-      const three = await import('@recast-navigation/three');
+      const built = api.navMesh, three = await import('@recast-navigation/three');
+      if (api.navMesh !== built) return;   // unloaded or rebuilt while the import ran: that mesh is gone (dispose clears it), a helper of it would draw freed data
       api.helper = new three.NavMeshHelper(api.navMesh);
       api.helper.position.y = 0.05; e.add(api.helper, { owner: 'engine:nav' });
     }
@@ -216,6 +225,7 @@ export function nav(opts = {}) {
   // collision-module colliders -> TileCache obstacles (engine.collision.mirror diffs add / remove, shared with rigid), then rebuild affected tiles
   function obstacle(m, type, o) {
     const tc = m.tileCache, list = [];
+    if (passesThrough(o, m.passes)) return list;   // a gate this mesh's bodies walk through: no piece, and remove() has nothing to drop
     const y = (o.y ?? e.surface(o.x, o.z)) - maxClimb, h = (o.h ?? 6) + maxClimb;   // extend a bit downward: Recast ignores a bottom face lying exactly on the ground
     if (type === 'box') {
       // one obstacle affects at most 8 tiles: cut big boxes into pieces no larger than half a tile (along the box's own orientation)

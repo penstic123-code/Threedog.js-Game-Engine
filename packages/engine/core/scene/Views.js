@@ -6,7 +6,7 @@
 import { warnMissing } from '../base/validate.js';
 import { readParams, keysSchema } from '../base/params.js';
 import { codedError } from '../base/errorHints.js';
-import { holdFov } from './view.js';
+import { holdFov, baseFov } from './view.js';
 
 const vec3 = a => Array.isArray(a) && a.length === 3 && a.every(Number.isFinite);
 
@@ -41,18 +41,24 @@ export class Views {
   show(name) {
     const v = this.map.get(name);
     if (!v) { warnMissing('view', name, this.list()); return null; }
-    const e = this.engine, c = e.camera;
+    const e = this.engine;
     // focus: the world loads around what the view looks at, not around a player far away (the view was an empty sheet of ground without it)
-    const focus = c.position.clone().fromArray(v.target);
-    this._cam = e.takeCamera('views', { focus });
+    const focus = e.camera.position.clone().fromArray(v.target);
+    // onTop: a newer claim (a timeline shot) that moved the camera has released, and this one is in charge again: the view is put back, not just the claim (stack hook in core/ops/holds.js)
+    this._cam = e.takeCamera('views', { focus, onTop: () => this._put(name, v, focus) });
+    this._put(name, v, focus);
+    const cam = this._cam;   // this showing, not the name: a handle kept from an earlier one must not end a later one
+    return { remove: () => { if (this._cam === cam) this.release(); } };
+  }
+  /** The view's pose and lens, on show and again each time the claim comes back on top */
+  _put(name, v, focus) {
+    const e = this.engine, c = e.camera;
     e.focus.copy(focus);
     c.position.fromArray(v.position); c.lookAt(...v.target);
-    if (v.fov != null) holdFov(e, v.fov);
+    holdFov(e, v.fov ?? baseFov(e));   // a view without a fov shows the base lens: a shot that stood in front of it may have left its own
     c.updateMatrixWorld(true);
     this.current = name;
     e.events.emit('camera:shot', { name });   // a cut: what follows the camera (the light pool) settles at once instead of easing over
-    const cam = this._cam;   // this showing, not the name: a handle kept from an earlier one must not end a later one
-    return { remove: () => { if (this._cam === cam) this.release(); } };
   }
   /** Give the camera back (to the previous holder, e.g. a running cutscene, or to the rig) */
   release() {

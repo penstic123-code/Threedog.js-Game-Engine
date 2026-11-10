@@ -1,14 +1,19 @@
 # Importing Blender models and levels
 
+> **Covers:** levels and models from Blender: naming conventions, compression, plants on a level.
+> **Use when:** the map is built in a modeling tool.
+> **Shortest:** `engine.use(level({ url: '/models/town.glb' }))`.
+> **Sections:** 1 Place things in · 2 Compression · 3 Putting it in · 4 Grass and trees · 5 Verify · 6 A level and
+
 ## 1. Place things in Blender by naming convention (the level module recognizes names)
 | Purpose | How to name it |
 |---|---|
 | Walkable ground | Object name contains `ground` `floor` `road` `terrain` `stair(s)` `ramp`, or custom property `walkable = true` (if there are none, every mesh counts as walkable); ground type = custom property `groundType`, otherwise the material name |
-| Walls / obstacles | `col_xxx`: a hidden collision box that only blocks the player (hidden automatically after loading); or custom property `collider = true` (a visible object that also blocks) |
+| Walls / obstacles | `col_xxx`: a hidden collision box that only blocks the player (hidden automatically after loading); or custom property `collider = true` (a visible object that also blocks); custom property `layer` (text): characters with it in `passes` walk through (recipe 12) |
 | Spawn point | Empty object `spawn` (or `spawn_2`...) |
-| NPC position | Empty object `npc_店主` |
-| Trigger zone | Empty object `trigger_门口`; the custom properties `shape` (cylinder/sphere/box), `radius`, `height` become trigger zone parameters |
-| Other markers | Empty object `marker_宝箱`; all custom properties go into `userData` unchanged |
+| NPC position | Empty object `npc_shopkeeper` |
+| Trigger zone | Empty object `trigger_door`; the custom properties `shape` (cylinder/sphere/box), `radius`, `height` become trigger zone parameters |
+| Other markers | Empty object `marker_chest`; all custom properties go into `userData` unchanged |
 | Things a save must know (a door that opens, a rock that can be removed) | Custom property `template = 'door'` (an instance of a content template; its other custom properties fill the template's state) or `id = true` (the node itself is the model). The node becomes a world record with id `<level file name>/<node name>` (`town/door_front`), saved as a diff (needs `world()` installed, and `content()` for `template`); untagged meshes stay static scenery (recipe 30 §2) |
 
 Export glTF/GLB (tick "Custom Properties") into `art/models/` (create it if missing).
@@ -21,15 +26,15 @@ hierarchy are kept; faces are not reduced. Only changed files are processed; `--
 ```js fragment
 import { presets, level, collision, followCamera, characters, interactions, dialogue, triggers, content, hlod } from 'threedog';
 engine.use(level({ url: '/models/town.glb' }), collision(), followCamera(), characters(), interactions({ ...presets.interactions.nearest }), dialogue(), triggers(), content(), hlod());
-engine.events.once('level:loaded', () => {   // once: level:loaded fires again on every level change
-  engine.characters.createPlayer({ ...presets.player.thirdPerson, spawn: engine.level.spawn });
-  engine.content.load(data);                       // a place in content can be a marker name directly: { place: 'npc_店主' }
+engine.events.once('level:loaded', () => {  // once: level:loaded fires again on every level change
+  engine.characters.addPlayer({ ...presets.player.thirdPerson, spawn: engine.level.spawn });
+  engine.content.load(data);  // a place in content can be a marker name directly: { place: 'npc_shopkeeper' }
 });
 engine.start();
 ```
-- Trigger zone data: write `{ 门口: { fromLevel: true, onEnter: { toast: '欢迎' } } }` in `<game>/content/triggers.js` (tag = the name after `trigger_`).
+- Trigger zone data: write `{ door: { fromLevel: true, onEnter: { toast: 'Welcome' } } }` in `<game>/content/triggers.js` (tag = the name after `trigger_`).
 - Content validation (`npm run check`) reads the level `.glb` files in `art/models/` and `public/models/` (needs `@gltf-transform/cli` installed):
-  marker names used in content (`{ place: 'npc_店主' }`) need no description in `content/places.js`; a `fromLevel` trigger zone must have a
+  marker names used in content (`{ place: 'npc_shopkeeper' }`) need no description in `content/places.js`; a `fromLevel` trigger zone must have a
   `trigger_<tag>` node, and a node's `template` must exist in `content/templates.js`. Without a readable `.glb`, validation
   skips `fromLevel` and GAMEMAP says the markers cannot be read statically; `level.js` is only for code-built levels.
 - `npm run assets -- check` prints what the level will find in each model (spawns, colliders, triggers, template nodes, duplicate ids) plus
@@ -37,7 +42,7 @@ engine.start();
 - When the level changes, the
   old level's trigger zones and the like are deleted automatically (`level.track`); NPCs, pickups and props placed by marker only lose their model
   while their data stays (with a zone), and are rebuilt when you return to this level; things that were picked up / deleted stay gone.
-- Get a marker in code: `engine.level.marker('marker_宝箱')?.position`, `engine.level.markersWith('npc_')`.
+- Get a marker in code: `engine.level.marker('marker_chest')?.position`, `engine.level.markersWith('npc_')`.
 - Many buildings: install `hlod()`, which merges distant ones into a few meshes. For a navmesh see `12-navmesh.md`.
 - A single model (not a level): `engine.assets.manifest({ models: { house: '/models/house.glb' } })`,
   `const h = await engine.assets.model('house', { static: true })` (static: registers it for rays).

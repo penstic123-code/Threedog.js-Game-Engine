@@ -70,7 +70,7 @@ export async function run({ check }) {
     && kinds("document.addEventListener('keyup', up);\n") === 'keys' && kinds("renderer.domElement.addEventListener('keydown', f);\n") === 'keys' && kinds('document.onkeydown = f;\n') === 'keys');
   check('keydown on a text field or tagged tool code is quiet', kinds("nameInput.addEventListener('keydown', e => e.key === 'Enter' && ok());\n") === ''
     && kinds("window.addEventListener('keydown', f);   // debug: dev overlay\n") === '' && kinds("window.addEventListener('resize', f);\n") === '');
-  check('engine.input.action is not flagged', kinds("engine.input.action('jump', { keys: ['Space'] });\n") === '');
+  check('engine.input.define is not flagged', kinds("engine.input.define('jump', { keys: ['Space'] });\n") === '');
 
   // audio
   check('AudioContext / new Audio -> audio', kinds('const ctx = new AudioContext();\n') === 'audio' && kinds("new Audio('hit.mp3').play();\n") === 'audio' && kinds('new webkitAudioContext();\n') === 'audio');

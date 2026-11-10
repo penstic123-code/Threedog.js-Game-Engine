@@ -1,6 +1,6 @@
 // mover: 'manual': the game owns the position. The engine integrates no velocity and applies no gravity; it only keeps what other systems read
 // in step with where the game put the character: grounded, what it stands on (a support still carries it), safeGround and the fall check.
-//   const p = createPlayer({ control: (p, input, dt) => { p.position.x += 3 * dt; return null; }, faceMode: 'manual', mover: 'manual' });
+//   const p = addPlayer({ control: (p, input, dt) => { p.position.x += 3 * dt; return null; }, faceMode: 'manual', mover: 'manual' });
 // Why a mover and not "a control that never moves": control decides where to go (core/ops/control.js), the mover is still the one that writes the
 // position. 'manual' is the takeover level for the position itself, so a hand-written controller (a platformer's own physics) keeps the
 // platform, safe-ground and fall behaviour without fighting the built-in integration.

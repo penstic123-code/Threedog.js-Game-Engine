@@ -40,5 +40,6 @@ export async function run({ check }) {
     e.stacks.mod('graph', { owner: 'g', set: data });
     check('data passes through as the decision', g.decide(null) === data);
   }
-  check('ctx.rule is the Stacks reader, no second registry', /rule: \(n, def, names\) => this\.stacks\.rule\(n, def, names\)/.test(readFileSync(join(ENGINE, 'core/engine/modules.js'), 'utf8')));
+  // a closed install gets an inert answer (group N review), a live one the Stacks reader: still no second registry
+  check('ctx.rule is the Stacks reader, no second registry', /rule: \(n, def, names\) => \(stale\(\) \? \{[^}]*\} : this\.stacks\.rule\(n, def, names\)\)/.test(readFileSync(join(ENGINE, 'core/engine/modules.js'), 'utf8')));
 }

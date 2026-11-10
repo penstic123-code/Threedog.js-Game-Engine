@@ -1,8 +1,9 @@
 # Scene: what is in the world, where, who manages it, and what a save keeps (engine.thing)
 
-**In this recipe**: 1. Two doors into one scene · 2. What goes in content, what stays three.js · 3. Which state a save keeps · 4. Give it an id ·
-4b. Change it: thing.set / thing.remove · 4c. Saves: the scene part · 5. Moving from three.js to a template · 6. Verify and dev checks ·
-7. Why is this mesh this colour? · 8. When to write plain three.js directly · 9. One id, everything: explain() and the three kinds of change
+> **Covers:** the scene: content and code as two doors, ids, what a save keeps, explain.
+> **Use when:** deciding where an object is written and what persists.
+> **Shortest:** `engine.add(mesh, { id: 'mill' })`.
+> **Sections:** 1 Two doors into · 2 What goes in · 3 Which state a · 4 Give it an · 4b Change it thing.set · 4c Saves the scene · 5 Moving from three.js · 6 Verify and dev · 7 Why is this · 8 When to write · 9 One id, everything
 
 The engine's three outward concepts are **Scene** (what stands in the world, where it is, how you interact with it), **Assets** (models, textures,
 sounds, fonts: `05-props-bake.md` §3b) and **Picture** (how it looks: `09-materials-lights-models.md`). Content packs belong to Scene: they are the data form of it.
@@ -21,17 +22,7 @@ A scene object comes in either of two ways, and both end up in the same scene:
 - **A template.** Define it in `content/templates.js`, place it in `content/props.js` with an `id`, or create it during play with
   `engine.content.spawn(name, at)`. This is the right way for anything that must be saved, be editable without code, or exist in many copies.
 
-The same windmill, both ways:
-
-```js fragment
-// A. plain three.js: your code builds it on every start
-const mill = buildWindmill();                       // THREE.Group
-mill.position.set(20, 0, -10);
-engine.snapToGround(mill);
-engine.add(mill, { id: 'mill' });
-engine.collision?.addCircle(mill, { radius: 1.3 });   // also pulls the follow camera in; { occluder: false } only stops walkers (forest trunks)
-engine.onFrame(dt => { mill.userData.blades.rotation.z += dt * 1.5; });
-```
+The same windmill, both ways. A, plain three.js built on every start: `THREE.md §"Example: a spinning windmill"` (with `engine.add(mill, { id: 'mill' })` for a stable id). B:
 ```js
 // B. template: the definition is data; the model is a name in the asset manifest
 // content/templates.js
@@ -75,15 +66,15 @@ inside an op with `engine.content.spawn(name, at)`: a record is saved whole.
 
 ## 4. Give it an id
 ```js
-const windmill = new THREE.Group();                // any Object3D
-engine.add(windmill, { id: 'windmill' });          // at setup: thing.set / thing.remove changes to it are saved
-engine.add(new THREE.Group());                     // effects need no id: obj#7, this session only
+const windmill = new THREE.Group();  // any Object3D
+engine.add(windmill, { id: 'windmill' });  // at setup: thing.set / thing.remove changes to it are saved
+engine.add(new THREE.Group());  // effects need no id: obj#7, this session only
 engine.thing('windmill');
 // { id: 'windmill', kind: 'Group', owner: 'game', at: 'main.js:50', phase: 'setup', saved: 'code',
 //   keeps: ['position, rotation, scale, visibility and removal made with thing.set / thing.remove (scene save part)'],
 //   loses: ['geometry and material changes', 'children added later', 'userData', ...], edit: 'added by code at main.js:50 (id ...)' }
-engine.thing('windmill').object;                   // the live Object3D (not enumerable, so the result stays JSON-able)
-engine.pick(0, 0)?.thing;                          // any child resolves to its registered root
+engine.thing('windmill').object;  // the live Object3D (not enumerable, so the result stays JSON-able)
+engine.pick(0, 0)?.thing;  // any child resolves to its registered root
 ```
 - The id is `{ id }`, else a session id `obj#n` (session tier: never saved). `obj.name` is not an id (GLB roots are all called `Scene`): it only helps `engine.thing(name)` find the object. An id is a non-empty string without `#`,
   unique across `engine.add` objects and world records: a clash throws (`thing-id`) from either side (`engine.add` or `world.add`) and says which one holds it.
@@ -95,10 +86,10 @@ engine.pick(0, 0)?.thing;                          // any child resolves to its 
 
 ## 4b. Change it: thing.set / thing.remove (ops, undoable)
 ```js
-const args = { id: 'windmill', position: [5, 0, 2], rotation: 1.2 };   // rotation: a number is yaw, or [x, y, z]; scale: a number or [x, y, z]
+const args = { id: 'windmill', position: [5, 0, 2], rotation: 1.2 };  // rotation: a number is yaw, or [x, y, z]; scale: a number or [x, y, z]
 const r = engine.ops.run('thing.set', args);
-engine.ops.undo('thing.set', args, r.value);                            // back where it was
-const gone = engine.ops.run('thing.remove', { id: 'windmill' });        // detached and kept: undo puts it back
+engine.ops.undo('thing.set', args, r.value);  // back where it was
+const gone = engine.ops.run('thing.remove', { id: 'windmill' });  // detached and kept: undo puts it back
 engine.ops.undo('thing.remove', { id: 'windmill' }, gone.value);
 ```
 - A world record id turns into `world.set` / `world.move` (`rot` / `scale` are template instance fields) and `world.remove`; the model follows the
@@ -155,7 +146,7 @@ Keep the integrations by going through the engine: `applyEffects(mat, { wind, se
 
 ## 9. One id, everything: explain and the three kinds of change
 ```js
-engine.explain({ thing: 'chest-home' }).detail;    // CLI: threedog explain thing chest-home --full (MCP: explain); the same JSON
+engine.explain({ thing: 'chest-home' }).detail;  // CLI: threedog explain thing chest-home --full (MCP: explain); the same JSON
 // { id, kind, owner, definition: { at: 'content/props.js:14', template, templateAt, level?, node?, spawned? }, model, materials: [{ role, name, from, keys }],
 //   state, rules: { blocksMovement, pickable, interact, height }, ops: [{ op, desc, args }], saved: { tier, keeps, loses }, change: {…}, overrides? }
 ```
@@ -170,11 +161,11 @@ engine.explain({ thing: 'chest-home' }).detail;    // CLI: threedog explain thin
 | Diagnostic override ("show me without it") | `engine.debug.override(owner, id, { visible: false, material: 'flat' \| 'wire', apply })` | until `handle.remove()` / `engine.debug.clear(owner)`; never saved |
 
 ```js
-const h = engine.debug.override('ai-session', 'windmill', { material: 'flat' });   // unlit base colour: is the colour wrong, or the light?
+const h = engine.debug.override('ai-session', 'windmill', { material: 'flat' });  // unlit base colour: is the colour wrong, or the light?
 engine.debug.override('ai-session', engine.player.root, { visible: false });
-engine.debug.override('ai-session', engine.renderer, 'toneMappingExposure', 3);   // any three.js value: (object, key, value); held above picture code until remove()
-engine.describe().scene.overrides;       // [{ owner, target, material: 'flat' }, …]: the screen differs from the real state while this is non-empty
-h.remove(); engine.debug.clear('ai-session');   // clear removes every override of that owner (and its debug.view) and nothing else
+engine.debug.override('ai-session', engine.renderer, 'toneMappingExposure', 3);  // any three.js value: (object, key, value); held above picture code until remove()
+engine.describe().scene.overrides;  // [{ owner, target, material: 'flat' }, …]: the screen differs from the real state while this is non-empty
+h.remove(); engine.debug.clear('ai-session');  // clear removes every override of that owner (and its debug.view) and nothing else
 ```
 `apply(obj)` may return its undo function: any other picture (a view mode) uses the same owner mechanism. Overrides do not touch game state, ops or saves.
 

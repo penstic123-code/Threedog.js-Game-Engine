@@ -13,7 +13,7 @@ export async function run({ check }) {
     writeFileSync(join(game, 'package.json'), '{"name":"g"}');
     writeFileSync(join(game, 'content/items.js'), "export default { gem: { name: 'Gem' } };\n");
     writeFileSync(join(game, 'content/pickups.js'), "export default [{ id: 'p1', item: 'gem', x: 1, z: 2 }];\n");
-    writeFileSync(join(game, 'main.js'), ["const engine = {};", "engine.inventory.add('gem', 1);", "engine.saves.register('gem', { save() {}, load() {} });", "const k = 'g' + 'em'; engine.inventory.add(k, 1);", "engine.ops.run(`buy-${k}`);", ''].join('\n'));
+    writeFileSync(join(game, 'main.js'), ["const engine = {};", "engine.inventory.add('gem', 1);", "engine.saves.define('gem', { save() {}, load() {} });", "const k = 'g' + 'em'; engine.inventory.add(k, 1);", "engine.ops.run(`buy-${k}`);", ''].join('\n'));
     writeFileSync(join(game, 'tests/scenarios/a.json'), '{ "name": "a", "steps": [{ "expect": { "x": "gem" } }] }\n');
     const r = await impact(game, 'gem'), d = r.data;
     check('[guard] the content that names it, by the section\'s own references', d.content.some(l => /content\/pickups\.js pickups\[0\] \(names items\.gem\)/.test(l)), JSON.stringify(d.content));

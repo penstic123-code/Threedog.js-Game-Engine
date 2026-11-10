@@ -27,7 +27,7 @@ export class Random {
   next() { const v = mulberry32(this); this.state >>>= 0; return v; }   // state kept unsigned (as saved)
   /** A decimal between a and b @param {number} a @param {number} b @returns {number} */
   range(a, b) { return a + this.next() * (b - a); }
-  /** An integer between a and b (inclusive) @param {number} a @param {number} b @returns {number} @example const dice = engine.random.int(1, 6); @experimental */
+  /** An integer between a and b (inclusive) @param {number} a @param {number} b @returns {number} @example const dice = engine.random.int(1, 6); */
   int(a, b) { return a + Math.floor(this.next() * (b - a + 1)); }
   /**
    * Pick one element of the array at random (undefined for an empty array).

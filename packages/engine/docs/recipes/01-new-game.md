@@ -1,6 +1,9 @@
 # Starting a new game
 
-**In this recipe**: 0. One-command setup · 1. Creating the files by hand · 2. Verify · 3. Feel presets · 4. Canvas size
+> **Covers:** a new game folder: page, modules, content data, tests.
+> **Use when:** starting any game.
+> **Shortest:** `npm run new-game -- my-game` (`npx threedog init` outside the repo).
+> **Sections:** 0 One-command setup preferred) · 1 Creating the files · 2 Verify · 3 Feel presets opt-in) · 4 Canvas size full
 
 Goal: a game with its own page, modules, content data and tests. The engine's own example is `examples/world/` in the package.
 
@@ -63,7 +66,7 @@ The template's `tsconfig.json` checks the game files only (`checkJs`), with `lib
 // The opening stays as in recipe 63 §1: createEngine({ canvas, lights: false, ui, saveKey, bindings }), engine.use(createPicture()) after engine.use,
 // Object.assign(window, { engine, picture }) (tests, screenshots and the console rely on it), await engine.start().
 import { presets, openWorld, interactions, dialogue, inventory, pickups, quests, content } from 'threedog';
-import { terrainPreset } from '@threedog/terrain-noise';   // optional terrain generator (nor a world shape)
+import { terrainPreset } from '@threedog/terrain-noise';  // optional terrain generator (nor a world shape)
 import data from './content/index.js';
 
 // keys: modules only declare actions, the game binds them (presets.bindings.* are ready-made maps); this goes in createEngine({ bindings })
@@ -75,8 +78,8 @@ engine.use(openWorld({ camera: 'follow', seed: 42, terrain: terrainPreset(), tim
   content());
 // the terrain is generated: find flat ground as "home" at the start (give your own height range to avoid beach and peaks)
 const home = engine.characters.findSpawn([0, 0, 0], { minH: 3, maxH: 14 });
-engine.characters.createPlayer({ ...presets.player.thirdPerson, spawn: home });
-engine.content.load(data, { places: { home } });   // on top of the names in content/places.js; content uses { place: 'home', x, z }, quests target: 'home'
+engine.characters.addPlayer({ ...presets.player.thirdPerson, spawn: home });
+engine.content.load(data, { places: { home } });  // on top of the names in content/places.js; content uses { place: 'home', x, z }, quests target: 'home'
 ```
 Every `openWorld` part takes `false` (leave it out) or its module's own options object, so you never have to drop the preset for one setting:
 `openWorld({ seed: 42, camera: 'follow', calendar: { seasons: ['wet', 'dry'], daysPerSeason: 28 }, characters: { npcs: false }, rigid: false, ambience:
@@ -87,9 +90,9 @@ false, debug: false })`;
 With `terrain: false` the game supplies its ground. Until it does, characters, props and pickups stand on an invisible flat plane at y = 0 (no
 warning): they look like they float over nothing. Draw the ground yourself, and if it is not flat at y = 0 tell the engine its height:
 ```js
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0x8c8c8c }));   // what you see
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0x8c8c8c }));  // what you see
 floor.receiveShadow = true; engine.add(floor);
-engine.setGround({ height: (x, z) => 0 });   // what walking, placing and the camera read (a ramp, a raised floor: return its y here)
+engine.setGround({ height: (x, z) => 0 });  // what walking, placing and the camera read (a ramp, a raised floor: return its y here)
 ```
 Walls and obstacles are `engine.collision.addBox(obj, { halfWidth, halfDepth })`; a Blender level brings its own ground (`level()`, next paragraph).
 `saveKey` must differ per game, otherwise saves overwrite each other. The UI language follows the player's browser (Chinese browser -> Chinese,
@@ -109,23 +112,19 @@ export default { items, startItems, places };
 1. `npm run map` -> generates `games/my-game/GAMEMAP.md`; check the "engine modules" and "page /" sections.
 2. `npm run check` -> content validation points out wrong file names, ids and clock-time formats; `npm run types` finds misused engine APIs.
 3. `npm run shot -- -w my-game / --describe-only` -> the text has a `player` line with its position, the module list, and no "still loading".
-4. `npm test -w games/my-game` -> without `tests/specs/` it runs a smoke test (the page opens, the engine is ready, the console has no errors); to
-   test gameplay, write `games/my-game/tests/specs/<name>.mjs` in the style of the engine repository's `packages/engine/tests/specs/*.mjs`.
-5. To see the picture: `npm run shot -- -w my-game /` (one image in `games/my-game/.threedog/shots/`); while developing run `npm run dev -w games/my-game` (or
-   `npm run dev -- my-game`) and open the printed address; read errors in `games/my-game/.threedog/errors.log`.
+4. `npm test -w games/my-game` -> without `tests/specs/` a smoke test runs; gameplay specs: `COMMANDS.md` §"Running one game only" (a minimal example).
+5. To see the picture: `npm run shot -- -w my-game /`; while developing `npm run dev -- my-game` and read errors in `games/my-game/.threedog/errors.log`.
 
 
 ## 3. Feel presets (opt-in)
-The engine applies no gameplay feel by itself: `weather()` alone has only a calm `clear`, `sky()` has no seasons, and the calls that need a feel
-refuse to guess: `createPlayer()` throws `[player-control]` without `control`, `interactions()` throws `[interaction-setup]` without `pick` and keys,
-`openWorld()` throws `[open-world-camera]` without `camera`. The core key table holds only movement and menu confirm / cancel; run, jump and interact
-keys come from the game. `presets` holds named option objects a game picks on purpose; each only bundles options you could write yourself, so spread
-and override:
+The engine applies no gameplay feel by itself: `weather()` alone has only a calm `clear`, `sky()` no seasons, and calls that need a feel refuse to guess
+(`addPlayer()` throws `[player-control]` without `control`, `interactions()` `[interaction-setup]` without `pick`, `openWorld()` `[open-world-camera]` without `camera`).
+`presets` holds named option objects a game picks on purpose, bundling options you could write yourself, so spread and override:
 ```js fragment
 import { presets, weather, calendar, sky, followCamera, interactions } from 'threedog';
 engine.use(calendar(presets.calendar.fourSeasons), sky(), weather({ ...presets.weather.temperate, autoPool: ['clear', 'rain'] }), followCamera(presets.camera.overShoulder));
-engine.use(interactions({ ...presets.interactions.facing }));   // nearest / facing / aim, each with E
-const player = engine.characters.createPlayer({ ...presets.player.lockOn, faceTarget: boss });   // none / thirdPerson / lockOn / aim / sideScroller
+engine.use(interactions({ ...presets.interactions.facing }));  // nearest / facing / aim, each with E
+const player = engine.characters.addPlayer({ ...presets.player.lockOn, faceTarget: boss });  // none / thirdPerson / lockOn / aim / sideScroller
 ```
 The run / jump keys are `presets.bindings.walk`. No module or preset takes keys: every key comes from `createEngine({ bindings })` or `engine.input.bind(...)`.
 

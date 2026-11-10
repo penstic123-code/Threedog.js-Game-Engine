@@ -15,7 +15,7 @@ engine.vegetation.define('松树', {
 });
 engine.vegetation.define('石头', { geometry: M.rock(), rule: { perChunk: 14, chance: 0.6, minHeight: 0.5, maxHeight: 70, maxSlope: 2, scale: [0.4, 1.6], collider: 0.6 }, maxRing: 3 });
 engine.assets.manifest(assets);   // template models are asset names (rock, pine)
-engine.characters.createPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 0 } });
+engine.characters.addPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 0 } });
 
 // a placeable with stages (grows over game time) and an interaction that is an op
 engine.ops.define('sapling.water', { run: (e, { id }) => e.world.set(id, { watered: true }) });

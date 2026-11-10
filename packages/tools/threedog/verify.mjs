@@ -11,6 +11,7 @@ import { errorMark, errorsSince } from './errorlog.mjs';
 import { oneLine } from '../lib/oneline.mjs';
 import { walk } from '../lib/text.mjs';
 import { ENGINE, TOOLS, rel } from '../paths.mjs';
+import { perfNotice } from '../lib/perf-baseline.mjs';
 import { pageMark, pageCoverage, NOT_PROVEN, checkEvidence, coverage, evidenceText } from './evidence.mjs';
 
 const PAGE_FACTS = () => ({ ops: [...window.engine.ops.defs.keys()], sections: Object.keys(window.engine.describe()) });
@@ -51,11 +52,14 @@ async function runMeasured(driver, dir, name) {
   const failedAt = bad.length ? Number(/^(\d+)\./.exec(bad[0].label)?.[1] ?? steps.length) : steps.length, ran = steps.slice(0, failedAt);
   const checked = new Set(ran.flatMap(s => 'expect' in s && !('op' in s) ? Object.keys(s.expect).map(root)
     : 'snapshot' in s ? (s.only ?? facts.sections.filter(x => !(s.ignore ?? []).includes(x))).map(root) : []));
-  return { sc, res, layers, rawCov, facts, bad, steps, failedAt, ran, checked, pageErrors: errorsSince(dir, mark) };
+  return { sc, d, res, layers, rawCov, facts, bad, steps, failedAt, ran, checked, pageErrors: errorsSince(dir, mark) };
 }
 
-export async function verify(driver, dir, name) {
-  const { sc, res, layers, rawCov, facts, bad, steps, failedAt, ran, checked, pageErrors } = await runMeasured(driver, dir, name);
+/** @param {{ saveBaseline?: boolean }} [opts] saveBaseline: --save-baseline, store this run's perf numbers in perf-baseline.json */
+export async function verify(driver, dir, name, { saveBaseline = false } = {}) {
+  const { sc, d, res, layers, rawCov, facts, bad, steps, failedAt, ran, checked, pageErrors } = await runMeasured(driver, dir, name);
+  // one line only when the run ended over the game's budget, slower than its baseline, or at a lowered resolution (lib/perf-baseline.mjs)
+  const perf = await perfNotice((src, arg) => d.evaluate(src, arg), dir, saveBaseline);
   const rows = checkEvidence(res, layers), kinds = k => steps.filter(s => k in s);
 
   // What ran: only the steps up to the failing one
@@ -79,9 +83,9 @@ export async function verify(driver, dir, name) {
     : pageErrors.length ? `FAIL: the checks passed but the page logged ${pageErrors.length} error${pageErrors.length > 1 ? 's' : ''} during the run (E${pageErrors[0].id}: ${oneLine(pageErrors[0].message)})`
       : `PASS (${res.length} checks, all ${steps.length} steps ran; no real browser input verified)`;
   const lc = layerCounts(layers), layerLine = `Layers: direct ${lc.direct}, simulated-input ${lc['simulated-input']}, real-browser-input 0 (not verified), visual 0`;
-  const text = [`${ok ? '✓' : '✗'} verify ${name}: ${why}`, `Tested: ${tested.join(' · ') || 'nothing but the scenario setup'}`, `Not tested: ${notTested.join(' · ')}`, layerLine, evidenceText(rows, cov),
+  const text = [`${ok ? '✓' : '✗'} verify ${name}: ${why}`, perf.notice, ...perf.lines, `Tested: ${tested.join(' · ') || 'nothing but the scenario setup'}`, `Not tested: ${notTested.join(' · ')}`, layerLine, evidenceText(rows, cov),
     related.length && `Related tests: ${related.map(t => `${t.name ? '"' + t.name + '" ' : ''}${t.at}`).join(' · ')}`, !ok && `Re-run: ${rerun}`].filter(Boolean).join('\n');
-  return { ok, text, data: { scenario: name, passed: ok, checks: res, failedStep: bad.length ? failedAt : null, tested, notTested, layers, layerCounts: lc, evidence: { checks: rows, notProven: NOT_PROVEN, coverage: cov }, pageErrors, related, rerun } };
+  return { ok, text, data: { scenario: name, passed: ok, checks: res, failedStep: bad.length ? failedAt : null, tested, notTested, layers, layerCounts: lc, evidence: { checks: rows, notProven: NOT_PROVEN, coverage: cov }, pageErrors, related, rerun, perf } };
 }
 
 /** threedog scenario <name>: the plain pass / fail line plus the short coverage block (what ran, what was only indirectly touched, what never) */

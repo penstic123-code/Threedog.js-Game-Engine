@@ -25,7 +25,7 @@ export class Seat {
     if (pad !== undefined && !(Number.isInteger(pad) && pad >= 0)) throw codedError('input-seat', `engine.input.seat(): pad is a gamepad index (0, 1, ...), got ${JSON.stringify(pad)}`);
     /** @internal */ this.input = input;
     /** The gamepad index this seat owns, if any @type {number | undefined} */ this.pad = pad;
-    /** Who this seat acts for, as engine.actor for engine.input: createPlayer sets the player's id; interactions read it. Set it to hand the seat to a vehicle or a squad member @type {string | null} */ this.actor = null;
+    /** Who this seat acts for, as engine.actor for engine.input: addPlayer sets the player's id; interactions read it. Set it to hand the seat to a vehicle or a squad member @type {string | null} */ this.actor = null;
     /** @internal action -> this seat's keyboard keys */ this.own = new Map(Object.entries(keys).map(([a, k]) => [a, [k].flat()]));
     for (const s of input.seats) {
       if (pad !== undefined && s.pad === pad) throw codedError('input-seat', `engine.input.seat(): pad ${pad} already has a seat; give each seat its own pad`);

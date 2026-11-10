@@ -82,7 +82,7 @@ function actionsOf(modules) {
     const sf = parse(file), defaults = {};
     visit(sf, n => { if (ts.isBindingElement(n) && n.initializer && ts.isStringLiteralLike(n.initializer)) defaults[n.name.getText()] ??= n.initializer.text; });
     visit(sf, n => {
-      if (!ts.isCallExpression(n) || !ts.isPropertyAccessExpression(n.expression) || n.expression.name.text !== 'action' || !/(^|\.)input$/.test(n.expression.expression.getText())) return;
+      if (!ts.isCallExpression(n) || !ts.isPropertyAccessExpression(n.expression) || !/^(define|action)$/.test(n.expression.name.text) || !/(^|\.)input$/.test(n.expression.expression.getText())) return;
       const [a, o] = n.arguments, isVar = ts.isIdentifier(a), def = isVar ? defaults[a.text] ?? byFile[file]?.params?.[a.text]?.default : null;
       const field = k => { const p = o?.properties?.find(x => x.name?.getText() === k); return p && (ts.isPropertyAssignment(p) && ts.isStringLiteralLike(p.initializer) ? p.initializer.text : '(variable)'); };
       out.push({ action: def ?? text(a), ...(def && { param: a.text }), context: field('context') || 'walk', label: field('label') || '', ...(/\boptional: true\b/.test(o?.getText() ?? '') && { optional: true }), ...(BASIC_KEYS[def ?? text(a)] && { hasKey: true }), file });
@@ -127,10 +127,10 @@ async function hintsOf(problems) {
 function savedParts(file) {
   const read = f => { try { return readFileSync(abs(f), 'utf8'); } catch { return ''; } }, own = read(file);
   const near = [...own.matchAll(/from '(\.\.?\/[^']+\.js)'/g)].map(m => read(join(dirname(file), m[1]).replaceAll('\\', '/')));
-  return [...new Set([own, ...near].flatMap(t => [...t.matchAll(/\.saves\??\.register\('([\w-]+)'/g)].map(m => m[1])))];
+  return [...new Set([own, ...near].flatMap(t => [...t.matchAll(/\.saves\??\.(?:define|register)\('([\w-]+)'/g)].map(m => m[1])))];
 }
 
-/** engine.<member> a module brings that the core does not: { module, by }; by is 'install', or the function that sets it later (engine.player stays null until createPlayer). Why from the source:
+/** engine.<member> a module brings that the core does not: { module, by }; by is 'install', or the function that sets it later (engine.player stays null until addPlayer). Why from the source:
  *  a slot name, a code member and what must exist first are three facts, and a tool that guesses one from another prints a member that is not there (test "how cards") */
 function membersOf(modules) {
   const core = [`${P.CORE_REL}/engine/Engine.js`, `${P.CORE_REL}/engine/services.js`].map(f => readFileSync(abs(f), 'utf8')).join('\n');

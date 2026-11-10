@@ -1,5 +1,7 @@
 // The picture check printed after every `threedog shot` and `threedog snap` (pagePicture), and on a saved picture by `threedog shot --image` (imagePicture,
-// pixel facts only): numbers from the pixels plus hints of three kinds only.
+// pixel facts only): numbers from the pixels plus hints of four kinds only.
+//   mistake:       settings proven wrong together whatever the game wants (baked light plus the fill it baked): the engine's own combination
+//                  checks (core/inspect/pictureChecks.js, also in describe().render), printed first; its notes come in as facts.
 //   contradiction: a setting says X, the pixels show not-X (shadows on but none measurable, a light that changes no pixel). Style-independent.
 //   fact:          something measured that may or may not be wanted, with its cost: glare, large clipped or near-black areas, a night that is not
 //                  dark from lighting (time-flat), the key / fill balance. A game may want blinding light, deep black or a bright night, so each is

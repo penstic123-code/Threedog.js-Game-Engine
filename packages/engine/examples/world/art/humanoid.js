@@ -1,5 +1,5 @@
 // The 'humanoid' body: the procedural character body, exported in the world example's asset pack (art/index.js `assets`), so a character picks it like any model:
-// createPlayer({ model: 'humanoid' }), npcs content { model: 'humanoid' }. It is an asset and not part of the picture because a body is content the
+// addPlayer({ model: 'humanoid' }), npcs content { model: 'humanoid' }. It is an asset and not part of the picture because a body is content the
 // game chooses per character (a GLB hero next to procedural villagers), while the picture only decides how things look.
 // Each part uses a material by name from picture/materials.js (skin / cloth / trousers / hair), so one change there retints every humanoid.
 // Per-character colors ({ colors: { body, skin, legs, hair } }) recolor the parts marked userData.part.

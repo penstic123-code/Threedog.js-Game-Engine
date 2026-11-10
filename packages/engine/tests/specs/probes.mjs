@@ -67,7 +67,8 @@ export const specs = [
         const stray = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial()); stray.name = 'strayBox'; stray.position.set(40, 1, 0); engine.scene.add(stray);
         const hemi = new THREE.HemisphereLight(0xffffff, 0x000000, 1); hemi.name = 'fill'; engine.scene.add(hemi); engine.scene.updateMatrixWorld(true);
         const d = engine.describe().render;
-        out.describe = d.probes[0]; out.text = /probes: 12 \(3x2x2/.test(d.text) && /strayBox/.test(d.text) && /counted twice/.test(d.text);
+        out.describe = d.probes[0]; out.text = /probes: 12 \(3x2x2/.test(d.text) && /strayBox/.test(d.text) && /picture (check|note) lit-twice: probe light/  /* a loaded file's set is in the scene too: its lights are unknown, so a note */.test(d.text);
+        out.twice = d.checks.find(c => c.id === 'lit-twice')?.text;
         out.lightsRow = d.lights.some(l => /Grid/.test(String(l.type)));
         stray.removeFromParent(); hemi.removeFromParent();
         // the debug view draws one dot per probe and takes them away again
@@ -94,7 +95,7 @@ export const specs = [
       check('an axis thinner than a millionth of the spacing counts as flat: 2 layers, a whole step apart', r.thin.counts[1] === 2 && r.thin.step[1] === 3, JSON.stringify(r.thin));
       check('an option typo throws (module-params); too many probes throws (probes-option); follow is gone (module-params)', r.typo === 'module-params' && r.tooMany === 'probes-option' && r.follow === 'module-params', J);
       check('a second bake leaves one texture, the half atlas', r.texLeak === -1 || r.texLeak === 0, String(r.texLeak));
-      check('[guard] describe names a lit object outside the grid and light counted twice (hemisphere), text line too', r.describe?.outside.names.includes('strayBox') && r.describe.doubled.some(x => /HemisphereLight/.test(x)) && r.text, JSON.stringify(r.describe));
+      check('[guard] describe names a lit object outside the grid and light counted twice (hemisphere), text line too', r.describe?.outside.names.includes('strayBox') && /HemisphereLight/.test(r.twice ?? '') && r.text, JSON.stringify([r.describe, r.twice]));
       check('describe: count, owner, source; the grid is not listed as a light', r.describe?.count === 12 && r.describe.owner === 'probe-test' && r.describe.source === 'bake' && !r.lightsRow, JSON.stringify(r.describe));
       check("debug.view('probes'): one dot per live probe (12 + 12 loaded), gone after clear", r.viewDots === 24 && r.viewGone, String(r.viewDots));
       check('remove(): grid leaves the scene and describe, data still readable; twice is harmless', r.removed);

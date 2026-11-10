@@ -19,7 +19,7 @@ function walkPiece(c, dx, dz) {
     const nx = p.x, nz = p.z;
     if (!col.blockedAt(nx, oz, c.radius)) p.z = oz; else if (!col.blockedAt(ox, nz, c.radius)) p.x = ox; else { p.x = ox; p.z = oz; c.velocity.set(0, 0); moving = false; }
   }
-  col?.resolve(p, c.radius);
+  col?.resolve(p, c.radius, c.passes);
   return moving;
 }
 

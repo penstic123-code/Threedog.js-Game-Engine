@@ -24,6 +24,7 @@ import { seatsOf } from './seat.js';
 import { useModel } from './useModel.js';
 import { codedError, coded } from '../../core/base/errorHints.js';
 import { isModelName } from '../../core/base/util.js';
+import { passesOf } from '../collision/grid.js';
 
 // A record whose jump / safe is the wrong kind of thing (a damaged or hand-edited save) is repaired so the game keeps running, but said out loud once: bad data is reported, not quietly fixed
 function badField(v, name, want) { if (v != null) warnOnce(`[threedog] character motion: the world record's '${name}' is ${JSON.stringify(v)} but should be ${want}; it was replaced with a fresh one. Check the save or the code that writes the record`); return undefined; }
@@ -32,7 +33,7 @@ const BUILT_IN = { simple: simpleMover, rapier: rapierMover, manual: manualMover
 
 // Options Character understands (shared by player and NPC)
 export const CHARACTER_KEYS = ['colors', 'speed', 'runSpeed', 'radius', 'water', 'states', 'swimDepth', 'swimSpeed', 'turnSpeed', 'acceleration', 'gravity',
-  'jumpSpeed', 'stepHeight', 'airControl', 'coyoteTime', 'canJump', 'maxJumps', 'airJumpSpeed', 'jumpBuffer', 'fall', 'channel', 'model', 'clips', 'animation', 'mover', 'faceMode', 'faceTarget', 'rig', 'id'];
+  'jumpSpeed', 'stepHeight', 'airControl', 'coyoteTime', 'canJump', 'maxJumps', 'airJumpSpeed', 'jumpBuffer', 'fall', 'channel', 'model', 'clips', 'animation', 'mover', 'faceMode', 'faceTarget', 'rig', 'id', 'passes'];
 const FACE_MODES = ['move', 'camera', 'target', 'manual'];
 
 export class Character {
@@ -42,6 +43,7 @@ export class Character {
    *                  engine.assets.model() returned; without model and rig a gray capsule (warned once). rig: a ready body (proceduralRig.js format)
    *           colors: { body, skin, legs, hair } per-character part colors (meshes marked userData.part; a capsule takes colors.body)
    *           speed walk speed, runSpeed run speed (m/s), radius collision radius
+   *           passes the collider layers it walks through, e.g. ['gate'] (collision.addBox { layer }): its walking, paths and navmesh all follow it; plain, may be rewritten later
    *           water what water deeper than swimDepth does: 'swim' (default, floats, state 'swim') | 'block' (never enters it) | 'wade' (walks the
    *                 bottom) | (character, { depth, x, z }) => one of those (per spot: a swim skill, a boat, depth); character:water fires on each change.
    *                 swimDepth water depth at which it counts as deep, swimSpeed swim speed multiplier
@@ -70,7 +72,7 @@ export class Character {
   constructor(engine, { colors = {}, speed = 4.5, runSpeed = 7, radius = engine.movement.radius, water = 'swim', states = null, swimDepth = 1.0, swimSpeed = 0.45,
     turnSpeed = 10, acceleration = 12, gravity = -24, jumpSpeed = 8, stepHeight = engine.movement.stepHeight, airControl = 0.35, coyoteTime = 0.12,
     canJump = true, maxJumps = 1, airJumpSpeed = null, jumpBuffer = 0.12, fall = false, channel = 'world',
-    model = null, clips = null, animation = null, mover = 'simple', faceMode = 'move', faceTarget = null, rig = null, id = null } = {}) {
+    model = null, clips = null, animation = null, mover = 'simple', faceMode = 'move', faceTarget = null, rig = null, id = null, passes } = {}) {
     /** @internal the id option, else the generated one (a character without a world record); the getter id below is the one public form */ this._ownId = id;
     /** @internal true for a world NPC's model (npcView.js): disposing it keeps the NPC's control slot */ this.npcModel = false;
     this.engine = engine;
@@ -78,6 +80,7 @@ export class Character {
     if (states != null && typeof states !== 'function') throw codedError('character-option', 'character option states: (character, facts) => state name | null', TypeError);
     /** What deep water does ('swim' | 'block' | 'wade' | function); states: the game's state hook. Both plain, change them at any time */
     this.water = water; this.states = states;
+    /** Collider layers this body goes through (character option passes); undefined: stopped by every collider */ this.passes = passesOf('character option passes', passes);
     Object.assign(this, { speed, runSpeed, radius, swimDepth, swimSpeedFactor: swimSpeed, turnSpeed, acceleration, gravity, jumpSpeed, stepHeight,
       airControl, coyoteTime, canJump, maxJumps, airJumpSpeed, jumpBuffer, channel });
     if (fall && !(typeof fall.belowY === 'number' || typeof fall.belowY === 'function')) throw codedError('character-option', `character option fall: { belowY: -20 } (a height, or (character) => boolean), or false; got ${JSON.stringify(fall)}`, TypeError);
@@ -93,7 +96,7 @@ export class Character {
     this.vy = 0; this.grounded = true; this._push = 0;
     this.limp = null; this.disposed = false;   // limp: the ragdoll that has the body (rigid/ragdoll.js)
     this.root = new THREE.Group();
-    engine._poses.add(this.root);
+    this._pose = engine._poses.add(this.root, null, null, () => `character '${this.id}'`);
     this.velocity = new THREE.Vector2();
     this.facing = 0; this.phase = 0; this.moveAmount = 0;
     this.swimming = false;
@@ -103,6 +106,7 @@ export class Character {
     this.state = this.stateMark = 'idle';
     /** The vehicle it sits in (null on foot) and its seat there (0 = driver, null on foot) */
     /** @internal the seat relation (seat.js), null on foot */ this._ride = null; this.anim = null;
+    /** @internal set by addPlayer: tears the player's registry entry down and then this character (player.js), so dispose() reaches it from either side */ this._release = null;
     /** false while a model named by asset loads (placeholder shows); await whenReady */
     this.ready = true;
     /**
@@ -119,10 +123,10 @@ export class Character {
     this._colors = colors;
     // one path for every body: an object, a procedural builder built now (joints exist at once), or a file asset loaded behind a capsule
     const now = isModelName(model) ? buildNow(engine, model) : model;
-    if (now) { this._useModel(now, clips, animation); return; }
+    if (now && !now.then) { this._useModel(now, clips, animation); return; }   // a promise: an async builder, waited on below
     if (!rig && !model) warnOnce(NO_CHARACTER);
     useRig(this, rig || capsule(colors.body, engine));
-    if (model) this._whenReady = loadAssetModel(this, model, m => this._useModel(m, clips, animation));
+    if (model) this._whenReady = loadAssetModel(this, model, m => this._useModel(m, clips, animation), now);
   }
   /** A model object with userData.rig is a procedural body (limb swing); anything else animates by its clips */
   _useModel(model, clips, animation) {
@@ -156,7 +160,7 @@ export class Character {
   /**
    * Request a jump (call when the jump key is pressed). It waits jumpBuffer seconds for the ground, so pressing slightly before landing counts;
    * on the ground or in coyote time it is the ground jump, otherwise an air jump while maxJumps allows. air: false = only a ground jump.
-   * @example createPlayer({ ..., maxJumps: 2 });   // double jump: the same jump key twice
+   * @example addPlayer({ ..., maxJumps: 2 });   // double jump: the same jump key twice
    */
   jump({ air = true } = {}) { const j = jumpOf(this); j.buffer = this.jumpBuffer || 1e-6; j.fresh = true; j.air = air; return this; }
   /** Give back n jumps for this airtime (a pickup, a wall touch) @param {number} [n] */
@@ -332,7 +336,7 @@ export class Character {
     if (e.player === this) this._driveCtx = e.input.push('vehicle', { pass: true });   // driving: brake lives in this context, walking-only keys are shadowed
     if (e.player === this && !e.input.keysOf('brake').length) warnOnce(coded('input-keys', "the player drives without a brake key: no module binds one by itself. engine.input.bind(presets.bindings.brake) (B / gamepad LT) or engine.input.bind('brake', ['KeyX'])"));
     this.root.visible = vehicle.hideDriver === false; this.velocity.set(0, 0); this.vy = 0; this.swimming = false; this.state = this.stateMark = 'drive'; this._store();
-    // only when the game asked the camera to follow the player (createPlayer({ cameraFollow }))
+    // only when the game asked the camera to follow the player (addPlayer({ cameraFollow }))
     if (e.player === this && this.cameraFollow) e.cameraRig?.follow(vehicle.object, vehicle.camera);
     e.events.emit('vehicle:enter', { character: this, vehicle });
   }
@@ -343,7 +347,7 @@ export class Character {
     for (let n = 0; n < 8; n++) {   // bounded: a vehicle with one exit answers the same point for every n
       const p = v.exitPosition(seat, n);
       if (!p) return null;
-      if (this.engine.collision?.walkableAt(p.x, p.z, this.radius, p.y) ?? true) return p;
+      if (this.engine.collision?.walkableAt(p.x, p.z, this.radius, p.y, this.passes) ?? true) return p;
     }
     return null;
   }
@@ -370,6 +374,8 @@ export class Character {
   }
   /** Dispose this character completely: exit the vehicle first, release animation and mover, remove from the scene and dispose geometries and materials */
   dispose() {
+    // a player made by addPlayer: its registry entry (st.players, keys, touch button, world:load listener) goes first, and calls this again with _release cleared
+    if (this._release) { const r = this._release; this._release = null; r(); return; }
     this.disposed = true;   // a model still loading by asset name is dropped on arrival
     this.engine.control?.endTasks(this, 'gone');
     // a character without a world record or NPC id has nothing to come back as: its control slot goes with it (records drop theirs on world:remove,
@@ -377,7 +383,7 @@ export class Character {
     if (!this.recordId && !this.npcModel) this.engine.control?.forget(this.id);
     this.exit({ force: true });
     detach(this);   // a disposed rider must leave the platform's rider list, or it is carried and kept alive for as long as the platform lives
-    this.engine._poses.remove(this.root);
+    this._pose.remove();
     this.anim?.dispose();
     for (const m of new Set(this._movers.values())) m.dispose?.();
     this.engine.characters?._capsules.delete(this._rig?.capsule);
@@ -449,7 +455,7 @@ export class Character {
   animate(dt) {
     dt *= this.engine.still ? 0 : this.engine.time.scale(this.channel, this.id);
     if (!this.limp) this._animate(dt);
-    if (!this.anim) this._firePose(dt);
+    if (!this.anim?._hook) this._firePose(dt);   // an Animator with a frame hook fires it itself, once the pose is applied; a model without clips (and no IK) has no hook
   }
   /** @internal */
   _animate(dt) {

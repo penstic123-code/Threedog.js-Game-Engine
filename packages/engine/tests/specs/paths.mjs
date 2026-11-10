@@ -120,6 +120,26 @@ export const specs = [
     },
   },
   {
+    name: 'nav: installed without a level mesh (procedural terrain), the A* stand-in is announced once, in dev',
+    url: '/tests/threads/',
+    async run({ check, ev }) {
+      const r = await ev(async () => {
+        const { createEngine, world, collision, characters, nav } = threedogThreads;
+        const E = createEngine({ canvas: document.createElement('canvas'), headless: true, ui: { loading: false }, urlState: false, saveKey: 'nav-nomesh' });
+        E.use(world(), collision(), characters({ npcs: false }), nav());
+        await E.start();
+        const seen = [], info = console.warn; console.warn = (...a) => { seen.push(a.join(' ')); };
+        const p1 = E.characters.findPath({ x: 0, z: 0 }, { x: 3, z: 3 });
+        E.characters.findPath({ x: 0, z: 0 }, { x: 4, z: 4 }); E.characters.findPathAsync({ x: 0, z: 0 }, { x: 4, z: 4 }, () => {});
+        E.step(1 / 60);
+        console.info = info;
+        const ready = E.nav.ready; E.dispose();
+        return { ready, seen: seen.filter(t => /nav/.test(t)), has: !!p1 };
+      });
+      check('no mesh: one warning naming nav and A*, though called three times', !r.ready && r.seen.length === 1 && /A\*/.test(r.seen[0]), JSON.stringify(r));
+    },
+  },
+  {
     name: 'paths: findPathAsync with A* -- threads 0 and 2 give identical paths on identical steps, also across a collider change and a worker crash (threads test page)',
     url: '/tests/threads/',
     expectErrors: /worker failed/,

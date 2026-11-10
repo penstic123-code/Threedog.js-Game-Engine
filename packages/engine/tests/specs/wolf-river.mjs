@@ -1,4 +1,4 @@
-// Shared acceptance scene "Wolf river" (docs/plans/2026-11-06-batch7-design.md): tests/wolf-river/main.js is game code on the public API; this spec plays it. Rapier's own world is public
+// Shared acceptance scene "Wolf river" (docs/plans/done/2026-11-06-batch7-design.md): tests/wolf-river/main.js is game code on the public API; this spec plays it. Rapier's own world is public
 // (engine.rigid.world, recipe 11), so the joint and body counts read that.
 const PAGE = '/tests/wolf-river/index.html';
 

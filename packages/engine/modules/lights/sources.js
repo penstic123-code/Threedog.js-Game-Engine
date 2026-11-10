@@ -45,7 +45,7 @@ function apply(pool, src, o) {
     if (d !== null && !(typeof d === 'number' && d >= 0 && d <= 1)) throw codedError('lightpool-dusk', fmt(STRINGS.dusk, { d: String(DUSK) }) + JSON.stringify(o.dusk), TypeError);
     src.dusk = d;
   }
-  if ('glow' in o) { if (src.glow) setGlow(pool, src, 1); src.glow = glowOf(o.glow); setGlow(pool, src, src.slot ? 1 - src.slot.w : 1); }
+  if ('glow' in o) { restoreGlow(src); src.glow = glowOf(o.glow); setGlow(pool, src, src.slot ? 1 - src.slot.w : 1); }
   pool.timer = Infinity;   // a changed source is reconsidered on the next frame, not after `every`
 }
 

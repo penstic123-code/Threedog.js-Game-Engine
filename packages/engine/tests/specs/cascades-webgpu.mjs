@@ -17,7 +17,7 @@ export const specs = [
       check(`the budget counts the caster once per cascade map: shadow draws ${r.budget.one - 1} -> ${r.budget.three - 1} (cascades 1 -> 3, x3)`,
         r.budget.one > 1 && r.budget.three - 1 === 3 * (r.budget.one - 1), JSON.stringify(r.budget));
       check('engine.shadows.mapSize (photo mode) resizes every cascade map, drawn at the new size, and back',
-        r.mapSize.cascades.every(s => s === 1024) && r.mapSize.sun === 1024 && r.mapSize.drawn.every(w => w === 1024) && r.mapSize.back.every(s => s === 2048), JSON.stringify(r.mapSize));
+        r.mapSize.cascades.every(s => s === 1024) && r.mapSize.sun === 1024 && r.mapSize.drawn.every(w => w === 1024) && r.mapSize.back.every(s => s === r.mapSize.size0), JSON.stringify(r.mapSize));
       check('light.shadow.intensity reaches every cascade', r.shadowIntensity.length === 3 && r.shadowIntensity.every(s => s === 0.3), JSON.stringify(r.shadowIntensity));
       check('the cascade shadow cameras reach lightMargin + 2 x maxFar (100 + 240 m), so the far cascades reach the ground',
         r.csm.far === 340 && r.csm.cascadeFar?.every(f => f === 340), JSON.stringify(r.csm));

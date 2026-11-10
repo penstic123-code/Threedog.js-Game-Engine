@@ -27,8 +27,8 @@ import { describeRender, describePicture, describeBackend } from './describeRend
 import { describeOwned, checkWrittenOnce } from '../ops/owned.js';
 import { describeScene } from '../scene/thingOps.js';
 import { describeHolds } from '../ops/holds.js';
-import { warnOnce } from '../base/validate.js';
-import { stats } from '../../render/backend.js';
+import { warnOnce, warningsSaid } from '../base/validate.js';
+import { stats, gpuMemoryMB, GPU_MEMORY } from '../../render/backend.js';
 import { threePatches } from '../scene/threePatches.js';
 import { describeSlots } from '../engine/plugins.js';
 /** describe().perf's draw counters (render/backend.js reads them per renderer) @param {any} r */
@@ -38,7 +38,7 @@ const NEAR_RADIUS = 30, NEAR_MAX = 15;
 const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];           // north = -Z, east = +X
 const RELATIVE = ['front', 'front-right', 'right', 'back-right', 'back', 'back-left', 'left', 'front-left'];   // relative to the camera heading
 // the core's own fields
-const STANDARD = new Set(['unhandled', 'holds', 'input', 'wraps', 'slots', 'threePatches', 'renderer', 'vars', 'ready', 'error', 'disabledModules', 'moduleStates', 'loading', 'audio', 'time', 'player', 'camera', 'nearbyRadius', 'nearby', 'actions', 'ui', 'cutscene', 'modules', 'perf', 'scene', 'render', 'picture', 'owned', 'shared', 'control']);
+const STANDARD = new Set(['unhandled', 'warnings', 'holds', 'input', 'wraps', 'slots', 'threePatches', 'renderer', 'vars', 'ready', 'error', 'disabledModules', 'moduleStates', 'loading', 'audio', 'time', 'player', 'camera', 'nearbyRadius', 'nearby', 'actions', 'ui', 'cutscene', 'modules', 'perf', 'scene', 'render', 'picture', 'owned', 'shared', 'changed', 'control']);
 const ACTIONS_MAX = 8;   // what the player can do now, with why not: saves the AI a guess for a few dozen characters
 const sector = a => Math.round(((a % (Math.PI * 2)) + Math.PI * 2) / (Math.PI / 4)) % 8;
 
@@ -80,7 +80,8 @@ export function describeApi(e) {
   api.add = (name, fn) => {
     if (extras.has(name) || STANDARD.has(name) || e.modules.has(name)) throw codedError('describe-name', `describe.add('${name}'): this name is already taken; pick another (existing fields, module names and previously registered names cannot be reused)`);
     extras.set(name, fn);
-    return { remove: () => { extras.delete(name); } };
+    // by identity: a handle that was removed (or whose name was registered again) must not delete the newer registration of the same name
+    return { remove: () => { if (extras.get(name) === fn) extras.delete(name); } };
   };
   /** Text of describe(): a summary by default; { path: 'world' } one part as JSON; { full: true } everything (see describeText.js) */
   // game: the describe.add names, so the summary lists the game's own state before engine tables (it is what the game author asked to see)
@@ -100,7 +101,7 @@ function pendingModules(e) {
 
 // Engine tables no module hook writes into (hooks add to time / player / camera / ui / perf / cutscene / nearby): a describe({ only }) that asks
 // for nothing else skips the hooks, describe.add and the action list
-const TABLES = new Set(['ready', 'error', 'disabledModules', 'loading', 'audio', 'holds', 'input', 'control', 'shared', 'modules', 'slots', 'scene', 'threePatches', 'owned', 'render', 'picture', 'renderer', 'spatial']);
+const TABLES = new Set(['ready', 'error', 'warnings', 'disabledModules', 'loading', 'audio', 'holds', 'input', 'control', 'shared', 'modules', 'slots', 'scene', 'threePatches', 'owned', 'render', 'picture', 'renderer', 'spatial']);
 const NONE = Symbol('none');   // a conditional section that is absent this time
 
 /**
@@ -111,11 +112,14 @@ const NONE = Symbol('none');   // a conditional section that is absent this time
 function describe(e, { radius = NEAR_RADIUS, center: at, only } = {}, extras) {
   checkWrittenOnce(e);
   const p = e.player?.position, center = at || p || e.focus, cam = e.camera;
+  let snap = null;   // one snapshot of the shared points' rows for both `changed` and `shared`
+  const rows = () => (snap ??= e.stacks._rows());
   /** @type {Record<string, () => any>} the core's sections in output order; NONE = left out */
   const core = {
     ready: () => e.ready,
     error: () => e.error,                                    // gameplay error in dev / tests (gameplay is frozen)
     unhandled: () => e._unhandled || NONE,                   // dev: first promise rejection nobody caught, and how many followed (errors.js)
+    warnings: () => warningsSaid() ?? NONE,                  // dev: what warnOnce said on this page (a fallback, a clamp, a misspelled name), { count, list: first 20 { code, text, fix } }
     disabledModules: () => Object.entries(e.moduleStates).filter(([, s]) => s === 'disabled').map(([n]) => n),   // picture / ui modules switched off after an error
     moduleStates: () => pendingModules(e) ?? NONE,           // while a module is initializing or failed
     loading: () => e.loading.view(),                         // what is pending / failed and whether it blocks the start (Loading.js)
@@ -125,7 +129,8 @@ function describe(e, { radius = NEAR_RADIUS, center: at, only } = {}, extras) {
     holds: () => describeHolds(e),                        // who holds halt / freeze / camera / input (holds.js)
     input: () => e.input.describe(),                      // context stack, declared actions nobody bound, the player's rebindings (Input.js)
     control: () => e.control.describe(),                  // who decides where each held character goes: { id: { owner, layer, waiting } } (control.js)
-    shared: () => e.stacks.describe(),                    // every shared value / slot with entries: value, writer, how it combined, who else wants it (stacks.js)
+    changed: () => { const c = e.stacks.changed(5, rows()); return c.length ? c : NONE; },   // the few shared values off their base now (stacks.changed), the summary's own line
+    shared: () => e.stacks.describe(rows()),                    // every shared value / slot with entries: value, writer, how it combined, who else wants it (stacks.js)
     wraps: () => { const w = e._wraps?.describe(); return w && Object.keys(w).length ? w : NONE; },   // engine.wrap: { 'inventory.add': [owners, outermost first] }
     vars: () => ({ flags: { ...e.vars.flags }, counters: { ...e.vars.counters } }),   // story state: without it a snapshot said "same" after a flag was set
     player: () => p ? {
@@ -153,12 +158,15 @@ function describe(e, { radius = NEAR_RADIUS, center: at, only } = {}, extras) {
     render: () => describeRender(e),                         // renderer / post / lights and who set each (describeRender.js)
     picture: () => describePicture(e),                       // tone, fog, environment, background, lights, shadows as three.js holds them now (describeRender.js)
     renderer: () => describeBackend(e),                      // asked for, drawing, why not WebGPU and what that backend can run (describeRender.js)
-    perf: () => ({
-      fps: e.halted ? null : Math.round(e.fps), cpuMs: e.halted ? null : r1(e._cpuMs),
+    // cpuMs: the median of the last cpuFrames real-time frames, the reading the perf notice, inspect.perf() and the F3 panel use (0 before the first, as in 1.1);
+    // cpu: the last frame by phase (the 1.1 key)
+    perf: (budget = e.budget.report(), fm = e.halted ? null : e.budget._frameMs()) => ({
+      fps: e.halted ? null : Math.round(e.fps), cpuMs: e.halted ? null : fm?.ms ?? 0, cpuFrames: fm?.n ?? 0,
       cpu: e.halted ? null : Object.fromEntries(Object.entries(e._cpuPhases).map(([k, v]) => [k, r1(v)])),
       apply: e.budget.cost.report(),
       ...drawStats(e.renderer), pixelRatio: e.renderer.getPixelRatio(),
-      budget: e.budget.report(), startup: e.startup, stream: e.stream.stats, batching: e.batching.stats, jobs: e.jobs.pending, commits: { pending: e.commits.pending, ...e.commits.stats },
+      ...(gpuMemoryMB(e.renderer) != null && { gpuMemory: { mb: gpuMemoryMB(e.renderer), is: GPU_MEMORY } }),   // WebGPU only: WebGL keeps no byte counts
+      budget, notice: e.budget._notice(budget), startup: e.startup, stream: e.stream.stats, batching: e.batching.stats, jobs: e.jobs.pending, commits: { pending: e.commits.pending, ...e.commits.stats },
     }),
   };
   const out = {};

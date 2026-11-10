@@ -16,7 +16,7 @@ export const specs = [
           E.use(...mods());
           await E.start(); E.haltLoop();
           rule?.(E);
-          const p = E.characters.createPlayer({ control: () => ({ x: 0, z: 0 }), spawn: [0, 0, 0], fall: { belowY: -50 } });
+          const p = E.characters.addPlayer({ control: () => ({ x: 0, z: 0 }), spawn: [0, 0, 0], fall: { belowY: -50 } });
           E.step(1 / 60);
           return { E, p };
         };

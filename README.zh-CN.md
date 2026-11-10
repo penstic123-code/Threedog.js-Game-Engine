@@ -77,6 +77,14 @@ npm run dev
 
 两条渲染路线的画面代码写法不同，所以要在创建项目时选。`createEngine()` 本身默认用 WebGL，项目模板默认配置成 WebGPU。
 
+也可以全交给 AI：把下面三句粘贴给你的 AI，再描述要做的游戏。
+
+```text
+在这个空文件夹里建一个 threedog 游戏：npm init -y、npm install threedog@1 three@~0.187.0、npm install -D @threedog/tools@1、npx threedog init、npm install。
+先读新生成的 CLAUDE.md：里面列着引擎已经有的系统，其余的用 `npx threedog how "<英文任务词>"` 查。
+然后循环到游戏能玩、样子符合要求为止：`npx threedog play` 运行，`npx threedog shot --play` 看画面，按报错和 `npx threedog check` 指的地方修。
+```
+
 ### 修改引擎本身
 
 只有要修改引擎时才下载这个仓库。里面是引擎源码和维护者文档（`CLAUDE.md`、`docs/design.md`、`docs/architecture.md`、`.claude/rules/`），做游戏用不到。在这里建的项目放在 `games/my-game/`，连到引擎源码，开发服务器上按 F2 打开编辑器。
@@ -203,7 +211,7 @@ three.js / Rapier / Recast 等基础库
 | `onFrame` | 动画、HUD 等每帧表现 |
 | `onRender` | 渲染前的画面更新 |
 
-`scene.add(obj)` 适合普通显示对象。需要稳定 ID 和引擎登记的对象用 `engine.add(obj, { id })`，见[场景约定](packages/engine/docs/recipes/40-scene.md)。项目自己的状态用 `engine.saves.register(...)` 接入存档。
+`scene.add(obj)` 适合普通显示对象。需要稳定 ID 和引擎登记的对象用 `engine.add(obj, { id })`，见[场景约定](packages/engine/docs/recipes/40-scene.md)。项目自己的状态用 `engine.saves.define(...)` 接入存档。
 
 维护者可以读[当前架构](docs/architecture.md)，项目作者从 [AI 使用索引](packages/engine/docs/AI.md)开始更直接。
 

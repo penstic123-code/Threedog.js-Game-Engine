@@ -185,7 +185,7 @@ export const specs = [
         B.dispose();
         // a failed init takes what its install registered too
         const F = mk(createEngine, 'cm-own-init');
-        F.use({ name: 'cmFail', type: 'rules', install(e, ctx) { ctx.ops?.define('cmFail.go', { run() {} }); ctx.saves?.register('cmFail', { save: () => ({ a: 1 }), load() {} }); ctx.ui?.define('cmFail', () => ({})); },
+        F.use({ name: 'cmFail', type: 'rules', install(e, ctx) { ctx.ops?.define('cmFail.go', { run() {} }); ctx.saves?.define('cmFail', { save: () => ({ a: 1 }), load() {} }); ctx.ui?.define('cmFail', () => ({})); },
           init() { throw new Error('cm init'); } });
         const q = [console.error, console.warn]; console.error = console.warn = () => {};
         await F.start();
@@ -196,18 +196,18 @@ export const specs = [
         const S = mk(createEngine, 'cm-own-save');
         await S.start();
         let seen = null, v = 5;
-        S.use({ name: 'cmPart', type: 'rules', install(e, ctx) { (ctx.saves ?? e.saves).register('cmPart', { version: 2, save: () => ({ v }), load: d => { v = d.v; } }); } });
+        S.use({ name: 'cmPart', type: 'rules', install(e, ctx) { (ctx.saves ?? e.saves).define('cmPart', { version: 2, save: () => ({ v }), load: d => { v = d.v; } }); } });
         S.unuse('cmPart');
         const saved = JSON.parse(JSON.stringify(S.saves.collect()));
         out.rides = saved.parts.cmPart?.v === 5 && saved.versions.cmPart === 2;
-        S._cmKeep = err(() => S.use({ name: 'cmPart', type: 'rules', install(e, ctx) { (ctx.saves ?? e.saves).register('cmPart', { version: 2, save: () => ({ v: seen }), load: d => { seen = d.v; } }); } }));
+        S._cmKeep = err(() => S.use({ name: 'cmPart', type: 'rules', install(e, ctx) { (ctx.saves ?? e.saves).define('cmPart', { version: 2, save: () => ({ v: seen }), load: d => { seen = d.v; } }); } }));
         out.back = seen;
         S.dispose();
         // replaces hands the data to the newcomer through the same path; a failed swap restores the old state
         const R = mk(createEngine, 'cm-own-swap');
         await R.start();
         const box = (name, o = {}) => { const m = { name, type: 'rules', provides: ['cmBox'], v: o.v ?? 0,
-          install(e, ctx) { (ctx.saves ?? e.saves).register('cmBox', { save: () => ({ v: m.v }), load: d => { m.v = d.v; } }); if (o.boom) throw new Error('swap boom'); } }; return m; };
+          install(e, ctx) { (ctx.saves ?? e.saves).define('cmBox', { save: () => ({ v: m.v }), load: d => { m.v = d.v; } }); if (o.boom) throw new Error('swap boom'); } }; return m; };
         const a = box('cmBoxA', { v: 9 });
         R.use(a);
         a.v = 10;

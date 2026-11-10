@@ -4,7 +4,7 @@
 // The map is sampled by world xz (the 'world' patch), not by uv, so the mesh uv stays free for the game's own textures.
 import * as THREE from 'three';
 import { applyEffects } from '../../render/materials.js';
-import { copyPatches } from '../../render/patches.js';
+import { cloneMaterial } from '../../render/patches.js';
 import { maxAnisotropy } from '../../render/backend.js';
 
 /** Material for one chunk: `base` plus the color map `t` ({ data, size }) of the chunk whose origin is (ox, oz) and edge length `chunk`; kept on `rec` */
@@ -16,9 +16,11 @@ export function mountColorMap(engine, base, rec, t, ox, oz, chunk) {
   tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
   tex.anisotropy = Math.min(4, maxAnisotropy(engine.renderer));   // ground is seen at grazing angles
   tex.needsUpdate = true;
+  // upload and mipmaps now, in the chunk's task, not in the first frame that draws it (a WebGPURenderer before init has no device yet)
+  if (engine.renderer.initialized !== false) engine.renderer.initTexture(tex);
   // world xz -> texture uv: pixel k is centered (k - 0.5) * chunk / R from the origin (see terrainColorMap.js); .zw = scale, offset
   const rect = new THREE.Vector4(ox, oz, R / (chunk * size), 1 / size);
-  const mat = copyPatches(base, base.clone()), texU = { value: tex }, rectU = { value: rect };
+  const mat = cloneMaterial(base), texU = { value: tex }, rectU = { value: rect };
   applyEffects(mat, { clouds: false, patches: [{
     name: 'terrainColorMap', cacheKey: 1, needs: { patches: ['world'] },
     uniforms: { uTColorMap: texU, uTColorRect: rectU },

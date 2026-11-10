@@ -125,7 +125,7 @@ export const specs = [
     async run({ check, ev }) {
       const r = await ev(async () => {
         const S = engine.saves; let got;
-        const h = S.register('r2nan', { save: () => ({ hp: NaN, pos: [Infinity, 0, 0] }), load: d => { got = d; } });
+        const h = S.define('r2nan', { save: () => ({ hp: NaN, pos: [Infinity, 0, 0] }), load: d => { got = d; } });
         const ok = await S.save('r2-nan');
         const said = engine.error?.message ?? '';
         const loaded = await S.load('r2-nan');
@@ -143,7 +143,7 @@ export const specs = [
       const r = await ev(async () => {
         const S = engine.saves;
         try {
-          const got = {}, hs = ['constructor', 'toString'].map(k => S.register(k, { save: () => ({ a: 1 }), load: d => { got[k] = d.a; } }));
+          const got = {}, hs = ['constructor', 'toString'].map(k => S.define(k, { save: () => ({ a: 1 }), load: d => { got[k] = d.a; } }));
           await S.save('r2-ctor');
           const part = JSON.parse(S._json.get('r2-ctor'));
           // the same save with these two left out of the versions table: each reads as version 1, not as Object's own constructor
@@ -229,7 +229,7 @@ export const specs = [
         // a page with no physics: readiness needs frames only, so the destination can come ready under the load's freeze
         const { mk } = threedogThreads, { createEngine } = threedogThreads.all, E = mk(createEngine, 'r2-trip'); await E.start(); E.haltLoop();
         const S = E.saves, tick = () => new Promise(r => setTimeout(r, 0)); let boom = false, open = null;
-        const h = S.register('r2fail', { save: () => ({ boom }), load: async d => { if (d.boom) { await new Promise(r => { open = r; }); throw new Error('r2fail'); } } });
+        const h = S.define('r2fail', { save: () => ({ boom }), load: async d => { if (d.boom) { await new Promise(r => { open = r; }); throw new Error('r2fail'); } } });
         boom = true; await S.save('r2-tf'); boom = false;
         const to = [E.focus.x + 3, 0, E.focus.z], p = E.focus.toArray();
         const trip = E.stream.teleport(to, { timeout: 30 }).then(() => 'landed', e => e.code ?? e.message);
@@ -257,7 +257,7 @@ export const specs = [
       const r = await ev(async () => {
         const { mk } = threedogThreads, { createEngine } = threedogThreads.all, E = mk(createEngine, 'r2-own'); await E.start(); E.haltLoop();
         const S = E.saves, to = [E.focus.x + 3, 0, E.focus.z]; let go = false;
-        const h = S.register('r2own', { save: () => ({ go }), load: async d => { if (d.go) await E.stream.teleport(to, { timeout: 30 }); } });
+        const h = S.define('r2own', { save: () => ({ go }), load: async d => { if (d.go) await E.stream.teleport(to, { timeout: 30 }); } });
         go = true; await S.save('r2-own'); go = false;
         let done = null; S.load('r2-own').then(v => { done = v; });
         for (let i = 0; i < 120 && done === null; i++) { E.step(1 / 60, { render: false }); await new Promise(r => setTimeout(r, 0)); }
@@ -273,7 +273,7 @@ export const specs = [
     url: '/?threedog-headless',
     async run({ check, ev }) {
       const r = await ev(async () => {
-        try { engine.saves.register('__proto__', { save: () => ({ a: 1 }), load: () => {} }); return { code: null, has: engine.saves.providers.has('__proto__') }; }
+        try { engine.saves.define('__proto__', { save: () => ({ a: 1 }), load: () => {} }); return { code: null, has: engine.saves.providers.has('__proto__') }; }
         catch (e) { return { code: e.code, msg: e.message, has: engine.saves.providers.has('__proto__') }; }
       });
       check('refused with the name in the message, nothing registered', r.code === 'module-params' && /__proto__/.test(r.msg) && !r.has, JSON.stringify(r));
@@ -286,11 +286,11 @@ export const specs = [
     async run({ check, ev }) {
       const r = await ev(async () => {
         const S = engine.saves, E = engine.session; let got;
-        const a = S.register('r2late', { save: () => ({ hp: NaN }), load: d => { got = d; } });
+        const a = S.define('r2late', { save: () => ({ hp: NaN }), load: d => { got = d; } });
         const inBase = JSON.parse(E._base).parts.r2late;
         await E.newGame();
         a.remove({ keep: false });
-        const b = S.register('r2gone', { save: () => ({ pos: [Infinity] }), load: () => {} });
+        const b = S.define('r2gone', { save: () => ({ pos: [Infinity] }), load: () => {} });
         b.remove();
         const kept = S._foreign.parts.r2gone;
         engine.error = null; engine.stacks.get('freeze').release('error');
@@ -346,7 +346,7 @@ export const specs = [
     async run({ check, ev }) {
       const r = await ev(async () => {
         const S = engine.saves; let v = 0;
-        const h = S.register('r2seq', { save: () => ({ v }), load: d => { v = d.v; } });
+        const h = S.define('r2seq', { save: () => ({ v }), load: d => { v = d.v; } });
         const hooks = [...engine.modules.values()].filter(m => m.afterLoad).length;
         const x = structuredClone(S.collect()), y = structuredClone(x);
         x.parts.r2seq = { v: 1 }; y.parts.r2seq = { v: 2 };
@@ -368,7 +368,7 @@ export const specs = [
       const r = await ev(async () => {
         const S = engine.saves, C = engine.commits; let boom = false; const landed = [];
         const ask = what => C.request({ lag: 1, fallback: () => what, apply: w => landed.push(w) });
-        const h = S.register('r2rb', { save: () => ({ boom }), load: d => { ask(d.boom ? 'failed load' : 'rollback'); if (d.boom) throw new Error('r2rb'); } });
+        const h = S.define('r2rb', { save: () => ({ boom }), load: d => { ask(d.boom ? 'failed load' : 'rollback'); if (d.boom) throw new Error('r2rb'); } });
         boom = true; await S.save('r2-rb'); boom = false;
         const epoch = C.epoch, ok = await engine.session.load('r2-rb');
         engine.error = null; engine.stacks.get('freeze').release('error');

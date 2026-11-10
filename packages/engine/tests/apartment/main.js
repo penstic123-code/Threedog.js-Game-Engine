@@ -79,9 +79,9 @@ engine.events.on('engine:ready', () => {
   engine.add(lakeMesh);
 
   // two people at one keyboard: the second has its own keys and the second pad
-  game.one = engine.characters.createPlayer({ ...presets.player.thirdPerson, control: 'camera', spawn: [-6, 0, 0], ...(RAPIER && { mover: 'rapier' }) });
+  game.one = engine.characters.addPlayer({ ...presets.player.thirdPerson, control: 'camera', spawn: [-6, 0, 0], ...(RAPIER && { mover: 'rapier' }) });
   game.seat = engine.input.seat({ pad: 1, keys: { moveForward: 'KeyI', moveBack: 'KeyK', moveLeft: 'KeyJ', moveRight: 'KeyL', jump: 'KeyU', interact: 'KeyO' } });
-  game.two = engine.characters.createPlayer({ ...presets.player.thirdPerson, control: 'camera', id: 'two', input: game.seat, spawn: [-6, 0, 3] });
+  game.two = engine.characters.addPlayer({ ...presets.player.thirdPerson, control: 'camera', id: 'two', input: game.seat, spawn: [-6, 0, 3] });
 
   // the front door counts every entrant; `who` names both players, since a zone hears engine.actor alone by default
   game.door = engine.triggers.add({

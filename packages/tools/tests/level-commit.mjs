@@ -1,6 +1,7 @@
 // A level switch is one commit (engine/modules/level/load.js), against the real level module on a small stand-in engine: the old level survives a load that
 // fails at any point before the commit, level:failed replaces level:loaded, the caller sees the error, and a save asked for during a load waits for it.
 // Why not a browser: every step here is plain data flow, and the stand-in records exactly the live writes the commit must hold back.
+import { fakeSaves } from './fixtures/fake-saves.mjs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import * as THREE from 'three';
@@ -30,7 +31,7 @@ function stand(files) {
     saves: { _replace: new StateReplace({ loading: { _limit: p => p } }) }, modules: new Map(), stream: { ready: true }, onFrame: () => ({ remove() {} }), ui: { get: () => null },
   };
   let part = null;
-  const m = level({ url: 'a' }), ctx = { ground: { provide() {} }, track: h => h, feeds() {}, saves: { register(k, p) { part = p; } } };
+  const m = level({ url: 'a' }), ctx = { ground: { provide() {} }, track: h => h, feeds() {}, saves: fakeSaves((k, p) => { part = p; }) };
   return { e, m, api: m.install(e, ctx), events, live, part };
 }
 

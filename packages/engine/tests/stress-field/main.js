@@ -37,6 +37,7 @@ async function measure(e, K = 40) {
   e.haltLoop();
   for (let i = 0; i < 6; i++) frame(e);
   await gpuDone(e);
+  const timing = e.profile() !== null;   // dev builds time modules all along: put it back as it was
   e.profile(true);
   renderMs = 0;
   let cpu = 0, worst = 0;
@@ -45,7 +46,8 @@ async function measure(e, K = 40) {
   const issued = performance.now() - t0;
   await gpuDone(e);
   const total = performance.now() - t0;
-  const modules = e.profile(); e.profile(false);
+  const modules = Object.fromEntries(Object.entries(e.profile()).map(([k, p]) => [k, p.mean]));   // the run's average per frame
+  if (!timing) e.profile(false);
   e._render = orig;
   const info = e.renderer.info;
   return { cpuMs: r2(cpu / K), renderMs: r2(renderMs / K), otherMs: r2((cpu - renderMs) / K), worstCpuMs: r2(worst), throughputMs: r2(total / K), gpuTailMs: r2((total - issued) / K),

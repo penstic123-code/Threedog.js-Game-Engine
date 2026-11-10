@@ -22,6 +22,7 @@ const FILES = {
     tag: { model: 'm', state: { kind: 'red' } },
     post: { model: 'm', collide: { circle: 0.25, occluder: false } },
     pole: { model: 'm', collide: { radius: 0.25 } },
+    gate: { model: 'm', collide: { layer: 'gate' } },
   };\n`,
   'content/props.js': `export default [
     { model: 'm', x: 0, z: 0, rot: 1.5 },
@@ -33,6 +34,9 @@ const FILES = {
     { id: 'g1', grid: 'yard', item: 'bed', cell: [0, 0], rotation: 5 },
     { model: 'm', x: 0, z: 0, collide: { circle: 0.25 } },
     { model: 'm', x: 0, z: 0, collide: { circle: -1 } },
+    { model: 'm', x: 0, z: 0, rot: [0.5, 0, 0], collide: { layer: 'gate' } },
+    { model: 'm', x: 0, z: 0, rot: 1, collide: { layer: 'gate' } },
+    { template: 'gate', id: 'g2', x: 1, z: 1, rot: [0, 0, 0.3] },
   ];\n`,
   'content/pickups.js': "export default [{ item: 'x', x: 0, z: 0, cuont: 2 }];\n",
 };
@@ -42,7 +46,7 @@ export async function run({ check }) {
   try {
     mkdirSync(join(dir, 'content'));
     for (const [f, src] of Object.entries(FILES)) writeFileSync(join(dir, f), src);
-    const { errors } = await checkGame(dir);
+    const { errors, warnings } = await checkGame(dir);
     const all = errors.join('\n'), has = re => errors.some(e => re.test(e)), none = re => !errors.some(e => re.test(e));
     check('[guard] a misspelled placement field is an error with did-you-mean (plain prop, template instance, pickup)',
       has(/prop #2: unknown field 'scael' \(did you mean 'scale'\?\)/) && has(/prop #6 \(template crop\): unknown field 'stagee' \(did you mean 'stage'\?\)/)
@@ -52,6 +56,8 @@ export async function run({ check }) {
       && has(/prop #3: collide must be one of false, "box", "circle"/) && has(/prop #7 \(grid item\): rotation must be one of 0, 1, 2, 3/), all);
     check('[guard] collide: the object form passes, a mistyped one is an error (template and plain prop)',
       has(/template pole: collide must be one of/) && has(/prop #9: collide must be one of/) && none(/template post: collide/) && none(/prop #8: collide/), all);
+    check('[guard] a layer on a tilted prop is a warning (plain prop and template instance), an upright one is not: the load warns with the same predicate',
+      warnings.some(w => /prop #10: collide.layer needs an upright model/.test(w)) && warnings.some(w => /prop #12: collide.layer needs an upright model/.test(w)) && !warnings.some(w => /prop #11: collide.layer/.test(w)), warnings.join('|'));
     check('[guard] default inside fields is an error (template and kind): defaults live only in state / the data',
       has(/template lamp: fields\.lit has a default; defaults live only in state/) && has(/kind waves: fields\.count has a default/), all);
     check('a template fields key that is no state key is an error with the closest state name; a state field named like a record field is an error',

@@ -3,12 +3,13 @@
 //   engine.hud.marker('river')                              // a place name (content places or a level marker point), { x, z }, an object or a character all work
 //   engine.hud.marker({ nearest: 'berry' })                 // the nearest not-yet-picked pickup of a kind (hides itself once all are taken)
 //   engine.hud.marker(() => targetOrNull)                   // function: resolves the target each frame, null hides it; m.setTarget(newTarget) swaps the target
-//   engine.hud.counter('fish', { icon: '🐟', label: '鱼', value: 2, max: 5 });   // calling again with the same id = update
+//   engine.hud.addCounter('fish', { icon: '🐟', label: '鱼', value: 2, max: 5 });   // calling again with the same id = update
+//   engine.hud.button('wave', { label: 'Start wave', run: startWave, anchor: 'bottom' });   // a click never reaches the game
 //   engine.hud.bar('stamina', { value: 0.6, label: '体力', anchor: 'bottom' });   engine.hud.remove('stamina');
 // Quests: a marker shows automatically when the current step has a target, and is removed on completion (turn off with hud({ questMarkers: false })).
 //   Quest markers follow the quests' state: they are dropped when a playthrough ends and rebuilt when the next starts (engine.session) or a save loads.
 //   Markers, counters and bars the game made itself stay; ones made during play go through engine.session.track(m) (counters / bars: hud.remove(id)).
-// Drawing is done by UI parts (see parts.js): engine.ui.set('hud.marker' | 'hud.counter' | 'hud.bar', yourFactory | false) replaces or hides each kind;
+// Drawing is done by UI parts (see parts.js): engine.ui.set('hud.marker' | 'hud.counter' | 'hud.bar' | 'hud.button', yourFactory | false) replaces or hides each kind;
 //   this file keeps the logic (targets, projection, arrows, quest sync, describe) so a replaced part only draws the data it gets.
 import * as THREE from 'three';
 import { injectUICSS, worldToScreen } from '../../ui/UI.js';
@@ -18,6 +19,7 @@ import { vec3 } from '../../core/base/math.js';
 import { surfaceOr } from '../../core/scene/ground.js';
 import { CSS, defineHudParts } from './parts.js';
 import { codedError } from '../../core/base/errorHints.js';
+import { hintKey } from '../../core/input/inputPad.js';
 /** @import { ModuleDef } from '../../types/core' */
 /** @import { Hud, HudOptions } from '../../types/gameplay' */
 
@@ -25,7 +27,7 @@ const STRINGS = {
   'zh-CN': { 'module.hud': '目标指示', 'hud.distance': '{m} 米' },
   en: { 'module.hud': 'objective markers', 'hud.distance': '{m} m' },
 };
-const MARKER_KEYS = ['label', 'icon', 'offscreen', 'distance', 'height'], ITEM_KEYS = ['label', 'icon', 'value', 'max', 'anchor'], BAR_KEYS = ['label', 'value', 'max', 'anchor'];
+const MARKER_KEYS = ['label', 'icon', 'offscreen', 'distance', 'height'], ITEM_KEYS = ['label', 'icon', 'value', 'max', 'anchor'], BAR_KEYS = ['label', 'value', 'max', 'anchor'], BUTTON_KEYS = ['label', 'icon', 'run', 'anchor', 'action'], HINT_KEYS = ['label', 'action', 'anchor'];
 const _size = new THREE.Vector2();
 const EDGE = 28;   // how far the arrow sits from the screen edge (px)
 
@@ -110,7 +112,12 @@ export function hud(opts = {}) {
 
   const item = (kind, id, o) => {
     if (o.anchor !== undefined && !ANCHORS.includes(o.anchor)) throw codedError('hud-option', `hud.${kind}('${id}'): anchor '${o.anchor}' is not one of ${ANCHORS.join(' | ')}`, TypeError);
-    if (kind === 'counter' && o.value != null && typeof o.value !== 'number' && typeof o.value !== 'string') throw codedError('hud-option', `hud.counter('${id}'): value is a number (a count) or text (a time, a quest step); got ${typeof o.value}`, TypeError);
+    if (kind === 'counter' && o.value != null && typeof o.value !== 'number' && typeof o.value !== 'string') throw codedError('hud-option', `hud.addCounter('${id}'): value is a number (a count) or text (a time, a quest step); got ${typeof o.value}`, TypeError);
+    if (kind === 'button' && typeof o.run !== 'function' && !items.get(id)?.o.run) throw codedError('hud-option', `hud.button('${id}'): run is the function a click calls`, TypeError);
+    if (o.action !== undefined) {   // the shown key is input.label(action): it follows rebinding and keyboard / pad switching (see frame())
+      if (!e.input.actions.has(o.action)) throw codedError('hud-option', `hud.${kind}('${id}'): action '${o.action}' is not an input action (engine.input.define declares it)`, TypeError);
+      o = { ...o, key: hintKey(e.input, o.action) };
+    }
     let it = items.get(id);
     if (!it) { it = { kind, o: {}, part: e.ui.create('hud.' + kind) }; items.set(id, it); }
     else if (Object.keys(o).every(k => it.o[k] === o[k])) return;   // value unchanged: leave the part alone (cheap even when called every frame)
@@ -152,11 +159,19 @@ export function hud(opts = {}) {
      * status: a clock, a quest step); no value = the label alone; anchor: 'top-left' (default) | 'top' | 'top-right' |
      * 'left' | 'right' | 'bottom-left' | 'bottom' | 'bottom-right', the screen corner / edge its column sits at
      */
-    counter(id, o) { readParams('hud.counter()', keysSchema(ITEM_KEYS), o); item('counter', id, o); },
+    addCounter(id, o) {
+      readParams('hud.addCounter()', keysSchema(ITEM_KEYS), o); item('counter', id, o);
+      // the handle names its own counter: set(value) changes what it shows, remove() takes it off (a newer counter under the id is not touched)
+      // each call owns the counter until the next addCounter of the id takes it: a token per call, so an older handle is a no-op, never removes a newer owner's
+      const mine = items.get(id), token = {}; mine.owner = token;
+      const live = () => items.get(id) === mine && mine.owner === token;
+      return { id, set: v => { if (live()) item('counter', id, typeof v === 'object' && v ? v : { value: v }); },
+        remove: () => { if (!live()) return; mine.part?.dispose(); items.delete(id); } };
+    },
     /**
      * Add n (default 1; negative takes away) to a number counter and return the new value. A counter not declared yet starts at 0 with its id as the label, so
-     * declare it with counter() for a player-facing label and max
-     * @example engine.hud.counter('shells', { label: 'Shells', value: 0, max: 4 }); engine.hud.bump('shells');
+     * declare it with addCounter() for a player-facing label and max
+     * @example engine.hud.addCounter('shells', { label: 'Shells', value: 0, max: 4 }); engine.hud.bump('shells');
      */
     bump(id, n = 1) {
       const it = items.get(id), v = it?.o.value ?? 0;
@@ -168,7 +183,24 @@ export function hud(opts = {}) {
     value(id) { return items.get(id)?.o.value; },
     /** Progress bar (calling again with the same id = update): { value, max = 1, label, anchor } (anchor as for counter) */
     bar(id, o) { readParams('hud.bar()', keysSchema(BAR_KEYS), o); item('bar', id, o); },
-    /** Remove a counter or bar */
+    /**
+     * Clickable button (calling again with the same id = update): { label, icon, run, anchor }. label is plain text or an i18n key (engine.t); run() is called on a click or tap.
+     * The press never reaches the game (no shot, no look-drag, no pointer lock) and focus goes back to the game. In a pointer-locked view the cursor is hidden, so the player
+     * frees the mouse first (Esc); the button is for menus-in-play, a touch layout, or a paused / between-waves moment.
+     * @example engine.hud.button('wave', { label: 'wave.start', run: () => startWave(), anchor: 'bottom' });
+     */
+    button(id, o) { readParams('hud.button()', keysSchema(BUTTON_KEYS), o); item('button', id, o); },
+    /**
+     * Key hint "E · Talk" (calling again with the same id = update): { action, label, anchor }. The key text is engine.input.label(action), so it follows the player's rebinding
+     * and the last used device (keyboard or pad); label is plain text or an i18n key. A hud.button with `action` shows its key the same way.
+     * @example engine.input.define('jump', { label: 'Jump', keys: ['Space'] }); engine.hud.hint('jump', { action: 'jump', label: 'hint.jump', anchor: 'bottom-left' });
+     */
+    hint(id, o) {
+      readParams('hud.hint()', keysSchema(HINT_KEYS), o);
+      if (o.action == null && !items.get(id)?.o.action) throw codedError('hud-option', `hud.hint('${id}'): action is the input action whose key is shown`, TypeError);
+      item('hint', id, o);
+    },
+    /** Remove a counter, bar, button or key hint */
     remove(id) { items.get(id)?.part?.dispose(); items.delete(id); },
   };
 
@@ -178,13 +210,18 @@ export function hud(opts = {}) {
       e = engine;
       e.i18n.add(STRINGS);
       defineHudParts(e, ctx, containers);
-      for (const ev of ['quest:start', 'quest:step', 'quest:part', 'quest:done', 'quest:fail', 'state:replaced']) ctx.track(e.events.on(ev, syncQuests));
+      for (const ev of ['quest:start', 'quest:step', 'quest:part', 'quest:done', 'quest:fail', 'state:replaced', 'op:rolledBack']) ctx.track(e.events.on(ev, syncQuests));
       // quest markers are derived from the quests save part: they belong to the old quests, and session:start / save:loaded rebuild them; session:failed too, the quests stayed
       ctx.track(e.events.on('session:end', () => { for (const m of quest.values()) m.remove(); quest.clear(); }));
       ctx.track(e.events.on('i18n:change', () => { for (const [id, it] of items) it.part?.update({ id, ...it.o }); }));
       return api;
     },
-    frame() { for (const m of api.markers) updateMarker(m); },
+    frame() {
+      for (const m of api.markers) updateMarker(m);
+      // input has no event for a device switch or bind(), so a hint compares its key text each frame and redraws only on a change. Not through item():
+      // an action removed since (its module left, a failed content load put the actions back) must read as no key here, not throw every frame
+      for (const [id, it] of items) if (it.o.action) { const key = hintKey(e.input, it.o.action); if (key !== it.o.key) { it.o.key = key; it.part?.update({ id, ...it.o }); } }
+    },
     // unloaded: nothing updates these any more, so they leave the screen too
     dispose() {
       for (const m of api.markers) m.remove();

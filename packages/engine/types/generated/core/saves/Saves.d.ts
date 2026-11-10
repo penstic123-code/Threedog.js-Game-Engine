@@ -24,14 +24,14 @@ export class Saves {
     /** Resolves once the save index is in memory; await it only to list / load before start() @type {Promise<void>} */
     whenReady: Promise<void>;
     /**
-     * Register "how to save and load"; key is this part's name in the save. Parts with first: true load first (the level); a load returning a Promise makes later
+     * Define "how to save and load"; key is this part's name in the save. Parts with first: true load first (the level); first may be a number, lower loads earlier, true counts as 0 (zones that need the level: 1); a load returning a Promise makes later
      * parts wait.
      * version (default 1): raise it by 1 whenever what save() returns changes shape, and add migrate[oldVersion] = data => newData; load sees only the current
      * shape.
      * A save whose part is newer than this build's version is refused as a whole (load returns false, the save is kept).
      * load(data, turn): turn is this replacement's identity. Pass it on, level.load(x, { turn }) or content.load(x, { turn }): those wait for a running load to end, except with its turn.
      * A part registered after a save was loaded (a module installed later) is handed its data from that save: at once when idle, else right after the replacement under way.
-     * atomic: true joins this part to atomic ops: it is copied before an atomic op runs and put back if the op fails (plain data only; afterLoad does not run on rollback).
+     * atomic: true joins this part to atomic ops: it is copied before an atomic op runs and put back if the op fails (plain data only; afterLoad does not run on rollback; load synchronous: an async function is refused here).
      * checkNewGame(data): dev only, called once start() finished with this part's data in the new-game state, to warn about what should not be there yet
      * (world: records placed by code instead of content). The part knows its own format; core only hands the data over.
      * Returns a handle: remove() takes the part out and keeps its data as unattached data (it rides in later saves and goes back to a part registered under
@@ -40,11 +40,11 @@ export class Saves {
      * @param {SaveProvider} provider
      * @returns {{ remove(o?: { keep?: boolean }): void }}
      * @example
-     * engine.saves.register('garden', { save: () => garden.toJSON(), load: d => garden.fromJSON(d) });
+     * engine.saves.define('garden', { save: () => garden.toJSON(), load: d => garden.fromJSON(d) });
      * // later the format gains beds: version 2, and a step that upgrades version-1 data
-     * engine.saves.register('garden', { version: 2, migrate: { 1: d => ({ ...d, beds: [] }) }, save: () => garden.toJSON(), load: d => garden.fromJSON(d) });
+     * engine.saves.define('garden', { version: 2, migrate: { 1: d => ({ ...d, beds: [] }) }, save: () => garden.toJSON(), load: d => garden.fromJSON(d) });
      */
-    register(key: string, provider: SaveProvider): {
+    define(key: string, provider: SaveProvider): {
         remove(o?: {
             keep?: boolean;
         }): void;
@@ -56,7 +56,7 @@ export class Saves {
     get versions(): Record<string, number>;
     /**
      * Store a binary attachment outside the world save (a photo, a replay). It rides in the queue of save writes, so flush() waits for it, and exportFile() carries it.
-     * Pass a function to make the bytes when the write runs: flush() then waits for that too. Without IndexedDB it is not kept.
+     * Pass a function to make the bytes when the write runs: flush() then waits for that too. Without IndexedDB it is not kept: it rejects with save-write.
      * Rejects with save-stale, changing nothing, when another tab wrote this id since this tab last saw it; attachments(group) is how a tab looks.
      * @example await engine.saves.putAttachment('replay', 'run-1', blob, { score: 12 });
      * @param {string} group what the attachment is for
@@ -151,10 +151,13 @@ export class Saves {
      * game back.
      * To continue or retry with nothing of the current playthrough left over, use engine.session.load(slot).
      * @param {string} [slot]
+     * @param {{ turn?: object }} [o]  turn: the running request's own (what a save part's load(), an afterLoad or a module's applyState was given): the call then runs inside that request instead of waiting behind it for itself, as level.load({ turn }) does
      * @returns {Promise<boolean>}
      * @example if (!(await engine.saves.load('quick'))) toast(engine, 'No quick save');
      */
-    load(slot?: string): Promise<boolean>;
+    load(slot?: string, { turn }?: {
+        turn?: object;
+    }): Promise<boolean>;
     /** All slots, newest first (synchronous, reads the in-memory index) @returns {{ slot: string, savedAt: number }[]} */
     list(): {
         slot: string;

@@ -10,7 +10,7 @@
 // Close-up: when the camera ends up nearer than hideTargetNear to the look point (wall, ground), the followed object is hidden from the camera (shadow stays).
 // Other cameras: firstPersonCamera, fixedCamera, rtsCamera (top-down strategy); all are engine.cameraRig; switch at runtime with engine.setCamera('firstPerson').
 import * as THREE from 'three';
-import { rigModule, defineRig, YAW_RIG, HIDE_RIG, clickToLock, releaseLock } from './common.js';
+import { rigModule, defineRig, YAW_RIG, HIDE_RIG, clickToLock, releaseLock, inRange } from './common.js';
 import { setProjection } from '../../core/scene/view.js';
 import { rigPixelSnap, checkPixelView } from './pixelSnap.js';
 import { codedError } from '../../core/base/errorHints.js';
@@ -20,6 +20,7 @@ const GROUND = ['raise', 'shorten', 'none'];
 // ground: 'shorten' sampling. 0.2 m: narrower than this the ground height rarely has a feature that blocks the view (posts and walls are colliders,
 // handled by the occlusion pull-in). 160 samples (one surface() each, every frame) keep full spacing up to a 32 m arm.
 const SHORTEN_STEP = 0.2, SHORTEN_MAX = 160;
+const DISTANCE = ['minDistance', 'maxDistance'], PITCH = ['minPitch', 'maxPitch'];
 
 export class FollowCamera {
   /** yaw/pitch initial angles (yaw: see the top of this file); distance (min/max zoom range); height how high on the character to look; smoothing follow smoothness;
@@ -41,6 +42,8 @@ export class FollowCamera {
     this.size0 = size; this.distance0 = distance;
     Object.assign(this, { engine, yaw, pitch, distance, minDistance, maxDistance, height, smoothing, sensitivity, minPitch, maxPitch, zoomStep, groundClearance });
     Object.assign(this, { invertY, shoulder, pointerLock, swallowLockClick, ground, mouseLook, hideTargetNear, hideLayer });
+    // a start outside the range stays as given (the first wheel notch or drag pulls it in), and says so
+    inRange(this, 'followCamera', 'followCamera()', 'distance', distance, DISTANCE, true); inRange(this, 'followCamera', 'followCamera()', 'pitch', pitch, PITCH, true);
     this._hidden = [];
     /** Arm length used last frame (after walls and ground), meters */
     this.arm = distance;
@@ -53,7 +56,7 @@ export class FollowCamera {
   follow(obj, opts) {
     this._unhide();
     if (this._saved) { Object.assign(this, this._saved); this._saved = null; }
-    if (opts) { this._saved = { distance: this.distance, height: this.height }; if (opts.distance != null) this.distance = opts.distance; if (opts.height != null) this.height = opts.height; }
+    if (opts) { this._saved = { distance: this.distance, height: this.height }; if (opts.distance != null) this.distance = inRange(this, 'followCamera', 'cameraRig.follow(obj, { distance })', 'distance', opts.distance, DISTANCE, true); if (opts.height != null) this.height = opts.height; }
     this.target = obj; if (obj) this.focus.copy(obj.position);
   }
 
@@ -64,14 +67,15 @@ export class FollowCamera {
    */
   frame(target, { strength = 6 } = {}) { this.framing = target ? { target, strength } : null; }
   /**
-   * Set the view from game code (scripted look, your own input scheme): any of yaw / pitch (clamped to minPitch..maxPitch) / distance (clamped to the zoom range).
+   * Set the view from game code (scripted look, your own input scheme): any of yaw / pitch (clamped to minPitch..maxPitch) / distance (clamped to the zoom range;
+   * a value past the range warns once in dev, naming the option to widen).
    * Pair with mouseLook: false to own the view every frame. Returns the rig
    * @example engine.cameraRig.setView({ pitch: -0.6 })   // look up (negative pitch = camera below the look point)
    */
   setView({ yaw, pitch, distance } = {}) {
     if (yaw != null) this.yaw = yaw;
-    if (pitch != null) this.pitch = Math.min(this.maxPitch, Math.max(this.minPitch, pitch));
-    if (distance != null) this.distance = Math.min(this.maxDistance, Math.max(this.minDistance, distance));
+    if (pitch != null) this.pitch = inRange(this, 'followCamera', 'cameraRig.setView()', 'pitch', pitch, PITCH);
+    if (distance != null) this.distance = inRange(this, 'followCamera', 'cameraRig.setView()', 'distance', distance, DISTANCE);
     return this;
   }
   /** The current view: yaw, pitch, distance (wanted), arm (actual after walls / ground, m), lookPoint and look (unit 3D view direction of the camera) */

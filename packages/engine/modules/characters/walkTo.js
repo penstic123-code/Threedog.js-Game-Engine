@@ -35,7 +35,7 @@ export function walkTo(ch, target, { speed, arrive = 0.5, turnRate = 8, stuckSec
   };
   function finishMods() { sped?.remove(); runMod?.remove(); }
   const solve = () => {
-    path = e.characters.findPath(ch.root.position, target, { radius: ch.radius, id: ch.id });
+    path = e.characters.findPath(ch.root.position, target, { radius: ch.radius, passes: ch.passes, id: ch.id });
     i = 0; bestD = Infinity; stuckT = 0;
     return !!path?.length;
   };

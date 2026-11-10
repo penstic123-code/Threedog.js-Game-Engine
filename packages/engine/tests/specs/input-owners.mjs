@@ -77,22 +77,22 @@ export const specs = [
         const E = mk(createEngine, 'io-rules', { bindings: { ioJump: ['KeyJ'] } });
         out.twice = err(() => E.input.bind('ioJump', ['KeyK'], { owner: 'someModule' }));
         E.input.bind('ioJump', ['KeyH']); out.same = E.input.keysOf('ioJump').join();   // the same owner binding again replaces its own keys
-        E.input.action('ioTalk', { context: 'dialog', owner: 'modA' });
-        out.ctx = err(() => E.input.action('ioTalk', { context: 'walk', owner: 'modB' }));
-        out.shared = err(() => E.input.action('ioTalk', { context: 'dialog', owner: 'modB' }));   // same context: the two share one action
-        E.input.action('ioNeed', { owner: 'modA' }); E.input.action('ioMaybe', { owner: 'modA', optional: true });
+        E.input.define('ioTalk', { context: 'dialog', owner: 'modA' });
+        out.ctx = err(() => E.input.define('ioTalk', { context: 'walk', owner: 'modB' }));
+        out.shared = err(() => E.input.define('ioTalk', { context: 'dialog', owner: 'modB' }));   // same context: the two share one action
+        E.input.define('ioNeed', { owner: 'modA' }); E.input.define('ioMaybe', { owner: 'modA', optional: true });
         E.input.pressed('ioNeed'); E.input.pressed('ioNeed'); E.input.pressed('ioMaybe');
         out.unbound = warns.filter(w => w.includes("'ioNeed'") && w.includes("engine.input.bind('ioNeed'")).length;
         out.maybe = warns.filter(w => w.includes("'ioMaybe'")).length;
         out.describe = E.describe().input;
         // a module's declarations and bindings go with it: the batch rolls back, nothing stays
-        const mod = { name: 'ioMod', type: 'rules', install(e, ctx) { ctx.input.action('ioModAct', { keys: ['KeyT'] }); ctx.input.bind('ioJump2', ['KeyY']); } };
+        const mod = { name: 'ioMod', type: 'rules', install(e, ctx) { ctx.input.define('ioModAct', { keys: ['KeyT'] }); ctx.input.bind('ioJump2', ['KeyY']); } };
         out.rollback = err(() => E.use(mod, { name: 'ioBoom', type: 'rules', install() { throw new Error('io boom'); } }));
         out.left = [E.input.actions.has('ioModAct'), E.input.keysOf('ioModAct').length, E.input.keysOf('ioJump2').length];
         // a declaration leaving takes only itself: keys the game bound stay readable; an action nobody bound goes with it
         E.input.bind('ioKept', ['KeyI']);
-        E.input.action('ioKept', { owner: 'ioDecl' }).remove();
-        E.input.action('ioAlone', { owner: 'ioDecl' }).remove();
+        E.input.define('ioKept', { owner: 'ioDecl' }).remove();
+        E.input.define('ioAlone', { owner: 'ioDecl' }).remove();
         out.declLeft = [E.input.actions.has('ioKept'), E.input.keysOf('ioKept').join(), E.input.actions.has('ioAlone')];
         // settings: the player's key is the settings layer of 'input.keys', saved and reset through input.rebind
         const S = mk(createEngine, 'io-settings');

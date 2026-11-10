@@ -1,7 +1,9 @@
 # Shadows: cascades, box, budget, cache, the switch
 
-**In this recipe**: `engine.shadows` works on a light you hand it and leaves every other light alone: cascades, a box that follows, an update budget, the master
-switch. Filter, bias, softness and map size are plain three.js (last section).
+> **Covers:** shadows: cascades, the box, budget, cache, the master switch, filtering.
+> **Use when:** shadows look wrong, cost too much or must follow the view.
+> **Shortest:** `sun.castShadow = true` on your own light.
+> **Sections:** How it works what · Costs and stalls · Rules of the entry · A box that follows · Keep what does not · An update budget · Resolution after the first · The master switch · Filter, bias, softness, map
 
 ```js
 const sun = new THREE.DirectionalLight('#fff4e0', 3);
@@ -11,9 +13,9 @@ sun.shadow.mapSize.setScalar(engine.tier === 'low' ? 1024 : 2048);
 engine.scene.add(sun);
 
 const shadows = engine.shadows.cascades(sun, { count: 3, maxFar: 150 });
-engine.onRender(() => sun.position.copy(engine.uniforms.uSunDir.value).multiplyScalar(100));   // aim it as usual
-shadows.set({ count: 2 });        // on a settings screen: it recompiles
-shadows.remove();                 // one plain shadow map again
+engine.onRender(() => sun.position.copy(engine.uniforms.uSunDir.value).multiplyScalar(100));  // aim it as usual
+shadows.set({ count: 2 });  // on a settings screen: it recompiles
+shadows.remove();  // one plain shadow map again
 ```
 
 Cascades split one light's shadow along the view into 2-4 maps (three's CSM addon): sharp near the camera, coarse far away. Use them when near
@@ -85,8 +87,8 @@ sun.position.set(40, 80, 30); sun.castShadow = true;
 engine.scene.add(sun);
 
 const box = engine.shadows.box(sun, { follow: engine.player.root, extent: 40, snap: 'texel' });
-box.set({ extent: 60 });   // a wider view
-box.remove();              // position, target and the shadow camera come back
+box.set({ extent: 60 });  // a wider view
+box.remove();  // position, target and the shadow camera come back
 ```
 
 | field | default | meaning |
@@ -103,10 +105,10 @@ box.remove();              // position, target and the shadow camera come back
 ## Keep what does not move
 
 ```js fragment
-const kept = engine.shadows.cache(sun, { static: mesh => mesh !== cars.mesh });   // a test on each mesh; or an Object3D, or a list of them
-kept.redraw();                  // a static object moved, hid or left
-kept.set({ static: town });     // say again what is static
-kept.remove();                  // three's own shadow node again
+const kept = engine.shadows.cache(sun, { static: mesh => mesh !== cars.mesh });  // a test on each mesh; or an Object3D, or a list of them
+kept.redraw();  // a static object moved, hid or left
+kept.set({ static: town });  // say again what is static
+kept.remove();  // three's own shadow node again
 ```
 
 Off until you call it, and only on the light you hand in. Static casters are drawn once into a second depth map. Each shadow frame copies that map into the light's own
@@ -132,11 +134,11 @@ Listed in `describe().threePatches` as `shadow-cache`.
 A shadow map of a still scene need not redraw every frame:
 
 ```js
-const sun = new THREE.DirectionalLight(0xffffff, 2);   // your main light
-const budget = engine.shadows.budget(sun, { every: 3 });   // a third of the shadow fill cost
-budget.redraw();                                           // something big moved: draw on the next frame
-budget.set({ every: 1 });                                  // every frame again
-budget.remove();                                           // light.shadow.autoUpdate as it was
+const sun = new THREE.DirectionalLight(0xffffff, 2);  // your main light
+const budget = engine.shadows.budget(sun, { every: 3 });  // a third of the shadow fill cost
+budget.redraw();  // something big moved: draw on the next frame
+budget.set({ every: 1 });  // every frame again
+budget.remove();  // light.shadow.autoUpdate as it was
 ```
 
 It works on any light with a shadow, through that light's own `shadow.autoUpdate` and `shadow.needsUpdate`, so other lights are not touched. Skipped frames make swaying shadows stutter.
@@ -147,16 +149,16 @@ Before the first frame `light.shadow.mapSize.set(2048, 2048)` is all it takes. O
 
 ```js
 const sun = new THREE.DirectionalLight(0xffffff, 2);
-engine.shadows.mapSize(sun, 1024);   // the map is rebuilt and redrawn; with cascades, every cascade's map
+engine.shadows.mapSize(sun, 1024);  // the map is rebuilt and redrawn; with cascades, every cascade's map
 ```
 
-Photo mode does this itself for every casting DirectionalLight in the scene (`photo({ shadowMapSize })`) and puts the sizes back after the shot.
+Photo mode does this for every casting DirectionalLight (`photo({ shadowMapSize })`) and restores the sizes.
 
 ## The master switch
 ```js
-engine.shadows.enabled = false;                                                  // a game's own setting
+engine.shadows.enabled = false;  // a game's own setting
 const hold = engine.mod('shadows.enabled', { owner: 'cutscene', layer: 'system', set: false });
-hold.remove();                                                                   // back to what was before
+hold.remove();  // back to what was before
 ```
 
 It writes `renderer.shadowMap.enabled` only, so no light's `castShadow` changes, and recompiles materials once: use it on a menu, not per frame. The settings menu holds the same
@@ -164,11 +166,11 @@ point (`'shadows.enabled'`, layer `settings`, restrict only), so a player who tu
 
 ## Filter, bias, softness, map size: three.js
 ```js
-engine.renderer.shadowMap.type = THREE.VSMShadowMap;   // BasicShadowMap | PCFShadowMap (default) | VSMShadowMap
+engine.renderer.shadowMap.type = THREE.VSMShadowMap;  // BasicShadowMap | PCFShadowMap (default) | VSMShadowMap
 const sun = new THREE.DirectionalLight(0xffffff, 2);
-sun.shadow.radius = 3; sun.shadow.blurSamples = 8;     // softness (pcf, vsm); blur quality (vsm)
+sun.shadow.radius = 3; sun.shadow.blurSamples = 8;  // softness (pcf, vsm); blur quality (vsm)
 sun.shadow.bias = -0.0001; sun.shadow.normalBias = 0.03;
-sun.shadow.mapSize.setScalar(2048);                    // before the first frame; later also sun.shadow.map?.dispose(); sun.shadow.map = null;
+sun.shadow.mapSize.setScalar(2048);  // before the first frame; later also sun.shadow.map?.dispose(); sun.shadow.map = null;
 ```
 
 Changing the type later:

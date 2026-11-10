@@ -42,8 +42,8 @@ export class PostFX {
     } | null;
     /**
      * The one way to add a post effect. x is a three.js Pass (WebGL), a TSL node function (input, ctx) => node (WebGPU), or an effect
-     * { name, create | node | fuse, slot, order, params, needsDepth, needsBuffers, backend, skipOnLowTier, facts } (both renderers when it gives create and node, or a fuse). A wrong shape throws with nothing added.
-     * needsDepth, needsBuffers ('normal' | 'diffuse' | 'velocity', WebGPU), backend ('webgpu': not on the WebGL2 backend), skipOnLowTier (held when engine.tier is 'low') and facts (shown by describe().render.post) are explained on PostEffect.
+     * { name, create | node | fuse, slot, order, params, needsDepth, needsBuffers, backend, skipOnLowTier, cheaper, facts } (both renderers when it gives create and node, or a fuse). A wrong shape throws with nothing added.
+     * needsDepth, needsBuffers ('normal' | 'diffuse' | 'velocity' | 'metalRough', WebGPU), backend ('webgpu': not on the WebGL2 backend), skipOnLowTier (held when engine.tier is 'low') and facts (shown by describe().render.post) are explained on PostEffect.
      * A Pass that draws engine.scene takes the 'scene' slot, FXAA / SMAA / TAA 'final', any other 'hdr' after the effects already there, or 'ldr' once an
      * OutputPass was added. A RenderPass of engine.scene and an OutputPass are the engine's own stages: skipped and said once (an OutputPass still marks where display color starts).
      * @example const glow = engine.post.add(new UnrealBloomPass(size, 0.6, 0.4, 0.85), { name: 'glow' }); glow.enabled = false;
@@ -61,9 +61,18 @@ export class PostFX {
      * @example engine.post.get('bloom').set({ strength: 0.6 });
      * @param {string} name
      * @returns {PostHandle | undefined}
-     * @experimental
      */
     get(name: string): PostHandle | undefined;
+    /**
+     * The added effects that declare this role in about.acts ('glow', 'ao', 'exposure'): found by what they do, never by name; the settings rows and
+     * photo follow every one of them. Only when NO effect declares the role does the effect named `name` stand in (a game's own 'bloom' written before
+     * roles existed); with no `name` that case gives [].
+     * @param {string} role
+     * @param {string} [name] fallback effect name
+     * @returns {PostHandle[]}
+     * @experimental
+     */
+    byRole(role: string, name?: string): PostHandle[];
     /**
      * Hand the built chain to the game: the engine stops rebuilding it, so the composer's passes (post.object().passes) or the WebGPU pipeline's
      * outputNode are the game's to edit. own(false) gives it back and rebuilds from the list. describe().owned shows who has it.
@@ -76,7 +85,6 @@ export class PostFX {
     /**
      * Effects in render order: [{ name, slot, order, enabled }]
      * @returns {{ name: string, slot: PostSlot, order: number, enabled: boolean }[]}
-     * @experimental
      */
     list(): {
         name: string;
@@ -99,8 +107,16 @@ export class PostFX {
  * ldr: sRGB color after tone mapping (LUT, palette, grain, vignette); final: last of all (FXAA / SMAA).
  */
 export type PostSlot = "scene" | "hdr" | "tone" | "ldr" | "final";
+export type BorrowRenderer = (renderer: any, draw: () => any, opts?: {
+    scene?: import("three").Scene;
+    camera?: import("three").Camera;
+    clean?: boolean;
+}) => any;
 /**
- * width / height are in device pixels.
+ * width / height are in device pixels. borrowRenderer(renderer, draw, { scene, camera, clean }): run draw() with the renderer borrowed, the engine's one
+ * borrow (render/backend.js): target with cube face and mip, viewport, scissor, clear color, autoClear, tone mapping, shadowMap.autoUpdate (and with scene
+ * / camera their overrideMaterial, background, fog, layers) are put back afterwards, also when draw throws. For an effect that draws an extra pass of
+ * its own; its targets and materials stay the effect's. clean (WebGPU): start from three's reset state (no MRT), for a quad drawn inside a node frame.
  */
 export type PostContext = {
     engine: Engine;
@@ -109,6 +125,7 @@ export type PostContext = {
     width: number;
     height: number;
     params: Record<string, any>;
+    borrowRenderer: BorrowRenderer;
 };
 /**
  * A GLSL snippet that colors the pixel; neighboring effects with a fuse run as ONE fullscreen pass. glsl is statements that edit
@@ -127,8 +144,8 @@ export type PostFuse = {
     reads?: boolean;
 };
 /**
- * WebGPU only. scenePass: the scene's pass() node (.getTextureNode('depth'), getViewZNode() ...; .getTextureNode('normal' | 'diffuse' | 'velocity')
- * when an effect that is on says so in needsBuffers); tsl: three/tsl; display: three's display nodes (bloom, ao from three/addons/tsl/display) plus
+ * WebGPU only. scenePass: the scene's pass() node (.getTextureNode('depth'), getViewZNode() ...); buffer(name): a needsBuffers output as a texture node
+ * ('normal' | 'diffuse' | 'velocity' | 'metalRough', the last as .x metalness, .y roughness: it may share velocity's target, so read it here, not from scenePass); tsl: three/tsl; display: three's display nodes (bloom, ao from three/addons/tsl/display) plus
  * pass (an extra scene render), texture (the color so far as a texture to sample at other uvs) and own (a node the effect made itself, disposed with the chain),
  * handed in so the main entry of an effect package never imports three/webgpu (its /tsl subpath may, a WebGL game never loads that) and so the nodes they make are disposed with the chain;
  * fx: the threedog/tsl functions (noise, hash ...), handed in for the same reason;
@@ -143,10 +160,12 @@ export type PostNodeContext = {
     height: number;
     params: Record<string, any>;
     scenePass: any;
+    buffer: (name: string) => any;
     tsl: any;
     fx: Record<string, Function>;
     display: Record<string, Function>;
     p: Record<string, any>;
+    borrowRenderer: BorrowRenderer;
 };
 /**
  * An effect as data, the form post.add() takes. node (WebGPURenderer): returns the effect's output color node built on input (the color node so far); called again only when a param
@@ -163,11 +182,16 @@ export type PostNodeContext = {
  * RenderPixelatedPass, or the tone-mapping output); the chain throws when it would not. A pass that writes the scene depth into its own output (gl_FragDepth, then set pass.keepsDepth = true; dof does) does not count as a swap. update: apply new params in place;
  * without it set() rebuilds the implementation.
  * needsBuffers (WebGPU): extra outputs of the one scene render, merged across every effect that is on, so two effects never overwrite each other's setMRT:
- * 'normal' (view space, raw), 'diffuse' (surface color), 'velocity' (a temporal resolve follows, so the scene pass runs without MSAA).
+ * 'normal' (view space, raw), 'diffuse' (surface color), 'velocity' (a temporal resolve follows, so the scene pass runs without MSAA), 'metalRough' (metalness, roughness).
+ * More targets than the device takes (WebGPU's default: 32 bytes per pixel, four with the color) throws naming the effects.
  * backend: 'webgpu' = needs three's WebGPU backend itself (storage textures; WebGPURenderer on its WebGL2 backend cannot run it, so it is held there).
  * skipOnLowTier: the effect's own statement that engine.tier 'low' is too weak for it. The rule: an effect declares this itself and the engine only follows the declaration; no list of
  * expensive effects lives in the engine, and an effect that does not declare it runs on every tier. A held effect costs nothing, describe().render.post says why in `held`, the console says it once; the game's enabled stays as written.
+ * cheaper: the effect's own cheaper params ({ quality: 0.25 }), the first step adaptive quality takes under load before the resolution (core/scene/adaptive.js); only
+ * params that change in place belong here (live uniforms, or WebGL update()): a param that rebuilds the chain would cause the hitch the step is meant to cure. A declared
+ * skipOnLowTier is the ladder's last step: the effect held off. Neither is a list in the engine; the game reorders or drops them with engine.adaptive.steps.
  * facts: read by describe().render.post (a voxel size, what the effect still misses).
+ * about: what the picture menu (engine.catalog('picture')) prints for it: { cost, on, recipe, limits, webgpuOnly?, acts? } (acts: 'glow' | 'exposure' | 'ao', what the combination checks, the settings rows and photo read in place of a name);
  */
 export type PostEffect = {
     name: string;
@@ -178,10 +202,12 @@ export type PostEffect = {
     order?: number;
     enabled?: boolean;
     needsDepth?: boolean;
-    needsBuffers?: ("normal" | "diffuse" | "velocity")[];
+    needsBuffers?: ("normal" | "diffuse" | "velocity" | "metalRough")[];
     backend?: "webgpu";
     skipOnLowTier?: boolean;
+    cheaper?: Record<string, any>;
     facts?: () => Record<string, any> | null;
+    about?: Record<string, any>;
     params?: Record<string, any>;
     update?: (impl: any, params: Record<string, any>) => void;
 };

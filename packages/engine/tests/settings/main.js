@@ -12,7 +12,7 @@ engine.use(
 );
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0x8a9a7a }));
 ground.receiveShadow = true; engine.add(ground);
-engine.characters.createPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 0 } });
+engine.characters.addPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 0 } });
 engine.dialogue.define('测试', { start: { text: '你好。', next: 'b' }, b: { text: '再见。' } });
 
 engine.music.rules([

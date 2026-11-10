@@ -10,11 +10,11 @@
 // Vehicles are used through an interface (the { object, speed, drive(), seatPosition(), exitPosition() } returned by rigid.addWheeled); rigid is not imported
 // here.
 import { Character } from './Character.js';
-import { createPlayer } from './player.js';
+import { addPlayer } from './player.js';
 import { NPCManager, NPC } from './NPC.js';
 import { findPath } from './astar.js';
 import { findSpawn, moveInput, withHeights } from './moveHelpers.js';
-import { AsyncPaths, sourcePath } from './pathAsync.js';
+import { AsyncPaths, sourcePath, noteAStarStandIn } from './pathAsync.js';
 import { needMaterial } from '../../core/base/validate.js';
 import { builtInSounds } from '../../core/assets/assetManifest.js';
 import { readParams, keysSchema } from '../../core/base/params.js';
@@ -27,12 +27,14 @@ import { footstepSynth, stepSound } from './footsteps.js';
 import { xzOf, yOf } from '../../core/base/math.js';
 import { surfaceOr } from '../../core/scene/ground.js';
 import { isEngineMade } from '../../render/patches.js';
+import { keepPart } from '../../core/base/freeParts.js';
 import { capsuleDefault, capsuleMaterial } from './proceduralRig.js';
+import { passesOf } from '../collision/grid.js';
 export { Character, NPC };
 
 /**
  * Characters module. Once installed:
- *   engine.characters.createPlayer({ spawn: {x, z}, colors, model, clips })  → player
+ *   engine.characters.addPlayer({ spawn: {x, z}, colors, model, clips })  → player
  *   engine.npcs.add({ id, name, schedule, interact, ... })                       → NPC handle (needs npcs: true, on by default; data lives in engine.world)
  *   engine.npcs.remove(npc or name); engine.characters.removePlayer()
  *   three.js object of player and NPC: .root (Group), position .position (Vector3); spawn / position accept a Vector3 directly
@@ -42,14 +44,16 @@ export { Character, NPC };
 /** The characters.path rule, else navmesh when ready, else A* (characters.findPath; the one synchronous A* entry, see R20) */
 function solvePath(e, st, from, to, o) {
   const { detailed, id, ...rest } = o;
+  rest.passes = passesOf('characters.findPath()', o.passes);
   let res = sourcePath(e, st.path, from, to, o);
   if (res) { /* the game's source answered */ }
   else if (e.nav?.ready) res = e.nav.findPath(from, to, { ...rest, detailed: true });
   else if (!e.collision) res = { status: 'notReady', path: null };
   else {
+    noteAStarStandIn(e);
     const [sx, sz] = xzOf(from), [gx, gz] = xzOf(to), radius = rest.radius ?? e.movement.radius;
     const floor = (x, z, y) => surfaceOr(e, x, z, y, y);
-    const path = findPath((x, z, y) => e.collision.walkableAt(x, z, radius, y), sx, sz, gx, gz, { ...rest, radius, y: floor(sx, sz, yOf(from)), goalY: yOf(to), floor, body: e.movement.height });
+    const path = findPath((x, z, y) => e.collision.walkableAt(x, z, radius, y, rest.passes), sx, sz, gx, gz, { ...rest, radius, y: floor(sx, sz, yOf(from)), goalY: yOf(to), floor, body: e.movement.height });
     // nav installed but not ready: A* is only a stand-in, tell the caller honestly
     res = { status: e.nav ? 'notReady' : path ? 'ok' : 'noPath', path };
   }
@@ -66,7 +70,9 @@ const CHARACTERS_PARAMS = keysSchema(['npcs', 'npcTiers', 'animation', 'fall']);
  * @param {any} animation characters({ animation })
  */
 function charactersApi(e, st, animation) {
-  const share = m => { e.assets.shared.add(m); return m; };   // every capsule draws with it: removing one character must not dispose it
+  // keepPart: every capsule draws with this material, so removing one character must not dispose it. The hold goes when the material is replaced or the
+  // module unloads (dispose below), and a default one is then freed here, as no asset load owns it; a game's is ordinary again for engine.remove
+  const hold = m => { st.keep?.remove(); st.keep = keepPart(m); return (st.material = m); };
   const api = {
     /** @internal characters({ animation }): what every model's Animator starts from (useModel.js) */
     _animation: animation,
@@ -78,12 +84,12 @@ function charactersApi(e, st, animation) {
      * @example engine.characters.material = new THREE.MeshToonMaterial({ color: 0xd9a066 });
      * @type {THREE.Material}
      */
-    get material() { return (st.material ??= share(capsuleDefault())); },
+    get material() { return st.material ?? hold(capsuleDefault()); },
     set material(m) {
       needMaterial('character-option', 'engine.characters.material', m, '. Example: engine.characters.material = new THREE.MeshStandardMaterial({ color: 0xd9a066 })');
       const old = api.material;
       if (m === old) return;
-      st.material = share(m);
+      hold(m);
       for (const [mesh, color] of api._capsules) {
         if (mesh.material !== old) mesh.material.dispose();   // the copy in a character's own color
         mesh.material = capsuleMaterial(m, color);
@@ -109,12 +115,15 @@ function charactersApi(e, st, animation) {
     /**
      * Pathfinding (the only entry): navmesh if nav is ready, else A* (needs the collision module). Returns [{ x, y, z }…], null if unreachable: every point has its height, and a y on from / to picks the floor.
      * Pass { detailed: true } to get { status, path }: 'ok' found | 'noPath' unreachable | 'notReady' nav installed but mesh not generated yet (path is the
-     * A* fallback, may be inaccurate; null without collision)
+     * A* fallback, may be inaccurate; null without collision). { passes: ['gate'] }: the path goes through colliders of those layers (collision.addBox { layer }), as the body does
+     * (walkTo and NPCs pass their character's passes themselves)
      * Where paths come from is the rule 'characters.path' (findPathAsync, walkTo and NPCs follow it too; o.id picks an entry for one character): default 'walk' is the above, false is no path,
      * a function ({ from, to, o }, engine) => [{ x, y?, z }…] | null | 'walk' is your own source, for flight, swimming or anything off the ground. It must be deterministic; it is not saved
      * @example engine.mod('characters.path', { owner: 'birds', id: 'hawk', set: ({ from, to }) => [from, { x: to.x, y: 40, z: to.z }, to] });
      */
     findPath(from, to, o = {}) { return solvePath(e, st, from, to, o); },
+    /** @internal may a nav crowd agent walk for this NPC: not with passes (the crowd's one mesh stops at every collider) or a 'characters.path' entry of its own (a game's source or false) */
+    _crowdFits(id, passes) { return !passes?.length && st.path.value(id) === 'walk'; },
     /**
      * findPath for many callers (NPC crowds, AI squads): solved in engine.threads workers, done(path, status) runs on a fixed step ~4 steps later
      * via engine.commits, so threads on / off give the same paths. Keep findPath for the few that need a path now (click-to-move). Details: recipe 12
@@ -122,13 +131,12 @@ function charactersApi(e, st, animation) {
      * @param {any} from
      * @param {any} to
      * @param {(path: { x: number, y: number, z: number }[] | null, status: 'ok' | 'noPath' | 'notReady') => void} done
-     * @param {{ radius?: number, step?: number, maxNodes?: number }} [opts]
+     * @param {{ radius?: number, passes?: string[], step?: number, maxNodes?: number }} [opts]
      * @returns {{ remove: () => void }}
      * @example const req = engine.characters.findPathAsync(guard.position, target, (path, status) => { guard.path = path; });
      * req.remove();   // target changed before the answer came
      */
     findPathAsync(from, to, done, opts) { return st.paths.request(from, to, done, opts); },
-    /** How many findPathAsync requests leave per fixed step (default 32); the rest wait for the next steps */
     /**
      * Bends a link crossing away from its straight line: (t, position, crossing, character) with t 0-1, called each step after position is set on the line, write to position.
      * Depends only on its arguments, so a crossing saved halfway resumes on the same curve. null = the straight line
@@ -136,13 +144,14 @@ function charactersApi(e, st, animation) {
      * @experimental
      */
     linkPose: null,
+    /** How many findPathAsync requests leave per fixed step (default 32); the rest wait for the next steps */
     get pathsPerStep() { return st.paths.perStep; },
     set pathsPerStep(n) { st.paths.perStep = Math.max(1, n | 0); },
     /**
      * The 'camera' player control as a value: movement keys / stick relative to the camera (world axes, up = -Z, without a camera module), the 'run' action
      * when the game bound one, input.autopilot.
      * Returns a reused { x, z, run } (do not keep it). Call it from your own control function to wrap the default instead of rewriting it. seat: read an engine.input.seat() instead of engine.input
-     * @example createPlayer({ ...presets.player.thirdPerson, control: (p, input) => busy ? null : engine.characters.moveInput() }) // no movement while
+     * @example addPlayer({ ...presets.player.thirdPerson, control: (p, input) => busy ? null : engine.characters.moveInput() }) // no movement while
      * attacking
      */
     moveInput(seat) { return moveInput(e, seat); },
@@ -162,7 +171,6 @@ function charactersApi(e, st, animation) {
      */
     addVehicle(vehicle) { return e.ops.allow(() => addVehicle(e, vehicle)); },
     /** @internal outside a fixed step: the rig calls it before it reads a rider's position (camera/common.js) */
-    /** @internal the camera calls this after its own step, so a rider and the view move together */
     carryRiders() { carryRiders(e, true); },
     /**
      * Remove a player, by default engine.player (exit the vehicle first, stop responding to keys, dispose the model: animation, geometry, materials; the 'player' record in
@@ -186,13 +194,13 @@ function charactersApi(e, st, animation) {
      * module at the player (and back after a vehicle)
      * The world record, saving and describe().player work the same for every control. The engine drives the player on its channel (default
      * 'player': dt passed to move and to the control function is engine.time.dt('player', 'player'), so engine.mod('time.player', ...) slows it)
-     * @example const player = engine.characters.createPlayer({ ...presets.player.thirdPerson, spawn: engine.characters.findSpawn() })
+     * @example const player = engine.characters.addPlayer({ ...presets.player.thirdPerson, spawn: engine.characters.findSpawn() })
      * @example const roll = engine.control.take(player, { owner: 'roll', layer: 'script', step: () => ({ x: 0, z: 1, run: true }) }); engine.clock.after(0.4, () => roll.remove(), { channel: 'real' })
      */
     // creating the player is setup (a game does it after loading its model, or on level:loaded), not a gameplay action: the ops guard lets its writes through
-    createPlayer(opts = {}) { return e.ops.allow(() => api._createPlayer(opts)); },
+    addPlayer(opts = {}) { return e.ops.allow(() => api._createPlayer(opts)); },
     /** @internal */
-    _createPlayer(opts) { return createPlayer(e, api, st, opts); },
+    _createPlayer(opts) { return addPlayer(e, api, st, opts); },
   };
   return api;
 }
@@ -200,9 +208,9 @@ function charactersApi(e, st, animation) {
 /** The player's actions, declared once by the module (gone with it); the game binds their keys (presets.bindings.walk / .brake), so no option takes keys.
  * optional: a player without jump or brake still works, reading them unbound stays silent */
 function declareActions(ctx) {
-  ctx.input.action('jump', { label: 'input.jump', optional: true });
-  ctx.input.action('run', { label: 'input.run', optional: true });
-  ctx.input.action('brake', { label: 'input.brake', context: 'vehicle', optional: true });
+  ctx.input.define('jump', { label: 'input.jump', optional: true });
+  ctx.input.define('run', { label: 'input.run', optional: true });
+  ctx.input.define('brake', { label: 'input.brake', context: 'vehicle', optional: true });
 }
 
 /** What the module listens to, all through ctx.track */
@@ -250,10 +258,10 @@ function describeCharacters(e, ctx, mgr) {
 export function characters(opts = {}) {
   readParams('characters', CHARACTERS_PARAMS, opts);
   const { npcs = true, npcTiers, animation, fall } = opts;
-  // players: what createPlayer made, by id. Their per-frame animation and per-step drive run in this module's own fixed / frame hooks (not
-  // engine.onFixed), so a game onFixed sees the same player position whether it was registered before or after createPlayer (phase 'early' = before the move,
+  // players: what addPlayer made, by id. Their per-frame animation and per-step drive run in this module's own fixed / frame hooks (not
+  // engine.onFixed), so a game onFixed sees the same player position whether it was registered before or after addPlayer (phase 'early' = before the move,
   // 'late' = after)
-  const st = { mgr: null, paths: null, path: null, players: new Map(), material: null };
+  const st = { mgr: null, paths: null, path: null, players: new Map(), material: null, keep: null };
   return {
     // before rigid: the player's move this step is in the physics step that follows (as when control was an onFixed)
     content: { npcs: NPC_CONTENT },
@@ -285,7 +293,11 @@ export function characters(opts = {}) {
     frame(dt, e) { for (const p of st.players.values()) p.character.animate(dt); carryRiders(e, true); },
     describe(e, ctx) { describeCharacters(e, ctx, st.mgr); },
     // a player, a queued path and the control lookup all outlive install unless they are ended here; the player's record stays in world, as NPC records do
-    dispose(e) { for (const p of [...st.players.values()]) p.dispose(true); st.paths?.stop(); e.control.resolveWith(() => null); if (st.mgr) e.npcs = null; },
+    dispose(e) {
+      for (const p of [...st.players.values()]) p.dispose(true); st.paths?.stop(); e.control.resolveWith(() => null); if (st.mgr) e.npcs = null;
+      if (isEngineMade(st.material)) st.material.dispose();   // the default capsule material is this module's (kept, so nothing else frees it); a game's stays the game's
+      st.keep?.remove(); st.material = st.keep = null;
+    },
   };
 }
 

@@ -17,9 +17,40 @@ import { acceleratedRaycast, computeBoundsTree } from 'three-mesh-bvh';
 import { thingOf } from '../inspect/Inspect.js';
 import { RESERVED_LAYERS } from '../../render/layers.js';
 import { DEV, warnOnce } from '../base/validate.js';
+import { notePatch, patchOn } from './threePatches.js';
 
 // No three.js prototype is changed: a registered static mesh gets its own BVH and its own raycast (an own property on that mesh), so the engine's
 // rays are fast and the game's own Raycaster stays plain three.js. A game that wants BVH page-wide writes three-mesh-bvh's three documented lines.
+// Those two writes on the game's objects are a change to three like any other, so they are listed (threePatches 'ray-bvh') and undone:
+// the last registration of a mesh going (remove, forget, geometry dispose, engine.dispose) gives it back the raycast it had, and a
+// boundsTree Rays built is dropped once no registered mesh uses that geometry. A boundsTree the game (or another library) built stays theirs.
+// Module-level, not per engine: two engines may register one mesh, and only the last one leaving may put it back.
+const PATCH = 'ray-bvh';
+/** mesh -> { users, own, prev }: own / prev is the raycast as it was (an own property or the class's) @type {Map<THREE.Object3D, any>} */
+const fast = new Map();
+/** geometry -> { users, tree }: only the trees Rays built @type {Map<THREE.BufferGeometry, any>} */
+const built = new Map();
+function accelerate(m) {
+  const f = fast.get(m); if (f) { f.users++; return; }
+  if (!patchOn(PATCH)) return;
+  const g = m.geometry;
+  if (!g.boundsTree && triangles(g) >= BVH_MIN) { computeBoundsTree.call(g); built.set(g, { users: 0, tree: g.boundsTree }); }
+  const b = built.get(g); if (b) b.users++;
+  // a game's own raycast override wins: only the class's own method is replaced
+  if (g.boundsTree && m.raycast === THREE.Mesh.prototype.raycast) { fast.set(m, { users: 1, own: Object.hasOwn(m, 'raycast'), prev: m.raycast, geometry: g }); m.raycast = acceleratedRaycast; }
+  else if (b) fast.set(m, { users: 1, own: null, prev: null, geometry: g });   // holds the tree it uses, no raycast to give back
+}
+function decelerate(m, g, all = false) {
+  const f = fast.get(m); if (!f || (--f.users > 0 && !all)) return;
+  fast.delete(m);
+  // a raycast the game wrote since is the game's: left alone
+  if (f.prev && m.raycast === acceleratedRaycast) { if (f.own) m.raycast = f.prev; else delete m.raycast; }
+  const b = built.get(g);
+  if (b && --b.users <= 0) { built.delete(g); if (g.boundsTree === b.tree) g.boundsTree = null; }
+}
+notePatch(PATCH, 'geometry.boundsTree (three-mesh-bvh) and an own mesh.raycast = acceleratedRaycast on each mesh of 256+ triangles registered with engine.rays.addStatic; its last registration going gives the raycast back and drops a boundsTree Rays built (core/scene/Rays.js)',
+  () => { for (const [m, f] of [...fast]) decelerate(m, f.geometry, true); },
+  { scope: 'objects in the scene', lost: 'engine.raycast tests every triangle of a large static mesh: the same hits, slower' });
 
 // Meshes under this many triangles get no BVH (blocky buildings etc.: the per-triangle check is faster)
 const BVH_MIN = 256;
@@ -43,7 +74,7 @@ export class Rays {
   constructor(engine) {
     /** @internal */ this.engine = engine;
     /** @internal */ this.providers = [];
-    /** @internal the tick the statics' world matrices were last brought up to date */ this.fresh = -1;
+    /** @internal the tick the statics' world matrices were last brought up to date; -1 = refresh at the next ray (a registration, a new frame) */ this.fresh = -1;
     /** Registered mesh -> { refs: registration count, occ: camera-blocker registration count } @type {Map<THREE.Object3D, { refs: number, occ: number }>} @experimental */
     this.statics = new Map();
     /** The three.js Raycaster (firstHitOnly is on) @type {any} @experimental */
@@ -52,7 +83,7 @@ export class Rays {
     this.ray.layers.enable(RESERVED_LAYERS.batched);   // originals drawn through engine.batching sit here and must still be hit
   }
   /**
-   * Register a static object and every mesh under it (an array also works; meshes over 256 triangles get a BVH); occluder: true also blocks the camera. Returns a handle { remove() }.
+   * Register a static object and every mesh under it (an array also works; meshes over 256 triangles get a BVH); occluder: true also blocks the camera. Returns a handle { remove() }. Matrices are read once per tick and frame: a registered mesh moved between two rays of one step needs updateMatrixWorld() first.
    * Only visible objects are hit. Something that is merely not drawn is still hit: batched originals, far hlod originals and the full model of a far assets.lod sit on a reserved layer, with their visible true.
    * Unregisters automatically on geometry dispose or engine.remove.
    * @param {THREE.Object3D | THREE.Object3D[]} obj
@@ -67,31 +98,40 @@ export class Rays {
     for (const o of [].concat(obj)) o.traverse(m => {
       if (DEV && (m.isInstancedMesh || m.isSkinnedMesh)) warnOnce(`engine.rays.addStatic: skipped ${m.isInstancedMesh ? 'an InstancedMesh' : 'a SkinnedMesh'} ("${m.name}"): rays do not hit these and they do not block the camera. Use a collider, or register a plain stand-in mesh.`, 'rays-skip-' + m.type);
       if (!m.isMesh || m.isInstancedMesh || m.isSkinnedMesh || m.userData.lodLevel || !m.geometry?.attributes.position) return;   // a low level stands in on screen only: rays use the full model
-      if (!m.geometry.boundsTree && triangles(m.geometry) >= BVH_MIN) computeBoundsTree.call(m.geometry);
-      if (m.geometry.boundsTree && m.raycast === THREE.Mesh.prototype.raycast) m.raycast = acceleratedRaycast;   // a game's own raycast override wins
       let s = this.statics.get(m);
       if (!s) {
-        s = { refs: 0, occ: 0, geometry: m.geometry, onDispose: () => this._drop(m) };
+        s = { refs: 0, occ: 0, geometry: m.geometry, onDispose: () => m.geometry === s.geometry ? this._drop(m) : this._rebind(m, s) };
         m.geometry.addEventListener('dispose', s.onDispose);
+        accelerate(m);
       }
       s.refs++; if (occluder) s.occ++;
-      this.statics.set(m, s); added.push(m);
+      this.statics.set(m, s); added.push([m, s]);
     });
     return { remove: () => {
-      for (const m of added.splice(0)) {
-        const s = this.statics.get(m); if (!s) continue;
+      for (const [m, mine] of added.splice(0)) {
+        const s = this.statics.get(m); if (s !== mine) continue;   // forgotten, or registered again since: that count is not this handle's
         s.refs--; if (occluder) s.occ--;
         if (s.refs <= 0) this._drop(m);
       }
     } };
   }
-  /** Unregister every mesh under the object (engine.remove calls this automatically) @param {THREE.Object3D} obj @experimental */
+  /** Unregister every mesh under the object (engine.remove calls this) @param {THREE.Object3D} obj @internal */
   forget(obj) { obj.traverse(m => this._drop(m)); }
+  /** @internal The mesh got another geometry (mesh.geometry = ...) and the old one was disposed: the mesh stays registered, and now follows the new one (listener and BVH) */
+  _rebind(m, s) {
+    s.geometry.removeEventListener('dispose', s.onDispose);
+    decelerate(m, s.geometry);
+    s.geometry = m.geometry;
+    if (!s.geometry?.attributes.position) return this._drop(m);   // nothing to hit any more
+    s.geometry.addEventListener('dispose', s.onDispose);
+    accelerate(m);
+  }
   /** @internal */
   _drop(m) {
     const s = this.statics.get(m); if (!s) return;
     s.geometry.removeEventListener('dispose', s.onDispose);
     this.statics.delete(m);
+    decelerate(m, s.geometry);
   }
   /** @internal Clear all registrations (called by engine.dispose) */
   dispose() { for (const m of [...this.statics.keys()]) this._drop(m); this.providers = []; }
@@ -141,8 +181,9 @@ export class Rays {
     } else {
       const ray = this.ray.ray, tick = this.engine.time.tick;
       // matrices are refreshed by the render, and a fixed step runs before it: what moved or was added since would answer from where it was.
-      // shortcut: once per tick and not per ray (a walk up the parents of 5000 statics costs more than the rays): something moved between two rays of one step answers from the next tick
+      // Once per tick and per frame, not per ray (5000 statics x 4 rays a frame measured 12 ms against 3-5 ms): a static moved between two rays of one step needs updateMatrixWorld() on it first (docs/api/rays.md)
       if (this.fresh !== tick) { this.fresh = tick; for (const m of this.statics.keys()) m.updateWorldMatrix(true, false); }
+      this.ray.firstHitOnly = !filter;   // BVH keeps one hit per mesh: a filter running after that would lose the hit it accepts behind the one it refuses
       for (const [m, s] of this.statics) {
         if (occluders && !s.occ) continue;   // first: a camera ray then pays one flag check for every mesh that is no blocker
         if (!mayHit(ray, m, far)) continue;   // most statics are nowhere near the ray: skip them before walking parents
@@ -150,6 +191,7 @@ export class Rays {
         hits.length = 0; m.raycast(this.ray, hits);
         for (const h of hits) take(toHit(h));
       }
+      this.ray.firstHitOnly = true;
       if (targets === 'all') for (const p of this.providers) take(p(o.clone(), d.clone(), far));
     }
     if (best) { const e = this.engine, h = best; Object.defineProperty(h, 'thing', { get: () => thingOf(e, h.object, h), configurable: true }); }   // computed only when read

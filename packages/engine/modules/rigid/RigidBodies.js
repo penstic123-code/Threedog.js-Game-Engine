@@ -52,19 +52,23 @@ function setLocalPose(mesh, t, r) {
 const _I = new THREE.Matrix4(), _eu = new THREE.Euler(), _box = new THREE.Box3(), _part = new THREE.Box3(), _inv = new THREE.Matrix4(), _rel = new THREE.Matrix4();
 /**
  * The size a body gets from its model, as [x, y, z]: measured in the mesh's own axes, since the body takes its rotation, and at its world scale, parents included.
- * The box around it in the world grew with the turn, so a turned crate got a larger body turned on top of that
+ * The box around it in the world grew with the turn, so a turned crate got a larger body turned on top of that.
+ * skip(o): parts left out (a vehicle's wheels). The mesh is not moved: a parent's transform is in matrixWorld and in its inverse alike, so it cancels
  */
-function ownSize(mesh) {
+export function ownBox(mesh, skip) {
   mesh.updateWorldMatrix(true, true);
   mesh.matrixWorld.decompose(_p, _q, _s);
   _inv.copy(mesh.matrixWorld).invert(); _box.makeEmpty();
   mesh.traverse(o => {
-    const g = o.geometry; if (!g) return;
+    const g = o.geometry; if (!g || skip?.(o)) return;
     if (!g.boundingBox) g.computeBoundingBox();
     _box.union(_part.copy(g.boundingBox).applyMatrix4(_rel.multiplyMatrices(_inv, o.matrixWorld)));
   });
-  return _box.getSize(_p).multiply(_s).toArray();
+  const box = _box.clone(), k = _s.set(Math.abs(_s.x), Math.abs(_s.y), Math.abs(_s.z));   // a mirrored model (scale -1) has the size of its picture, not min above max
+  box.min.multiply(k); box.max.multiply(k);
+  return box;
 }
+const ownSize = mesh => ownBox(mesh).getSize(_p).toArray();
 const NO_TURN = { x: 0, y: 0, z: 0, w: 1 };
 
 const PHYSICS = { physics: true };   // stream source filter (shared, not rebuilt every step)
@@ -111,6 +115,7 @@ export class RigidBodies {
   constructor(engine, { gravity = -9.81, terrainRing = 1, buoyancy = true, buoyancyForce = 1.6, waterDrag = 2.5, floatLine = 0.3, floatDepth = 0.8,
     treeColliderHeight = 6, treeRadius = 16, playerCapsule, fallbackFloor = true } = {}) {
     const mv = engine.movement;   // default capsule uses the shared character radius / height: total height = 2 * halfHeight + 2 * radius
+    this._capsuleRadiusGiven = playerCapsule?.radius != null;   // the mover follows the character's radius only when the game did not set one here
     playerCapsule ??= { halfHeight: Math.max(0.05, (mv.height - 2 * mv.radius) / 2), radius: mv.radius };
     this.engine = engine;
     this.gravity = gravity;
@@ -126,7 +131,7 @@ export class RigidBodies {
     this.trees = new Map();           // chunk key -> { token, colliders }: trunk cylinders of the chunks near the player / bodies (see sync.js)
     this._anchors = []; this._treeMemo = [];
     this.groundTrees = new Map();     // 'x,z,r' -> cylinder collider: circles from ground.forEachCollider when the ground has no chunked collision
-    /** @internal houses / pillars of the collision module as colliders (engine.collision.mirror, built on the first step: sync.js syncStatics) */ this._statics = null; /** @internal mirror data -> collider, for those standing on the ground */ this._onGround = new Map();
+    /** @internal houses / pillars of the collision module as colliders (engine.collision.mirror, built on the first step: sync.js syncStatics) */ this._statics = null; /** @internal mirror data -> collider, for those standing on the ground */ this._onGround = new Map(); /** @internal collider -> mirror data, for those with a layer: the rapier mover lets a body that passes it through */ this._layered = new Map();
     /** @internal the sources of the copies above, checked on every read (_current) */ this._collision = follows(() => engine.collision); this._level = follows(() => engine.ground.staticTrimeshes ?? null, () => engine.ground.staticVersion?.() ?? 0); this._standOn = follows(() => engine.ground, G => G.staticVersion?.() ?? 0); this._floor = follows(() => wantsFloor(this));
     /** @internal the world changed since Rapier last built its query structures, which it does only in a step */ this._behind = false;
     /** @internal fixed solids of the collider3d contract: what they are, so every new world (init, _fresh) builds them; a collider only lives as long as its world */ this._solids = new Set();
@@ -143,9 +148,10 @@ export class RigidBodies {
   _wasm() { return (this._rapier ??= import('@dimforge/rapier3d-compat').then(async mod => { const R = mod.default ?? mod; await R.init(); return R; })); }
 
   /** @internal module hook */
-  async init() {
+  async init(signal) {
     if (this.ready) return;
     this.rapier = await this._wasm();
+    if (signal?.aborted) return;   // unloaded while the WASM loaded: dispose ran with no world to free, so none may be made now (ctx.signal)
     this._newWorld();
     this.ready = true;
   }
@@ -195,7 +201,7 @@ export class RigidBodies {
     }
     const old = this.world, R = this.rapier, hadJoints = old.impulseJoints.len();
     this._newWorld();
-    this.terrain.clear(); this.trees.clear(); this.groundTrees.clear(); this._statics?.clear(); this._onGround.clear();
+    this.terrain.clear(); this.trees.clear(); this.groundTrees.clear(); this._statics?.clear(); this._onGround.clear(); this._layered.clear();
     this._level.reset(); this._levelColliders = [];
     this._srcMemo = null; this._srcPending = false; this._syncT = 0; this._anchors = []; this._treeMemo = [];
     for (const b of this.bodies) {
@@ -233,6 +239,9 @@ export class RigidBodies {
     // id names the body in the save part 'rigid': two live bodies with one id would load into each other
     if (id != null && this.bodies.some(b => b.id === id)) throw codedError('rigid-misuse', `rigid: id '${id}' is already used by another body or vehicle; ids name the body in saves, pick a unique one (e.g. the world record id)`);
     const R = this.rapier, { p, q } = worldPose(mesh, 'rigid');
+    // the pose registration comes first: a mesh another body or a character already owns throws here, before any Rapier body exists to leak
+    let entry;
+    const pose = this.engine._poses.add(mesh, at => { if (this.world) this.setPosition(entry, entry.place?.(at) ?? at); }, () => entry.remove(), () => id != null ? `rigid body '${id}'` : 'a rigid body');
     const bd = (fixed ? R.RigidBodyDesc.fixed() : R.RigidBodyDesc.dynamic())
       .setTranslation(p.x, p.y, p.z).setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
       .setLinearDamping(damping).setAngularDamping(angularDamping).setCanSleep(true);
@@ -240,13 +249,13 @@ export class RigidBodies {
     desc.setFriction(friction).setRestitution(restitution).setMass(mass);
     const collider = this.world.createCollider(desc, body);   // desc is kept on the entry (_desc): _fresh rebuilds the collider from it
     if (!mesh.parent) this.engine.add(mesh, { owner: 'engine:rigid' });   // shadow casting/receiving follows the model's own settings (not forced)
-    const entry = { id, body, collider, mesh, object: mesh, enabled: true, volume: 0, damping, angularDamping, fixed, _x: p.x, _z: p.z, _desc: desc };   // _x / _z: where sync.js looks for trunks to give it
+    entry = { id, body, collider, mesh, object: mesh, enabled: true, volume: 0, damping, angularDamping, fixed, _x: p.x, _z: p.z, _desc: desc };   // _x / _z: where sync.js looks for trunks to give it
     entry.remove = () => this._remove(entry);
     recordLocks(entry, body);
     this.bodies.push(entry); this._byHandle = null; this._behind = true;
     // a write to the record of this model lands here (world/views.js placed); with rigid gone first at dispose the model is on its own
     // entry.place: a template's copy says what a written place means for it (content/templates.js)
-    this.engine._poses.add(mesh, at => { if (this.world) this.setPosition(entry, entry.place?.(at) ?? at); }, () => entry.remove());
+    entry._pose = pose;
     // a loaded save holds this body's state (it is built after the load, e.g. by a world presenter): it continues from there, not from the record's pose
     this._claim(entry);
     return entry;
@@ -269,7 +278,7 @@ export class RigidBodies {
   addHull(mesh, o = {}) {
     readParams('rigid.addHull()', keysSchema(BODY_KEYS), o);
     if (!this._ready('addHull')) return null;
-    const g = mesh.geometry, pts = new Float32Array(g.attributes.position.array.length);
+    const g = mesh.geometry, pts = new Float32Array(g.attributes.position.count * 3);   // count, not array.length: an interleaved attribute's array is the whole buffer
     const v = new THREE.Vector3();
     mesh.updateWorldMatrix(true, false); mesh.matrixWorld.decompose(_p, _q, _s);   // the world scale: a parent's counts as much as the mesh's own
     const scale = _s.clone();
@@ -332,7 +341,7 @@ export class RigidBodies {
     const i = this.bodies.indexOf(entry); if (i < 0) return;
     this.world?.removeRigidBody(entry.body);   // no world: rigid left first at dispose and freed its bodies with it
     this.bodies.splice(i, 1); this._byHandle = null; this._behind = true;
-    this.engine._poses.remove(entry.mesh);
+    entry._pose.remove();
   }
   /** Push: impulse vector v (Vector3 / [x, y, z] / { x, y, z }) */
   impulse(entry, v) { const { x, y, z } = vec3(v); entry.body.wakeUp(); entry.body.applyImpulse({ x, y, z }, true); }
@@ -572,11 +581,11 @@ export function rigid(opts = {}) {
       ctx.track(e.events.on('session:end', () => { r._freshDue = true; }));
       ctx.track(e.events.on('session:failed', () => { r._freshDue = false; r._claimSaved(); }));
       ctx.track(e.events.on('world:load', () => r._fresh()));
-      ctx.saves.register('rigid', { notAtomic: 'the physics world is stepped, not written: a load cannot rewind what the bodies did', save: () => r._saveState(), load: d => r._loadState(d) });
+      ctx.saves.define('rigid', { notAtomic: 'the physics world is stepped, not written: a load cannot rewind what the bodies did', save: () => r._saveState(), load: d => r._loadState(d) });
       return r;
     },
     afterLoad() { if (r._freshDue) r._fresh(); r._claimSaved(); },   // after every part loaded and _fresh rebuilt the world (world:load is emitted inside the world part's load)
-    async init(e, ctx) { await r.init(); ctx.whileCompiling(() => warmRapier(r.rapier)); },
+    async init(e, ctx) { await r.init(ctx.signal); ctx.whileCompiling(() => warmRapier(r.rapier)); },
     counts() { return r.bodies.length; },   // engine.counts().rigid
     // bodies by type and what they are doing: sleeping = at rest (normal), frozen = disabled because no terrain collider is under them yet (they wait, not fall)
     describe() {
@@ -586,7 +595,7 @@ export function rigid(opts = {}) {
     },
     fixed(dt) { r.step(dt); },
     // a vehicle lives in this world: its riders get out while the seat and the exit can still be read, or they would read a freed solver every step
-    dispose() { for (const v of [...r.vehicles]) r._removeVehicle(v); r._ragdolls?.dispose(); r.world?.free(); r.world = null; },
+    dispose() { for (const v of [...r.vehicles]) r._removeVehicle(v); r._ragdolls?.dispose(); for (const b of [...r.bodies]) r._remove(b); r.world?.free(); r.world = null; },   // every body lets go of its mesh's pose, or a new rigid could not take the same mesh
   };
 }
 

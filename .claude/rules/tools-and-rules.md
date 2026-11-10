@@ -10,6 +10,4 @@ paths:
 - Shared helpers, not copies: `lib/text.mjs` (walk with one skip set, summary, splitTop, closest), `lib/proc.mjs` (npm without a shell), `lib/cli-args.mjs` (page path and option parsing: an unknown option fails with the list), `browser.mjs` (Chromium args, game page, build + preview on a free port).
 - Each rule file `packages/tools/rules/R*.mjs` starts with a "Detection:" comment that says what it flags and its known limits. Register a new rule in `rules/index.mjs`.
 - Rules that read documentation text (R07 reads `.claude/rules/api-design.md`, section `## Interface conventions`, the line starting `Cancel convention:`) must fail loudly when the text is missing, not skip silently.
-- Output text of generators and CLI commands is English. Generated files are never edited by hand (`npm run map`).
-- `check.mjs` runs: hard rules, rule checks R1..., types, content validation, and "generated docs up to date".
-- A string-matching test and the source string it matches change in the same commit.
+- Output text of generators and CLI commands is English.

@@ -1,9 +1,13 @@
 # Stream sources: what is loaded where (teleport, far camera)
 
-Part of the world data recipe (`18-world.md`): world records never unload, this page is about the models, terrain and colliders built around them.
+> **Covers:** stream sources: what is loaded around which point (teleport, far camera).
+> **Use when:** the camera or the player jumps far away.
+> **Shortest:** `await engine.stream.teleport([x, y, z])`.
+
+Part of `18-world.md`: world records never unload; this page is about the models, terrain and colliders built around them.
 
 Three things are kept apart: **what is shown** (terrain chunks, models, stream entries, hlod), **what has colliders** (rigid terrain colliders, chunk
-collision), and **world data** (records and their near / far simulation, which follows `world.anchor` and never unloads). Every loader reads the same
+collision), and **world data** (records and their near / far simulation, which follows `world.anchor` and never unloads). Every loader reads one
 list, the sources of `engine.stream`:
 
 | Source | Shows | Colliders |
@@ -17,7 +21,7 @@ list, the sources of `engine.stream`:
 // a new game or load during the trip abandons it: it rejects with code stream-removed and the player stays
 await engine.stream.teleport([800, 0, 300]);
 
-// the same by hand (for a door animation or a fade while it loads)
+// the same by hand (for a door animation or a fade)
 const dest = engine.stream.source([800, 0, 300], { radius: 64 });
 await dest.whenReady;
 engine.player.placeAt([800, 0, 300]);
@@ -30,11 +34,11 @@ engine.stream.source(photoCam, { physics: false, until: () => !photoMode.active 
 const vista = engine.stream.source(towerTop, { detail: 'simple', radius: 600 });
 ```
 - `radius` caps every loader's own range around that source (terrain view distance, present radius, `stream.radius`); without it each loader uses its own.
-- `source.ready` is checked at the end of each frame; a new source counts after one full frame, so every loader has seen it. Fixed steps must run
-  (collision takes effect on a tick), so do not wait while `engine.haltLoop()` is on without stepping.
-- `ready` means nothing is pending, not that everything built: a stream entry or world model whose build failed is reported and left out, and `teleport` still lands. Need a thing built?
-  Check it yourself: `handle.built`, `engine.world.view(id)`. A failed terrain chunk (recipe 28) is different: no ground, never ready, `teleport` ends in `stream-timeout`.
-- Leaving a place and coming back is safe: models unload, but records (an opened chest, a dropped item, a removed rock) stay in `engine.world` and the
-  models are rebuilt from them.
-- Module authors with their own distance-based loader: read `engine.stream.sources({ detail: 'full' })` / `sources({ physics: true })` and
-  `s.reach(range)`, and register `engine.stream.addReadyCheck(name, s => ...)`. Do not read `engine.focus` or the player position for loading.
+- `source.ready` is checked at the end of each frame, a new source after one full frame. Collision takes effect on a fixed tick: under `engine.haltLoop()`, step while waiting.
+- `ready` means nothing is pending, not that everything built: a failed build is reported and left out, and `teleport` still lands. Need it built? Check
+  `handle.built`, `engine.world.view(id)`. A failed terrain chunk (recipe 28) is different: no ground, never ready, `teleport` ends in `stream-timeout`.
+- Leaving and coming back is safe: models unload, records (an opened chest, a removed rock) stay in `engine.world` and the models are rebuilt from them.
+- After start, a stream entry bringing an undrawn material attaches after its compile, a task later (not in the
+  same `engine.step`); `ready` waits. Unloading frees geometry and materials nothing else uses; textures are yours (`dispose`).
+- A module's own distance-based loader reads `engine.stream.sources({ detail: 'full' })` / `sources({ physics: true })` and `s.reach(range)`, and
+  registers `engine.stream.addReadyCheck(name, s => ...)`, never `engine.focus` or the player position.

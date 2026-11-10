@@ -87,7 +87,7 @@ export const specs = [
     async run({ check, ev }) {
       const r = await ev(async () => {
         let v = 'old', got = null, saved = 0;
-        engine.saves.register('sfail', { save: () => v, load: d => { got = d; } });
+        engine.saves.define('sfail', { save: () => v, load: d => { got = d; } });
         engine.events.on('save:written', () => saved++);
         await engine.saves.save('sf');
         const put = engine.saves.store.putSlot;
@@ -114,7 +114,7 @@ export const specs = [
     async run({ check, ev }) {
       const r = await ev(async () => {
         let got = 'untouched';
-        engine.saves.register('sver', { version: 2, migrate: { 1: d => d + '+m' }, save: () => 'x', load: d => { got = d; } });
+        engine.saves.define('sver', { version: 2, migrate: { 1: d => d + '+m' }, save: () => 'x', load: d => { got = d; } });
         const tick0 = engine.commits.epoch;
         engine.saves._json.set('bad', 'not json');
         const bad = await engine.saves.load('bad');

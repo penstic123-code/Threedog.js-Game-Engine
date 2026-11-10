@@ -1,4 +1,4 @@
-// Record ids inside save data, for upgrade steps (saves.register migrate). Shared by the world part and every part that keys data by a record id
+// Record ids inside save data, for upgrade steps (saves.define migrate). Shared by the world part and every part that keys data by a record id
 // (containers): when the world part renames ids, those parts must rename the same ones, and core is the one place both may import from.
 // Runtime record ids: world save part version 2 numbered them `<kind>-<n>`, version 3 `<kind>#<n>` (an authored id may not contain `#`,
 // so the two can never collide; modules/content/ids.js).

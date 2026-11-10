@@ -14,7 +14,7 @@ export const specs = [
         E.loading.timeoutMs = 150;
         const sleep = ms => new Promise(res => setTimeout(res, ms));
         let mode = null, n = 0, caught = null;
-        E.saves.register('sn', { save: () => ({ n }), async load(d) {
+        E.saves.define('sn', { save: () => ({ n }), async load(d) {
           n = d.n;
           // once: the rollback loads this part again
           if (mode === 'nested') { mode = null; n = 99; try { await E.level.load(new THREE.Group()); } catch (err) { caught = err.code; throw err; } }

@@ -13,6 +13,8 @@
 // Terrain shading for the stream section: npm run perf -- --only=stream --shading=texture
 // Renderer: the hardware GPU when headless can reach it, else SwiftShader (--gpu / --software force one); the first line says which. Under SwiftShader
 // GPU work counts as CPU time, so only look at relative differences. Pages section route: --renderer=webgl|webgpu|both (default both).
+// Resolution: --size WxH (default 1280x720, as in shot / capture), e.g. npm run perf -- --size 1920x1080. A game: threedog perf -w my-game --size 1920x1080.
+// Impostor cards (docs/plans/2026-11-09-impostors.md): --impostor adds a row of the world example with its trees as baked cards (?impostor), WebGPU route only.
 // Frame count: npm run perf -- 120. Load ramps per axis: threedog stress
 process.env.THREEDOG_TEST = '1';
 import { rmSync, existsSync, readdirSync } from 'node:fs';
@@ -21,13 +23,14 @@ import { launchBrowser, buildAndPreview, newGamePage } from './browser.mjs';
 import { waitEngine } from './wait-engine.mjs';
 import { ENGINE, GAMES, MODE, ROOT, cli, rel } from './paths.mjs';
 import { intOption } from './lib/cli-args.mjs';
+import { viewSize } from './lib/shot-name.mjs';
 import { copyTemplates } from './lib/scaffold.mjs';
 
 // Without -w (and outside a game folder) it measures the engine package (test pages in tests/perf/ and the two examples)
 // --only one section (`--only world` and `--only=world` both work; perf and stress used to read opposite spellings); a frame count as `--frames 120`
 // or a bare number. A wrong section or shading fails before the build instead of measuring nothing and exiting 0
 const SECTIONS = ['native', 'world', 'startup', 'props', 'stream', 'pages'], ROUTES = ['webgl', 'webgpu', 'both'], SHADINGS = ['smooth', 'flat', 'texture'];
-const { dir, named, opt, rest } = cli(process.argv.slice(2), { workspace: 'scope', positional: true, flags: ['gpu', 'software'], values: ['only', 'shading', 'frames', 'renderer'] });
+const { dir, named, opt, rest } = cli(process.argv.slice(2), { workspace: 'scope', positional: true, flags: ['gpu', 'software', 'impostor'], values: ['only', 'shading', 'frames', 'renderer', 'size'] });
 const GAME = MODE === 'game' ? dir ?? ROOT : named && dir !== ENGINE ? dir : null;   // a game in its own repo has no engine pages to fall back on
 const fail = m => { console.error('✗ ' + m); process.exit(1); };
 if (GAME && (opt.only || opt.shading || opt.renderer)) fail('perf -w <game> measures the game\'s own page: --only, --shading and --renderer choose among the engine\'s test pages');
@@ -37,6 +40,7 @@ if (opt.renderer && !ROUTES.includes(opt.renderer)) fail(`perf --renderer: "${op
 if (rest.length > 1 || (rest[0] && opt.frames)) fail(`perf takes one frame count, got ${[...rest, opt.frames].filter(Boolean).join(' ')}`);
 const ONLY = opt.only, want = k => !GAME && (!ONLY || ONLY === k);
 const SHADING = opt.shading;   // world / stream pages: terrain shading 'smooth' | 'flat' | 'texture' (default: the page's)
+let W, H; try { [W, H] = viewSize(opt.size ?? '1280x720'); } catch (e) { fail(e.message); }   // --size WxH as in shot / capture; perf kept its own 1280x720 default
 let FRAMES = 60;
 try { FRAMES = intOption({ frames: opt.frames ?? rest[0] }, 'frames') ?? FRAMES; } catch (e) { fail(e.message); }
 const server = await buildAndPreview(GAME ?? ENGINE), base = server.base;
@@ -45,7 +49,7 @@ let said = false, failed = 0;
 async function open(url, host = base) {
   const browser = await launchBrowser({ prefer: 'gpu' });
   if (!said) { said = true; console.log(`Renderer: ${browser.render.kind}${browser.render.renderer ? ` (${browser.render.renderer})` : ''}`); }
-  const page = await newGamePage(browser);
+  const page = await newGamePage(browser, { viewport: { width: W, height: H } });
   page.close = () => browser.close();
   page.on('pageerror', e => console.log('  page error', String(e)));
   try {
@@ -167,14 +171,18 @@ if (want('stream')) {
 /** In the page: n frames of the running loop, the numbers of section 7 and of a game */
 async function sampleFrames(n) {
   await new Promise(res => setTimeout(res, 500));   // let start-up streaming settle a little before sampling
-  const gaps = [], js = []; let last = performance.now();
-  await new Promise(res => { let k = 0; const tick = () => { const t = performance.now(); gaps.push(t - last); last = t; js.push(engine._tools.cpuMs); if (++k < n) requestAnimationFrame(tick); else res(); }; requestAnimationFrame(tick); });
+  const timing = engine.profile() !== null; engine.profile(true);   // module medians and p95 over the sampled frames only (a built page times nothing by default)
+  const gaps = []; let last = performance.now();
+  await new Promise(res => { let k = 0; const tick = () => { const t = performance.now(); gaps.push(t - last); last = t; if (++k < n) requestAnimationFrame(tick); else res(); }; requestAnimationFrame(tick); });
   const mid = a => [...a].sort((x, y) => x - y)[a.length >> 1], r1 = v => Math.round(v * 10) / 10;
   const p = engine.inspect.perf(), rd = engine.renderer;
+  // the five modules with the worst p95: a spike (p95 far over the median) hitches play even when the median looks cheap
+  const modules = Object.entries(engine.profile()).sort((a, b) => b[1].p95 - a[1].p95).slice(0, 5).map(([k, m]) => `${k} ${m.ms}/${m.p95}`).join(', ');
+  if (!timing) engine.profile(false);
   // WebGPU keeps no program list in renderer.info: count the distinct fragment programs three's pipeline cache holds instead
   const programs = p.programs ?? rd._pipelines?.programs?.fragment?.size ?? null;
-  return { cpuMs: r1(mid(js)), frameMs: r1(mid(gaps.slice(1))), backend: engine.describe().renderer?.backend ?? '?', reason: engine.describe().renderer?.reason, drawCalls: p.drawCalls, triangles: p.triangles,
-    programs, geometries: p.memory.geometries, textures: p.memory.textures, textureMB: p.textureMB, heapMB: performance.memory ? r1(performance.memory.usedJSHeapSize / 1048576) : null };
+  return { cpuMs: p.cpuMs, frameMs: r1(mid(gaps.slice(1))), backend: engine.describe().renderer?.backend ?? '?', reason: engine.describe().renderer?.reason, drawCalls: p.drawCalls, triangles: p.triangles,
+    programs, geometries: p.memory.geometries, textures: p.memory.textures, textureMB: p.textureMB, heapMB: performance.memory ? r1(performance.memory.usedJSHeapSize / 1048576) : null, modules };
 }
 
 if (GAME) {
@@ -189,6 +197,7 @@ if (GAME) {
   row('backend', 'frame ms', 'JS ms', 'draw calls', 'triangles', 'programs', 'geometries', 'textures', 'texture MB', 'JS heap MB');
   row('---', '---', '---', '---', '---', '---', '---', '---', '---', '---');
   row(r.backend, r.frameMs, r.cpuMs, r.drawCalls, r.triangles, r.programs, r.geometries, r.textures, r.textureMB, r.heapMB);
+  console.log(`\nmodules, ms median/p95 (worst p95 first): ${r.modules || 'none timed'}`);
 }
 
 if (want('pages')) {
@@ -198,11 +207,14 @@ if (want('pages')) {
   console.log('frame = requestAnimationFrame interval (capped by vsync on a GPU); JS = main-thread ms of update + render submit\n');
   row('page', 'route', 'backend', 'frame ms', 'JS ms', 'draw calls', 'triangles', 'programs', 'geometries', 'textures', 'texture MB', 'JS heap MB');
   row('---', '---', '---', '---', '---', '---', '---', '---', '---', '---', '---', '---');
-  const routes = !opt.renderer || opt.renderer === 'both' ? ['webgl', 'webgpu'] : [opt.renderer];
-  for (const [name, url] of [['world example', '/'], ['city test page', '/tests/city/index.html']]) {
+  const routes = !opt.renderer || opt.renderer === 'both' ? ['webgl', 'webgpu'] : [opt.renderer], spikes = [];
+  const pages = [['world example', '/'], ...(opt.impostor ? [['world, impostor cards', '/', 'impostor']] : []), ['city test page', '/tests/city/index.html']];
+  for (const [name, url, extra] of pages) {
     for (const route of routes) {
+      if (extra && route !== 'webgpu') continue;   // cards are WebGPU only: the WebGL row would measure the same meshes
       let page;
-      try { page = await open(url + (route === 'webgpu' ? '?renderer=webgpu' : '')); } catch (e) { row(name, route, 'failed: ' + String(e.message ?? e).split('\n')[0].slice(0, 120)); continue; }
+      const query = [route === 'webgpu' && 'renderer=webgpu', extra].filter(Boolean).join('&');
+      try { page = await open(url + (query ? '?' + query : '')); } catch (e) { row(name, route, 'failed: ' + String(e.message ?? e).split('\n')[0].slice(0, 120)); continue; }
       // Standing still means the camera too: the world example flies an intro camera for 5 s after ready (the built page reads no ?cutscene=skip),
       // and draw calls follow the view, so a route whose samples fell inside the flight showed ~60 more than one whose samples came after it
       const still = await page.evaluate(async () => {
@@ -217,9 +229,11 @@ if (want('pages')) {
       const r = await median(page, sampleFrames, FRAMES * 2);
       if (route === 'webgpu' && r.backend !== 'webgpu') console.log(`  (${name}: no WebGPU adapter, ran on the WebGL2 backend: ${String(r.reason).split('\n')[0]})`);
       row(name, route, r.backend, r.frameMs, r.cpuMs, r.drawCalls, r.triangles, r.programs, r.geometries, r.textures, r.textureMB, r.heapMB);
+      spikes.push(`${name} ${route}: ${r.modules || 'none timed'}`);
       await page.close();
     }
   }
+  console.log('\nmodules, ms median/p95 (worst p95 first):\n' + spikes.map(l => '  ' + l).join('\n'));
 }
 
 await server.close();

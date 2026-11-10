@@ -8,9 +8,11 @@ const KEYS = ['radius', 'cone', 'close', 'angleWeight', 'blocked', 'at'];
 const yawOf = view => typeof view === 'number' ? view : Math.atan2(view.x, view.z);
 /** Candidate position: an Object3D / NPC / Character / world record has .position; a Vector3 / { x, z } / [x, y, z] is the position itself */
 const posOf = c => c.position ?? c;
+// these two functions live in api/tools.md, not api/engine.md (the code's default page), so the error carries its own pointer
+const misuse = (code, text) => Object.assign(codedError(code, text), { docs: ['api/tools.md'] });
 function check(fn, opts) {
-  if ('range' in opts) throw codedError('unknown-option', `${fn}(): the distance option is radius (meters), as in world.query: write { radius: ${opts.range} }`);
-  for (const k of Object.keys(opts)) if (!KEYS.includes(k)) throw codedError('unknown-option', `${fn}(): unknown option '${k}'; available: ${KEYS.join(', ')}`);
+  if ('range' in opts) throw misuse('unknown-option', `${fn}(): the distance option is radius (meters), as in world.query: write { radius: ${opts.range} }`);
+  for (const k of Object.keys(opts)) if (!KEYS.includes(k)) throw misuse('unknown-option', `${fn}(): unknown option '${k}'; available: ${KEYS.join(', ')}`);
 }
 
 /**
@@ -47,7 +49,7 @@ export function pickTarget(from, view, candidates, opts = {}) {
  */
 export function switchTarget(from, view, current, candidates, side, opts = {}) {
   check('switchTarget', opts);
-  if (side !== 1 && side !== -1) throw codedError('engine-misuse', `switchTarget(): side must be 1 (right) or -1 (left), got ${side}`);
+  if (side !== 1 && side !== -1) throw misuse('engine-misuse', `switchTarget(): side must be 1 (right) or -1 (left), got ${side}`);
   const { radius = 15, blocked = null, at = posOf } = opts;
   const [fx, fz] = xzOf(posOf(from)), yaw = yawOf(view);
   // right of the view is the negative angle direction (facing grows toward +X, the screen's right is at -yaw), so negate to sort left → right

@@ -1,40 +1,39 @@
 # WebGPU and your own TSL materials
 
-**In this recipe**: WebGPU or WebGL · Turning it on, fallbacks · A minimal TSL material · The engine's values as nodes · The engine's shader
-functions · Patches with a `tsl` field (lighting hooks) · Sky and fog hooks · Post effects as nodes · A consistent style · Mistakes, each with the fix · Drawn wrong without a thrown error · GLSL to TSL
+> **Covers:** the WebGPU route: TSL materials, engine values as nodes, patches with `tsl`.
+> **Use when:** a new game (WebGPU is the default) needs its own shaders.
+> **Shortest:** `createEngine({ renderer: 'webgpu' })`.
+> **Sections:** WebGPU or WebGL · Turning it on · A minimal TSL material · The engine's values as · The engine's shader functions · Patches with a tsl · Half-transparent surfaces and fog · Sky and fog hooks · Post effects as nodes · Textures from nodes bake · A consistent style · Dropping a mesh whose · Mistakes, each with the · Drawn wrong without a · GLSL to TSL
 
 On the WebGPU route a game draws with three.js node materials (`MeshStandardNodeMaterial` ...) and writes shaders in TSL, three's shading
-language in JavaScript. Learn TSL from three itself: the [TSL guide](https://github.com/mrdoob/three.js/wiki/Three.js-Shading-Language) and
-the [WebGPU examples](https://threejs.org/examples/?q=webgpu) are written for exactly this renderer. The engine adds nothing you must use:
-its wind, cloud shadows, season tint and the rest are ordinary TSL functions in `threedog/tsl`, called where you want them. A whole small
-scene written this way: `threedog examples pull webgpu-tsl`.
+language in JavaScript. Learn TSL from three: the [TSL guide](https://github.com/mrdoob/three.js/wiki/Three.js-Shading-Language) and
+the [WebGPU examples](https://threejs.org/examples/?q=webgpu). The engine's wind, cloud shadows, season tint and the rest are ordinary TSL
+functions in `threedog/tsl`, used where you want them. A whole small scene: `threedog examples pull webgpu-tsl`.
 
 Rules (correctness, not taste): `import 'threedog/tsl'` comes first in `main.js`; GLSL does not run here (`ShaderMaterial`, `RawShaderMaterial`,
 `onBeforeCompile`, three.js `Pass` objects, GLSL-only patches and hooks), and each one fails by name instead of drawing nothing.
 
 ## WebGPU or WebGL
 `threedog new-game` and `threedog init` start a game on WebGPU with TSL (`main.js` imports `threedog/tsl` first and calls `createEngine({ renderer: 'webgpu' })`). `--webgl` starts it on GLSL instead. `createEngine` called without `renderer` still builds a WebGL renderer. When the browser has no WebGPU the game keeps running on three's WebGL2 backend, and `engine.describe().renderer` says why. How to decide:
-- WebGPU + TSL (the default for a new game): the picture is built from TSL, you write shaders in JavaScript and compose them as functions, or start from a three.js WebGPU example, and effects that exist only as node materials are open to you.
-- `--webgl` + GLSL: the game already has GLSL (ShaderMaterials, `onBeforeCompile`, a three.js `Pass`), or must run best on modest hardware where plain WebGL draws a frame fastest, or start-up time matters more than the shading style. Recipe 43 is the GLSL route for the same tasks.
-- Check on the hardware you care about: `threedog inspect perf` on both routes, same scene. On an integrated GPU expect WebGPU to take longer per frame than plain WebGL, the WebGL2 backend longer still, and the first WebGPU frame to come later (shader compilation).
+- WebGPU + TSL (the default): shaders are JavaScript functions you compose, three's WebGPU examples apply, and node-only effects are open to you.
+- `--webgl` + GLSL (recipe 43): the game already has GLSL (ShaderMaterials, `onBeforeCompile`, a three.js `Pass`), must run best on modest hardware, or start-up time matters more.
+- Measure on the hardware you care about (`threedog inspect perf`, both routes, same scene): on an integrated GPU expect WebGPU slower per frame than plain WebGL, the WebGL2 backend slower still, and a later first frame (shader compilation).
 
 ## Turning it on
 ```js
-import 'threedog/tsl';   // first line: brings three/webgpu and the node versions of the engine's sky, post chain and patches
+import 'threedog/tsl';  // first line: brings three/webgpu and the node versions of the engine's sky, post chain and patches
 import { createEngine } from 'threedog';
 
 const engine = createEngine({ canvas: document.getElementById('view'), renderer: 'webgpu' });
-await engine.start();   // start() initializes the renderer, so createEngine stays synchronous
-console.log(engine.describe().renderer);   // { requested: 'webgpu', backend: 'webgpu' | 'webgl2' | 'webgl', reason }
+await engine.start();  // start() initializes the renderer, so createEngine stays synchronous
+console.log(engine.describe().renderer);  // { requested: 'webgpu', backend: 'webgpu' | 'webgl2' | 'webgl', reason }
 ```
 Your own `new WebGPURenderer(...)` as `renderer` goes the same way (the engine configures only a renderer it built, recipe 50). When the
 browser gives no WebGPU, `fallback` decides, and the console says once which one happened (`[threedog] WebGPU unavailable (...)`):
 - `'webgl2'` (default): the same WebGPURenderer on its WebGL2 backend. Your TSL keeps working; frames are slower than plain WebGL.
 - `'webgl'`: a `WebGLRenderer` instead. Faster, but node materials cannot draw there (`start()` fails when the scene has one). The engine's
-  own materials (terrain, vegetation, water) are plain three.js materials with both a GLSL and a tsl form of each patch, so they
-  draw on either renderer with the same picture. What engine modules built before `start()` is rebuilt for WebGLRenderer there: the post chain,
-  the sky dome (with the `engine.sky.clouds` / `layer` hooks set so far), fog, cascaded shadows, particles, rain and snow. Your own objects are not:
-  build node materials after `start()` when `engine.describe().renderer.backend !== 'webgl'`.
+  own materials and what its modules built before `start()` (post chain, sky dome with its hooks, fog, cascaded shadows, particles, rain, snow) draw the same
+  picture there. Your own objects do not switch: build node materials after `start()` when `engine.describe().renderer.backend !== 'webgl'`.
 - `'error'`: `start()` rejects; the game shows its own message.
 
 ## A minimal TSL material
@@ -44,7 +43,7 @@ import { MeshStandardNodeMaterial } from 'three/webgpu';
 import { color, positionWorld, sin } from 'three/tsl';
 
 const mat = new MeshStandardNodeMaterial({ roughness: 0.5 });
-mat.colorNode = color(0x4080ff).mul(sin(positionWorld.y.mul(4)).mul(0.25).add(0.75));   // bands by world height
+mat.colorNode = color(0x4080ff).mul(sin(positionWorld.y.mul(4)).mul(0.25).add(0.75));  // bands by world height
 engine.add(new THREE.Mesh(new THREE.TorusKnotGeometry(0.6, 0.2, 128, 16), mat));
 ```
 A node material is lit, shadowed and fogged by three like its plain twin; you replace only the inputs you set (`colorNode`, `positionNode`,
@@ -55,7 +54,7 @@ Node names come from `three/tsl` (`Object.keys(await import('three/tsl'))` lists
 ## The engine's values as nodes: `uniforms(engine)`
 `uniforms(engine)` returns `engine.uniforms` as TSL nodes with the same names: `uTime`, `uWind`, `uWeatherCloud`, `uSunDir`, `uSunColor`, `uDaylight`
 (0 at night, 1 at noon), `uTimeOfDay`, `uFoliageTint`, `uGroundTint` ... (the list: `uniforms` in [the engine API](../api/engine.md)). The node reads the
-engine's value each render, so weather, the calendar and the sky move your material with no per-frame code.
+engine's value each render: no per-frame code.
 ```js
 import * as THREE from 'three';
 import { MeshStandardNodeMaterial } from 'three/webgpu';
@@ -63,10 +62,10 @@ import { color, float, sin, smoothstep, uniform } from 'three/tsl';
 import { uniforms } from 'threedog/tsl';
 
 const u = uniforms(engine);
-const glow = uniform(3);   // a value of your own: change glow.value from game code (an op, a quest step)
+const glow = uniform(3);  // a value of your own: change glow.value from game code (an op, a quest step)
 const lantern = new MeshStandardNodeMaterial({ color: 0x3a2a18 });
 const night = smoothstep(0.3, 0.9, float(1).sub(u.uDaylight));
-lantern.emissiveNode = color(0xffa040).mul(night.mul(glow)).mul(sin(u.uTime.mul(7)).mul(0.08).add(0.92));   // lights up at dusk, flickers
+lantern.emissiveNode = color(0xffa040).mul(night.mul(glow)).mul(sin(u.uTime.mul(7)).mul(0.08).add(0.92));  // lights up at dusk, flickers
 engine.add(new THREE.Mesh(new THREE.OctahedronGeometry(0.3), lantern));
 ```
 
@@ -95,13 +94,15 @@ import { wind, objectOrigin, cloudShadow, season } from 'threedog/tsl';
 
 const flag = new MeshLambertNodeMaterial({ side: THREE.DoubleSide });
 flag.colorNode = season(mix(color(0x803020), color(0xd06040), uv().x), 0).mul(cloudShadow(positionWorld));
-flag.positionNode = positionLocal.add(wind(positionGeometry, objectOrigin(), float(0.4)));   // its shadow sways too
+flag.positionNode = positionLocal.add(wind(positionGeometry, objectOrigin(), float(0.4)));  // its shadow sways too
 const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.8, 12, 8).translate(0.6, 2.2, 0), flag);
 mesh.castShadow = true;
 engine.add(mesh);
 ```
-three's shadow pass draws with the material's `positionNode`, so whatever moves vertices there moves their shadow: no depth material to keep
-in step. With an `InstancedMesh` whose instances are rotated or scaled, the offset must turn with each instance; the patch form below does that.
+three's shadow pass draws with the material's `positionNode`, so the shadow moves too. On an `InstancedMesh` with rotated or scaled instances the offset must turn with each (`instanceOffset`, or the patch form below).
+
+A program takes 16 vertex inputs on most devices; past that the build stops with a `[vertex-inputs]` error that counts what stacked up and how to
+fit. `objectOrigin()` costs 1 per program, `instanceOffset()` 3 more.
 
 ## Patches with a `tsl` field (optional convenience)
 `applyEffects(mat, { wind, season, clouds, patches })` (recipe 43) works on node materials: the engine's own patches carry a TSL version, and a
@@ -135,14 +136,14 @@ import { applyEffects } from 'threedog';
 const coolShade = { name: 'coolShade', slot: 'lighting', tsl: {
   start: c => { c.state.lit = c.tsl.float(1).toVar('coolShadeLit'); },
   direct: (light, c) => { if (light.directional && light.shadow) c.state.lit.assign(light.shadow); },
-  after: c => ({ indirectDiffuse: c.indirectDiffuse.mul(c.tsl.mix(c.tsl.vec3(0.8, 0.9, 1.25), c.tsl.vec3(1), c.state.lit)) }),   // bluer fill in shadow
+  after: c => ({ indirectDiffuse: c.indirectDiffuse.mul(c.tsl.mix(c.tsl.vec3(0.8, 0.9, 1.25), c.tsl.vec3(1), c.state.lit)) }),  // bluer fill in shadow
 } };
 const rock = applyEffects(new MeshStandardNodeMaterial({ color: 0x9a9080 }), { patches: [coolShade] });
 engine.add(new THREE.Mesh(new THREE.DodecahedronGeometry(1), rock));
 ```
 
-## Half-transparent surfaces and fog differ from plain WebGL
-WebGL straight to the canvas tone-maps and encodes each material first, then applies fog and blends in display values. WebGPU, and WebGL with any `engine.post` effect on, fog and blend in linear and tone-map once. Those two match pixel for pixel, opaque unfogged surfaces match on all three, and half-transparent or fogged ones shift on the straight WebGL path, more in dim scenes. So on WebGL turning the first post effect on can move those surfaces a little. This is how three.js's renderers work, not a fault to fix in your scene.
+## Half-transparent surfaces differ from plain WebGL, fog does not
+Fog is mixed in linear space before tone mapping on every path (WebGPU, WebGL with an effect on, and WebGL straight to the canvas, where the engine's `fog-linear` patch moves three's fog mix before the tone curve), so fog does not change colour when the first post effect turns on. Half-transparent and additive surfaces still differ: WebGL straight to the canvas blends them in display values after tone mapping; WebGPU, and WebGL with any `engine.post` effect on, blend in linear and tone-map once. They shift a little on the straight WebGL path (more in dim scenes), and turning the first post effect on there can move them. This is three.js's own model, not a fault in your scene.
 
 ## Sky and fog hooks
 The engine's sky dome has a node version; nothing changes in how you set it (recipe 08). The GLSL hooks (`engine.sky.clouds`, `engine.sky.layer`
@@ -159,14 +160,45 @@ not rebuild), `ctx.tsl` is three/tsl, `ctx.scenePass` the scene pass (depth: `ct
 ```js
 engine.post.add({ name: 'warmGrade', slot: 'ldr', params: { amount: 0.3 },
   node: (input, { tsl, p }) => tsl.vec4(tsl.mix(input.rgb, input.rgb.mul(tsl.vec3(1.05, 0.95, 0.8)), p.amount), input.a) });
-engine.post.get('warmGrade').set({ amount: 0.5 });   // a uniform write, no rebuild
+engine.post.get('warmGrade').set({ amount: 0.5 });  // a uniform write, no rebuild
 ```
 `ldr` runs after tone mapping (display colors 0-1); something that should glow or bleed belongs in `hdr`. An effect with only `create`
 (a three.js `Pass`) stops with its name.
 
+## Textures from nodes: bake with `rtt`, tile without seams
+`rtt` with `autoUpdate: false` draws a node into a texture once, so a costly pattern is not computed per pixel per frame. Seamless: blend four copies
+shifted by one period, weighted by the position in the tile (a little softer mid-tile). Textures from different sources read as one style only once
+brought to one way of drawing (recipe 05 §2d).
+```js
+import * as THREE from 'three';
+import { MeshStandardNodeMaterial } from 'three/webgpu';
+import { rtt, uv, vec2, vec3, mix, color, mx_fractal_noise_float } from 'three/tsl';
+
+const noise = p => mx_fractal_noise_float(vec3(p, 0)).mul(0.5).add(0.5);
+const seamless = (st, period) => {  // st: uv over one tile, period: noise cells per tile
+  const p = st.mul(period), top = mix(noise(p), noise(p.sub(vec2(period, 0))), st.x);
+  return mix(top, mix(noise(p.sub(vec2(0, period))), noise(p.sub(vec2(period, period))), st.x), st.y);
+};
+const baked = rtt(seamless(uv(), 4), 512, 512, { type: THREE.UnsignedByteType, autoUpdate: false });
+baked.value.wrapS = baked.value.wrapT = THREE.RepeatWrapping;
+baked.uvNode = uv().mul(6);  // 6 x 6 tiles; set on the node itself (a .sample() copy leaves the bake out of the frame)
+const mat = new MeshStandardNodeMaterial();
+mat.colorNode = mix(color(0x6b5640), color(0xa89070), baked.r);
+engine.add(new THREE.Mesh(new THREE.PlaneGeometry(4, 4), mat));
+```
+Save it (dev, after a frame drew it; WebGPU renderer; width a multiple of 64; values are linear, right for masks and heights). No UVs to
+follow (rocks, cliffs): project from three sides. Check either alone: `threedog gallery --shots --material <name> --mode albedo` (recipe 05).
+```js fragment
+import { triplanarTexture, texture, float } from 'three/tsl';
+const r = /** @type {any} */ (engine.renderer), px = await r.readRenderTargetPixelsAsync(baked.renderTarget, 0, 0, 512, 512);
+const c = Object.assign(document.createElement('canvas'), { width: 512, height: 512 });
+c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(px.buffer), 512, 512), 0, 0);
+c.toBlob(b => Object.assign(document.createElement('a'), { href: URL.createObjectURL(b), download: 'mask.png' }).click());
+rock.colorNode = triplanarTexture(texture(rockMap), null, null, float(0.5));  // rockMap: RepeatWrapping
+```
+
 ## A consistent style
-A style reads as one when every surface answers the same few questions the same way. Decide these once, in one place of `picture/`, and let materials share the answers; a
-look built material by material drifts. Working example: `examples/techniques/three-looks/` (page `/technique-looks.html`), the same models three ways.
+A style reads as one when every surface answers the same few questions the same way: decide them once in `picture/` and let materials share the answers. Working example: `examples/techniques/three-looks/` (page `/technique-looks.html`), the same models three ways.
 
 | Question | Where it lives | With |
 |---|---|---|
@@ -181,12 +213,12 @@ look built material by material drifts. Working example: `examples/techniques/th
 import { MeshToonNodeMaterial } from 'three/webgpu';
 import { rampTexture } from 'threedog';
 import { celLighting } from 'threedog/tsl';
-const ramp = rampTexture([0x7a84c8, 0xd0d4f0, 0xffffff]);   // example colors: the light in each band, dark to light, from the game's palette; one ramp for the whole game
+const ramp = rampTexture([0x7a84c8, 0xd0d4f0, 0xffffff]);  // example colors: the light in each band, dark to light, from the game's palette; one ramp for the whole game
 const mat = new MeshToonNodeMaterial({ color: 0xe08050, gradientMap: ramp });
-mat.setupLightingModel = celLighting;   // colored bands; a cast shadow reads the dark end of the ramp, so it is the same flat color as the side turned away
+mat.setupLightingModel = celLighting;  // colored bands; a cast shadow reads the dark end of the ramp, so it is the same flat color as the side turned away
 ```
-three's toon alone is enough for gray bands: it reads only the red channel of `gradientMap`, and a cast shadow drops to the ambient light. Choose it when that is the picture you
-want; `celLighting` when shade has a color or cast shadows belong to the bands. The ramp's width sets where bands fall, the left half being the side turned away.
+three's toon alone gives gray bands (it reads only the red channel of `gradientMap`, and a cast shadow drops to the ambient light); `celLighting` when shade has a color or
+cast shadows belong to the bands. The ramp's width sets where bands fall, the left half being the side turned away.
 
 **Same tools, different pictures**: a paper cut-out is two bands and no line; ink wash is a gray palette through `paletteLut` with soft fog; a neon night is a dark ramp with `bloom` and
 emissive lines; a storybook is soft ramp edges (`rampTexture(ramp, soften)`) with a warm grade; a retro handheld is a four-color `paletteLut` with `posterize` before it.
@@ -196,12 +228,11 @@ emissive lines; a storybook is soft ramp edges (`rampTexture(ramp, soften)`) wit
 - Cover the object you just changed. If the rest of the frame tells you the same story about light, the style is holding; if one material looks lit by another sun, its answers differ.
 - Is every shade in the frame leaning the same way? A cast shadow and a turned-away side that disagree read as two renderers.
 - A flat look with soft or stair-stepped shadow edges: the shadow map is showing. Raise its resolution for the area in view, or soften the ramp a little.
-- Count what the picture really holds, not what you meant: most common colors, saturation, light-dark spread (`window.techTest.measure` in the example is one way). A palette look with
-  many stray colors has something running after the `lut`; grain and vignette belong before it there.
-- Put an effect in the stage that matches what it reads. A grade written for finished colors looks wrong before the tone curve, and a glow after it stops glowing.
+- Count what the picture really holds (common colors, saturation, light-dark spread): a palette look with many stray colors has something running after the `lut`.
+- Put an effect in the stage that matches what it reads: a grade for finished colors goes after the tone curve, a glow before it.
 
 ## Dropping a mesh whose material lives on
-A game has nothing to do here. WebGPURenderer keeps a record of every mesh it drew, and neither `scene.remove` nor `geometry.dispose()` frees it while the material stays in use. So every few seconds the engine looks for meshes that have left every Scene and frees theirs, after 4 to 8 seconds out. Adding such a mesh back is fine: its record is rebuilt.
+Nothing to do: WebGPURenderer keeps a record of every mesh it drew while the material stays in use, so the engine frees the records of meshes 4 to 8 seconds out of every Scene (`webgpu-record-sweep` in `THREE.md`). Adding one back rebuilds it.
 
 Two things stay yours:
 - Call `geometry.dispose()` (or use `engine.remove`) when a mesh is gone for good. Only you know it will not come back. A steady climb of unused geometries warns in dev, with the code `geometry-undisposed`.
@@ -272,19 +303,19 @@ import { RenderTarget } from 'three/webgpu';
 // wrong: your own requestAnimationFrame loop calling engine.renderer.render(...); the engine runs the only loop and its post chain
 const minimap = new RenderTarget(256, 256), top = new THREE.OrthographicCamera(-20, 20, 20, -20, 0.1, 100);
 top.position.set(0, 50, 0); top.lookAt(0, 0, 0);
-engine.onFrame(() => engine.renderOnce(minimap, top));   // one extra picture per frame; a fresh node frame each call
+engine.onFrame(() => engine.renderOnce(minimap, top));  // one extra picture per frame; a fresh node frame each call
+// with a camera the target is linear and not tone mapped (renderOnce(minimap) with no camera would be display pixels): use minimap.texture on a material or a TSL node, which encodes it; a readback is dark
 ```
 ```js
 import { RenderPipeline } from 'three/webgpu';
 
 // wrong: new PostProcessing(renderer) from older three examples (three 0.187 names it RenderPipeline), and a second pipeline beside the engine's
-console.log(engine.post.object()?.pipeline instanceof RenderPipeline);   // the engine's own, once its chain is built; add effects with engine.post.add
+console.log(engine.post.object()?.pipeline instanceof RenderPipeline);  // the engine's own, once its chain is built; add effects with engine.post.add
 ```
 Also: three's `uniform` takes a value, not a `{ value }` object, so passing it `engine.uniforms.uWind` throws; use `uniforms(engine).uWind`.
 A type mismatch never errors: look at the result (`engine.debug.view('lighting')`, `threedog shot`).
-Many materials, many programs: WebGPURenderer builds one program per distinct set of patch uniform objects. Materials given the same
-`detail` / `lighting` options through `applyEffects` share theirs, so a hundred stones build one; a patch you write once and pass
-to every material shares too, a fresh patch object per material builds one program each.
+WebGPURenderer builds one program per distinct set of patch uniform objects: the same `applyEffects` options, or one patch object passed to every material,
+share one; a fresh patch object per material builds one program each.
 
 ## Drawn wrong without a thrown error
 These come from WebGPURenderer in three.js r187. Nothing throws and the engine's start check does not name them, so the picture is what shows them.

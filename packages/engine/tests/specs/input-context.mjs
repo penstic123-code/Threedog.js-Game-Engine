@@ -9,16 +9,18 @@ export const specs = [
         const I = engine.input, o = {};
         // one fixed step's view, taken the way the engine does at the start of each step
         const fx = names => { I.beginFixed(); const v = names.map(n => [I.pressed(n), I.down(n)]); I.endFixed(); return v; };
-        I.action('tAtk', { keys: ['KeyU'] });
-        I.action('tOk', { keys: ['KeyU'], context: 'tmenu' });
-        I.action('tUse', { keys: ['KeyF'] }); I.action('tExit', { keys: ['KeyF'], context: 'tcar' }); I.action('tWalk', { keys: ['KeyG'] });
+        I.define('tAtk', { keys: ['KeyU'] });
+        I.define('tOk', { keys: ['KeyU'], context: 'tmenu' });
+        I.define('tUse', { keys: ['KeyF'] }); I.define('tExit', { keys: ['KeyF'], context: 'tcar' }); I.define('tWalk', { keys: ['KeyG'] });
 
         I._keyDown('KeyU', 'keyboard');
         o.base = fx(['tAtk', 'tOk']);                       // attack pressed; menu action not on the stack
+        o.baseWhy = I.blockedBy('tOk');
         const h = I.push('tmenu');
         o.pendingEnabled = I.enabled;                        // not applied before the next fixed step
         fx([]);
         o.menu = { enabled: I.enabled, ctx: I.contexts.join(), held: I.keys.has('KeyU') };
+        o.menuWhy = I.blockedBy('tAtk');
         I._keyUp('KeyU'); fx([]); I._keyDown('KeyU', 'keyboard');
         o.inMenu = fx(['tAtk', 'tOk']);                      // confirm-style key does not attack; the menu action sees it
         I._keyUp('KeyU'); fx([]);
@@ -35,6 +37,7 @@ export const specs = [
         const car = I.push('tcar', { pass: true }); fx([]);
         I._keyDown('KeyF', 'keyboard'); I._keyDown('KeyG', 'keyboard');
         o.car = { enabled: I.enabled, v: fx(['tUse', 'tExit', 'tWalk']) };
+        o.carWhy = { use: I.blockedBy('tUse'), exit: I.blockedBy('tExit'), walk: I.blockedBy('tWalk'), shadowed: engine.describe().holds.shadowed ?? null };
         car.remove(); car.remove(); I._keyUp('KeyF'); I._keyUp('KeyG'); fx([]);
         o.carOut = { ctx: I.contexts.join() };
         // blur / tab hidden release everything
@@ -58,6 +61,11 @@ export const specs = [
       check('a fresh press after the menu works again', r.repress[0][0] && r.repress[0][1], J);
       check('vehicle context: F means exit, walk-F is shadowed, G still works, enabled stays true', r.car.enabled && !r.car.v[0][0] && r.car.v[1][0] && r.car.v[2][1], J);
       check('remove() twice is harmless and pops the context', r.carOut.ctx === 'walk', J);
+      // blockedBy names every cause (it used to name only opaque holders, so a shadowed or switched-off action read as unblocked)
+      check('blockedBy: an action whose context is not on the stack says context-off', JSON.stringify(r.baseWhy) === '["context-off:tmenu"]', J);
+      check('blockedBy: an opaque menu above names the menu', JSON.stringify(r.menuWhy) === '["tmenu"]', J);
+      check('blockedBy: a pass-through vehicle binding the same key says shadowed-by; readable actions say nothing', JSON.stringify(r.carWhy.use) === '["shadowed-by:tcar"]' && !r.carWhy.exit.length && !r.carWhy.walk.length, J);
+      check('describe().holds.shadowed lists the shadowed action with the same causes', JSON.stringify(r.carWhy.shadowed?.tUse) === '["shadowed-by:tcar"]', J);
       check('window blur and tab hidden release all held keys', r.blur === 0 && r.hidden === 0, J);
     },
   },

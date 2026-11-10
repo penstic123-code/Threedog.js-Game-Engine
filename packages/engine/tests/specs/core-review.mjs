@@ -15,7 +15,10 @@ export const specs = [
       const missing = await unregistered();
       check('no code is raised without an entry (add it to core/base/errorCodes.js with fix + docs)', missing.length === 0, missing.join('; '));
       const { ERROR_CODES } = await import(new URL('../../core/base/errorCodes.js', import.meta.url).href);
-      const dead = Object.entries(ERROR_CODES).flatMap(([k, v]) => (v.docs || []).filter(d => !existsSync(new URL('../../docs/' + d, import.meta.url))).map(d => `${k}: ${d}`));
+      // a link is "file §section" (docRef.js, the one spelling): here only that it parses and the file exists; whether the section exists is
+      // tools/tests/error-doc-pointers.mjs (readSection), so the two checks do not drift apart
+      const { parseDocRef } = await import(new URL('../../core/base/docRef.js', import.meta.url).href);
+      const dead = Object.entries(ERROR_CODES).flatMap(([k, v]) => (v.docs || []).filter(d => { const r = parseDocRef(d); return !r || !existsSync(new URL('../../docs/' + r.file, import.meta.url)); }).map(d => `${k}: ${d}`));
       check('every docs link of every code points at an existing page', dead.length === 0, dead.join('; '));
       check('plugin-shape lists only what plugs in (a Material or ShaderPatch is refused)', !/a Material|ShaderPatch/.test(ERROR_CODES['plugin-shape'].fix), ERROR_CODES['plugin-shape'].fix);
       check('camera-none does not promise a camera openWorld only installs when named', !/openWorld installs followCamera/.test(ERROR_CODES['camera-none'].fix), ERROR_CODES['camera-none'].fix);
@@ -55,8 +58,8 @@ export const specs = [
         await E.start();
         const S = E.saves, quiet = [console.error, console.warn]; console.error = console.warn = () => {};
         let a = 1, bad = false;
-        S.register('crA', { save: () => ({ a }), load: d => { a = d.a; } });
-        S.register('crB', { save: () => { if (bad) throw new Error('crB broke'); return { b: 1 }; }, load: d => { if (d.boom) throw new Error('crB load broke'); } });
+        S.define('crA', { save: () => ({ a }), load: d => { a = d.a; } });
+        S.define('crB', { save: () => { if (bad) throw new Error('crB broke'); return { b: 1 }; }, load: d => { if (d.boom) throw new Error('crB load broke'); } });
         const first = await S.save('cr1');
         a = 2; bad = true;
         const second = await S.save('cr1');
@@ -70,7 +73,7 @@ export const specs = [
         await S.save('cr-ghost2');
         const g2 = JSON.parse(S._json.get('cr-ghost2'));
         let adopted = null;
-        S.register('ghost', { version: 3, save: () => adopted, load: d => { adopted = d; } });   // the module arrives later: it gets its part
+        S.define('ghost', { version: 3, save: () => adopted, load: d => { adopted = d; } });   // the module arrives later: it gets its part
         a = 5;
         S._json.set('cr-boom', JSON.stringify({ ...env, parts: { ...env.parts, crA: { a: 99 }, crB: { boom: true } } }));
         const p = S.load('cr-boom'), isPromise = typeof p?.then === 'function', boom = await p, afterBoom = a, boomCode = E.error?.code;
@@ -195,7 +198,7 @@ export const specs = [
         })();
         E.saves._replace.begin(); const undoHeld = E.ops.undo('fr.u', {}, 1).code; E.saves._replace.end();
         let nullLoad = false;
-        E.saves.register('frNull', { atomic: true, save: () => null, load: () => { nullLoad = true; } });
+        E.saves.define('frNull', { atomic: true, save: () => null, load: () => { nullLoad = true; } });
         E.ops.define('fr.bad', { atomic: true, run: () => ({ ok: false, code: 'no' }) });
         E.ops.run('fr.bad');
         let after = 0;
@@ -232,7 +235,7 @@ export const specs = [
         const allUp = !I.keys.has('Mouse0') && !I.keys.has('Mouse2');
         I._muted.add('KeyW'); E.events.emit('page:blur', { focused: false, visible: true });
         const muted = I._muted.size;
-        const a = I.action('frShared', { owner: 'a', optional: true }), b = I.action('frShared', { owner: 'b', optional: true });
+        const a = I.define('frShared', { owner: 'a', optional: true }), b = I.define('frShared', { owner: 'b', optional: true });
         a.remove(); const kept = I.actions.has('frShared'); b.remove(); const freed = !I.actions.has('frShared');
         E.dispose(); canvas.remove();
         return { chord, leftUp, allUp, muted, kept, freed };
@@ -350,7 +353,7 @@ export const specs = [
         const { createEngine } = threedogThreads;
         const E = createEngine({ canvas: document.createElement('canvas'), headless: true, urlState: false, saveKey: 'cr-session', ui: { title: { title: 'T' } } });
         let part = 'new';
-        E.saves.register('crP', { save: () => ({ v: part }), load: d => { part = d.v; } });
+        E.saves.define('crP', { save: () => ({ v: part }), load: d => { part = d.v; } });
         await E.start();
         const S = E.saves; let saved = 0; E.events.on('save:written', () => saved++);
         const atTitle = E.session.playing;
@@ -549,6 +552,30 @@ export const specs = [
       check('a saved step id the quest no longer has restarts the quest', r.lostStep === 0, JSON.stringify(r));
       check('world: owed is written only for kinds simulated with far; records are keyed by id (version 5)', r.owed.length > 0 && r.owed.every(id => id.startsWith('crop')) && r.recordsIsObject && r.wVersion === 5, JSON.stringify(r));
       check('a version-1 world save (records as an array) still loads', r.oldOk === true && r.propsBack === 30, JSON.stringify(r));
+    },
+  },
+  {
+    // the game's dispose may free what the scene walk never sees (a lease, a body, a pooled buffer): a build that lands after engine.dispose was dropped without it
+    name: 'stream: a build that lands after engine.dispose goes to the entry\'s own dispose, once, and counts nothing',
+    url: PAGE,
+    async run({ check, ev }) {
+      const r = await ev(async () => {
+        const { createEngine, THREE } = threedogThreads;
+        const E = createEngine({ canvas: document.createElement('canvas'), headless: true, urlState: false, saveKey: 'fr-stream-late' });
+        await E.start();
+        let land; const late = new Promise(res => { land = res; }), freed = [];
+        const obj = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial());
+        E.stream.add({ position: [0, 0, 0], radius: 6, build: () => late, dispose: o => freed.push(o) });
+        E.step(0.1, { describe: false }); await new Promise(res => setTimeout(res, 0));
+        const started = E.stream.queued;
+        E.dispose();
+        land(obj); await new Promise(res => setTimeout(res, 20));
+        return { started, freed: freed.length, same: freed[0] === obj, queued: E.stream.queued, attached: !!obj.parent };
+      });
+      const J = JSON.stringify(r);
+      check('the build was in flight when the engine went', r.started === 1, J);
+      check('it reaches the entry\'s dispose exactly once, never the scene', r.freed === 1 && r.same && !r.attached, J);
+      check('nothing is counted down after dispose zeroed the queue', r.queued === 0, J);
     },
   },
 ];

@@ -138,13 +138,15 @@ export function members(node) {
   if (ts.isTypeAliasDeclaration(node)) return ts.isTypeLiteralNode(node.type) ? node.type.members : [];
   return node.members || [];
 }
+// A @deprecated alias or an @internal member is not listed: the pages teach the current name, and the CHANGELOG lists every rename
+const hidden = m => (m.jsDoc || []).some(d => (d.tags || []).some(t => t.tagName.text === 'deprecated' || t.tagName.text === 'internal'));
 // Interface members are split into methods (overloads merged) and properties
 export function split(node, owner) {
   const methods = new Map(), props = [];
   for (const m of members(node)) {
     if (ts.isConstructorDeclaration(m) || ts.isConstructSignatureDeclaration?.(m) || ts.isIndexSignatureDeclaration(m)) continue;
     const name = m.name?.getText();
-    if (!name) continue;
+    if (!name || hidden(m)) continue;
     const isMethod = ts.isMethodSignature(m) || ts.isMethodDeclaration(m);
     const doc = docOf(m);
     if (isMethod) {

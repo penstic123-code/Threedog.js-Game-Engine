@@ -78,7 +78,11 @@ function readDistances(d) {
  * Wrap one copy of a model. scale: what the copy will be scaled by, so default distances follow its size on screen.
  * @param {any} a the Assets instance  @param {string} name  @param {THREE.Object3D} full  @returns {Promise<THREE.LOD>}
  */
-export async function wrapLod(a, name, full, { distances, hysteresis = HYSTERESIS, scale = 1 } = {}) {
+export async function wrapLod(a, name, full, opts = {}) {
+  // `full` is the caller's already (a lease, a clone's bones): a LOD that cannot be made gives it back, so a rejected call leaves nothing counted
+  try { return await assemble(a, name, full, opts); } catch (err) { a.dropCopy(full); throw err; }
+}
+async function assemble(a, name, full, { distances, hysteresis = HYSTERESIS, scale = 1 } = {}) {
   const asked = readDistances(distances), e = a.entries.get(name), lod = new THREE.LOD();
   lod.name = full.name;
   Object.assign(lod.userData, { batch: false, ...(full.userData.modelName && { modelName: full.userData.modelName }) });
@@ -92,7 +96,10 @@ export async function wrapLod(a, name, full, { distances, hysteresis = HYSTERESI
   if (DEV && e?.lodCopies === MANY_COPIES) warnOnce(coded('asset-lod', `assets.lod('${name}'): ${MANY_COPIES} copies, and a LOD object is never batched, so each one is its own draw calls. Check engine.batching is not the better fit: drop lod for this model and compare describe().perf`));
   const fullMeshes = meshesOf(full);
   const size = new THREE.Box3().setFromObject(full).getSize(new THREE.Vector3()).length() * scale;
-  const copies = await Promise.all(urls.map(u => a.model(u)));
+  // allSettled: one level failing to load must not strand the others that did (each holds a lease)
+  const got = await Promise.allSettled(urls.map(u => a._bare(u, {}, 'lod'))), failed = got.find(r => r.status === 'rejected');
+  if (failed) { for (const r of got) if (r.status === 'fulfilled') a.dropCopy(r.value); throw failed.reason; }
+  const copies = got.map(r => r.value);   // bare: a level is part of the LOD, which is what gets the onModel setup
   copies.forEach((copy, i) => {
     const low = meshesOf(copy), at = asked ? asked[i] : size * FIRST_LENGTHS * STEP ** i;
     // a level built from another version of the model, or more levels than the game gave distances: leave it out rather than draw the wrong material on it

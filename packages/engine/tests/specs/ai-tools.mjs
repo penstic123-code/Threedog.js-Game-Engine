@@ -51,7 +51,7 @@ export const specs = [
         return { warns, error: engine.error, text: engine.describeText().split('\n')[0] };
       });
       check('warnOnce: the warning ends with "Possible cause" and a Read line, and repeats are not printed again', r.warns.length === 1 && /Possible cause: .*\n\s+Read: .*api\//.test(r.warns[0]), JSON.stringify(r.warns));
-      check('engine.error has a code, the fix and docs (recipes/18-world.md)', r.error?.code === 'world-plain' && /JSON-like/.test(r.error?.fix ?? '') && r.error.docs.includes('recipes/18-world.md'), JSON.stringify(r.error));
+      check('engine.error has a code, the fix and docs (recipes/18-world.md)', r.error?.code === 'world-plain' && /JSON-like/.test(r.error?.fix ?? '') && r.error.docs.some(d => d.startsWith('recipes/18-world.md')), JSON.stringify(r.error));
       check('engine.error.at: the first stack line, also on the describeText error line', /^at |@\S+:\d+/.test(r.error?.at ?? '') && r.text.includes(`(${r.error.at})`), JSON.stringify(r.error?.at));
       // 为什么：一次试玩里 world.present 只调 modelNow 拿代码生成的模型，一直是 null 也没有说明
       const m = await ev(async () => {

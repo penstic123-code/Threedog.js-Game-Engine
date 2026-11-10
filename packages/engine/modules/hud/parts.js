@@ -4,6 +4,7 @@
 //   colors follow ui.theme bg / fg / accent unless ui.theme hudBg / hudFg / hudAccent say otherwise; layout is plain CSS, so ui.css moves the stats column, sizes, fonts.
 //   Inner HTML: ui.templates.hudMarker / hudCounter / hudBar (data, { esc, t }) => HTML.
 import { esc, placeAt } from '../../ui/UI.js';
+import { keyed } from '../../core/input/inputPad.js';   // "E · Talk", the same as the interaction prompt
 /** @import { Engine } from '../../types/core' */
 
 export const CSS = `
@@ -15,13 +16,14 @@ export const CSS = `
 .threedog-hud-top-left,.threedog-hud-top,.threedog-hud-top-right{top:var(--hy)}
 .threedog-hud-bottom-left,.threedog-hud-bottom,.threedog-hud-bottom-right{bottom:calc(12px + env(safe-area-inset-bottom,0px))}
 .threedog-hud-left,.threedog-hud-right{top:50%;transform:translateY(-50%)}
-.threedog-hud-counter,.threedog-hud-bar{background:var(--threedog-hud-bg);border-radius:var(--threedog-radius-small);padding:4px 10px;min-width:120px}
+.threedog-hud-counter,.threedog-hud-bar,.threedog-hud-hint{background:var(--threedog-hud-bg);border-radius:var(--threedog-radius-small);padding:4px 10px;min-width:120px}
 .threedog-hud-bar-track{height:6px;border-radius:3px;background:var(--threedog-line);overflow:hidden;margin-top:3px}
 .threedog-hud-bar-fill{height:100%;width:calc(var(--threedog-hud-fill,0) * 100%);background:var(--threedog-hud-accent)}
 .threedog-hud-marker{position:absolute;left:0;top:0;transform:translate(-50%,-100%);display:flex;flex-direction:column;align-items:center;white-space:nowrap;text-shadow:var(--threedog-shadow-small)}
 .threedog-hud-marker::after{content:'';width:10px;height:10px;margin-top:2px;border-radius:50%;background:var(--threedog-hud-accent)}
 .threedog-hud-marker.threedog-hud-arrow{transform:translate(-50%,-50%)}
 .threedog-hud-marker.threedog-hud-arrow::after{width:0;height:0;border-radius:0;border:7px solid transparent;border-left:12px solid var(--threedog-hud-accent);order:-1;transform:rotate(var(--threedog-hud-angle,0rad))}
+.threedog-hud-stats .threedog-hud-button{pointer-events:auto}
 .threedog-hud-dist{color:var(--threedog-hud-accent);font-size:12px}
 `;
 
@@ -61,21 +63,38 @@ export function defineHudParts(e, ctx, root) {
   // a counter / bar lives in the column of its anchor; a changed anchor moves the element there
   const place = (el, d) => { const col = root().column(d.anchor ?? 'top-left'); if (el.parentNode !== col) col.appendChild(el); };
 
-  ctx.ui.define('hud.counter', () => {
-    const el = document.createElement('div'); el.className = 'threedog-hud-counter';
+  // a text box placed at its anchor (counter, key hint): the part is one div, write(el, d) fills it
+  const box = (cls, write) => () => {
+    const el = document.createElement('div'); el.className = cls;
+    return { el, update(d) { place(el, d); write(el, d); }, dispose() { el.remove(); } };
+  };
+
+  ctx.ui.define('hud.counter', box('threedog-hud-counter', (el, d) => {
+    const t = tpl('hudCounter');
+    if (t) el.innerHTML = t(d, tools);
+    // value is a number (a count, with max: 2 / 5) or text (a time '08:30', a quest step): one counter for both, no second widget.
+    // No value = the label alone: a status line that has no number yet must not read "0". No label = the value alone: the id is the game's handle, not text for the player
+    else el.textContent = [d.icon, d.label, d.value == null ? null : d.max != null ? `${d.value} / ${d.max}` : d.value].filter(x => x != null && x !== '').join(' ');
+  }), { multi: true });
+
+  // A button is plain DOM over the canvas, so a press on it never reaches the canvas input (no shot, no look-drag, no pointer lock). A click gives keyboard focus back to the
+  // game (a button left focused would answer the next Enter), and the label goes through engine.t like every other text.
+  ctx.ui.define('hud.button', () => {
+    const el = document.createElement('button'); el.type = 'button'; el.className = 'threedog-btn threedog-hud-button';
+    let run = null;
+    el.addEventListener('click', () => { el.blur(); run?.(); });
     return {
       el,
       update(d) {
-        place(el, d);
-        const t = tpl('hudCounter');
-        if (t) el.innerHTML = t(d, tools);
-        // value is a number (a count, with max: 2 / 5) or text (a time '08:30', a quest step): one counter for both, no second widget.
-        // No value = the label alone: a status line that has no number yet must not read "0". No label = the value alone: the id is the game's handle, not text for the player
-        else el.textContent = [d.icon, d.label, d.value == null ? null : d.max != null ? `${d.value} / ${d.max}` : d.value].filter(x => x != null && x !== '').join(' ');
+        place(el, d); run = d.run;
+        el.textContent = [d.icon, keyed(d.key, d.label == null ? '' : e.t(d.label))].filter(x => x).join(' ');
       },
       dispose() { el.remove(); },
     };
   }, { multi: true });
+
+  // "E · Talk": d.key is already the input label of the action (hud keeps it current); not clickable, so it never takes the mouse
+  ctx.ui.define('hud.hint', box('threedog-hud-hint', (el, d) => { el.textContent = keyed(d.key, d.label == null ? '' : e.t(d.label)); }), { multi: true });
 
   ctx.ui.define('hud.bar', () => {
     const el = document.createElement('div'); el.className = 'threedog-hud-bar';

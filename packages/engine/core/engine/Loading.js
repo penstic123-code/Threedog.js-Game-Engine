@@ -35,19 +35,21 @@ export class Loading {
   constructor(engine) {
     this.engine = engine; this.tasks = new Map();
     this._inits = new Set();   // init() of modules installed after start(), in flight
+    this._parts = new Set();   // their save parts taking back data a save kept for them (saveApply.js adoptPart), in flight
     /** The one limit on every wait for a load (ms): a file that gives no sign of life, a module's init or a settle that does not end fail by name after it @type {number} */
     this.timeoutMs = 120000;
   }
 
   /** @internal keep a late module init in flight until it ends (settled() waits for these) */
-  _track(p) { this._inits.add(p); p.finally(() => this._inits.delete(p)); }
+  _track(p, into = this._inits) { into.add(p); p.finally(() => into.delete(p)); }
   /**
-   * Resolves when every module installed after start() has finished its init() (also when one failed: its state is then 'failed' in engine.moduleStates and the error went through the error tiers).
+   * Resolves when every module installed after start() has finished its init() (also when one failed: its state is then 'failed' in engine.moduleStates and the error went through the error tiers),
+   * and its save parts took back what the last save kept for them, afterLoad round included: until then the load holds gameplay, as any load does (core/saves/stateReplace.js).
    * engine.use() returns the engine, so await this to know a late module is running.
    * @returns {Promise<void>}
    * @example engine.use(shop()); await engine.loading.settled(); engine.explain({ module: 'shop' }).ok   // true
    */
-  async settled() { while (this._inits.size) await Promise.allSettled([...this._inits]); }
+  async settled() { while (this._inits.size || this._parts.size) await Promise.allSettled([...this._inits, ...this._parts]); }
 
   /**
    * @internal The one limit: p, or fail()'s error once lastSign() (the time of the last sign of life, null: stop watching) is older than timeoutMs. It only answers the waiter; p goes on unless fail ends it.

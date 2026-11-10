@@ -3,8 +3,8 @@
 // ops, stacks / freeze, engine.wrap; stand-ins for input, UI, i18n, audio, saves) so it needs no browser. Works in a game installed from npm:
 //   import { runContract } from '@threedog/tools/contract';
 //   import contract from 'threedog/modules/gameplay/inventory.contract.js';
-//   runContract(contract, () => myInventory(contract.options), { check });       // check(label, ok, detail?) from your test runner
-//   runContract(cameraContract, () => myCamera(), { check, prepare: e => { e.camera = ... } })   // prepare: add what your module needs to the small engine
+//   await runContract(contract, () => myInventory(contract.options), { check });       // check(label, ok, detail?) from your test runner
+//   await runContract(cameraContract, () => myCamera(), { check, prepare: e => { e.camera = ... } })   // prepare: add what your module needs to the small engine
 // An object contract (kind: 'object', e.g. characters/vehicle.contract.js) checks one object instead: runContract(contract, () => myBoat, { check }).
 // Order: install -> name -> api methods -> fields (properties other modules read) -> resolves (characters: control can find a character) -> ops defined and listed -> saves registered with their versions -> probe setup -> each probe event fires ->
 //   describe answers -> engine.wrap goes around an api method -> a probed value survives save -> a fresh install -> load -> (probe.copy) and a read -> write into a fresh install
@@ -15,12 +15,15 @@ import { pathToFileURL } from 'node:url';
 import { ENGINE } from './paths.mjs';
 
 const core = f => import(pathToFileURL(join(ENGINE, 'core', f)).href);
-const [{ Events }, { Ops }, { Stacks }, { defineHoldStacks, holdMethods }, { Wraps }, { Control }] =
-  await Promise.all(['base/Events.js', 'ops/Ops.js', 'ops/stacks.js', 'ops/holds.js', 'ops/wrap.js', 'ops/control.js'].map(core));
+const [{ Events }, { Ops }, { Stacks }, { defineHoldStacks, holdMethods }, { Wraps }, { Control }, { Saves }, { readSave }, { partData }, { StateReplace }, { syncOnly, isThenable }] =
+  await Promise.all(['base/Events.js', 'ops/Ops.js', 'ops/stacks.js', 'ops/holds.js', 'ops/wrap.js', 'ops/control.js', 'saves/Saves.js', 'saves/saveVersions.js', 'saves/saveApply.js', 'saves/stateReplace.js', 'base/validate.js'].map(core));
+
+// The save parts go through the real Saves.define (no storage behind it: save() does nothing), so a part the engine refuses (a key taken twice, a field it
+// does not know, a bad first or version) is refused here too. A copy of those checks would drift from the engine and pass a module that engine.use() throws on.
+const contractSaves = e => Object.assign(Object.create(Saves.prototype), { engine: e, providers: new Map(), _foreign: { parts: {}, versions: {} }, _replace: new StateReplace(e), save() {} });
 
 /** A minimal engine with the real core parts a gameplay module talks to; everything with a screen is a stand-in that records calls */
 export function contractEngine() {
-  const saved = new Map();
   const e = Object.defineProperties({
     headless: true, ready: true, disposed: false, halted: false, tick: 0, actor: 'player', modules: new Map(), _loop() {},
     events: new Events(),
@@ -31,14 +34,14 @@ export function contractEngine() {
     time: { _onMove: [], onMove(fn) { this._onMove.push(fn); return { remove: () => { this._onMove = this._onMove.filter(f => f !== fn); } }; } },
     // asset name table: modules register built-in assets in install (characters' 'footstep' synthesized sound, builtInSounds writes entries), and a real engine always has engine.assets
     assets: { entries: new Map() },
-    saves: { register: (key, def) => { saved.set(key, def); }, save() {}, _defs: saved },
-    input: { actions: new Map(), action(a, o) { this.actions.set(a, o ?? {}); return { name: a, remove() {} }; }, bind: () => ({ owner: 'game', remove() {} }), keysOf: () => [], isUnbound: () => false, touchButton() {}, pressed: () => false, pressedRaw: () => false, down: () => false,
+    input: { actions: new Map(), define(a, o) { this.actions.set(a, o ?? {}); return { name: a, remove() {} }; }, bind: () => ({ owner: 'game', remove() {} }), keysOf: () => [], isUnbound: () => false, touchButton() {}, pressed: () => false, pressedRaw: () => false, down: () => false,
       push: name => ({ name, remove() {} }), axis: { x: 0, y: 0 }, padStick: { x: 0, y: 0 }, label: () => '' },
     ui: { define() {}, get: () => null, create: () => null, set() {}, templates: {}, isOpen: () => false, open() {}, close() {}, refresh() {} },
     movement: { radius: 0.3, stepHeight: 0.4, slopeRatio: 1 },
-    session: { id: 1 }, _things: { sources: [], source: () => null },
+    session: { id: 1, _late() {} }, _things: { sources: [], source: () => null },
     t: k => k, onFixed: () => ({ remove() {} }), onFrame: () => ({ remove() {} }),
   }, Object.getOwnPropertyDescriptors(holdMethods));
+  e.saves = contractSaves(e);
   e.ops = new Ops(e);
   e.stacks = new Stacks(e); e.mod = (n, o) => e.stacks.mod(n, o); defineHoldStacks(e);
   e._wraps = new Wraps(e); e.wrap = (t, m, fn, o) => e._wraps.wrap(t, m, fn, o);
@@ -60,7 +63,7 @@ const readOf = (api, read) => typeof read === 'string' ? api[read] : callOn(api,
  */
 /** The ctx a module gets on the contract engine: the real verbs, with nothing to own because that engine never uninstalls */
 export const contractCtx = (e, name) => ({
-  name, track: h => h, feeds: () => ({ remove() {} }), rule: (n, def, names) => e.stacks.rule(n, def, names), input: { action: (a, o) => e.input.action(a, o), bind: (a, k) => e.input.bind(a, k) },
+  name, track: h => h, feeds: () => ({ remove() {} }), rule: (n, def, names) => e.stacks.rule(n, def, names), input: { define: (a, o) => e.input.define(a, o), bind: (a, k) => e.input.bind(a, k) },
   ops: e.ops, saves: e.saves, ui: e.ui, stream: e.stream, budget: e.budget,
   things: { addSource() {}, explainWith() {} }, ground: { provide: g => e.setGround(g), addColliders() {} },
 });
@@ -73,13 +76,14 @@ function checkPosition({ position }, label, check) {
   check(`${label}: position names its authority and its writers`, ['record', 'solver', 'physics', 'view'].includes(authority) && said.length > 0 && said.every(w => typeof w === 'string' && w), JSON.stringify(position));
 }
 
-export function runContract(contract, makeModule, { check, label = contract.name, prepare = null }) {
+export async function runContract(contract, makeModule, { check, label = contract.name, prepare = null }) {
   checkPosition(contract, label, check);
   if (contract.kind === 'object') return runObjectContract(contract, makeModule, { check, label });
   const install = () => {
     const e = contractEngine(); prepare?.(e);
     const mod = makeModule(), nobody = e.control.characterOf;
     const api = mod.install(e, contractCtx(e, mod.name));
+    syncOnly(api, `install() of module ${mod.name}`, true);   // the engine's own check (core/engine/modules.js): engine.use() refuses an install that returns a Promise
     e[mod.name] = api; e.modules.set(mod.name, mod);
     for (const c of contract.probe?.setup ?? []) callOn(api, c);
     return { e, mod, api, nobody };
@@ -102,7 +106,7 @@ export function runContract(contract, makeModule, { check, label = contract.name
   }
   const listed = new Set(e.ops.list().map(o => o.name)), noOp = contract.ops.filter(n => !listed.has(n));
   t(`defines ops ${contract.ops.join(', ') || '(none)'}`, !noOp.length, `missing: ${noOp.join(', ')}`);
-  const reg = e.saves._defs, badSave = Object.entries(contract.saves).filter(([k, v]) => (reg.get(k)?.version ?? 1) !== v || !reg.has(k));
+  const reg = e.saves.providers, badSave = Object.entries(contract.saves).filter(([k, v]) => (reg.get(k)?.version ?? 1) !== v || !reg.has(k));
   t(`registers saves ${JSON.stringify(contract.saves)}`, !badSave.length, `wrong or missing: ${badSave.map(([k]) => `${k} (version ${reg.get(k)?.version})`).join(', ')}`);
   for (const [ev, call] of contract.probe?.emits ?? []) {
     let fired = 0; const h = e.events.on(ev, () => fired++);
@@ -126,11 +130,16 @@ export function runContract(contract, makeModule, { check, label = contract.name
     const read = a => st.map ? st.map(readOf(a, st.read)) : readOf(a, st.read);
     const before = read(api), what = typeof st.read === 'string' ? st.read : `${st.read[0]}(${st.read.slice(1).join(', ')})`;
     t(`${what} is ${st.expect} after the probe calls`, before === st.expect, String(before));
-    const data = Object.fromEntries([...reg].map(([k, d]) => [k, JSON.parse(JSON.stringify(d.save()))]));
+    // the save as the engine writes it (partData: what a part may save; nothing to save = left out), then read back by the engine's readSave: the load order by first, the
+    // version steps. A part's load may return a Promise and later parts wait for it, as saves.load does, so a part that needs another one loaded first is tested as it runs
+    const parts = {}, versions = {};
+    for (const [k, p] of reg) { const d = partData(k, p); if (d != null) { parts[k] = JSON.parse(JSON.stringify(d)); versions[k] = p.version; } }
     const fresh = install();
     fresh.e.clock.now = first.e.clock.now;   // the engine's time source is in every save (core/time/time.js part): the fresh engine resumes at the saved second
-    for (const [k, d] of fresh.e.saves._defs) if (k in data) d.load(data[k]);
-    const after = read(fresh.api);
+    const back = readSave({ parts, versions }, fresh.e.saves.providers, 'contract');
+    let after;
+    if (back.list) try { for (const [, p, d] of back.list) { const r = p.load(d); if (isThenable(r)) await r; } after = read(fresh.api); } catch (err) { after = err.message; }
+    else after = back.dev;
     t('the value survives save -> fresh install -> load', after === st.expect, String(after));
     // probe.copy: what one install reads (contents()) written into a fresh one (setContents) gives the same value: the net host -> client path
     const cp = contract.probe.copy;

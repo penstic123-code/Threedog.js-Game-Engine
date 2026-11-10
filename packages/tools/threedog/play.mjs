@@ -84,13 +84,27 @@ Run state: ${rs.state === 'frozen' ? `frozen(by ${rs.owners.join(', ')})` : rs.s
     text: `${head}${last ? ` (latest E${last.id}: ${oneLine(last.message)}; threedog errors latest)` : ''}${run}${blocked}` };
 }
 
+/** Ends the processes (on Windows with their children) and returns the pids still alive after a short wait; kill/alive can be replaced by a test. */
+export async function endProcesses(pids, { kill = killPid, alive = pidAlive, tries = 10 } = {}) {
+  for (const pid of pids) kill(pid);
+  for (let i = 0; i < tries && pids.some(alive); i++) await wait(300);
+  return pids.filter(alive);
+}
+function killPid(pid) {
+  if (process.platform === 'win32') spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
+  else try { process.kill(-pid, 'SIGTERM'); } catch { try { process.kill(pid, 'SIGTERM'); } catch { /* already gone */ } }
+}
+
 export async function stopServer(dir) {
   const own = (() => { try { return JSON.parse(readFileSync(playFile(dir), 'utf8')).pid; } catch { return null; } })();
   if (!own || !pidAlive(own)) {
     // play's server is gone (it stops itself when idle and leaves play.json behind), so whatever answers now was started by hand
     rmSync(playFile(dir), { force: true });
     // a server started by hand stays up, but the headless browser its bridge opened (e.g. for threedog status) is closed: that one burns CPU
-    if ((await probe(dir)).state !== 'ok') return { ok: false, kind: 'no-server', text: '✗ No dev server of this workspace is running, nothing to stop.' };
+    if ((await probe(dir)).state !== 'ok') {   // nothing answers and play's process is gone (e.g. killed by hand): the leftover records are stale
+      rmSync(join(dir, '.threedog/dev.json'), { force: true });
+      return { ok: true, text: '✓ Nothing is running; the leftover records were cleared.' };
+    }
     const closed = await bridgeDriver(dir).closeHeadless().catch(() => false);
     return { ok: true, text: `✓ ${closed ? 'Closed the headless browser the dev bridge had opened' : 'No headless browser was open'}; `
       + 'the dev server was not started by threedog play, so it keeps running.\nNext: to stop it, close the terminal where you ran npm run dev.' };
@@ -105,10 +119,9 @@ export async function stopServer(dir) {
     for (const f of [playFile(dir), join(dir, '.threedog/dev.json')]) rmSync(f, { force: true });
     return { ok: true, text: `✓ No dev server of this workspace answers any more (the record was removed${pidAlive(own) ? `; pid ${own} is alive but is not confirmed as the dev server, so it was left alone` : ''}).` };
   }
-  for (const pid of new Set([own, devPid].filter(Boolean))) {
-    if (process.platform === 'win32') spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
-    else try { process.kill(-pid, 'SIGTERM'); } catch { try { process.kill(pid, 'SIGTERM'); } catch { /* already gone */ } }
-  }
+  const left = await endProcesses([...new Set([own, devPid].filter(Boolean))]);
+  // the records are the only way to find the server again: keep them when a process is still there
+  if (left.length) return { ok: false, kind: 'stop-failed', text: `✗ The dev server (pid ${left.join(', ')}) is still running; its record was kept.\nNext: end that process by hand (Task Manager, or ${process.platform === 'win32' ? 'taskkill /PID <pid> /T /F' : 'kill -9 <pid>'} in a terminal with the same rights), then run threedog play --stop again.` };
   for (const f of [playFile(dir), join(dir, '.threedog/dev.json')]) rmSync(f, { force: true });
   return { ok: true, text: '✓ Dev server stopped (the headless browser it opened closes with it).' };
 }

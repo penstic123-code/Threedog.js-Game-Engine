@@ -29,6 +29,7 @@ export class SaveStore {
     /** 'idb' | 'localStorage': meaningful only after open() completes */
     this.mode = 'idb';
     this.db = null;
+    /** @internal why open() fell back to localStorage */ this.openError = null;
   }
 
   /** Open the database; on failure (private mode, disabled) switch to localStorage. Returns whether IndexedDB is in use. */
@@ -40,8 +41,11 @@ export class SaveStore {
       this.db = await req(r);
       this.db.onversionchange = () => this.db.close();   // yield when another tab wants to upgrade the database
       return true;
-    } catch { this.mode = 'localStorage'; return false; }
+    } catch (e) { this.mode = 'localStorage'; this.openError = e; return false; }   // kept: the warning names the real cause, not always private mode
   }
+
+  /** Attachments live only in IndexedDB: in localStorage mode a write says so (save-write) instead of resolving as stored */
+  _needIdb(b) { if (this.mode === 'localStorage') throw codedError('save-write', `attachment '${b.group}/${b.id}' was not stored: IndexedDB is unavailable, so attachments (such as photos) are not kept`); }
 
   _tx(store, mode = 'readonly') { return this.db.transaction(store, mode); }
 
@@ -117,7 +121,8 @@ export class SaveStore {
   /** Several attachments in one transaction: all stored or none (a restore must not leave half of them) */
   async putBlobs(list) {
     list.forEach(checkBlob);
-    if (this.mode === 'localStorage' || !list.length) return;
+    if (!list.length) return;
+    this._needIdb(list[0]);
     const t = this._tx('blobs', 'readwrite'), st = t.objectStore('blobs');
     try { for (const b of list) st.put(b); } catch (e) { t.abort(); throw e; }
     await tx(t);
@@ -132,7 +137,8 @@ export class SaveStore {
   /** @internal One attachment, only if no other tab claimed the row since the rev this tab saw (putSlot's compare). row: as stored, with its own rev */
   async putBlobIf(row, expect) {
     checkBlob(row);
-    if (this.mode !== 'localStorage') return this._change('blobs', [row.group, row.id], cur => claimed(cur, expect), st => st.put(row));
+    this._needIdb(row);
+    return this._change('blobs', [row.group, row.id], cur => claimed(cur, expect), st => st.put(row));
   }
   /** @internal deleteBlob with the same compare */
   async deleteBlobIf(group, id, expect) {

@@ -1,5 +1,10 @@
 # Shop and gold: buy, sell / consign, gold HUD, saving
 
+> **Covers:** gold as an item, buying and selling as two ops, a gold counter, saving.
+> **Use when:** a shop, a trader, a currency.
+> **Shortest:** `gold: { name: 'Gold', stack: 99999 }` in the items content.
+> **Sections:** 1 Where to keep · 2 Data · 3 Buy, sell / · 4 Gold HUD · 5 Saving
+
 Requires modules `inventory()` + `dialogue()` + `content()` (the gold HUD needs `hud()`). The engine has no "shop"
 module: gold is an ordinary item, a shelf is an ordinary container, and buying and selling are two small ops that dialogue choices (or your own shop
 window) run.
@@ -16,8 +21,8 @@ The rest is written for A.
 `content/items.js`:
 ```js
 export default {
-  gold: { name: 'Gold', icon: '🪙', stack: 99999 },   // currency: one slot however much
-  medkit: { name: 'Medkit', price: 5 },          // price: read by the shop ops below
+  gold: { name: 'Gold', icon: '🪙', stack: 99999 },  // currency: one slot however much
+  medkit: { name: 'Medkit', price: 5 },  // price: read by the shop ops below
 };
 export const startItems = { gold: 12 };
 ```
@@ -36,7 +41,7 @@ first, and when the other side cannot take its part it returns `{ ok: false, cod
 ```js
 // main.js (after engine.use(...inventory()...))
 const price = (e, item) => e.inventory.item(item).price ?? 1;
-const payout = (e, item) => Math.max(1, Math.floor(price(e, item) * 0.6));   // add and remove take 1 or more, never 0
+const payout = (e, item) => Math.max(1, Math.floor(price(e, item) * 0.6));  // add and remove take 1 or more, never 0
 engine.ops.define('shop.buy', {
   atomic: true,
   args: { shop: 'string', item: 'string' },
@@ -46,7 +51,7 @@ engine.ops.define('shop.buy', {
     return true;
   },
   run(e, { shop, item }, ctx) {
-    e.inventory.container(ctx.actor).remove('gold', price(e, item));   // first: the last coins free their slot for the goods
+    e.inventory.container(ctx.actor).remove('gold', price(e, item));  // first: the last coins free their slot for the goods
     return e.inventory.transfer(shop, ctx.actor, item, 1) || { ok: false, code: 'bagFull' };
   },
   reasons: { soldOut: 'Shelf is empty', noMoney: 'Not enough gold', bagFull: 'No room in the bag' },
@@ -60,7 +65,7 @@ engine.ops.define('shop.sell', {
   },
   run(e, { shop, item }, ctx) {
     const bag = e.inventory.container(ctx.actor), pay = payout(e, item);
-    e.inventory.transfer(ctx.actor, shop, item, 1);   // first: the last piece frees its slot for the gold
+    e.inventory.transfer(ctx.actor, shop, item, 1);  // first: the last piece frees its slot for the gold
     if (bag.room('gold') < pay) return { ok: false, code: 'bagFull' };
     bag.add('gold', pay, { silent: true });
     return 1;
@@ -101,9 +106,9 @@ export default {
   buys from the terminal.
 
 ## 4. Gold HUD
-Calling `hud.counter` again with the same id = update, and it leaves the DOM alone when the value is unchanged, so calling it every frame is cheap:
+Calling `hud.addCounter` again with the same id = update, and it leaves the DOM alone when the value is unchanged, so calling it every frame is cheap:
 ```js
-engine.onFrame(() => engine.hud.counter('gold', { icon: '🪙', label: 'Gold', value: engine.inventory.count('gold') }));
+engine.onFrame(() => engine.hud.addCounter('gold', { icon: '🪙', label: 'Gold', value: engine.inventory.count('gold') }));
 ```
 Loading a save replaces the whole inventory, and refreshing every frame follows naturally; no event listener is needed.
 

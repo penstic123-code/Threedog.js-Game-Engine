@@ -42,8 +42,8 @@ const RULES = {
   'world.write': [['picture', 'ui'], 'world records are game state; a {type} module only reads them',
     "run an op that writes it (engine.ops.run('<noun.verb>', args)) or move the write into a rules / world module"],
   'input.bind': [['ui'], 'a ui module declares actions; which key does what is the game\'s choice',
-    "declare the action (ctx.input.action(name, { context })) and bind keys in the game: engine.input.bind(name, ['KeyE']) or createEngine({ bindings })"],
-  'saves.register': [['ui'], 'a ui module keeps menus and preferences out of the game save (a load must not change the volume)',
+    "declare the action (ctx.input.define(name, { context })) and bind keys in the game: engine.input.bind(name, ['KeyE']) or createEngine({ bindings })"],
+  'saves.define': [['ui'], 'a ui module keeps menus and preferences out of the game save (a load must not change the volume)',
     'keep preferences in browser storage (engine.settings does), and game state in a rules / world module'],
 };
 
@@ -56,7 +56,7 @@ export function checkType(m) {
 
 /**
  * @internal dev check at a write point: warns once when the module installing or running a hook now does `what` and its type does not usually own it.
- * what: 'ops.define' | 'world.write' | 'input.bind' | 'saves.register'; did: what it did, for the message ("defined op shop.buy").
+ * what: 'ops.define' | 'world.write' | 'input.bind' | 'saves.define'; did: what it did, for the message ("defined op shop.buy").
  */
 export function checkTypeRule(e, what, did) {
   const m = DEV ? e?._curModule : null;

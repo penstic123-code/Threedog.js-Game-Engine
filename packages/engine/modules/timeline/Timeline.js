@@ -79,7 +79,7 @@ export class Timeline {
     /** @internal how runs ended, and the last failure: describe */ this._endings = { finished: 0, skipped: 0, dropped: 0, failed: 0 }; this._failure = null;
     /** Skip every cutscene immediately (set by scenario param cutscene=skip) @type {boolean} @experimental */
     this.skipAll = false;
-    ctx.track(engine.input.action('skip', { context: 'cutscene', label: 'timeline.skipAction', optional: true, owner: 'timeline' }));   // cancel skips anyway
+    ctx.track(engine.input.define('skip', { context: 'cutscene', label: 'timeline.skipAction', optional: true, owner: 'timeline' }));   // cancel skips anyway
     buildLetterbox(this);
   }
 
@@ -159,7 +159,8 @@ export class Timeline {
   _stop(r, ending) {
     if (r.ending && r.ending !== 'skipped') return;
     r.ending = ending;
-    this._tweener.finishAll(r);
+    // only a skip completes the tweens (the playthrough's end state); a drop or a failure leaves the values where they are
+    if (ending === 'skipped') this._tweener.finishAll(r); else this._tweener.cancelAll(r);
     for (const c of [...r.cancels]) c();
   }
 
@@ -327,7 +328,7 @@ export function timeline(opts = {}) {
     frame(dt) { t.frame(dt); },
     afterLoad() { t._drop(r => r.duringLoad); },
     // unloaded mid-cutscene: every run ends through its finally (camera, focus, actors go back); nothing else would, the frame hook is gone
-    dispose() { t._drop(); },
+    dispose() { t._drop(); t._tweener.cancelAll(); },   // also the tweens started with timeline.tween(): no run owns them
     // scenario param cutscene: 'skip' | 'keep'
     stateKeys: ['cutscene'],
     applyState(e, p) {

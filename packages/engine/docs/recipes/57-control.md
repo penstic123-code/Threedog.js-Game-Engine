@@ -1,5 +1,10 @@
 # Who steers a character: engine.control
 
+> **Covers:** who steers a character: the control slot, script moves, vehicles, your own mover.
+> **Use when:** a quest, cutscene or vehicle takes over a character.
+> **Shortest:** `engine.control.take(character, { owner, step })`.
+> **Sections:** Who takes what · Control is not the · Moved by script ride · Vehicles · Saves · Advanced your own mover
+
 Every character (the player, an NPC, a hand-built `Character`) has one control slot. One owner is in charge of it at a time, and only that
 owner moves the character. Take it, steer, give it back:
 
@@ -16,8 +21,8 @@ engine.clock.after(0.4, () => roll.remove(), { channel: 'real' });
 const h = engine.control.take(drone, { owner: 'ai', layer: 'script' });
 engine.onFixed(dt => h.move(dir.x, dir.z, false, dt));
 
-engine.control.of(engine.player);   // { owner: 'timeline', layer: 'cutscene', waiting: [{ owner: 'walkTo', layer: 'script' }, { owner: 'player-input', layer: 'base' }] }
-engine.describe().control;          // the same for every held character, by id
+engine.control.of(engine.player);  // { owner: 'timeline', layer: 'cutscene', waiting: [{ owner: 'walkTo', layer: 'script' }, { owner: 'player-input', layer: 'base' }] }
+engine.describe().control;  // the same for every held character, by id
 ```
 
 What to remember:
@@ -38,7 +43,7 @@ What to remember:
 
 | Driver | Layer | Owner | Notes |
 |---|---|---|---|
-| `createPlayer({ control })` | base | `'player-input'` | `control` is `'camera'` or `(player, input, dt) => ({ x, z, run })`; jump and driving live here too |
+| `addPlayer({ control })` | base | `'player-input'` | `control` is `'camera'` or `(player, input, dt) => ({ x, z, run })`; jump and driving live here too |
 | NPC behaviour (schedule, wander, your own) | base | `'npcs'` | paused near and far while anything above holds the NPC; kept by NPC id, so it survives the model being rebuilt |
 | `character.walkTo(target)` | script | `'walkTo'` | paused under a cutscene (no progress, no stuck clock), resumes after |
 | `timeline.play(steps, { actors })` | cutscene | `'timeline'` | `actors` defaults to `[engine.player]`; `[]` drives nobody; a `path` step adds its character. Resolves `{ ending, error? }`: `'finished'`, `'skipped'`, `'dropped'` (a load, new game or dispose took its state) or `'failed'`; `timeline:end` carries the same. While the player is an actor, the `'cutscene'` input context is up |
@@ -71,7 +76,7 @@ const ride = engine.control.take(engine.player, { owner: 'boat', layer: 'script'
   boat.updateWorldMatrix(true, false);
   boat.localToWorld(ch.root.position.copy(seat));
   ch.syncRecord();
-  return false;                                // placed by hand this step
+  return false;  // placed by hand this step
 } });
 ```
 To lock the player's input during a scripted ride, one line: `const lock = engine.input.push('ride');` and `lock.remove()` at the end.
@@ -79,14 +84,14 @@ Gravity comes back the moment the hold ends, so end a ride where the character c
 fixed step or an op. The camera and saves follow the position as usual.
 
 ```js fragment
-// a ladder (the landing point must be ground or a registered platform, engine.characters.support; anywhere else it drops to what is below): createPlayer({ clips: { climb: 'Climb' }, states: () => climbing ? 'climb' : null }), then call this when the player uses the ladder
+// a ladder (the landing point must be ground or a registered platform, engine.characters.support; anywhere else it drops to what is below): addPlayer({ clips: { climb: 'Climb' }, states: () => climbing ? 'climb' : null }), then call this when the player uses the ladder
 let climbing = false;
-function climb(player, top) {                  // top: { x, y, z }, where it steps off, on ground or a registered platform
-  climbing = true; player.mover = 'manual';    // no gravity, the position is yours
+function climb(player, top) {  // top: { x, y, z }, where it steps off, on ground or a registered platform
+  climbing = true; player.mover = 'manual';  // no gravity, the position is yours
   const h = engine.control.take(player, { owner: 'ladder', layer: 'script', step: (dt, ch) => {
     const up = (engine.input.down('moveForward') ? 1 : 0) - (engine.input.down('moveBack') ? 1 : 0);
     ch.root.position.y += up * 2 * dt;
-    if (ch.root.position.y < top.y) return null;   // null: the mover runs, so states picks climb
+    if (ch.root.position.y < top.y) return null;  // null: the mover runs, so states picks climb
     climbing = false; ch.mover = 'simple'; h.remove(); ch.placeAt(top);
     return false;
   } });
@@ -100,9 +105,9 @@ cutscene that takes the player while driving stops the steering; the rider stays
 
 Holding a car on the grid (a countdown, after the finish) is the same take, plus the brake, since a released pedal only rolls:
 ```js
-const hold = engine.control.take(engine.player, { owner: 'race', layer: 'script', step: () => null });   // the keys stop driving
-engine.onFixed(() => { if (hold.active) car.drive(0, 0, 1); });      // throttle, steer, brake
-hold.remove();                                                       // go
+const hold = engine.control.take(engine.player, { owner: 'race', layer: 'script', step: () => null });  // the keys stop driving
+engine.onFixed(() => { if (hold.active) car.drive(0, 0, 1); });  // throttle, steer, brake
+hold.remove();  // go
 ```
 
 ## Saves
@@ -122,8 +127,8 @@ const fly = (c, e) => ({ name: 'fly', move(x, z, run, dt, y) {
   p.x += x * v; p.y += y * v; p.z += z * v;
   c.grounded = false; e.characters.kit.ownState(c, 'fly', v / dt);
 } });
-const held = engine.mod('character.mover', { owner: 'wings', id: 'player', set: fly });   // for a while: held.remove() puts back what was there
-engine.player.mover = fly;   // or for good
+const held = engine.mod('character.mover', { owner: 'wings', id: 'player', set: fly });  // for a while: held.remove() puts back what was there
+engine.player.mover = fly;  // or for good
 ```
 
 A mover that keeps something in the physics world gives it a `leave()`: the engine calls it when another mover takes over, and `move` runs again when it is back. `mover: 'rapier'` does this, so an NPC taking off leaves no capsule behind.

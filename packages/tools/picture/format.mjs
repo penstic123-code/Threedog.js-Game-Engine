@@ -28,7 +28,7 @@ export function formatPicture(N, probe, hints, ms = probe?.ms) {
   if (probe?.unread) lines.push(`  could not be read on a built page: ${probe.unread.join(', ')} (a dev page reads them)`);
   // Short by default, detail on demand: a rainy-night shot printed 4 lines of 400-600 characters (one listed ~17 post names) and the AI had to dig.
   // Contradictions first, then intent, then facts, each by measured size; at most HINT_LINES lines of one sentence, the rest counted
-  const rank = { contradiction: 0, intent: 1, fact: 2 };
+  const rank = { mistake: -1, contradiction: 0, intent: 1, fact: 2 };
   const sorted = [...hints].sort((a, b) => (rank[a.kind] - rank[b.kind]) || ((b.size ?? 0) - (a.size ?? 0)));
   // the fog before the time line, whatever their kinds: a picture mostly fog gets its picture from that fog, and "brightness stays with the lights off"
   // alone sent the AI after the lights (a dark fog at night ate three rounds of color changes)

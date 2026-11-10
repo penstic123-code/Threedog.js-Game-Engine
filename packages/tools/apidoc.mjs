@@ -13,6 +13,7 @@ import ts from 'typescript';
 import { pathToFileURL } from 'node:url';
 import { API_MD_REL, API_DIR_REL, RECIPES_REL, CONTENT_RULES_REL, METADATA_REL, ENGINE, abs, cli } from './paths.mjs';
 import { COMMANDS, EXTRA as EXTRA_COMMANDS } from './threedog/command-table.mjs';
+import { aiTable } from './how.mjs';
 import {
   ROOT, OUT, PAGES, GEN, decls, indexFns, reexported, shown, get, clean, docOf, first, full, brief, raw, typeText, sig,
   INTERNAL, missingDocs, split, ext, methodLine, fieldLines, renderApi, renderOptions, renderStruct,
@@ -61,7 +62,7 @@ for (const n of ['stateApplied', 'ready', 'player', 'scene',
 // ---------- Core objects ----------
 const CORE_OBJS = [['events', 'Events'], ['input', 'Input'], ['clock', 'Clock'], ['vars',
   'Vars'], ['saves', 'Saves'], ['assets', 'Assets'], ['audio', 'Audio'], ['i18n', 'I18n'],
-  ['rays', 'Rays'], ['jobs', 'Jobs'], ['stream', 'Stream'], ['budget', 'Budget'], ['post', 'PostFX'], ['occlusion', 'Occlusion'], ['ground', 'Ground']];
+  ['rays', 'Rays'], ['jobs', 'Jobs'], ['stream', 'Stream'], ['budget', 'Budget'], ['post', 'PostFX'], ['occlusion', 'Occlusion'], ['ground', 'GroundProvider']];
 idx.push('', '## Core objects (engine.xxx, no install needed)');
 for (const [p, t] of CORE_OBJS) {
   const d = docOf(get(t)).text;
@@ -198,13 +199,16 @@ idx.push('');
 // ---------------------------------------------------------------------
 // Write out / check
 // ---------------------------------------------------------------------
-// llms.txt at the package root (llmstxt.org convention): where an AI starts, the reading order, one line per recipe from its title
+// llms.txt at the package root (llmstxt.org convention): where an AI starts, the reading order, then AI.md's task table by domain (the same rows threedog how
+// searches and falls back to, read by one parser, aiTable; no second hand-written list) and one line per recipe from its title
 const LLMS = join(ENGINE, 'llms.txt');
 const llms = ['# threedog', '', '> A web 3D game engine on three.js 0.187 (plain three.js, no React): core and modules installed with engine.use. ' +
   'It ships no art: each game draws its own picture (plain three.js in its picture/ folder, and assets).', '',
   "Taking over a game: its status notes first. A new feature: docs/AI.md or threedog how, then the recipe, then docs/api/<module>.md.", '',
   '## Start', '', '- [AI.md](docs/AI.md): entry table, commands, verification rules, conventions',
     '- [API.md](docs/API.md): API index; one page per module in docs/api/', '',
+  ...[...new Set(aiTable(join(ENGINE, 'docs')).filter(r => r.domain).map(r => r.domain))].flatMap(d => [`## ${d}`, '',
+    ...aiTable(join(ENGINE, 'docs')).filter(r => r.domain === d && r.where).map(r => `- ${r.task.replace(/`/g, '')}: docs/${r.where}`), '']),
   '## Recipes', '', ...recipeNames.map(r => `- [${r}](docs/recipes/${r}.md): ${readFileSync(join(abs(RECIPES_REL), r + '.md'), 'utf8').split('\n')[0].replace(/^#\s*/, '')}`), ''].join('\n');
 // COMMANDS.md: the dev bridge rows come from the command table, the rest of the page is hand-written
 const COMMANDS_DOC = join(ENGINE, 'docs/COMMANDS.md');

@@ -152,8 +152,7 @@ export const specs = [
         engine.step(0.5, { render: false });
         engine.profile(true);
         engine.step(2, { render: true });   // 120 fixed steps + 60 frame hooks, rendering only 1 frame
-        const ms = engine.profile().world ?? 0;   // average per frame-hook cycle (60 over these 2 seconds, 2 fixed steps each)
-        engine.profile(false);
+        const ms = engine.profile().world?.mean ?? 0;   // average per frame-hook cycle (60 over these 2 seconds, 2 fixed steps each)
         return { perFrame: ms, perStep: ms / 2 };
       });
       check(`2000 records: world averages < 0.5 ms per fixed step (measured ${r.perStep.toFixed(3)})`, r.perStep < 0.5, JSON.stringify(r));

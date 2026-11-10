@@ -4,7 +4,8 @@
 //     log once to the console, emit module:disabled; the game carries on -- a missing picture, sound or panel does not change game state.
 //   Gameplay (all other modules, the game's own callbacks and event listeners): in dev and tests (DEV) fail hard -- freeze gameplay (freeze('error')),
 //     engine.error records where and why, emits engine:error, and describe() / describeText() show it on the first line;
-//     so a half-deducted inventory or half-updated quest does not keep running, and a test does not mistake it for normal. A release build reports once and keeps running (so the player is not stuck for the whole session).
+//     so a half-deducted inventory or half-updated quest does not keep running, and a test does not mistake it for normal. A release build does not freeze (so the player is not stuck
+//     for the whole session) but the game can still see it: engine.error keeps the first one and engine:error fires once per site; a game that cares can react (save and offer a restart).
 //   soft (core steps such as rendering and stream.update): report once per site and continue.
 // engine.error is machine-readable: { where, message, code, fix, docs } (code / fix / docs come from the error itself or from the hint table, errorHints.js).
 import { DEV, fmt } from './validate.js';
@@ -19,13 +20,17 @@ const failsSoft = m => m?.type === 'picture' || m?.type === 'ui';
 /** Handle an error. key: where it happened (for display); module: the module definition that threw (none means a game callback / event listener, counted as gameplay); soft: report only once */
 export function reportError(engine, err, key, { module = null, soft = false } = {}) {
   if (failsSoft(module)) return disableModule(engine, module, err);
-  if (!soft && DEV && !engine.error) {
+  // dev: the first gameplay error freezes the game. Release: no freeze, but the game can SEE it: engine.error keeps the first, engine:error fires once per site
+  if (!soft && (DEV ? !engine.error : !engine._hookErrors.has(key))) {
     const message = String(err?.message ?? err);
     // code + fix + docs: what to do and which page to read; at: the line that threw (the message alone often does not say which callback line)
-    engine.error = { where: key, message, ...errorInfo(err), at: firstFrame(err) };
-    engine.freeze('error');   // until reload, a new game included: dev must not walk past a bug, and a new playthrough on top of it would hide it. Release builds keep running
-    console.error(fmt(STRINGS.halted, { key }) + hintText(err?.code ? `[${err.code}]` : message), err);
-    engine.events.emit('engine:error', engine.error);
+    const info = { where: key, message, ...errorInfo(err), at: firstFrame(err) };
+    engine.error ??= info;
+    if (DEV) {
+      engine.freeze('error');   // until reload, a new game included: dev must not walk past a bug, and a new playthrough on top of it would hide it
+      console.error(fmt(STRINGS.halted, { key }) + hintText(err?.code ? `[${err.code}]` : message), err);
+    } else { engine._hookErrors.add(key); console.error(fmt(STRINGS.once, { key }), err); }
+    engine.events.emit('engine:error', info);
     return;
   }
   if (engine._hookErrors.has(key)) return;
@@ -53,13 +58,23 @@ export function watchRejections(engine) {
 /** An event listener threw (called by the event bus): counted as gameplay */
 export function reportListenerError(engine, name, err) { reportError(engine, err, fmt(STRINGS.listener, { name })); }
 
-/** Disable a picture / ui module: give back what it borrowed, remove its fixed / frame / afterRender hooks */
+/** Disable a picture / ui module: remove everything it tracked (borrows given back) and its fixed / frame / afterRender hooks */
 function disableModule(engine, m, err) {
   const was = engine._modState.get(m.name);
   if (was === 'disabled') return;
-  if (was !== 'failed') engine._modState.set(m.name, 'disabled');   // a failed init stays 'failed': that word is what blocks the modules that require it
-  engine._returnBorrowed(m.name);
-  for (const k in engine._hooks) engine._hooks[k] = engine._hooks[k].filter(h => h.name !== m.name);
+  // the same teardown as unload for what it tracked (listeners, timers, borrows, slots), so a disabled module leaves nothing running; it stays installed. A failed init stays 'failed':
+  // that word is what blocks the modules that require it. _setModState re-sorts, which drops its hooks and re-blocks its dependents ('disabled' counts as dead there)
+  engine._dropTracked(m.name);
+  if (was !== 'failed') engine._setModState(m, 'disabled');
   console.error(fmt(STRINGS.disabled, { type: m.type, name: m.name }), err);
   engine.events.emit('module:disabled', { name: m.name, message: String(err?.message ?? err) });
+}
+
+/**
+ * @internal The one cleanup rule: remove every handle, newest first when the caller orders them so; one that throws is reported (soft) and the rest still go.
+ * Modules (unload, failed init) and sessions (the old playthrough's session.track handles) both clean up through it.
+ * @param {any} e @param {Iterable<{ remove(): void }>} handles @param {string} where @param {(h: any) => void} [first]  runs before each remove(), inside its catch
+ */
+export function removeEach(e, handles, where, first) {
+  for (const h of handles) { try { first?.(h); h.remove(); } catch (err) { reportError(e, err, where, { soft: true }); } }
 }

@@ -13,7 +13,7 @@ export const specs = [
       const r = await ev(async () => {
         const big = 'abcdefghij'.repeat(700000);   // 7MB of text, too big for localStorage (about 5MB)
         let loaded = null;
-        engine.saves.register('s1big', { save: () => ({ big, n: 42 }), load: d => { loaded = d; } });
+        engine.saves.define('s1big', { save: () => ({ big, n: 42 }), load: d => { loaded = d; } });
         const ok = await engine.saves.save('s1-big');
         const listed = engine.saves.list().some(s => s.slot === 's1-big');
         const lsKeys = Object.keys(localStorage).filter(k => k.includes('s1-big'));
@@ -52,14 +52,14 @@ export const specs = [
     url: '/',
     async run({ page, check, ev, wait }) {
       await ev(async () => {
-        engine.saves.register('s1keep', { save: () => ({ v: 'hello', arr: [1, 2, 3] }), load: d => { window.s1got = d; } });
+        engine.saves.define('s1keep', { save: () => ({ v: 'hello', arr: [1, 2, 3] }), load: d => { window.s1got = d; } });
         engine.ops.run('photo.take', {}, { source: 'test' }).value;
         await engine.saves.save('s1-keep');
         await engine.saves.flush();
       });
       await reload(page);
       const r = await ev(async () => {
-        engine.saves.register('s1keep', { save: () => null, load: d => { window.s1got = d; } });
+        engine.saves.define('s1keep', { save: () => null, load: d => { window.s1got = d; } });
         const listed = engine.saves.list().some(s => s.slot === 's1-keep');   // start() has already waited for the save index to be read into memory, no await needed
         const ok = await engine.saves.load('s1-keep');
         await engine.photo.restore();
@@ -76,7 +76,7 @@ export const specs = [
     url: '/',
     async run({ page, check, ev }) {
       await ev(async () => {
-        engine.saves.register('s1exp', { save: () => ({ k: 'v', n: [1, 2] }), load: d => { window.s1got = d; } });
+        engine.saves.define('s1exp', { save: () => ({ k: 'v', n: [1, 2] }), load: d => { window.s1got = d; } });
         engine.ops.run('photo.take', {}, { source: 'test' }).value;
         await engine.saves.save('s1-exp');
       });
@@ -110,7 +110,7 @@ export const specs = [
     async run({ check, ev }) {
       const r = await ev(async () => {
         engine.saves.store.putSlot = () => Promise.reject(new DOMException('quota', 'QuotaExceededError'));
-        engine.saves.register('s1q', { save: () => ({ a: 1 }), load: () => {} });
+        engine.saves.define('s1q', { save: () => ({ a: 1 }), load: () => {} });
         const ok = await engine.saves.save('s1-quota');
         return { ok, toast: [...document.querySelectorAll('.threedog-toast')].map(t => t.textContent).join('|'), inMemory: await engine.saves.load('s1-quota') };
       });
@@ -127,7 +127,7 @@ export const specs = [
       await reload(page);
       const r = await ev(async () => {
         let got = null;
-        engine.saves.register('s1ls', { save: () => ({ z: 9 }), load: d => { got = d; } });
+        engine.saves.define('s1ls', { save: () => ({ z: 9 }), load: d => { got = d; } });
         const ok = await engine.saves.save('s1-ls');
         const inLS = !!localStorage.getItem(engine.saves._prefix + 's1-ls');
         engine.saves.load('s1-ls');
@@ -143,8 +143,8 @@ export const specs = [
       const r = await ev(async () => {
         const S = engine.saves, loads = [], imported = [];
         engine.events.on('save:loaded', s => loads.push(s)); engine.events.on('save:imported', s => imported.push(s));
-        S.register('s1bad', { save: () => ({ a: 1 }), load: () => { throw new Error('boom'); } });
-        let good = null; S.register('s1good', { save: () => ({ b: 2 }), load: d => { good = d; } });
+        S.define('s1bad', { save: () => ({ a: 1 }), load: () => { throw new Error('boom'); } });
+        let good = null; S.define('s1good', { save: () => ({ b: 2 }), load: d => { good = d; } });
         await S.save('s1-bad');
         const origErr = console.error; console.error = () => {};   // the deliberate errors are reported in the console; restored before the test ends
         const ok = await S.load('s1-bad');
@@ -173,13 +173,13 @@ export const specs = [
     async run({ check, ev }) {
       const r = await ev(async () => {
         const S = engine.saves; let got = null, other = null;
-        const firstVer = S.register('s1ver', { save: () => ({ n: 1 }), load: d => { got = d; } });
-        S.register('s1other', { save: () => ({ o: 1 }), load: d => { other = d; } });
+        const firstVer = S.define('s1ver', { save: () => ({ n: 1 }), load: d => { got = d; } });
+        S.define('s1other', { save: () => ({ o: 1 }), load: d => { other = d; } });
         await S.save('s1-v1');
         const savedVersions = JSON.parse(JSON.stringify(S.collect().versions));
         // the format changed: version 2 renames n -> count
         firstVer.remove();
-        S.register('s1ver', { version: 2, migrate: { 1: d => ({ count: d.n }) }, save: () => ({ count: 1 }), load: d => { got = d; } });
+        S.define('s1ver', { version: 2, migrate: { 1: d => ({ count: d.n }) }, save: () => ({ count: 1 }), load: d => { got = d; } });
         const upOk = await S.load('s1-v1'), upgraded = got;
         // a save written by a newer build (version 9) is refused before any part loads
         got = null; other = null;
@@ -187,8 +187,8 @@ export const specs = [
           await S.import(btoa(JSON.stringify({ savedAt: 1, versions: { s1ver: 9 }, parts: { s1ver: { x: 1 }, s1other: { o: 2 } } })), 's1-new');
           return S.load('s1-new');
         });
-        let badReg = ''; try { S.register('s1bad', { version: 0, save: () => 1, load: () => {} }); } catch (e) { badReg = e.message; }
-        let badMig = ''; try { S.register('s1bad', { version: 2, migrate: { 2: d => d }, save: () => 1, load: () => {} }); } catch (e) { badMig = e.message; }
+        let badReg = ''; try { S.define('s1bad', { version: 0, save: () => 1, load: () => {} }); } catch (e) { badReg = e.message; }
+        let badMig = ''; try { S.define('s1bad', { version: 2, migrate: { 2: d => d }, save: () => 1, load: () => {} }); } catch (e) { badMig = e.message; }
         return { savedVersions, upOk, upgraded, newOk, got, other, errs, badReg, badMig };
       });
       check('collect writes each part version (default 1)', r.savedVersions.s1ver === 1 && r.savedVersions.s1other === 1, JSON.stringify(r.savedVersions));
@@ -204,14 +204,14 @@ export const specs = [
     async run({ check, ev }) {
       const r = await ev(async () => {
         const S = engine.saves, part = v => ({ save: () => v, load: () => {} });
-        const old = S.register('s1h', part('old'));
+        const old = S.define('s1h', part('old'));
         old.remove();
-        const mine = S.register('s1h', part('new'));
+        const mine = S.define('s1h', part('new'));
         old.remove();
         const kept = S.providers.has('s1h');
         mine.remove(); mine.remove();
         const gone = !S.providers.has('s1h');
-        engine.use({ name: 's1hMod', type: 'rules', install(e, ctx) { ctx.track(e.saves.register('s1hTracked', part(1))); } });
+        engine.use({ name: 's1hMod', type: 'rules', install(e, ctx) { ctx.track(e.saves.define('s1hTracked', part(1))); } });
         await engine.loading.settled();
         const held = S.providers.has('s1hTracked');
         engine.unuse('s1hMod');
@@ -219,7 +219,7 @@ export const specs = [
       });
       check('an old handle removes nothing of the part that has the key now', r.kept, JSON.stringify(r));
       check('remove ends the part, and a second remove is safe', r.gone, JSON.stringify(r));
-      check('ctx.track ends a raw saves.register with the module', r.held && !r.after, JSON.stringify(r));
+      check('ctx.track ends a raw saves.define with the module', r.held && !r.after, JSON.stringify(r));
     },
   },
 ];

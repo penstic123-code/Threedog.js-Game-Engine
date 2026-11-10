@@ -12,7 +12,7 @@
 // The rollback point is a copy (structuredClone of every part's save()): save() may return the live object, which load() then writes into.
 // A part about to load whose save() gives nothing to copy (null, or it threw) goes back to its new-game state; with none of that either it cannot go back, and a failed load says so.
 import { toast } from '../../ui/UI.js';
-import { fmt, warnOnce } from '../base/validate.js';
+import { fmt, warnOnce, isThenable, syncOnly } from '../base/validate.js';
 import { reportError } from '../base/errors.js';
 import { codedError, coded } from '../base/errorHints.js';
 import { FORMAT, readSave, parseSave, upgradePart, partVersion } from './saveVersions.js';
@@ -23,6 +23,7 @@ const DEV_STRINGS = {
   partAt: "load() of save part '{k}'", adoptAt: "load() of save part '{k}' (registered after the save was loaded)",
   rollback: "rollback of save part '{k}' after a failed load (that part may be half-loaded; the other parts rolled back)",
   noRollback: "save part '{k}' keeps what the failed load gave it: its save() gave nothing before the load and it has no new-game state to go back to (the other parts rolled back)",
+  changed: "save part '{k}' was unloaded or replaced while '{slot}' was loading, so its data had nobody to take it; the load failed and rolled back (the data stays in the save)",
   notData: "save() of save part '{k}' returned {got}, which a save cannot hold; return plain data, or null when there is nothing to save",
   notNumber: "save() of save part '{k}' holds {got} at {path}, which a save cannot hold (it would come back as null); save a finite number, or leave the field out",
   listener: 'a listener of event {name} threw while the part loaded: {msg}',
@@ -44,45 +45,57 @@ const loadError = (k, err, slot) => Object.assign(codedError('save-load-threw', 
  * @internal
  */
 export function applySave(s, data, slot) {
+  return marked(s, () => {
+    const r = readSave(data, s.providers, slot);
+    if ('reason' in r) {
+      if (r.reason !== 'missing') { warnOnce(coded('save-refused', r.dev));   // handled: the player is told, nothing changed
+        toast(s.engine, s.engine.t('saves.' + r.reason), { kind: 'error', ms: 5000 }); }
+      return false;
+    }
+    return applyRead(s, r, slot, false);
+  });
+}
+
+/** fn under the marker, from its first line until what it returned settled (top of stateReplace.js) */
+function marked(s, fn) {
   const q = s._replace, job = q.job;
   q.begin();
   let out;
-  try { out = checkAndApply(s, data, slot); } catch (err) { q.end(); throw err; }
+  try { out = fn(); } catch (err) { q.end(); throw err; }
   if (typeof out !== 'boolean') return out.finally(() => q.endOf(job));
   q.end();
   return out;
 }
 
-/** The body of applySave, under the marker */
-function checkAndApply(s, data, slot) {
-  const r = readSave(data, s.providers, slot);
-  if ('reason' in r) {
-    if (r.reason !== 'missing') { warnOnce(coded('save-refused', r.dev));   // handled: the player is told, nothing changed
-      toast(s.engine, s.engine.t('saves.' + r.reason), { kind: 'error', ms: 5000 }); }
-    return false;
-  }
+/** Apply parts already read and migrated (r.list): the one part-application protocol. late: one part registered after its save was loaded (adoptPart);
+ *  it adds to the state instead of replacing it, so the parts nobody owns, background results and the saved-state generation stay, and only that part rolls back */
+function applyRead(s, r, slot, late) {
   const e = s.engine, foreign0 = s._foreign;
   let before;   // the rollback point, a copy (rollbackPoint)
-  try { before = rollbackPoint(s, slot, r.list); } catch (err) { reportError(e, err, `saves.apply('${slot}')`); return false; }
+  try { before = rollbackPoint(s, slot, r.list, late); } catch (err) { reportError(e, err, `saves.apply('${slot}')`); return false; }
   const ev = e.events, scope = [];   // this load's capture scope: listener errors from now until the load settled (top of the file)
   ev._scopes.push(scope);
   const settled = () => { const i = ev._scopes.lastIndexOf(scope); if (i >= 0) ev._scopes.splice(i, 1); };
   let out;
-  try { out = applyParts(s, e, r, slot, before, foreign0, scope); } catch (err) { settled(); throw err; }
+  try { out = applyParts(s, e, r, slot, before, foreign0, scope, late); } catch (err) { settled(); throw err; }
   if (typeof out !== 'boolean') return out.finally(settled);
   settled();
   return out;
 }
 
 /** The rest of applySave, under the load's capture scope */
-function applyParts(s, e, r, slot, before, foreign0, scope) {
-  const q = s._replace;
-  const keepResults = e.commits.invalidate(); e.ops._mark('(load)');   // old background results die with the old world; the op log shows where the load cut in
-  const generation = q.generation++;
-  q.changed();
-  s._foreign = r.foreign;
+function applyParts(s, e, r, slot, before, foreign0, scope, late) {
+  const q = s._replace, turn = q.job.turn, generation = q.generation;
+  let keepResults = () => {};
+  if (!late) {
+    keepResults = e.commits.invalidate(); e.ops._mark('(load)');   // old background results die with the old world; the op log shows where the load cut in
+    q.generation++; q.changed();
+    s._foreign = r.foreign;
+  }
+  const reached = new Set();
   const fail = err => {
-    keepResults(); q.generation = generation; q.changed(true);   // the old world stays, and what it was waiting for with it
+    keepResults();
+    if (!late) { q.generation = generation; q.changed(true); }   // the old world stays, and what it was waiting for with it
     // a malformed save (refuseSave, save-bad-record) is the save's fault, not the game's: refused like a corrupt save (warning + toast), so it
     // does not freeze gameplay as a code error would; a load() / listener / afterLoad that throws is a bug and goes through the error tiers
     const refused = err?.cause?.code === 'save-bad-record';
@@ -91,12 +104,11 @@ function applyParts(s, e, r, slot, before, foreign0, scope) {
     s._foreign = foreign0;
     const back = readSave(before, s.providers, '(rollback)');
     // every part reloads its pre-load state; a part that throws again is reported (once) and the rest still roll back
-    const onPart = er => reportError(e, er, fmt(DEV_STRINGS.rollback, { k: er.part }), { soft: true });
-    const undone = 'list' in back ? e.ops.allow(() => runParts(s, back.list, '(rollback)', scope, onPart)) : true;
+    const undone = 'list' in back ? e.ops.allow(() => runParts(s, back.list, '(rollback)', scope, onRollback(e), turn)) : true;
     // a part that refused its data took none of it: it has nothing to go back from
-    for (const [k] of r.list) if (!Object.hasOwn(before.parts, k) && !(refused && k === err.part)) reportError(e, codedError('save-load-threw', fmt(DEV_STRINGS.noRollback, { k })), `saves.apply('${slot}')`, { soft: true });
+    for (const [k] of r.list) if (reached.has(k) && !Object.hasOwn(before.parts, k) && !(refused && k === err.part)) reportError(e, codedError('rollback-incomplete', fmt(DEV_STRINGS.noRollback, { k })), `saves.apply('${slot}')`);
     // a session door announces its own failure, after its clocks came back
-    const failed = () => { if (!e.session._busy) e.events.emit('session:failed', { kind: 'quick', slot }); return false; };
+    const failed = () => { if (!e.session._busy && !late) e.events.emit('session:failed', { kind: 'quick', slot }); return false; };
     if (undone === true) return failed();
     q.hold();   // a rollback that waits on an async part holds gameplay too, whichever way the load failed
     return undone.then(failed);
@@ -109,7 +121,7 @@ function applyParts(s, e, r, slot, before, foreign0, scope) {
     return hooks === true ? true : hooks.then(() => true, fail);
   };
   let out;
-  try { out = e.ops.allow(() => runParts(s, r.list, slot, scope)); } catch (err) { return fail(err); }   // loading writes state outside ops on purpose (guard allows it)
+  try { out = e.ops.allow(() => runParts(s, r.list, slot, scope, null, turn, reached)); } catch (err) { return fail(err); }   // loading writes state outside ops on purpose (guard allows it)
   if (out === true) return partsDone();
   q.hold();   // a part still loading (its load() returned a Promise): gameplay waits until every part is applied. A fully sync load never takes it
   return out.then(partsDone, fail);
@@ -118,8 +130,9 @@ function applyParts(s, e, r, slot, before, foreign0, scope) {
 /** The rollback point: every part's save(), copied so a load() writing into the object its save() returned cannot change it.
  *  A part whose data cannot be copied throws (save-part-threw): without a true copy a failed load could not be undone.
  *  list: the parts about to load; those with nothing to copy take their new-game data (top of the file) */
-function rollbackPoint(s, slot, list) {
+function rollbackPoint(s, slot, list, late) {
   const data = s._collect().data, S = s.engine.session, base = S._base ? S._baseData() : { parts: {}, versions: {} };
+  if (late) for (const k of Object.keys(data.parts)) if (!list.some(([n]) => n === k)) { delete data.parts[k]; delete data.versions[k]; }   // only the late part loads, so only it goes back
   for (const [k] of list) if (!Object.hasOwn(data.parts, k) && Object.hasOwn(base.parts, k)) { data.parts[k] = base.parts[k]; data.versions[k] = base.versions[k]; }
   for (const k of Object.keys(data.parts)) {
     try { data.parts[k] = structuredClone(data.parts[k]); }
@@ -149,22 +162,43 @@ function callLoad(s, fn, scope) {
 }
 
 /**
- * Load parts in order; a part returning a Promise makes the rest wait for it. A failing part throws (or rejects) with the part named,
- * unless onFail is given (rollback): then onFail(err) is called and the next part loads anyway.
+ * The one loop that calls a part's load(): a load, its rollback, a late part, an atomic op's rollback. Parts load in order; a part returning a Promise makes
+ * the rest wait for it, except with sync (an atomic op's rollback): there a Promise is refused as at the other sync-only sites (syncOnly), reported, and the
+ * next part loads at once. That rollback has to be whole before the op returns: the outer op of a nested failure goes on, commits and runs its after hooks
+ * right after, and a part load still pending would then write the old value over it, its change events past the mute. A failing part throws (or rejects) with the part named, unless onFail is given (rollback): then onFail(err) is called and the next
+ * part loads anyway. A part whose provider is no longer the one registered under its key (its module unloaded or replaced while an earlier part awaited)
+ * cannot take the data read for that provider (review l2 #4): the load fails with save-provider-changed and rolls back, a rollback reports it and goes on. turn: the replacement's identity for load(); none outside one (an atomic op's rollback).
  */
-function runParts(s, list, slot, scope, onFail = null) {
-  const failed = (k, err) => { const er = loadError(k, err, slot); if (!onFail) throw er; onFail(er); }, { turn } = s._replace.job;
+function runParts(s, list, slot, scope, onFail, turn, reached, sync = false) {
+  const failed = (k, err, own) => { const er = own ? Object.assign(own, { part: k }) : loadError(k, err, slot); if (!onFail) throw er; onFail(er); };
   const step = i => {
     for (; i < list.length; i++) {
       const [k, p, d] = list[i];
+      if (s.providers.get(k) !== p) { failed(k, null, codedError('save-provider-changed', fmt(DEV_STRINGS.changed, { k, slot }))); continue; }   // a rollback reports it and goes on; a load fails and rolls back
       let r;
+      reached?.add(k);   // a part that started loading may hold half of the new data; one never reached holds nothing of it
       try { r = callLoad(s, () => p.load(d, turn), scope); } catch (err) { failed(k, err); continue; }
-      if (r && typeof r.then === 'function') return r.then(() => step(i + 1), err => { failed(k, err); return step(i + 1); });
+      if (!isThenable(r)) continue;
+      if (sync) { try { syncOnly(r, `save part '${k}' load() in ${slot}`, true); } catch (err) { failed(k, null, err); } continue; }
+      return r.then(() => step(i + 1), err => { failed(k, err); return step(i + 1); });
     }
     return true;
   };
   return step(0);
 }
+
+/** A rollback goes past a part that throws again: reported once (a gameplay error: engine.error / engine:error, not soft, an incomplete rollback is a broken state), and the rest still go back */
+const onRollback = e => er => reportError(e, er, fmt(DEV_STRINGS.rollback, { k: er.part }));
+
+/**
+ * Put plain part data back outside a load (an atomic op's rollback, core/ops/opsAtomic.js): the same loop, past a part that throws, synchronous only:
+ * a part whose load() returns a Promise is reported (engine-misuse) and not waited for. A normal load keeps waiting for async parts.
+ * @param {any} s  the Saves instance
+ * @param {[string, any, any][]} list
+ * @param {string} where
+ * @internal
+ */
+export const restoreParts = (s, list, where) => { runParts(s, list, where, [], onRollback(s.engine), undefined, undefined, true); };
 
 /**
  * A part registered after a save was loaded (a module installed later): hand it its data from that save in a turn of its own. Idle that is now. During a
@@ -174,21 +208,34 @@ function runParts(s, list, slot, scope, onFail = null) {
  * @param {string} key
  * @internal
  */
-export function adoptPart(s, key) {
-  const f = s._foreign, q = s._replace, where = fmt(DEV_STRINGS.adoptAt, { k: key });
-  q.run(null, () => {
-    const p = s.providers.get(key);
-    if (s._foreign !== f || !p || !Object.hasOwn(f.parts, key)) return;
+export function adoptPart(s, key, part) {
+  const f = s._foreign, q = s._replace, where = fmt(DEV_STRINGS.adoptAt, { k: key }), L = s.engine.loading;
+  // engine.loading.settled() waits for it: use(mod); await loading.settled() says the module runs with its data back, and gameplay is no longer held for it.
+  // Its own set, not the inits': a failed replaces tells module:restored once the inits are done, and its content must land on the line after use() threw
+  L._track(q.run(null, () => {
+    // the provider this data was kept for: one removed meanwhile, or another under the same key, does not get it (review l2 #4)
+    if (s._foreign !== f || s.providers.get(key) !== part || !Object.hasOwn(f.parts, key)) return;
     const d = f.parts[key], v = f.versions[key] ?? 1;
     delete f.parts[key]; delete f.versions[key];
     // data the part could not take stays unattached, and collectParts writes it instead of the part's empty state: the next save must not lose it
-    const refused = err => { if (s._foreign === f) { f.parts[key] = d; f.versions[key] = v; } reportError(s.engine, err, where); };
+    const back = () => { if (s._foreign === f && !Object.hasOwn(f.parts, key)) { f.parts[key] = d; f.versions[key] = v; } };
+    let list;
     try {
-      if (v > p.version) throw codedError('save-refused', `save part '${key}' is version ${v}, this build reads up to ${p.version}`);
-      const r = s.engine.ops.allow(() => p.load(upgradePart(key, p, d, v, f.whole), q.job.turn));
-      if (r && typeof r.then === 'function') return r.catch(refused);
-    } catch (err) { refused(err); }
-  }, true);
+      if (v > part.version) throw codedError('save-refused', `save part '${key}' is version ${v}, this build reads up to ${part.version}`);
+      list = [[key, part, upgradePart(key, part, d, v, f.whole)]];
+    } catch (err) {
+      back();
+      if (err?.code === 'save-refused') warnOnce(err.message);   // handled like an ordinary load's version refusal: newer data kept, nothing reported as an engine error
+      else reportError(s.engine, err, where);
+      return;
+    }
+    // the protocol of a load: marker, freeze while it waits, a rollback point of this part, afterLoad. Called bare, ops and fixed steps would read a half-loaded part
+    part.adopting = true;   // a remove() meanwhile keeps this data, not the half-loaded state (Saves.define)
+    const done = ok => { part.adopting = false; if (!ok) back(); return ok; };
+    let out;
+    try { out = marked(s, () => applyRead(s, { list }, `(late part '${key}')`, true)); } catch (err) { done(false); throw err; }
+    return typeof out === 'boolean' ? done(out) : out.then(done);
+  }, { behind: true }), L._parts);
 }
 
 
@@ -244,12 +291,17 @@ export function applyAnnounced(s, data, slot, done) {
  *  Returns true when no module has a hook (nothing waited), else a Promise. The hooks start a microtask after the parts, and the marker and the
  *  freeze with them: the lines right after an unawaited apply can still step, run ops and apply again (stateReplace.js, pause). */
 function afterLoad(s, e, slot, scope) {
-  const hooks = [...e.modules.values()].filter(m => m.afterLoad), q = s._replace;
-  if (!hooks.length) { takeListenerError(scope, 0); return true; }
+  const has = [...e.modules.values()].filter(m => m.afterLoad), q = s._replace;
+  if (!has.length) { takeListenerError(scope, 0); return true; }
   const job = q.pause();
-  const run = () => {
+  let hooks = [];
+  const run = async () => {
     if (!q.resume(job)) return null;
     q.hold();
+    // the loop hooks' gate (_runsHooks): a failed, blocked, disabled or still initializing module rebuilds nothing, so no afterLoad reads what its init has not
+    // built (review l2 #10). Not waited for: an init that defines a save part (a late job holding the turn) and then awaits a load would wait for this very job.
+    // Its init builds for the state that stands when it runs
+    hooks = has.filter(m => e._runsHooks(m.name));
     return Promise.allSettled(hooks.map(m => Promise.resolve().then(() => m.afterLoad(e, job.turn))));
   };
   return Promise.resolve().then(run).then(res => {

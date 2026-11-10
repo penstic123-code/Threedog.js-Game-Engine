@@ -149,9 +149,10 @@ export function syncStatics(r) {
       const shape = type === 'box' ? R.ColliderDesc.cuboid(o.hw, o.h / 2, o.hd).setRotation({ x: Q.x, y: Q.y, z: Q.z, w: Q.w }) : R.ColliderDesc.cylinder(o.h / 2, o.r);
       const c = r.world.createCollider(shape.setTranslation(o.x, g + o.h / 2, o.z));
       if (o.y == null) r._onGround.set(o, c);
+      if (o.ly !== undefined) r._layered.set(c, o);
       return c;
     },
-    remove(c, o) { r._onGround.delete(o); r.world.removeCollider(c, false); },
+    remove(c, o) { r._onGround.delete(o); r._layered.delete(c); r.world.removeCollider(c, false); },
   }) ?? null;
   return !!r._statics?.sync();
 }

@@ -8,7 +8,7 @@
 //
 // On by default; createEngine({ validate: false }) turns it all off (for release builds). Each message warns only once.
 
-import { hintText, coded, codedError } from './errorHints.js';
+import { hintText, hintFor, coded, codedError } from './errorHints.js';
 import { isOptions } from './util.js';
 import { closest } from './spelling.js';
 export { closest };
@@ -56,6 +56,10 @@ export const DEV_SERVER = !!ENV?.DEV;
 /** Vite's base URL ('/' outside Vite) */
 export const BASE_URL = ENV?.BASE_URL ?? '/';
 const warned = new Set();
+// Dev: what warnOnce said, for describe().warnings, so an AI sees a fallback or clamp without reading the console. The first ones are kept (the first
+// warning is most often the cause of the rest); later ones are only counted
+const said = [], SAID_MAX = 20;
+let saidCount = 0;
 
 /**
  * The one check behind every `.material = m` setter a module hands out.
@@ -91,14 +95,38 @@ export function trackValidate(on) {
 
 /**
  * Warn only once (no warning when checks are off). The one dedupe for engine warnings: modules do not keep private "already warned" sets.
- * @param {string} msg  the text, usually coded(code, text) so it carries its fix
+ * @param {string | (() => string)} msg  the text, usually coded(code, text) so it carries its fix; a function (with a key) builds it only when it is said,
+ *   for a call on a hot path whose text is costly to build (a value read every frame)
  * @param {string} [key]  what counts as "the same warning" when the text has changing parts (a measured value each second, a stack line); default the text
  */
-export function warnOnce(msg, key = msg) {
+/** Whether v is a Promise or any thenable. The one test the engine's sync contracts use (syncOnly below). @param {unknown} v */
+export const isThenable = v => typeof /** @type {any} */ (v)?.then === 'function';
+/**
+ * Guard a callback whose contract is synchronous (op run, frame / fixed / render hooks, install, dispose, a listener inside a load): the engine does not await what it
+ * returns, so a Promise would count as done while its writes and its failure happen outside the op's rollback, the frame's error tiers or the save's transaction.
+ * That is a programming error: dev (and strict, always) throws a coded error naming the callback; release warns once. It never awaits the thenable.
+ * Callbacks that DO accept async (module init, a save part's load / afterLoad, flow.transition) must not call this.
+ * @param {unknown} r  what the callback returned
+ * @param {string} what  who it was: "ops.run('shop.buy')", "hook frame of module fishing"
+ * @param {boolean} [strict]  throw in release too (an op: its failure must reach the caller)
+ */
+export function syncOnly(r, what, strict = false) {
+  if (!isThenable(r)) return;
+  const text = `${what} returned a Promise, but it must be synchronous: the engine does not wait for it, so what it does after its first await escapes the rollback, error handling or save transaction around it. Do the async work outside (await it first, then call this with the result) and keep this callback plain`;
+  if (DEV || strict) throw codedError('engine-misuse', text);
+  warnOnce(coded('engine-misuse', text), what);
+}
+export function warnOnce(msg, key = /** @type {string} */ (msg)) {
+  if (typeof msg === 'function' && /** @type {unknown} */ (key) === msg) throw new Error('warnOnce(textFactory, key): a text factory needs a key, or every call is a new function and nothing dedupes');
   if (!enabled() || warned.has(key)) return;
   warned.add(key);
+  if (typeof msg === 'function') msg = msg();
+  if (DEV) { saidCount++; if (said.length < SAID_MAX) { const h = hintFor(msg); said.push({ code: h?.id ?? null, text: msg.replace(/ \[[a-z][a-z0-9-]*\]$/, ''), fix: h?.cause ?? null }); } }
   console.warn(DEV ? msg + hintText(msg) : msg);   // the fix + doc page only in dev: release builds drop the hint table
 }
+
+/** Dev: the warnings said so far on this page, { count, list: [{ code, text, fix }] } (list capped at the first 20), or null when there were none @internal */
+export const warningsSaid = () => (saidCount ? { count: saidCount, list: said.map(w => ({ ...w })) } : null);
 
 /**
  * A dev note that is not a problem (a hot swap happened, why a shared value shows another number): console.info with the '[threedog] ' prefix,

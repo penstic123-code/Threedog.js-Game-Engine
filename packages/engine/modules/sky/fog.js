@@ -1,4 +1,4 @@
-// Sky fog (helper of Sky.js). The game's fog is plain three.js: engine.scene.fog; this file only reads it for the dome's fog band.
+// Sky fog (helper of Sky.js). The game's fog is plain three.js: engine.scene.fog (WebGPU: scene.fogNode, render/fogLook.js); this file only reads it for the dome's fog band.
 
 // The dome's fog band: its lower band fades to the fog color so the line where fogged ground meets the sky does not show.
 // Always compiled in and switched by the uFogBand uniform (0 = off, mix(col, x, 0.0) is col exactly), so any fog color change at

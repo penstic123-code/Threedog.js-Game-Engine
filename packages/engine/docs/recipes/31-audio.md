@@ -1,5 +1,10 @@
 # Sound: buses, sounds by name, ambience rules, music, footsteps, ducking
 
+> **Covers:** sound: buses, sounds by name, ambience rules, music, footsteps, ducking, settings.
+> **Use when:** anything the player hears.
+> **Shortest:** `createEngine({ audio: { levels: { music: 0.4 } } })`, then sounds by name.
+> **Sections:** 1 Config in one · 2 Buses and sounds · 3 Ambience a rule · 4 Music rules, cross-fade · 5 Footsteps by surface · 6 Ducking · 7 Settings · 8 Sounds as content
+
 Everything you hear is the game's. The engine ships no sound files and plays nothing the game did not name; built-in synths (`footstep`, `shutter`,
 `thunder`, `wind`, `rain`, `water`, `birds`, `crickets`) stay silent until `audio.sounds` asks for them. Signatures: `api/audio.md`,
 `api/ambience.md`, `api/music.md`.
@@ -9,22 +14,22 @@ Two places, one job each: **the asset manifest says what a sound is** (a file, o
 model), **`audio.sounds` says how it plays** (which sound or variants, volume, bus, cooldown...).
 ```js
 const engine = createEngine({ canvas, audio: {
-  levels: { music: 0.4, voice: 1 },                                   // volume per bus; an extra key (voice) adds a bus
+  levels: { music: 0.4, voice: 1 },  // volume per bus; an extra key (voice) adds a bus
   sounds: {
-    door: {},                                                          // the asset of the same name, default rules
-    hit: ['hit1', 'hit2'],                                             // variants: random, never the same one twice in a row
+    door: {},  // the asset of the same name, default rules
+    hit: ['hit1', 'hit2'],  // variants: random, never the same one twice in a row
     shot: { src: 'shot', jitter: { pitch: 0.08, volume: 0.1 }, cooldown: 0.05, voices: 4, distance: { ref: 3, max: 80 } },
-    footstep: {},                                                      // a built-in synth asset, named so it plays
-    'step.sand': { src: 'footstep', params: { surface: 'sand' } },     // a synth source with parameters
+    footstep: {},  // a built-in synth asset, named so it plays
+    'step.sand': { src: 'footstep', params: { surface: 'sand' } },  // a synth source with parameters
     wind: {}, birds: {}, ding: { volume: 0.6 },
   },
   ambience: [ /* rule table, section 3 */ ],
   music: { tracks: { /* section 4 */ }, rules: [] },
-  footsteps: { beach: 'step.sand', default: 'footstep' },             // section 5
+  footsteps: { beach: 'step.sand', default: 'footstep' },  // section 5
 } });
 engine.assets.manifest({ name: 'sfx', sounds: {
   door: '/sfx/door.ogg', hit1: '/sfx/hit1.ogg', hit2: '/sfx/hit2.ogg', shot: '/sfx/shot.ogg',
-  ding: (a, p, out) => { a.tone({ freq: 880 * p.pitch, dur: 0.2, out }); return 0.2; },   // a synth: connect to out, return seconds (or { stop(t) })
+  ding: (a, p, out) => { a.tone({ freq: 880 * p.pitch, dur: 0.2, out }); return 0.2; },  // a synth: connect to out, return seconds (or { stop(t) })
 } });
 ```
 Code may hold functions (a `volume: e => ...`); the same config as data goes in a content pack (section 8). A full working one:
@@ -36,10 +41,10 @@ Buses are real Web Audio `GainNode`s: `master`, `music`, `sfx`, `ambience`, `ui`
 unlocks on the player's first click or key: build your own nodes on the `audio:ready` event. A name that is no bus warns once and gives `master`, so the sound still plays.
 
 ```js fragment
-engine.audio.sfx('door');                                   // plays on its bus (default sfx)
-const h = engine.audio.sfx('shot', { at: enemy.root });    // 3D: a PannerNode that follows the Object3D every frame
+engine.audio.sfx('door');  // plays on its bus (default sfx)
+const h = engine.audio.sfx('shot', { at: enemy.root });  // 3D: a PannerNode that follows the Object3D every frame
 const hum = engine.audio.sfx('engine-hum', { loop: true, at: [4, 0, 2] });
-hum?.fade({ to: 0.2, seconds: 1.5 }); hum?.stop({ fade: 1 });                          // the handle (null while silent, see below): fade({ to, seconds }), stop({ fade }), remove(), setPosition(at)
+hum?.fade({ to: 0.2, seconds: 1.5 }); hum?.stop({ fade: 1 });  // the handle (null while silent, see below): fade({ to, seconds }), stop({ fade }), remove(), setPosition(at)
 engine.audio.sfx('click', { bus: 'ui' });
 ```
 `sfx` returns `null` when the sound is silent: neither a rule nor an asset of that name, a built-in synth no rule names, audio still locked (before
@@ -57,8 +62,8 @@ Each rule names a sound and says when and how loud. A rule with `every` is a one
 when silent, so idle rules cost nothing).
 ```js
 ambience: [
-  { sound: 'wind', volume: e => 0.05 + (e.weather?.current.wind ?? 0) * 0.08 },        // volume can follow the moment
-  { sound: 'river', volume: (e, a) => a.nearWater(12) * 0.12 },                         // a = engine.ambience (position, nearWater)
+  { sound: 'wind', volume: e => 0.05 + (e.weather?.current.wind ?? 0) * 0.08 },  // volume can follow the moment
+  { sound: 'river', volume: (e, a) => a.nearWater(12) * 0.12 },  // a = engine.ambience (position, nearWater)
   { sound: 'cave-drip', when: { zone: 'cave' }, volume: 0.6, fade: 2 },
   { sound: 'birds', when: { time: 'day', weather: ['clear', 'cloudy'] }, every: [2, 7] },
   { sound: 'war-drums', when: { state: 'combat' }, volume: 0.5 },
@@ -77,9 +82,9 @@ engine.use(music({ tracks: {
   combat: { url: '/music/combat.ogg', stems: [{ url: '/music/combat-drums.ogg', at: [0.3, 0.7] }] },
 }, rules: [
   { track: 'combat', when: { state: 'combat' }, priority: 10 },
-  { track: 'explore' },                                     // no when: the fallback
+  { track: 'explore' },  // no when: the fallback
 ] }));
-engine.music.intensity = 0.8;                               // stems fade in as it rises through their at range
+engine.music.intensity = 0.8;  // stems fade in as it rises through their at range
 ```
 The same `when` keys as ambience. Tracks cross-fade (`fade`, default 2 s); a new rule result must hold `hold` seconds before switching.
 `engine.music.override('boss')` picks by hand; `override(null)` hands back to the rules. `engine.music.stinger('win')` plays a short piece over the music.
@@ -92,8 +97,8 @@ property); `water` while swimming.
 
 ## 6. Ducking
 ```js
-const d = engine.audio.duck({ music: 0.3, ambience: 0.5 }, { fade: 0.3 });   // lower these buses
-engine.events.once('dialogue:end', () => d.remove());                     // restore
+const d = engine.audio.duck({ music: 0.3, ambience: 0.5 }, { fade: 0.3 });  // lower these buses
+engine.events.once('dialogue:end', () => d.remove());  // restore
 ```
 Ducks stack (levels multiply) and never touch the player's volume setting. `music({ duckDialogue: 0.35 })` ducks the music bus during dialogue for
 you; it is off by default (whether talking lowers the music is the game's choice).
@@ -107,9 +112,9 @@ A content pack carries the game's audio the way it carries items: data only, sou
 ```js
 // content/audio.js (export it from content/index.js like any content file)
 export default {
-  sounds: { wind: {}, door: 'door', hit: ['hit1', 'hit2'], shot: { src: 'shot', cooldown: 0.05 } },   // asset pack sound names (files or synths)
+  sounds: { wind: {}, door: 'door', hit: ['hit1', 'hit2'], shot: { src: 'shot', cooldown: 0.05 } },  // asset pack sound names (files or synths)
   ambience: [
-    { sound: 'wind', volume: { base: 0.05, add: { wind: 0.08, altitude: 0.00375 }, max: 0.5 } },        // base + measure x factor, clamped
+    { sound: 'wind', volume: { base: 0.05, add: { wind: 0.08, altitude: 0.00375 }, max: 0.5 } },  // base + measure x factor, clamped
     { sound: 'rain', volume: { add: { rain: 0.22 } } },
     { sound: 'birds', when: { daylight: { gt: 0.15 }, rain: { lt: 0.2 } }, every: [1.5, 6.5] },
   ],
@@ -119,7 +124,7 @@ export default {
 ```
 ```js fragment
 engine.assets.manifest({ name: 'sfx', base: '/sounds/', sounds: { door: 'door.ogg', hit1: 'hit1.ogg', hit2: 'hit2.ogg', shot: 'shot.ogg', 'music-day': 'day.ogg' } });
-engine.content.load([base, forest]);   // each pack's audio merges in
+engine.content.load([base, forest]);  // each pack's audio merges in
 ```
 - **Names, never paths or code.** A sounds string is a sound name from an asset pack, a file or a synth (`engine.audio.load` and music resolve it
   through `engine.assets`, so a missing file falls back to silence as an `engine.loading` task). A file path warns in dev; a function anywhere in the

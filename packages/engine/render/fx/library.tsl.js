@@ -8,4 +8,5 @@ export { hash, noise } from './noise.tsl.js';
 export { detailNoise, detailBump } from './detail.tsl.js';
 export { wrapDiffuse, shadowTint, rim } from './lighting.tsl.js';
 export { celLighting } from './cel.tsl.js';
+export { pcss } from './pcss.tsl.js';
 export { waterWave, waterSurface, waterFresnel } from './water.tsl.js';

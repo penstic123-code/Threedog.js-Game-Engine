@@ -84,6 +84,7 @@ export const EVENTS_GEN_REL = `${CORE_REL}/base/events.generated.js`;
 export const CORE_DTS_REL = `${TYPES_REL}/core.d.ts`;
 export const I18N_CORE_REL = `${CORE_REL}/base/I18n.js`;
 export const CONTENT_RULES_REL = `${MODULES_REL}/content/rules.js`;
+export const VEGETATION_REL = `${MODULES_REL}/vegetation/Vegetation.js`;
 /** Content field tables (placement fields, template / kind fields): content-check validates entries with them */
 export const CONTENT_FIELDS_REL = `${MODULES_REL}/content/fields.js`;
 /** Content id rules (index ids, missingIds): read by `threedog content ids` */

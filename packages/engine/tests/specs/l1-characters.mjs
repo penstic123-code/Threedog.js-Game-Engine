@@ -72,7 +72,7 @@ export const specs = [
         E.use(T.world(), T.collision(), T.characters());
         await E.start(); E.haltLoop();
         const steps = n => { for (let i = 0; i < n; i++) E.step(1 / 60, { render: false, describe: false }); };
-        const mkPlayer = () => E.characters.createPlayer({ control: () => null, spawn: { x: 0, z: 0 } });
+        const mkPlayer = () => E.characters.addPlayer({ control: () => null, spawn: { x: 0, z: 0 } });
         const p = mkPlayer();
         let st = null; p.walkTo({ x: 2, z: 0 }).then(a => { st = a.status; });
         steps(120); await null; await null; out.flat = st;
@@ -226,11 +226,11 @@ export const specs = [
         E.use(T.world(), T.collision(), T.characters());
         await E.start(); E.haltLoop();
         const steps = n => { for (let i = 0; i < n; i++) { E.input.poll(1 / 60); E.step(1 / 60, { render: false, describe: false }); } };
-        const a = E.characters.createPlayer({ control: 'camera', spawn: { x: 0, z: 0 } });
+        const a = E.characters.addPlayer({ control: 'camera', spawn: { x: 0, z: 0 } });
         const seat = E.input.seat({ pad: 1, keys: { moveForward: 'KeyI', jump: 'KeyU' } });
-        const b = E.characters.createPlayer({ id: 'two', input: seat, control: 'camera', spawn: { x: 5, z: 0 } });
+        const b = E.characters.addPlayer({ id: 'two', input: seat, control: 'camera', spawn: { x: 5, z: 0 } });
         out.first = E.player === a; out.ids = [a.id, b.id]; out.rec = E.world.get('two')?.kind;
-        for (const [k, f] of [['pad', () => E.input.seat({ pad: 1 })], ['key', () => E.input.seat({ keys: { jump: 'KeyU' } })], ['twice', () => E.characters.createPlayer({ id: 'three', input: seat, control: 'camera' })], ['loose', () => E.characters.createPlayer({ id: 'three', input: { axis: {} }, control: 'camera' })]]) {
+        for (const [k, f] of [['pad', () => E.input.seat({ pad: 1 })], ['key', () => E.input.seat({ keys: { jump: 'KeyU' } })], ['twice', () => E.characters.addPlayer({ id: 'three', input: seat, control: 'camera' })], ['loose', () => E.characters.addPlayer({ id: 'three', input: { axis: {} }, control: 'camera' })]]) {
           try { f(); out[k] = 'no throw'; } catch (x) { out[k] = x.code; }
         }
         const z = () => [a.position.z, b.position.z];
@@ -253,7 +253,7 @@ export const specs = [
         out.same = Math.abs(saved - b.position.x) < 1e-6;
         E.characters.removePlayer('two'); out.afterTwo = [E.player === a, E.world.get('two') === undefined || E.world.get('two') === null];
         E.characters.removePlayer(); out.gone = E.player;
-        const c = E.characters.createPlayer({ control: () => null, spawn: { x: 1, z: 1 } }); out.solo = [E.player === c, c.id];
+        const c = E.characters.addPlayer({ control: () => null, spawn: { x: 1, z: 1 } }); out.solo = [E.player === c, c.id];
         E.dispose();
         return out;
       });

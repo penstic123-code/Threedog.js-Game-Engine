@@ -11,13 +11,13 @@ import * as THREE from 'three';
 import { createTerrain } from './terrainGen.js';
 import { chunkHandler } from './chunkJob.js';
 import { TerrainEdits } from './terrainEdit.js';
-import { ChunkStream, bookCollision } from '../../core/stream/chunkStream.js';
+import { ChunkStream, bookCollision, colliderLag } from '../../core/stream/chunkStream.js';
 import { chunkQueries } from './chunkQueries.js';
 import { reportError } from '../../core/base/errors.js';
 import { codedError } from '../../core/base/errorHints.js';
 
 /** Planter stand-in while no vegetation is installed (the vegetation data part replaces it) */
-const NO_VEG = { baseNames: () => [], nearNames: () => [], list: () => [], get: () => null, mount() {}, unmount() {}, drop() {} };
+const NO_VEG = { baseNames: () => [], nearNames: () => [], list: () => [], get: () => null, mount() {}, unmount() {}, release() {}, drop() {} };
 // A failed ground job is sent again up to this many times in all (a worker that crashed or ran out of memory usually passes next time); then the
 // chunk is marked failed and reported. Before, it sat in 'pending' for ever and the loading screen waited without a word.
 const MAX_TRIES = 3;
@@ -34,6 +34,8 @@ export class ChunkManager {
     this.ready = [];
     this._want = [];                              // chunks not yet dispatched (nearest first)
     this.gen = 0;
+    this._bookDue = false;                        // book the near-only collider tickets in the next update (_bookNear)
+    this._cid = 0;                                // chunk identity counter: a chunk released and made again at the same coordinate is another chunk
     this.vgen = 0;                                // +1 on a density or species change: plants placed before it are asked again
     this.stats = { builtThisFrame: 0, applyMs: 0, queued: 0, failed: 0 };
     /** @internal the draw parts drawing these chunks (view()) */ this.views = new Set();
@@ -103,7 +105,14 @@ export class ChunkManager {
    */
   setPlanter(planter) {
     this.plants = planter;
-    return { remove: () => { if (this.plants === planter) this.plants = NO_VEG; } };
+    return { remove: () => {
+      if (this.plants !== planter) return;
+      this.plants = NO_VEG;
+      // everything it put into the terrain goes with it: the rules in the workers, the jobs in flight (a newer vgen sends their results back), the colliders' tickets
+      this.vgen++;
+      for (const sp of planter.list()) this.lane.broadcast({ type: 'species', name: sp.name, rule: null }, 'species:' + sp.name);
+      for (const c of this.chunks.values()) for (const n in c.near) this._cancelNear(c, n);
+    } };
   }
 
   /**
@@ -128,6 +137,7 @@ export class ChunkManager {
    */
   registerSpecies(name, rule) {
     this.lane.broadcast({ type: 'species', name, rule }, 'species:' + name);
+    this._bookDue = true;
     this.vgen++;   // a chunk already on its way carries the old species list: update() asks again when it arrives
     if (!this.plants.get(name)?.nearOnly) this._regrow([name]);
     else this._regrowNear([name]);
@@ -152,10 +162,10 @@ export class ChunkManager {
   // reported with the chunk and the cause. A plants-only job marks its species done so the LOD pass does not ask again every ring change.
   _failed(job, err) {
     const key = job.cx + ',' + job.cz, c = this.chunks.get(key);
-    if (!c || job.gen !== this.gen) return;
+    if (!c || job.gen !== this.gen || job.cid !== c.id) return;   // gen: the table; cid: this chunk, not an older one at the same coordinate
     if (!job.terrain) {
       if (job.regrow) this._regrown(c);
-      c.pendingDetail = false; for (const name of job.species || []) c.detailDone.add(name);
+      c.pendingDetail = false; for (const name of job.species || []) { c.detailDone.add(name); this._cancelNear(c, name); }
       reportError(this.engine, err, 'terrain chunk worker job');   // one key: a broken rule fails every chunk, report it once
       return;
     }
@@ -201,7 +211,8 @@ export class ChunkManager {
   _regrown(c) { if (c.regrow > 0) c.regrow--; }
   // near-only species: dropped here, and the LOD pass places them again on the chunks within their ring (never on the far ones _regrow would reach)
   _regrowNear(names) {
-    for (const c of this.chunks.values()) { for (const n of names) { this.plants.unmount(c, n); c.detailDone.delete(n); } c.level = -1; }
+    for (const c of this.chunks.values()) { for (const n of names) this._unplantNear(c, n); c.level = -1; }
+    this._bookDue = true;
   }
 
   rebuild() {
@@ -219,7 +230,7 @@ export class ChunkManager {
    * Ring 1, which the loading screen waits for, takes effect the moment play starts (lag 0); farther rings get more worker time
    */
   _queue(cx, cz, key) {
-    const c = { cx, cz, key, state: 'queued', data: null, plants: {}, colliders: {}, inView: true, pendingDetail: false, detailDone: new Set(), level: -1, sphere: null, solid: false, gen: this.gen, regrow: 0 };
+    const c = { cx, cz, key, id: ++this._cid, near: {}, state: 'queued', data: null, plants: {}, colliders: {}, inView: true, pendingDetail: false, detailDone: new Set(), level: -1, sphere: null, solid: false, gen: this.gen, regrow: 0 };
     this.chunks.set(key, c);
     bookCollision(this, c, this._ring(c), {
       // collision counts from this step on (a new token makes the physics module build this chunk's collision)
@@ -245,9 +256,10 @@ export class ChunkManager {
 
   /** sources: engine.stream.sources() (every stream source; a source radius caps the view distance) */
   update(sources, camera) {
-    this._stream.follow(sources, this.generator.CHUNK, this.viewChunks);   // queue what a source needs, release what is far from all
+    if (this._stream.follow(sources, this.generator.CHUNK, this.viewChunks)) this._bookDue = true;   // queue what a source needs, release what is far from all
     this._pump();
     this.stats.queued = this._want.length;
+    if (this._bookDue) { this._bookDue = false; this._bookNear(); }
 
     // 2. take worker results within the time budget; while the loading screen is up, first-screen chunks (the ring around the player) ignore the
     // budget and all come in one frame
@@ -255,7 +267,7 @@ export class ChunkManager {
     let built = 0;
     for (const r of this.ready) {
       const c = this.chunks.get(r.cx + ',' + r.cz);
-      if (!c || r.gen !== this.gen) continue;
+      if (!c || r.gen !== this.gen || r.cid !== c.id) continue;
       if (this._stale(c, r)) { if (r.regrow) this._regrown(c); continue; }
       if (built > 0 && performance.now() - t0 >= this.applyBudgetMs   // measure
         && !(loading && this._ring(c) <= 1)) { later.push(r); continue; }
@@ -264,9 +276,11 @@ export class ChunkManager {
       if (r.vgen !== this.vgen) {   // placed with an old density or species list: keep the ground, ask for the plants again
         if (r.terrain) c.regrow++; else c.pendingDetail = false;
         // a regrow stays counted until its plants are in; a new chunk asks for today's species, not the list it left with
-        this._send({ ...this._job(c, false, r.terrain ? this.plants.baseNames() : Object.keys(r.veg)), regrow: !!(r.regrow || r.terrain) });
+        const names = r.terrain ? this.plants.baseNames() : Object.keys(r.veg).filter(n => this.plants.get(n));   // only species the planter still knows
+        if (r.terrain || names.length) this._send({ ...this._job(c, false, names), regrow: !!(r.regrow || r.terrain) });
+        else if (r.regrow) this._regrown(c);
       } else {
-        for (const name in r.veg) this.plants.mount(c, name, r.veg[name]);
+        for (const name in r.veg) this._mountPlants(c, name, r.veg[name]);
         if (r.regrow) this._regrown(c);
         if (!r.terrain) { c.pendingDetail = false; for (const name in r.veg) c.detailDone.add(name); }
       }
@@ -284,7 +298,7 @@ export class ChunkManager {
 
   _job(c, terrain, species) {
     const ev = this.edits.version(c.key), edits = this.edits.forChunk(c.cx, c.cz);
-    return { type: 'job', cx: c.cx, cz: c.cz, terrain, species, density: this.density, gen: this.gen, vgen: this.vgen, ev, edits };
+    return { type: 'job', cx: c.cx, cz: c.cz, terrain, species, density: this.density, gen: this.gen, cid: c.id, vgen: this.vgen, ev, edits };
   }
   // result built before a later edit near this chunk: drop it and ask again (a loaded chunk was already rebuilt by the edit)
   _stale(c, r) {
@@ -312,7 +326,7 @@ export class ChunkManager {
   // A failed chunk is not tried here (it was reported; the main thread would throw the same error at every commit)
   _forceReady(c) {
     if (c.state === 'ready' || c.state === 'failed') return true;
-    const i = this.ready.findIndex(r => r.terrain && r.cx === c.cx && r.cz === c.cz && r.gen === c.gen && r.ev === this.edits.version(c.key));
+    const i = this.ready.findIndex(r => r.terrain && r.cx === c.cx && r.cz === c.cz && r.gen === c.gen && r.cid === c.id && r.ev === this.edits.version(c.key));
     let r = i >= 0 ? this.ready.splice(i, 1)[0] : null;
     if (!r || r.vgen !== this.vgen) {
       r = { terrain: r?.terrain ?? this.generator.buildChunk(c.cx, c.cz), veg: {} };
@@ -335,11 +349,43 @@ export class ChunkManager {
       // detailDone: this species was already placed here and came back empty; without it the empty result would reset the level and re-ask forever
       if (ring <= sp.maxRing && !has && !c.pendingDetail && !c.detailDone.has(sp.name)) {
         c.pendingDetail = true;
-        this._send(this._job(c, false, P.nearNames()));
-      } else if (ring > sp.maxRing + 1 && has) { P.unmount(c, sp.name); c.detailDone.delete(sp.name); }
+        const names = P.nearNames();
+        this._send(this._job(c, false, names));
+      } else if (ring > sp.maxRing + 1 && has) this._unplantNear(c, sp.name);
     }
     P.ring?.(c, ring);
   }
+  // A near-only species with a collider is gameplay (it blocks), so its colliders take effect on a tick booked from where the sources stand, not when the
+  // worker answers: a fast and a slow machine block the same spot at the same step. The fallback places it on the main thread when due (the same
+  // code as the worker), as the chunk's own collision does (_forceReady). Booked for every chunk, ready or not, in the frame a source changes chunk
+  // (the stream planned: _bookDue), a species changes or a record is withdrawn; the chunk's own ticket (same lag, booked earlier) is due first
+  _bookNear() {
+    for (const sp of this.plants.list()) if (sp.nearOnly && sp.rule.collider) for (const c of this.chunks.values()) this._book(c, sp);
+  }
+  /** @internal book one chunk's near-only collider ticket if its ring wants the species and none is booked */
+  _book(c, sp) {
+    const name = sp.name, ring = this._ring(c);
+    if (c.state === 'failed' || ring > sp.maxRing || c.near[name] || c.detailDone.has(name)) return;
+    const e = c.near[name] = { mounted: false, done: false, ticket: null };
+    e.ticket = this.engine.commits.request({
+      lag: colliderLag(this, ring),
+      apply: r => {
+        if (this._forceReady(c), c.state !== 'ready') return;   // a source came closer after the chunk was booked: its ground first
+        e.done = true;
+        if (e.mounted) this.plants.release(c, name); else this.plants.mount(c, name, r);
+      },
+      fallback: () => this.generator.place(c.cx, c.cz, sp.rule, this.density),
+      valid: () => this.chunks.get(c.key) === c && c.near[name] === e,
+    });
+  }
+  /** @internal the one way plants of a chunk are mounted (job result, terrain edit): a near-only collider species waits for its ticket, then it is plain */
+  _mountPlants(c, name, r) {
+    const e = c.near[name], held = !!e && !e.done;
+    if (held) { e.mounted = true; e.ticket.resolve(r); }
+    this.plants.mount(c, name, r, held);
+  }
+  _cancelNear(c, name) { const e = c.near[name]; if (e) { e.ticket.remove(); delete c.near[name]; this._bookDue = true; } }
+  _unplantNear(c, name) { this.plants.unmount(c, name); this._cancelNear(c, name); c.detailDone.delete(name); }
 
   /** Stop the chunk workers and release the chunks with their commit tickets (called by terrain dispose; in-flight results are discarded) */
   dispose() { this.lane.dispose(); this.rebuild(); }

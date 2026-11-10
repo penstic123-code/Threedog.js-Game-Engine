@@ -48,6 +48,8 @@ export class Music {
     this.tracks = new Map();
     this._defineAll(st.tracks || {});
     this._defineAll(opts.tracks || {});
+    /** @internal stingers sounding now (their handles), and whether the module is gone: a stinger whose file loads after that must not start */
+    this._stingers = new Set(); this._gone = false;
     /** Name of the track playing (or wanted) @type {string | null} */
     this.current = null;
     /** 0-1: how loud each stem of the playing track is (see the stems `at` range); fades in about half a second @type {number} */
@@ -151,7 +153,7 @@ export class Music {
       const t = ctx.currentTime + 0.02, loop = tr.loop !== false;
       bufs.forEach((buf, i) => { const src = ctx.createBufferSource(); src.buffer = buf; src.loop = loop; src.connect(parts[i].out); src.start(t); slot.srcs.push(src); });
       if (fade > 0) { g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + fade); }
-      if (!loop && slot.srcs[0]) slot.srcs[0].onended = () => { if (this.playing === slot) { this.playing = null; this.current = null; this.engine.events.emit('music:change', { from: name, to: null }); } };
+      if (slot.srcs[0]) slot.srcs[0].onended = () => this._ended(slot);   // a looping source ends only when a fade stops it
     }).catch(err => { warnOnce(err.message); if (this.playing === slot) this.playing = null; });   // a missing file is said once; the game goes on silent
   }
   /**
@@ -175,7 +177,21 @@ export class Music {
     p.gain.gain.setValueAtTime(p.gain.gain.value, t);
     p.gain.gain.linearRampToValueAtTime(0, t + f);
     for (const s of p.srcs) { try { s.stop(t + f + 0.05); } catch { /* already stopped */ } }
-    if (p.srcs[0]) p.srcs[0].onended = () => p.gain.disconnect();   // free the nodes once the fade has really ended
+    if (p.srcs[0]) p.srcs[0].onended = () => this._ended(p);   // free the nodes once the fade has really ended
+  }
+  /** @internal The one end of a track's nodes, natural or faded (a fade-out already took it off `playing`): free them, and if it is still the playing one, say the music ended */
+  _ended(slot) {
+    slot.gain.disconnect();
+    if (this.playing !== slot) return;
+    this.playing = null; const from = this.current; this.current = null;
+    this.engine.events.emit('music:change', { from, to: null });
+  }
+  /** @internal the module goes: stop the background, every stinger, and refuse the ones still loading */
+  _close() {
+    this._gone = true;
+    this.stop({ fade: 0 }); this._duck?.remove(0); this.output?.disconnect();
+    for (const h of [...this._stingers]) h.remove();
+    this._stingers.clear();
   }
   /** @internal the background bed: tracks connect here, then to the music bus; a stinger dips this node, never the bus (it plays on the bus itself) */
   _ensureOutput() {
@@ -203,6 +219,8 @@ export class Music {
     this.engine.events.emit('music:stinger', { name, played: !!live });
     if (!live) return;                                         // a one-shot piece is not worth queueing
     a.play(tr.url, { bus: 'music', volume: volume ?? tr.volume ?? 1 }).then(h => {
+      if (this._gone) { h.remove(); return; }   // the file loaded after the module went
+      this._stingers.add(h); h.source.addEventListener?.('ended', () => this._stingers.delete(h));
       const d = h.source.buffer?.duration || 1, g = this.output.gain, t = a.ctx.currentTime;
       if (duck >= 1) return;
       // scheduled on the audio clock (no timers): dip, hold for the stinger's length, come back
@@ -304,11 +322,11 @@ export function music(opts = {}) {
     install(e, ctx) { e.i18n.add({ 'zh-CN': { 'module.music': '音乐' }, en: { 'module.music': 'music' } });
       m = new Music(e, opts, ctx.track);
       ctx.track(e.events.on('session:end', () => m.stop({ fade: 0 })));   // a playthrough ends: its music stops at once
-      ctx.saves.register('music', { notAtomic: 'sound, which an atomic op leaves alone: side effects go in after', save: () => ({ override: m._override ?? null, intensity: m.intensity }), load: d => m._load(d) });
+      ctx.saves.define('music', { notAtomic: 'sound, which an atomic op leaves alone: side effects go in after', save: () => ({ override: m._override ?? null, intensity: m.intensity }), load: d => m._load(d) });
       return m;
     },
     frame(dt) { m.frame(dt); },
-    dispose() { m.stop({ fade: 0 }); m._duck?.remove(0); m.output?.disconnect(); },   // nothing would stop a looping track once the module is gone
+    dispose() { m._close(); },   // nothing would stop a looping track once the module is gone
     // the same state the tests read (music.state) plus why nothing may sound: audio still locked (ready false, the track waits in pending), rules on, ducked by dialogue
     describe() { return { ...m.state, ready: m.ready, ruled: m.ruled, ducked: !!m._duck, tracks: m.tracks.size }; },
   };

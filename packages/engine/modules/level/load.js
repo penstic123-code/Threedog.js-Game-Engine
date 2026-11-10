@@ -134,7 +134,7 @@ export function finishLoad(st) {
   // playable comes later than committed: nav, nearby models and physics start building on level:loaded. This level leaving ends the wait, a load that may not come to anything does not
   const version = st.version;
   st.playable = false;
-  whenSettled(e, () => version === st.version).then(ok => {
+  whenSettled(e, () => version === st.version, true).then(ok => {
     if (!ok) return;
     st.playable = true;
     e.events.emit('level:playable', { root: api.root });
@@ -189,7 +189,9 @@ export function addColliders(st) {
   st.wallsIn.sync(() => {
     const ph = st.e.collision, fresh = [];
     if (ph) try {
-      for (const b of colliderBoxes(st.colliders, { colliderHeight: st.o.colliderHeight, colliderPad: st.o.colliderPad })) fresh.push(ph.addBox(b.at, b.opts));
+      for (const b of colliderBoxes(st.colliders, { colliderHeight: st.o.colliderHeight, colliderPad: st.o.colliderPad,
+        // `layer` read up the parent chain like occluder: it is often on the col_ / collider object, and a mesh with two materials is a Group of meshes in three
+        layerOf: m => chainValue(m, st.api.root, 'layer') })) fresh.push(ph.addBox(b.at, b.opts));
     } catch (err) { for (const h of fresh) h.remove?.(); throw err; }
     st.walls.length = 0; st.walls.push(...fresh);
   });

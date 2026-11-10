@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { FULLSCREEN_VERT, DEPTH_GLSL, depthUniforms, writeDepthUniforms, depthNodes } from './depth.js';
+import { declared } from './about.js';
 /** @import { PostEffect } from 'threedog' */
 
 class DofPass extends Pass {
@@ -62,7 +63,7 @@ class DofPass extends Pass {
  */
 export function dof({ focus = 10, range = 2, falloff = 20, maxBlur = 6, enabled, order = 5 } = {}) {
   const update = (pass, p) => { const u = pass.material.uniforms; u.uFocus.value = p.focus; u.uRange.value = p.range; u.uFalloff.value = p.falloff; u.uMaxBlur.value = p.maxBlur; };
-  return { name: 'dof', slot: 'hdr', order, enabled, needsDepth: true, params: { focus, range, falloff, maxBlur },
+  return { ...declared(dof), name: 'dof', slot: 'hdr', order, enabled, needsDepth: true, params: { focus, range, falloff, maxBlur },
     create: ({ camera, params }) => { const pass = new DofPass(camera); update(pass, params); return pass; }, update, node: dofNode };
 }
 
@@ -87,3 +88,6 @@ function dofNode(input, { tsl: T, display, scenePass, camera, p }) {
   }
   return T.select(r.lessThan(0.5), color.sample(uv), T.vec4(sum.div(w), 1));
 }
+
+// the picture menu facts of each effect (about.js says why they sit on the factory)
+dof.about = { cost: 'high', on: 'engine.post.add(dof({ focus }))', recipe: 'recipes/52-around-the-picture.md "dof: blur the background"', limits: 'one focus band for the whole screen; transparent things blur with what is behind them' };

@@ -390,6 +390,8 @@ export interface VegetationOptions {
   fade?: false | { start?: number; end?: number };
   /** Switch to the low-detail model beyond this many rings, default 1 */
   lodRing?: number;
+  /** Beyond lodRing, draw camera-facing cards baked from this species' own model and materials: one draw for all far chunks, lit through baked normals, no shadow there. views around the plant (default 8), size in pixels per view (default 128). Not with lodGeometry. WebGPU only (WebGL draws the mesh and warns) */
+  impostor?: boolean | { views?: number; size?: number };
   /** Cast shadows */
   castShadow?: boolean;
   /** Cast shadows within this many rings */
@@ -465,16 +467,19 @@ export interface Vegetation {
   define(name: string, opts: VegetationOptions): Species | Promise<Species>;
   get(name: string): Species | undefined;
   list(): Species[];
-  /** @experimental */ isRemoved(species: string, cx: number, cz: number, id: number): boolean;
+  /** Was this instance removed (removeInstance) and not restored */
+  isRemoved(species: string, cx: number, cz: number, id: number): boolean;
   /**
    * Remove one (chop a tree). regrowSeconds: grows back after this many calendar seconds, 0 = permanent. The record is saved with the save (save key
    * 'vegetation'). Returns the entry name
    */
   removeInstance(species: string, cx: number, cz: number, id: number, opts?: { regrowSeconds?: number }): string;
-  /** Restore one @experimental */
+  /** Restore one removed instance */
   restoreInstance(species: string, cx: number, cz: number, id: number): void;
   /** The one nearest to position within radius meters (default 2) (species restricts to one kind), null if none */
   instanceAt(position: PositionLike, opts?: { radius?: number; species?: string | null }): VegetationHit | null;
+  /** The plant a ray hit, read from the hit itself (no spatial guess): the same VegetationHit instanceAt returns (goes to removeInstance), null if not vegetation or a far impostor card */
+  plantOf(hit: { object?: unknown; instanceId?: number } | null | undefined): VegetationHit | null;
 }
 
 // ======================================================================
@@ -1076,6 +1081,8 @@ export interface BudgetLimits {
   triangles?: number;
   /** Texture count */
   textures?: number;
+  /** GPU memory in MB as three counts it (WebGPURenderer only: an estimate, not driver VRAM) */
+  gpuMemoryMB?: number;
   /** Terrain chunk upload milliseconds per frame */
   chunkApplyMs?: number;
   /** Rigid body count */
@@ -1098,8 +1105,10 @@ export interface BudgetLimits {
   startupMs?: number;
   /** Single module startup (init + wait for ready, milliseconds); when exceeded, that module is named */
   moduleMs?: number;
+  /** Hook ms per frame of one module, { terrain: 1.5 } (median of engine.profile(), on in dev builds); reported as category 'modules.<name>' */
+  modules?: Record<string, number>;
   /** Custom module categories (registered via budget.metric) */
-  [metric: string]: number | undefined;
+  [metric: string]: number | Record<string, number> | undefined;
 }
 /** One overrun: top is the biggest draw-call contributors grouped by userData.budgetTag */
 export interface BudgetOver { category: string; value: number; limit: number; top: BudgetTagStat[] }

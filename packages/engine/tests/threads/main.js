@@ -8,7 +8,8 @@ import * as all from '../../index.js';   // every export, for specs that build t
 // mk: a throwaway headless engine on a detached canvas (specs pass createEngine so the call reads like createEngine itself)
 const mk = (create, saveKey, extra = {}) => create({ canvas: document.createElement('canvas'), headless: true, urlState: false, saveKey, ui: { loading: false }, ...extra });
 import { fakeCharacter } from '../contract/fakeCharacter.js';
+import { compileThrough } from '../../render/backend.js';
 import characterContract from '../../modules/characters/character.contract.js';
-window.threedogThreads = { createEngine, world, collision, characters, quests, level, nav, THREE, all, mk, bloom, grain, fakeCharacter, characterContract };
+window.threedogThreads = { createEngine, world, collision, characters, quests, level, nav, THREE, all, mk, bloom, grain, fakeCharacter, characterContract, compileThrough };
 const engine = window.engine = createEngine({ canvas: document.getElementById('view'), headless: true, ui: { loading: false }, urlState: false, saveKey: 'threads-test' });
 engine.start();

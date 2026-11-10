@@ -12,9 +12,8 @@
 //
 // Determinism: in engine.step() and headless loading frames, jobs ignore the real-time budget and drain the queue (see Jobs.js),
 // and stream's synchronous builds are attached to the scene before step returns: same input and same seed (engine.random) give the same result.
-import { Vector4 } from 'three';
 import { reportError } from '../base/errors.js';
-import { DEV, warnOnce, fmt } from '../base/validate.js';
+import { DEV, warnOnce, fmt, syncOnly } from '../base/validate.js';
 import { coded, codedError } from '../base/errorHints.js';
 import { watchLights } from '../inspect/lightWatch.js';
 import { watchGeometries } from '../inspect/geometryWatch.js';
@@ -22,12 +21,44 @@ import { followFocus } from '../../render/lights.js';
 import { STEP } from '../time/time.js';   // fixed step length: 60 per second
 import { adapt } from '../scene/adaptive.js';
 import { advanceUiClock } from '../time/uiClock.js';
-import { resetStats, programCount, freshFrame } from '../../render/backend.js';
+import { resetStats, programCount, freshFrame, holdRenderer, releaseRenderer } from '../../render/backend.js';
 import { engineDraws } from '../../render/ownFrame.js';
 import { writeDaylight } from '../../render/daylight.js';
+import { quantile } from '../base/math.js';
+import { unsettled } from './headlessLoad.js';
 // Most real time one frame may turn into fixed steps (6 steps). A longer hitch slows the game for that frame
 // instead of replaying it in a burst (no spiral of death, no jump after a stall).
 const MAX_CATCHUP = 0.1;
+// Module hook timing keeps each module's ms of the last PROF_FRAMES frame-hook cycles: median (steady cost, what budgets judge), mean (what a
+// benchmark run averages) and p95 (spikes). 300 cycles = 5 s live, 10 s of step(), enough for the benchmark pages; each ring is allocated once
+// per module and read on demand, so the sort costs nothing per frame
+const PROF_FRAMES = 300;
+/** Timing judges play, not start-up: the first frame after ready at which loading is done and nothing is unsettled (modules' isReady, the stream's
+ * queued builds: the same answer start() and the tools' waits use) clears the module timing ring and the frame-time window, once. Start-up chunk
+ * builds would otherwise sit in the median window and read as spikes; a chunk built while walking later still counts */
+function startPlayTiming(e) {
+  if (!e.ready || !e.loading.view().done || unsettled(e).length) return;
+  e._playTiming = true;
+  if (e._prof) e.profile(true);
+  e.budget._clearFrames();
+}
+/** Close one frame-hook cycle of module timing: each module's ms of the cycle goes into its ring (0 for a module whose hooks did not run).
+ *  Each ring counts its own samples: a module first timed late (a level's module, a late use()) is judged on its cycles only, not on zeros for
+ *  the cycles before it existed.
+ *  Fixed hooks count one step: the cycle's dearest step (_runHooks keeps it). Why: a slow frame runs several catch-up steps and step() runs
+ *  frameEvery per cycle, so the summed ms grew with the frame rate, not with the module: the open-world physics read median 0.7 / p95 3.9 ms
+ *  ("spiky: rigid") on a slow software-rendered page while one step cost about 0.2 ms. The dearest, not the average: a step that itself spikes
+ *  (a chunk's collider built) still shows in full */
+function closeProfFrame(p) {
+  for (const k in p.fix) { p.cur[k] = (p.cur[k] || 0) + p.fix[k]; p.fix[k] = 0; }
+  for (const k in p.cur) if (!p.ring[k]) p.ring[k] = { buf: new Float32Array(PROF_FRAMES), i: 0, n: 0 };
+  for (const k in p.ring) {
+    const r = p.ring[k];
+    r.buf[r.i] = p.cur[k] || 0; p.cur[k] = 0;
+    r.i = (r.i + 1) % PROF_FRAMES;
+    if (r.n < PROF_FRAMES) r.n++;
+  }
+}
 // Most milliseconds one frame spends on catch-up steps (two steps' worth of real time, one 30 fps frame). Why a time budget on top of the
 // step cap: after a hitch in a heavy scene, 6 steps of 13 ms made a 77 ms fixed phase, so the next frame was long too and caught up again
 // (a hitch cascade). Judged by the step just measured, so cheap steps still catch up all 6; the time left over is dropped (a brief slow-down)
@@ -41,32 +72,30 @@ const STRINGS = {
 };
 
 const SOFT = { soft: true };   // core steps (render, stream): report once only
-const _viewport = new Vector4(), _scissor = new Vector4();
 /** Call a hook fn.call(self, a, b); errors go to reportError for tiering.
  *  opts: { module } the failing module / SOFT / null (game callback, counts as gameplay).
  *  Takes no ...args and needs no caller closure: the main loop calls this many times a frame, so it must not allocate each time. */
 function safe(engine, key, fn, opts, self, a, b) {
-  try { fn.call(self, a, b); } catch (err) { reportError(engine, err, key, opts ?? undefined); }
+  try { syncOnly(fn.call(self, a, b), opts?.module ? `${key} of module ${opts.module}` : key); } catch (err) { reportError(engine, err, key, opts ?? undefined); }
 }
 /**
  * One engine.onRender hook. What a hook borrows to draw (the target, viewport, scissor, autoClear, scene.overrideMaterial, camera.layers) it gives back on its last lines, which a
- * throw skips, and the engine's frame then draws into an 8-pixel corner or in one flat material from there on. So a hook that throws has them put back. One that returns
+ * throw skips, and the engine's frame then draws into an 8-pixel corner or in one flat material from there on. So a hook that throws has them put back (every field
+ * render/backend.js holdRenderer lists, scene and camera included). One that returns
  * is taken at its word: what it left is the game's choice.
  */
 function drawHook(f, ctx) {
-  const { renderer: r, scene, camera } = ctx, target = r.getRenderTarget(), viewport = r.getViewport(_viewport), scissor = r.getScissor(_scissor), scissorTest = r.getScissorTest();
-  const { autoClear } = r, { overrideMaterial } = scene, { mask } = camera.layers;
-  try { f(ctx); } catch (err) {
-    r.setRenderTarget(target); r.setViewport(viewport); r.setScissor(scissor); r.setScissorTest(scissorTest);
-    r.autoClear = autoClear; scene.overrideMaterial = overrideMaterial; camera.layers.mask = mask;
-    throw err;
-  }
+  const held = holdRenderer(ctx.renderer, { scene: ctx.scene, camera: ctx.camera });
+  let threw = true;
+  try { syncOnly(f(ctx), STRINGS.onRender); threw = false; } finally { releaseRenderer(held, threw); }
 }
 /** Run one game callback list. remove() replaces the list, so a hook an earlier one removed in this pass (or a dispose) is skipped: it may sit on what its remover just tore down */
 function runList(e, name, key, a) {
   const list = e[name];
-  for (const f of list) if (e[name] === list || e[name].includes(f)) safe(e, key, f, null, undefined, a);
+  for (const f of list) if (live(e, name, list, f)) safe(e, key, f, null, undefined, a);
 }
+/** Whether f still belongs to holder[name]: the list was replaced (remove, dispose) and f is not in the new one = skip it. Shared by runList and the engine.onRender passes */
+const live = (holder, name, list, f) => holder[name] === list || holder[name].includes(f);
 
 // The first frame drawn after ready ends the first-frame measure (engine.startup.firstFrameMs, startup.js); one compare per frame after that
 function firstFrame(e, at) {
@@ -85,7 +114,7 @@ export const loopMethods = {
     this.input.beginFixed();
     try {
       // gameplay frozen: no clock moves, no channel, no mod({ for }) timer (frame hooks and render continue). uTime is the ambient clock (wind, water,
-      // clouds): it keeps moving behind a pause menu, the common expectation, unless a freezer asked freeze(owner, { ambient: true })
+      // clouds): it keeps moving behind a pause menu, the common expectation, unless a freezer asked freeze(owner, { still: true })
       if (this.frozen) { this.time._frozenStep(!this.still); return; }
       this.time._beginStep();                  // the one counter (core/time/time.js): this step's commits, ops and input records carry the new tick
       this._inFixed = true;                    // ops log phase 'fixed' and the dev guard lets gameplay writes through
@@ -102,8 +131,9 @@ export const loopMethods = {
     if (this.disposed) return;   // a fixed step of this frame disposed the engine (step() checks the same)
     // one profile frame = one frame-hook cycle (the real loop: one per rendered frame; step(): one per frameEvery fixed steps). Counting rendered frames
     // instead made step(render: false) divide by zero frames and report the whole run's milliseconds as one frame's
-    if (this._prof) this._prof.frames++;
+    if (this._prof) closeProfFrame(this._prof);
     this._picture?.frameStart();
+    this.rays.fresh = -1;   // frames advance while time is frozen (tick stays): the next ray re-reads the statics' matrices
     advanceUiClock(this, dt);   // headless pages: UI display timers run on the stepped time (core/time/uiClock.js)
     writeDaylight(this);   // before the hooks: an onFrame reads this frame's signal
     runList(this, '_frame', STRINGS.onFrame, dt);
@@ -115,6 +145,8 @@ export const loopMethods = {
     safe(this, 'stream.settle', this.stream._settle, SOFT, this.stream);   // after every loader ran: readiness of stream sources
     safe(this, 'batching.update', this.batching.update, SOFT, this.batching);   // last before rendering: picks up everything built this frame
     safe(this, 'audio.tick', this.audio._tick, SOFT, this.audio);   // positional sounds follow their objects (returns at once when there are none)
+    // every 30th cycle: loading.view() and unsettled() build arrays, and a game that never settles would pay that every frame
+    if (!this._playTiming && (this._settleTick = ((this._settleTick ?? 0) + 1) % 30) === 1) startPlayTiming(this);
   },
   /** @internal The loop and the dev tools: one whole engine frame (onRender hooks, own-frame yielding, per-frame bookkeeping). engine.renderOnce stays the public draw: photo mode needs its picture even from a game that owns the frame, and a game may call it inside a hook.
    *  @param {number} dt @param {boolean} [hooks] false: draw without the game's onRender hooks (the picture check's probe renders: picture code
@@ -136,14 +168,14 @@ export const loopMethods = {
     if (own) own.inside++;
     this._poses.draw();   // moving things draw between the last two fixed steps (stepPoses.js); undone below, gameplay never sees it
     try {
-      for (const f of before) { safe(this, STRINGS.onRender, drawHook, null, undefined, f, ctx); r.setRenderTarget(null); }
+      for (const f of before) { if (!live(this._onRender, 'before', before, f)) continue; safe(this, STRINGS.onRender, drawHook, null, undefined, f, ctx); r.setRenderTarget(null); }
       this.shadows._frame();   // a game light's cascades, after 'before': picture code aims its light there, and the placement must be what is drawn (render/shadows.js)
       this._checkBackendAdds();   // WebGPU route: a WebGL-only material added since the last frame is named, not drawn blank (startup.js)
       freshFrame(r);   // WebGPU: step() several times in one task, or a renderOnce() earlier in this tick, must not reuse that scene pass
       if (this._picture) this._picture.drawing = true;
       if (draws) { this.batching.skip(); try { this.post.render(dt); } finally { this.batching.unskip(); } }
       if (this._picture) this._picture.drawing = false;
-      for (const f of after) safe(this, STRINGS.onRender, drawHook, null, undefined, f, ctx);
+      for (const f of after) if (live(this._onRender, 'after', after, f)) safe(this, STRINGS.onRender, drawHook, null, undefined, f, ctx);
     } finally { this._poses.undraw(); if (own) own.inside--; this._picture?.frameEnd(); }
     gpu?.end();
     // frames that first draw new objects pay their GPU upload here (Budget.js ApplyCost); a frame that compiled shaders is not judged by adaptive resolution
@@ -165,18 +197,26 @@ export const loopMethods = {
       if (!p) { safe(this, key, h.fn, opts, undefined, dt, this); continue; }
       const t0 = performance.now();   // measure
       safe(this, key, h.fn, opts, undefined, dt, this);
-      p.t[h.name] = (p.t[h.name] || 0) + performance.now() - t0;   // measure
+      const into = kind === 'fixed' ? p.step : p.cur;   // fixed hooks: this step's ms, kept below as the cycle's dearest step (closeProfFrame)
+      into[h.name] = (into[h.name] || 0) + performance.now() - t0;   // measure
     }
+    if (p && kind === 'fixed') for (const k in p.step) { if (p.step[k] > (p.fix[k] || 0)) p.fix[k] = p.step[k]; p.step[k] = 0; }
     this._curModule = was;
   },
-  /** Time module hooks: profile(true) starts, profile(false) stops; profile() returns { moduleName: average ms per frame } and resets (null when off). */
+  /** Time module hooks (fixed + frame + afterRender): on by default in dev builds, off in production. profile(true) starts afresh, profile(false) stops;
+   *  profile() returns { moduleName: { ms, mean, p95 } } per frame over the last 300 frame-hook cycles: ms is the median (null when off); fixed hooks
+   *  count one fixed step per frame (the frame's dearest), so a slow frame's catch-up steps do not read as the module's cost. Only the
+   *  module's own hooks count, not engine.jobs / stream work it hands off. Without cross-origin isolation the browser rounds performance.now() to 0.1 ms */
   profile(on) {
-    if (on !== undefined) { this._prof = on ? { frames: 0, t: {} } : null; return this; }
+    if (on !== undefined) { this._prof = on ? { cur: {}, step: {}, fix: {}, ring: {} } : null; return this; }
     const p = this._prof;
     if (!p) return null;
     const r = {};
-    for (const k in p.t) r[k] = Math.round(p.t[k] / Math.max(1, p.frames) * 100) / 100;
-    p.frames = 0; p.t = {};
+    const r2 = v => Math.round(v * 100) / 100;
+    for (const k in p.ring) {
+      const a = p.ring[k].buf.subarray(0, p.ring[k].n);
+      r[k] = { ms: r2(quantile(a, 0.5)), mean: r2(a.reduce((s, v) => s + v, 0) / a.length), p95: r2(quantile(a, 0.95)) };
+    }
     return r;
   },
 
@@ -202,16 +242,18 @@ export const loopMethods = {
    * Returns how many ran (tests read it).
    */
   _catchUp(dt) {
-    let acc = Math.min((this._acc || 0) + dt, MAX_CATCHUP), n = 0;
+    const want = (this._acc || 0) + dt;
+    let acc = Math.min(want, MAX_CATCHUP), n = 0, lost = want - acc;   // lost: real time the fixed steps will not run (over MAX_CATCHUP, or dropped for the budget below)
     const f0 = performance.now();   // measure
     let s0 = f0;
     while (acc >= STEP && !this.disposed) {   // a hook may dispose the engine
       this._fixedStep(); acc -= STEP; n++;
       const t = performance.now();   // measure
-      if (acc >= STEP && t - f0 + (t - s0) > CATCHUP_MS) { acc %= STEP; break; }   // the next one would go over: drop the rest
+      if (acc >= STEP && t - f0 + (t - s0) > CATCHUP_MS) { lost += acc - acc % STEP; acc %= STEP; break; }   // the next one would go over: drop the rest
       s0 = t;
     }
     this._acc = acc;
+    this._gameDt = Math.max(0, dt - lost);   // the one time frame hooks get this frame: what the fixed steps took of dt, minus every drop (hooks never run ahead of game logic)
     // held while frozen: with no fixed steps positions stand still, and a moving ratio would make interpolated things shake in place
     if (!this.frozen) this.stepBlend = acc / STEP;
     return n;
@@ -241,10 +283,12 @@ export const loopMethods = {
       try {
         this.input.poll(dt);
         // coming back from a hidden tab drops the time spent away, so play resumes without a burst of steps (page.js)
+        // gameDt: the time the fixed steps took this frame (_catchUp: minus MAX_CATCHUP and budget drops; none after a resync), so frame hooks (tweens, cutscenes) never move more than game logic does
+        let gameDt = 0;
         if (this.page.consumeResync()) this._acc = 0;
-        else this._catchUp(dt);
+        else { this._catchUp(dt); gameDt = this._gameDt; }
         c1 = performance.now();   // measure
-        this._frameHooks(dt);
+        this._frameHooks(gameDt);
         c2 = performance.now();   // measure
         // Before ready only the loading screen (DOM) is on screen: a scene frame there is never seen, but it compiled shaders and uploaded
         // geometry in the middle of loading (cold start measured 2.9 s -> 1.6 s without it). start() draws one hidden warm-up frame itself

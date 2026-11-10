@@ -18,7 +18,7 @@ export const name = 'describe everywhere: R44 catches a module without describe,
 function fakeEngine() {
   const scene = new THREE.Scene();
   const e = { scene, THREE, style: {}, i18n: { add() {} }, input: { define() {}, action: () => ({ remove() {} }), pressed: () => false }, audio: { condition() {} },
-    saves: { register() {} }, events: { on() {} }, surface: () => 0, actorPosition: () => null, _things: { entryOf: () => null, live: () => null } };
+    saves: { define() {} }, events: { on() {} }, surface: () => 0, actorPosition: () => null, _things: { entryOf: () => null, live: () => null } };
   e.stacks = new Stacks(e);
   e.debug = new DebugOverrides(e);
   return e;

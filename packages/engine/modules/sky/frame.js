@@ -5,6 +5,7 @@ import { defineOwned } from '../../core/ops/owned.js';
 import { applySeason } from './season.js';
 import { applyCover, skyTint } from './tint.js';
 import { fogBand } from './fog.js';
+import { fogLook } from '../../render/fogLook.js';
 import { signalWatch } from '../../render/daylight.js';
 import { sunAngle } from '../../core/time/dayTime.js';
 import { LUMA } from '../../render/fxNumbers.js';
@@ -20,6 +21,7 @@ const lum = c => LUMA[0] * c.r + LUMA[1] * c.g + LUMA[2] * c.b;
 // The copyable takeover calls each owned property's warning quotes (core/ops/owned.js): the engine yields to a direct write, these say it explicitly
 const L = {
   background: { manual: 'engine.sky.dome.visible = false', back: 'engine.sky.replace(null)' },
+  environment: { manual: 'engine.sky.environment().remove()', back: 'engine.sky.environment()' },
   sunDir: { manual: "engine.autoView.manual('sunDir')", back: "engine.autoView.manual('sunDir', false)" },
 };
 
@@ -38,6 +40,9 @@ export function watchOwned(sky) {
   // the reference is the scene as the engine made it, not what is there now: picture code runs before start() (and may run before sky()), and a write
   // with no reference to differ from would leave the dome drawn over the game's background for good
   sky._oBg.mark([e.baseBackground, 1]);
+  // the environment map engine.sky.environment() writes into its `into` object: a game that writes scene.environment itself takes it, the sky stops building it (environment.js)
+  list.push(sky._oEnv = own('sky.environment', 'sky', 'environment', () => sky._env?.into?.environment ?? null, L.environment, [scene]));
+  sky._oEnv._onChange = o => { if (o.on && sky._env) sky._env.key = null; };   // handed back: the next interval builds it again
   // the sun: part 'view', so engine.autoView.manual('sunDir') is the one takeover entry. The shadow and the game's lights follow this value, so a sun at a chosen
   // direction has to survive the frame. sunDir and uSunDir are one vector (Sky.js), so a write to either name is seen here
   list.push(sky._oSun = defineOwned(e, { id: 'sky.sunDir', part: 'view', key: 'sunDir', read: () => sky.sunDir.toArray(), levels: L.sunDir, objects: [sky] }));
@@ -77,7 +82,7 @@ export function updateSky(sky) {
   sky._signals.check();
   sky.engine.uniforms.uSkyTop.value.copy(u.uTop.value); sky.engine.uniforms.uSkyHorizon.value.copy(bd ? bd.color : u.uHorizon.value);
   sky._signals.mark();
-  u.uFogBand.value = fogBand(scene.fog, u.uHorizon.value);   // compared to the dome's horizon (not the backdrop): the band is drawn on the dome
+  u.uFogBand.value = fogBand(fogLook(scene, sky.engine.renderer), u.uHorizon.value);   // compared to the dome's horizon (not the backdrop): the band is drawn on the dome
   u.uSunColor.value.copy(a[3]).lerp(b[3], f);   // the keyframes' sun color: the dome's sun disk, and a signal for the game's own sun (shader.js shares the object)
 
   const ang = sunAngle(t), elev = Math.sin(ang);

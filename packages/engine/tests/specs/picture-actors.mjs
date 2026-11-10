@@ -113,7 +113,8 @@ export const specs = [
         out.mineColor = mine.color.getHex(); out.minePatches = materialPatches(mine).length;
         const late = new Character(engine, {});
         out.lateIsMine = body(late).material === mine;
-        a.dispose(); out.survives = !engine.assets.shared.has(mine) ? 'not shared' : 'shared';
+        let freed = 0; mine.addEventListener('dispose', () => freed++);   // kept (keepPart): removing one character leaves the material every capsule draws with
+        a.dispose(); out.survives = freed === 0 ? 'shared' : 'freed';
         b.dispose(); late.dispose();
         out.bad = (() => { try { engine.characters.material = 'gold'; return ''; } catch (x) { return x.code; } })();
         const e2 = createEngine({ canvas: document.createElement('canvas'), headless: true, ui: { loading: false }, saveKey: 'picture-ch' });

@@ -195,7 +195,7 @@ export function synthTone(audio, opts) {
 /** audio.load body: a file sound is an engine.assets entry, by name or by path (a path gets an entry of its own, like a model path), so release, trim and dispose reach it */
 export async function loadSound(audio, url) {
   const { assets } = audio.engine, e = assets._resolve(url, 'sound');
-  if (e.type !== 'sound') throw codedError('asset-load', `audio.load('${url}'): ${url} is a ${e.type}, not a sound`);
+  if (e.type !== 'sound') throw codedError('asset-misuse', `audio.load('${url}'): ${url} is registered as a ${e.type}, not a sound. Use a sound entry from assets.manifest({ sounds })`);
   if (e.opts.build) throw codedError('audio-synth-gone', `audio.load('${url}'): ${url} is a synth (a function in the asset pack), not a file: play it with audio.sfx('${url}')`);
   audio._init();
   if (!audio.ctx && !e.named) throw codedError('audio-unsupported', 'Audio is not supported by this browser; check typeof AudioContext before calling');   // a named sound falls back to silence

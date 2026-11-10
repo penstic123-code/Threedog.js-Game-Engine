@@ -1,4 +1,4 @@
-// The in-browser editor's server side (plan docs/plans/2026-11-05-editor.md). Dev server only (apply: 'serve'): a production build has no trace of it,
+// The in-browser editor's server side (plan docs/plans/done/2026-11-05-editor.md). Dev server only (apply: 'serve'): a production build has no trace of it,
 // and a game needs no line of its own, because the loader below is put into every page the dev server serves.
 //   Loader      F2, or ?edit=1 in the address: imports @threedog/tools/editor once the engine is up. Why F2 reloads the page instead of opening in place:
 //               leaving must show the game as the files say, and a reload is the one way that is always true; the address keeps the mode across reloads.

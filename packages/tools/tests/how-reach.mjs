@@ -38,7 +38,7 @@ export async function run({ check }) {
   check('MCP how: a flag as a task is only words now', !/^character:/.test((await via({ task: '--browse' })).text));
 
   const saved = await answer(ENGINE, 'remember progress between visits');
-  check('an entry row shows a short example from the recipe it points at', /^Example/m.test(saved.text) && /engine\.saves/.test(saved.data.example.join('\n')) && /recipes\/20-/.test(saved.data.recommended.at), saved.text.slice(0, 300));
+  check('an entry row prints the section of the recipe it points at', /^The section \(recipes\/20-.*§/m.test(saved.text) && /engine\.saves/.test(saved.text) && /recipes\/20-/.test(saved.data.recommended.at), saved.text.slice(0, 300));
 
   const fake = { smelter: { call: 'smelter', file: 'x.js', provides: [] } };
   const one = capabilities({ modules: fake }, '', [])[0];

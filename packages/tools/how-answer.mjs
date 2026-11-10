@@ -1,4 +1,4 @@
-// threedog how "<effect or task>" [-w game] [--full], --browse [category], --card <id>: one answer to a task, the same from the command line and the MCP tool `how`.
+// threedog how "<effect or task>" [-w game] [--full], --read <pointer>, --browse [category], --card <id>: one answer to a task, the same from the command line and the MCP tool `how`.
 // It leads with one recommended route, then says whether that route is installed in this project, which dependency is missing, a minimal example, and
 // what to do when it does not fit. --full adds the other routes with their paragraphs. A recommendation is a first read, never the only allowed way.
 // Sources: the docs search (how.mjs), the game's renderer and code, the connected page's catalog when one is attached, and the asset library.
@@ -10,7 +10,9 @@ import { command } from './paths.mjs';
 import { pageAttached } from './devinfo.mjs';
 import { esc, gameCodeFiles } from './lib/text.mjs';
 import { installedCalls, read, noComments } from './gamemap/text.mjs';
-import { search, format, tryNext, libraryHits, metadataHits, gameRenderer, queryTokens, DOCS, docPath } from './how.mjs';
+import { search, format, tryNext, libraryHits, metadataHits, gameRenderer, queryTokens, readSection, domainLines, firstRoute, DOCS, docPath } from './how.mjs';
+import { docReadCommand } from 'threedog/error-hints';
+import { readField } from './how-field.mjs';
 import { capabilityCards, categoryLines, categoryCards, cardLine, cardText } from './how-browse.mjs';
 
 /** Lines of a borrowed example printed by default; a task example from recipe 66 prints whole, it is written short */
@@ -18,6 +20,22 @@ const EXAMPLE_LINES = 10;
 // a letter outside plain English: the docs are English, so those words can match nothing, and a long list of closest hits would read like an answer
 const NOT_ENGLISH = /(?![a-zA-Z])\p{L}/u;
 const startHere = () => `Search words are English: try English task words, threedog how --browse, or ${docPath('AI.md')}.`;
+/** The whole answer stays within the output-length rule (docs/testing/tool-output-sizes.md): the section text gets what the other lines leave of it */
+const ANSWER_MAX = 4000, ANSWER_LINES = 40;
+/** No words matched: AI.md's domains, so the next try is a domain's words or its row, not another guess */
+const domains = () => ['Domains (AI.md "What exists"; pick one, then threedog how "<its task words>"):', ...domainLines(DOCS).map(l => '  ' + l)];
+
+/** threedog how --read <pointer>: one section of the docs, cut to the output rule unless full; a name with no .md (interactions.add.once) is one API entry (how-field.mjs) */
+export function readDoc(ref, { full = false } = {}) {
+  if (ref && !/\.md\b/i.test(ref) && /^[\w$.()]+$/.test(ref.trim())) {
+    const f = readField(DOCS, ref);
+    if ('near' in f) return { ok: false, text: `No API name "${ref}".${f.near.length ? ` Close: ${f.near.join(', ')}.` : ''} Try threedog how "<task words>", or a page: threedog how --read api/<module>.md`, data: null };
+    return { ok: true, text: [f.text, f.more].join('\n'), data: { ref: f.ref, cut: false } };
+  }
+  const r = ref && readSection(DOCS, ref, full ? { max: Infinity } : { max: ANSWER_MAX - 200, maxLines: ANSWER_LINES - 1 });   // 200: room for the line that gives the full command
+  if (!r) return { ok: false, text: `No section "${ref}". A pointer is a docs path, optionally with §<number> or §"<heading start>" (threedog how prints them), or an API name (interactions.add.once).`, data: null };
+  return { ok: true, text: [r.text, ...(full ? [] : [r.more])].join('\n'), data: { ref: r.ref, cut: r.more.startsWith('…') } };
+}
 const MODULES = Object.entries(metadata.modules);
 const callsOf = m => [m.call, ...(m.aliases ?? []).map(a => a.call)];
 // engine.particles?.emit is an optional use: the route works without that module. An API page's route line opens with the name alone (`api/quests.md · quests.start(id)`):
@@ -89,6 +107,18 @@ function installLines(s) {
 }
 
 const fileOf = at => (at ?? '').replace(/[#:].*$/, '');
+/**
+ * The modules a recipe page declares for itself: its "Shortest" line and its "Modules needed" paragraph. Why the page and not the route's first paragraph: a section about
+ * talking to a villager names `npc.talk`, not `engine.npcs`, so the route alone said "nothing to install"; and a first paragraph can mention a module only to say it is
+ * NOT part of the answer (09 §0 and `calendar({ hoursPerDay })`), which put calendar() on a picture route.
+ */
+function pageModules(route) {
+  const file = /^recipes\//.test(route.ref ?? '') ? join(DOCS, route.ref.replace(/\.md\b.*$/, '.md')) : '';
+  if (!file || !existsSync(file)) return '';
+  const lines = readFileSync(file, 'utf8').split(/\r?\n/), out = [];
+  lines.forEach((l, i) => { if (/^> \*\*Shortest:|^Modules( needed)?:/.test(l)) for (let j = i; j < lines.length && lines[j].trim(); j++) out.push(lines[j]); });
+  return out.join('\n');
+}
 /** May a route with no code of its own show this hit's? Only when it is the same thing: the same page, or a block using a module the route names. An example of another system under this route would read as how to do this one */
 const sameRoute = (route, h) => !!route.at && fileOf(h.at) === fileOf(route.at) || routeModules(`${route.line} ${route.para}`).some(id => routeModules(h.blocks[0]).includes(id));
 
@@ -99,7 +129,7 @@ export function exampleLines(route, hits, full) {
   if (!from) return { lines: [`Example: none in the docs for this route; read ${route.at || 'the row above'}.`], code: [] };
   const code = from.task ? from.blocks : from.blocks.slice(0, 1), indent = t => t.split('\n').map(l => '  ' + l);
   const cut = t => { const L = t.split('\n'); return full || from.task || L.length <= EXAMPLE_LINES ? t : [...L.slice(0, EXAMPLE_LINES), `… (${L.length - EXAMPLE_LINES} more lines)`].join('\n'); };
-  const head = from.skeleton ? `Add to your game, reuse what is there (a test runs it, ${from.at}):` : from.task ? `Example (complete; a test runs it, ${from.at}):` : `Example (a piece; its setup is in ${from.at}):`;
+  const head = from.skeleton ? `Add to your game, reuse what is there (a test runs it, ${from.ref ?? from.at}):` : from.task ? `Example (complete; a test runs it, ${from.ref ?? from.at}):` : `Example (a piece; its setup is in ${from.ref ?? from.at}):`;
   return { code, lines: [head, ...code.flatMap((t, i) => [...(from.task && i === 1 ? ['Check it (threedog js --file <this block>):'] : []), ...indent(cut(t))])] };
 }
 
@@ -138,28 +168,38 @@ export async function answer(dir, q, { full = false } = {}) {
   let lib = [];
   try { const L = await import('./lib.mjs'); lib = libraryHits(L.entries(L.libraryDir()), q); } catch { /* no library */ }
   const extra = [...(live?.hits ?? []).map(l => `in this game · ${l}`), ...lib];
-  if (!hits.length && !modules.length && !extra.length) return { ok: true, text: `No match for "${q}". ${startHere()}`, data: { query: q, recommended: null, routes: [] } };
+  if (!hits.length && !modules.length && !extra.length) return { ok: true, text: [`No match for "${q}". ${startHere()}`, ...(foreign ? [] : domains())].join('\n'), data: { query: q, recommended: null, routes: [] } };
   const tail = [...modules, ...extra];
   if (hits.weak || !hits.length && !modules.length) {   // nothing to stand behind: the closest hits, said to be that
     const weak = (foreign ? startHere() + '\n' : '') + (hits.weak ? `No good match for "${q}": the closest hits below cover less than a third of it. ${tryNext(hits)}\n\n` : '');
-    return { ok: true, text: weak + [...hits.map(format), ...tail.map((l, i) => `${hits.length + i + 1}. ${l}`)].join('\n'), data: { query: q, weak: !!hits.weak, recommended: null, routes: [...hits.map(h => h.line), ...tail] } };
+    return { ok: true, text: weak + [...hits.map(format), ...tail.map((l, i) => `${hits.length + i + 1}. ${l}`), ...(hits.weak ? domains() : [])].join('\n'), data: { query: q, weak: !!hits.weak, recommended: null, routes: [...hits.map(h => h.line), ...tail] } };
   }
   // a game that runs needs the lines to add, not a whole new file; the first three hits only, further down it is a different task
-  const project = projectFacts(dir), route = (project && hits.slice(0, 3).find(h => h.skeleton)) || (hits[0] ?? { line: modules[0], at: '', para: '', blocks: [] });
-  const example = exampleLines(route, hits, full), code = example.code.join('\n');
-  const ids = route.plain ? [] : routeModules(route.task ? code : [route.line, route.para, code].join('\n'));
+  const project = projectFacts(dir), route = firstRoute(hits, !!project) ?? { line: modules[0], at: '', para: '', blocks: [] };
+  // the hit's own section, printed whole up to the size rule: the AI reads the answer here instead of opening a 30 KB page. A task section of recipe 66 keeps its
+  // complete-example print (its two blocks and the check line); a route with no section of its own (a THREE.md row) keeps the borrowed example
+  const section = !route.task && !route.plain && /^recipes\//.test(route.ref ?? '') ?readSection(DOCS, route.ref, { max: full ? Infinity : ANSWER_MAX }) : null;
+  const example = section && route.ref.includes('§') ? { lines: [], code: route.blocks ?? [] } : exampleLines(route, hits, full), code = example.code.join('\n');
+  const ids = route.plain ? [] : routeModules(route.task ? code : [route.line, pageModules(route), code].join('\n'));
   const state = installState(ids, code, project, live), next = nextRoute(route, hits), others = hits.filter(h => h !== route), more = others.length + tail.length;
-  const text = [...(foreign ? [startHere()] : []), `Recommended (a good first route, not the only allowed one): ${route.line}`, ...(route.at ? [`  read: ${route.at}`] : []), ...(full && route.para ? [`  ${route.para}`] : []),
-    ...installLines(state), ...example.lines, `When it does not fit: ${next}`, ...(full ? [] : extra.slice(0, 1).map(l => `Also: ${l}`)),
-    ...(!more ? [] : full ? ['Other routes:', ...others.map(format), ...tail.map((l, i) => `${others.length + i + 1}. ${l}`)] : [`Other routes: ${more} more, ask again with --full.`])].join('\n');
+  const head = [...(foreign ? [startHere()] : []), `Recommended (a good first route, not the only allowed one): ${route.line}`, ...(route.ref ? [`  read: ${route.ref}`] : []), ...(full && route.para && !section ? [`  ${route.para}`] : []),
+    ...installLines(state), ...example.lines];
+  const foot = [`When it does not fit: ${next}`, ...(full ? [] : extra.slice(0, 1).map(l => `Also: ${l}`)),
+    ...(!more ? [] : full ? ['Other routes:', ...others.map(format), ...tail.map((l, i) => `${others.length + i + 1}. ${l}`)] : [`Other routes: ${more} more, ask again with --full.`])];
+  // the section gets what the final text leaves: every other line (its title line and the longest form of its "more" line included) is counted first,
+  // in bytes and in lines, and the body's own lines are counted with their indent
+  const title = section && `The section (${section.ref}):`, moreMax = section && `… 9999 more lines: ${docReadCommand(section.ref)}`;
+  const fixed = [...head, ...foot, ...(section ? [title, moreMax] : [])];
+  const body = section && (full ? section : readSection(DOCS, route.ref, { max: ANSWER_MAX - Buffer.byteLength(fixed.join('\n')) - 1, maxLines: ANSWER_LINES - fixed.length, indent: 2 }));
+  const text = [...head, ...(body ? [title, ...(body.text ? body.text.split('\n').map(l => '  ' + l) : []), body.more] : []), ...foot].join('\n');
   return { ok: true, text, data: { query: q, recommended: { line: route.line, at: route.at }, install: state, example: example.code, next, routes: [...others.map(h => h.line), ...tail] } };
 }
 
 /** CLI body */
 export async function main(argv) {
   let dir, rest, opt;
-  try { ({ dir, rest, opt } = command(argv, { positional: true, flags: ['full', 'browse', 'card'] })); } catch (e) { console.log('✗ ' + e.message); return 1; }
-  const words = rest.join(' ').trim(), r = opt.browse ? browse(words) : opt.card ? await card(dir, words, { full: !!opt.full }) : await answer(dir, words, { full: !!opt.full });
+  try { ({ dir, rest, opt } = command(argv, { positional: true, flags: ['full', 'browse', 'card', 'read'] })); } catch (e) { console.log('✗ ' + e.message); return 1; }
+  const words = rest.join(' ').trim(), r = opt.read ? readDoc(words, { full: !!opt.full }) : opt.browse ? browse(words) : opt.card ? await card(dir, words, { full: !!opt.full }) : await answer(dir, words, { full: !!opt.full });
   console.log(r.text);
   return r.ok ? 0 : 1;
 }

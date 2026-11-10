@@ -78,7 +78,7 @@ Why: two entries for one job are two chances to pick the wrong one, and they dri
 
 ### 2.6 What is replaced is deleted
 
-A new way replaces the old one in the same change: code, docs, options, tests, examples. During 0.x there are no compatibility layers. Breaking changes go in a migration note.
+A new way replaces the old one in the same change: code, docs, options, tests, examples. Engine-internal code keeps no compatibility layers. Public names are frozen since 1.0 (docs/plans/done/2026-11-05-api-freeze.md): removing or renaming one is a breaking change that goes in the lock and the changelog. A rename removes the old name in the same change (no deprecated alias; nobody writes the old names), and the CHANGELOG lists it. Names marked unstable may change in a minor version. Breaking changes go in a migration note.
 
 Why: an AI reads both versions and may use either. An old path left in place is a second source of truth.
 
@@ -322,14 +322,13 @@ The engine never picks for the game without saying so. Either a fixed rule resol
 
 - Two different owners `set` one point on one layer: `shared-conflict`, naming both, with three fixes to copy. Development and release builds behave the same: the call throws and the first value stays; the engine never lets the later write win.
 - A second provider takes an exclusive slot: `shared-taken`, naming both, with the `replaces` fix.
+- Two owners on one control layer of a character: `control-conflict`, the first keeps the layer.
 - `add`, `mul` and `clamp` never conflict: they are meant to stack.
 - The same owner writing again replaces its own entry, which is normal.
 
-Development and release builds throw the same error and leave the earlier value in place, so a conflict a game never saw in development cannot behave differently in a shipped build.
-
 ### 5.4 Prefer deleting
 
-When two things collide, ask first whether one should exist. Only after deletion and merging are ruled out does a precedence rule earn its place. Where two similar entries must both stay, each does one job and refuses the other's: `replace` takes one drawn thing (a dome, a material), `replaces` takes a whole module.
+When two things collide, delete one first (section 1); a precedence rule is the last resort. Where two similar entries must both stay, each does one job and refuses the other's: `replace` takes one drawn thing (a dome, a material), `replaces` takes a whole module.
 
 ### 5.5 Picture code among itself
 
@@ -369,11 +368,13 @@ A module's ownership is `ctx.track` and the registrars on `ctx`. Every registrat
 
 Each install is its own instance. A `ctx` belongs to one install, not to a name, so an async `init` that resumes after its module was unloaded cannot touch a same-named newcomer. What a stale `ctx` tracks is removed at once.
 
-`ctx.signal`, a read-only abort signal from the module instance's lifecycle, is the only lifecycle name for async work. There is no second task manager. A load whose underlying call cannot be cancelled still checks on completion, discards its result and returns the resources. Teardown aborts first, then removes every tracked handle: schedules, borrows, registered resources and capability aliases are all tracked handles. One `remove` that throws is reported and does not stop the rest. A late resource given to a closed `ctx` is removed at once.
+`ctx.signal`, a read-only abort signal from the module instance's lifecycle, is the only lifecycle name for async work. There is no second task manager. A load whose underlying call cannot be cancelled still checks on completion, discards its result and returns the resources. Teardown aborts first, then removes every tracked handle, and one `remove` that throws does not stop the rest ([architecture.md](architecture.md), section 4). A late resource given to a closed `ctx` is removed at once.
 
 ### 6.2 Lifetime and resource ownership are separate questions
 
 Adoption is not ownership. `scene.remove(mesh)` says the mesh left the scene; it does not say the material is unused elsewhere. Removing a node and freeing GPU resources are separate acts.
+
+The rule: whoever created a resource disposes it, and an asset load owns what it loaded. Scene teardown and `engine.dispose()` release references and leases and dispose only what the engine itself made: materials and textures its maker marked engine-made (a texture's owner is never inferred from the material it sits on), geometry and object data (instance buffers, shadow maps) of objects a module put in the scene, and a model copy's own bones. A game's material, texture, geometry or batch survives `engine.dispose()`. A part a module shares among its objects is kept (`keepPart`): its maker frees it, not `engine.remove` and not the asset cache. `engine.remove(obj)` is the game handing that object over, so it frees the geometry and materials nothing else holds. All disposal walks share one low-level helper (`core/base/freeParts.js`) with an explicit owner test, so no part is disposed twice; a guard spec parses the code for any other walk.
 
 | Resource | Who frees it | When |
 |---|---|---|
@@ -382,6 +383,7 @@ Adoption is not ownership. `scene.remove(mesh)` says the mesh left the scene; it
 | The original GLB or texture in the asset cache | The asset cache | All leases returned and cache policy met |
 | Scene nodes and animation state of a model copy | That copy's lease | When the copy is no longer used |
 | Geometry and material shared from an original | The original's owner | Never because one copy left |
+| A model prototype (content props, templates, pickups) | `engine.assets`, one per model and palette | A file model's: its last consumer unloads, a palette write or a hot swap replaces it; then `release` / `trim` can free it. A generated model stays cached until `engine.dispose` (nothing counts the uses of a code-built prototype); a hot swap frees the old build once no scene mesh draws it |
 | Fog, camera, control or UI focus a module borrowed | The borrow handle | When the borrow ends, respecting a later legitimate takeover |
 | Tasks, timers and events of one level or playthrough | That level or session | Level change or session end |
 
@@ -391,7 +393,7 @@ A borrow restores only if the value is still the one the borrower wrote. A game 
 
 ### 6.3 Errors
 
-A throwing `picture` or `ui` module is reported once and disabled, and the game keeps running. It gives back what it borrowed with `ctx.borrow` first, under the same "still the value it wrote" check; the rest of what it holds waits for unload. Errors elsewhere freeze gameplay in development and tests. The rule for an unrecoverable game error is to keep the last consistent state and refuse the action or stop what depends on it. Continuing with invalid state in the name of "keep the game going" is not acceptable.
+A throwing `picture` or `ui` module is reported once and disabled, and the game keeps running; what it borrowed is given back first (tiers in [architecture.md](architecture.md), section 4). Errors elsewhere freeze gameplay in development and tests. The rule for an unrecoverable game error is to keep the last consistent state and refuse the action or stop what depends on it. Continuing with invalid state in the name of "keep the game going" is not acceptable.
 
 ## 7. Capabilities, dependencies and replacement
 
@@ -411,7 +413,7 @@ Modules reach each other through public APIs and events only. Core names no modu
 
 `requires` is a promise that the provider works, not merely that it is installed. A module whose provider is not running is blocked: its `init` waits, its hooks do not run, `engine.catalog(name).blockedBy` says why, and it starts by itself when a provider comes up. A critical module blocked by a failure stops `start()`. Modules unrelated to the failure carry on.
 
-`optional` means allowed to be missing, and a module can say what is lost without it. `before`, `after` and `stage` yield one stable order, and a contradiction or a cycle throws with the names. `before` and `after` read a name the way `requires` does: a capability means whichever module provides it now, so an order survives a replacement. A stage contradiction reached only through `provides` is a development warning and the stage order stays, because built-in lines such as water's `after: ['sky']` must not refuse a game's own sky that ran before.
+`optional` means allowed to be missing, and a module can say what is lost without it. `before`, `after` and `stage` yield one stable order, and a contradiction or a cycle throws with the names. `before` and `after` read a name the way `requires` does: a capability means whichever module provides it now, so an order survives a replacement. A stage contradiction reached through `provides` is refused like a direct one, naming the provider and the fix (give the provider the stage the order needs, or drop the order): a provider in an earlier stage already satisfies an `after`, so only a real contradiction stops.
 
 Installed and running are separate questions. `has` answers the first; `explain({ module })` the second. A game waits with `engine.loading.settled()`, which ends even when a module failed, so nothing is left waiting; `usable` is the internal form of the answer.
 
@@ -453,7 +455,7 @@ A rule's default is the engine deciding nothing where the decision is the game's
 
 Control decides where to go, the mover decides how to move, and animation reads the result. Character does not grow a general boolean for each new way of climbing or gliding.
 
-Several local players are routing, not a rule: seats on input and an `id` on `createPlayer`, shared screen only. A seat acts for `seat.actor`: interactions take its presses, and footsteps and NPCs giving way cover every player. The interaction prompt stays `engine.actor`'s, since there is one screen, and one hold runs at a time. Limits are in [architecture.md](architecture.md), section 7.1.
+Several local players are routing, not a rule: seats on input and an `id` on `addPlayer`, shared screen only. A seat acts for `seat.actor`: interactions take its presses, and footsteps and NPCs giving way cover every player. The interaction prompt stays `engine.actor`'s, since there is one screen, and one hold runs at a time. Limits are in [architecture.md](architecture.md), section 7.1.
 
 ## 8. Space
 
@@ -642,7 +644,7 @@ There is one counter of fixed steps, and every other time is a read-only view. C
 
 Season names, day length and similar values are data. A calendar is signals and scheduling; it does not imply farming, or even days.
 
-A fixed step has a stable order: input snapshot, due commits, `onFixed`, module hooks by stage, then late `onFixed`. Frames read committed state and interpolate. Drawing never advances game time.
+A fixed step has a stable order ([architecture.md](architecture.md), section 5). Frames read committed state and interpolate. Drawing never advances game time.
 
 ### 14.2 Workers and streaming
 

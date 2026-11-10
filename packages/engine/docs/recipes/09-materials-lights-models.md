@@ -1,14 +1,15 @@
 # Materials, lights and models: the game's own picture
 
-**In this recipe**: 0. Where the picture lives · 1. Materials are plain three.js · 1a. The engine's big pieces · 1b. Lights and stalls · 1c. The UI's picture ·
-2. Using your own models instead of procedural ones · 2a. Reusing art · 2b. Wind, cloud shadows and season tint on your own materials ·
-3. When the engine gets a new picture value · 4. Verify
+> **Covers:** the game's own materials, lights and models in plain three.js, which material kind looks how.
+> **Use when:** giving things their look.
+> **Shortest:** `new THREE.MeshStandardMaterial({ color, roughness })` in `picture/materials.js`.
+> **Sections:** 0 Where the picture · 1 Materials are plain · 1a The engine's big · 1b Lights and stalls · 1c The UI's picture · 2 Using your own · 2b Wind, cloud shadows · 3 When the engine · 4 Verify
 
 ```js
 // picture/materials.js: the game's materials are its own three.js objects
 const wood = new THREE.MeshStandardMaterial({ color: 0x8a5a36, roughness: 0.8 });
 const crate = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), wood);
-engine.water.material.color.set(0x3070a0);          // a big engine piece hands out its material the same way
+engine.water.material.color.set(0x3070a0);  // a big engine piece hands out its material the same way
 ```
 
 **The engine ships no art.** No default picture, character model, terrain drawing or terrain generator: until the game gives one, everything is a
@@ -26,8 +27,18 @@ separate package, `@threedog/terrain-noise`, because the shape of the world is g
 `@threedog/post-effects` and go in as `plugins/` files (recipe 40 §1, chain order: recipe 52).
 
 ## 1. Materials are plain three.js
-`new THREE.MeshStandardMaterial(...)`, `MeshToonMaterial`, `ShaderMaterial`, `onBeforeCompile`: all work as in any three.js project, and a plain material gets fog and
+`new THREE.MeshStandardMaterial(...)`, `MeshToonMaterial`, your own shading in TSL (WebGPU, recipe 56) or GLSL (WebGL only, recipe 43): all work as in any three.js project, and a plain material gets fog and
 cascaded shadows by itself. Keep them in `picture/materials.js` by name, and let other code ask for `picture.materials.wall`, so a change of picture touches one folder.
+
+**Which kind gives which look** (three's own kinds; any of them suits any style, and one game may mix them):
+
+| Kind | What it looks like | When it fits |
+|---|---|---|
+| `MeshLambertMaterial` | matte: light falls off smoothly, no highlight | cheap surfaces that never shine; many objects, low tiers |
+| `MeshToonMaterial` | light in flat bands (`gradientMap` sets how many and how soft) | shading read as shapes of color rather than a gradient |
+| `MeshStandardMaterial` / `MeshPhysicalMaterial` | physically based: roughness and metalness, reflections of the environment; Physical adds clearcoat, sheen, transmission | surfaces that should react to light and environment like real ones |
+| `MeshBasicMaterial` | unlit: exactly its color or texture, no shading, no shadows received | color that must stay as painted: sprites, UI in the world, glowing signs, sky cards |
+| Your own (`ShaderMaterial`, TSL node material, `onBeforeCompile`) | whatever the shader computes | a look none of these gives (recipe 43, recipe 56 on WebGPU) |
 ```js
 // Toon with an explicit light ramp: three.js's gradientMap; rampTexture takes grays, dark to light, and how far the bands melt (0-1). three's toon reads only
 // the red channel, so a colored ramp needs celLighting on the WebGPU route (recipe 56); on WebGL a colored shade is a lighting patch (recipe 43)
@@ -69,14 +80,14 @@ moves to the sources that matter most (near the camera, bright, high `priority`)
 it before `engine.start()` so the startup compile covers its lights:
 ```js fragment
 import { lightPool } from 'threedog';
-engine.use(lightPool({ point: 8 }));          // 8 PointLights; lightPool({ spot: 2, shadows: 1 }) adds spots / lets one point light cast
-for (const t of torches) engine.lightPool.add(t, {   // an Object3D is followed; a position stays put
+engine.use(lightPool({ point: 8 }));  // 8 PointLights; lightPool({ spot: 2, shadows: 1 }) adds spots / lets one point light cast
+for (const t of torches) engine.lightPool.add(t, {  // an Object3D is followed; a position stays put
   color: 0xffa040, intensity: 4, distance: 8,
   flicker: (time, i) => 0.85 + 0.15 * Math.sin(time * 13 + i),
-  glow: t.getObjectByName('halo'),           // stand-in while it has no real light: its material's opacity / emissiveIntensity fades to 0 as the light fades in
+  glow: t.getObjectByName('halo'),  // stand-in while it has no real light: its material's opacity / emissiveIntensity fades to 0 as the light fades in
 });
 const flash = engine.lightPool.add(gun.muzzle, { intensity: 0, priority: 5, distance: 6 });
-flash.set({ intensity: 8 }); /* next frame */ flash.set({ intensity: 0 });   // muzzle flash: no light is created
+flash.set({ intensity: 8 }); /* next frame */ flash.set({ intensity: 0 });  // muzzle flash: no light is created
 ```
 Pool lights cast no shadow unless you ask (`shadows`), and the pool picks by distance, brightness and `priority`: it knows nothing of rooms, so indoors a lamp shines through the wall into the next room.
 Three ways out, by how much of the picture depends on it: turn off the sources the player cannot see from where they are with `set({ intensity: 0 })` (the game knows its rooms; near a door keep both sides on, and a
@@ -97,7 +108,7 @@ const neon = new THREE.MeshStandardMaterial({ emissive: 0x33ccff });
 engine.onFrame(() => {
   const night = engine.uniforms.uNight.value, day = engine.uniforms.uDaylight.value;
   windows.emissiveIntensity = 2 * night;
-  neon.emissiveIntensity = 0.4 + 2.6 * (1 - THREE.MathUtils.smoothstep(day, 0, 0.6));   // its own dusk: faintly lit by day, on while the sky is still bright
+  neon.emissiveIntensity = 0.4 + 2.6 * (1 - THREE.MathUtils.smoothstep(day, 0, 0.6));  // its own dusk: faintly lit by day, on while the sky is still bright
 });
 ```
 Share one Material between the meshes that glow together. Models built later bring their own copies: collect them when the model is made
@@ -121,15 +132,14 @@ rules, `fonts` lists font asset names to load at start (the files sit in an asse
 Models are assets: content names them, an asset pack maps the names to files or generators. Register a later manifest with the same
 name to swap one:
 ```js fragment
-engine.assets.manifest(yourAssets);   // assets from an asset pack you have: trees, rocks, flowers... built in code
-engine.assets.manifest({ name: 'mine', models: { pine: () => myPineGeometry(), well: '/models/well.glb' } });   // replaces pine, adds well
+engine.assets.manifest(yourAssets);  // assets from an asset pack you have: trees, rocks, flowers... built in code
+engine.assets.manifest({ name: 'mine', models: { pine: () => myPineGeometry(), well: '/models/well.glb' } });  // replaces pine, adds well
 ```
 Vegetation takes a geometry (`geometry: await engine.assets.geometry('pine')`, the first mesh in the model) or a whole model with one material per
 mesh, e.g. bark trunk + alpha-cut leaf cards:
 `engine.vegetation.define('oak', { model: await engine.assets.model('oak'), wind: 0.02 })` (still one draw call per part; felling hides every part). For
 the import workflow see `10-blender-level.md`.
 `mergeColored(parts, { flat: false })` keeps smooth normals; UVs survive when every part has them.
-A generator in `models` may also return an Object3D with its own materials; those are used as they are.
 
 ### 2a. Reusing art from somewhere else: copy it in, do not depend on it
 Art code you already have (generator modules such as `art/my-crate.js` from an earlier game, a folder of your own, files someone gave you, a package
@@ -149,11 +159,10 @@ GLB files from Blender are copied the same way and checked with recipe 46 sectio
 The engine's shader effects are named patches that work on any material that has the usual three.js chunks (WebGL only):
 ```js fragment
 import { applyEffects } from 'threedog';
-const leaves = applyEffects(new THREE.MeshToonMaterial({ color: 0x5a8a3a }), { wind: 0.03, season: 'foliage' });   // clouds default on
-engine.vegetation.define('bush', { geometry, material: leaves });   // vegetation adds them itself; effects: false keeps the material untouched
+const leaves = applyEffects(new THREE.MeshToonMaterial({ color: 0x5a8a3a }), { wind: 0.03, season: 'foliage' });  // clouds default on
+engine.vegetation.define('bush', { geometry, material: leaves });  // vegetation adds them itself; effects: false keeps the material untouched
 ```
-The shadow sways with the wind automatically. Your own effect (pixel snapping, dissolve...) is a patch too, and stacks with the built-in ones and with
-the material's own `onBeforeCompile`:
+The shadow sways with the wind automatically. Your own effect (pixel snapping, dissolve...) is a patch too, stacking with the built-in ones; the GLSL form below is WebGL, a WebGPU game gives the patch a `tsl` field (recipe 56):
 `applyEffects(mat, { patches:
 [{ name: 'snap', cacheKey: 64, uniforms, glsl: { vertex: { pars: '...', project_vertex: '...code after #include <project_vertex>' } } }] })`.
 A missing `#include` anchor throws. A hand-written `ShaderMaterial` can `#include <threedog_wind_vertex>`, `<threedog_clouds_pars_fragment>` etc. (see

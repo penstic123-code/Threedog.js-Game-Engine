@@ -9,23 +9,13 @@
 // Native objects: car.body (rigid body), car.controller (vehicle controller).
 import * as THREE from 'three';
 import { vec3 } from '../../core/base/math.js';
+import { ownBox } from './RigidBodies.js';
 
 export const VEHICLE_KEYS = ['id', 'wheels', 'mass', 'engineForce', 'brakeForce', 'maxSteer', 'suspension', 'seats', 'hideDriver', 'camera', 'size', 'friction', 'exitOffset'];
 export const STRINGS = { 'zh-CN': { 'vehicle.enter': '上车', 'vehicle.exit': '下车' }, en: { 'vehicle.enter': 'Get in', 'vehicle.exit': 'Get out' } };
 
-/** Chassis size: model bounding box (wheels excluded), in local coordinates */
-function bodyBox(mesh, wheelObjs) {
-  const box = new THREE.Box3(), q = mesh.quaternion.clone(), p = mesh.position.clone();
-  mesh.quaternion.identity(); mesh.position.set(0, 0, 0); mesh.updateMatrixWorld(true);
-  const skip = o => { for (let x = o; x; x = x.parent) if (wheelObjs.has(x)) return true; return false; };
-  mesh.traverse(o => {
-    if (!o.isMesh || skip(o)) return;
-    if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
-    box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld));
-  });
-  mesh.quaternion.copy(q); mesh.position.copy(p); mesh.updateMatrixWorld(true);
-  return box;
-}
+/** Chassis box, wheels excluded and meshes only (a sprite, points or line on the car, like a name tag or glow, is no chassis): the box of a body from its model (ownBox, RigidBodies.js), so a vehicle and a plain body measure alike */
+const bodyBox = (mesh, wheelObjs) => ownBox(mesh, o => { if (!o.isMesh) return true; for (let x = o; x; x = x.parent) if (wheelObjs.has(x)) return true; return false; });
 
 /** Create a vehicle (called by RigidBodies.addWheeled) */
 export function createVehicle(rigid, mesh, { wheels, mass = 800, engineForce = 800, brakeForce = 20, maxSteer = 0.5, suspension = {}, seats, hideDriver = true, camera, size, friction = 1.5, exitOffset = 0.8 }, id) {

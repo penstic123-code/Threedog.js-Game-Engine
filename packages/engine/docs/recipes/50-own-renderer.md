@@ -1,10 +1,14 @@
 # Bring your own renderer: `createEngine({ renderer })`
 
+> **Covers:** passing in your own three.js renderer (a `WebGLRenderer` or `WebGPURenderer` you made) instead of the one the engine makes.
+> **Use when:** the game must own the renderer (shared canvas, editor).
+> **Shortest:** `createEngine({ renderer })`.
+
 Pass a ready three.js renderer when the game must own it (shared canvas, an editor, a custom context):
 
 ```js
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-const engine = createEngine({ renderer });   // canvas defaults to renderer.domElement
+const engine = createEngine({ renderer });  // canvas defaults to renderer.domElement
 ```
 
 - The engine configures only a renderer it created itself. With yours it sets nothing: pixel ratio (unless `pixelRatio` is given), size, tone mapping, exposure and shadow map stay as you left them, so set them yourself on the renderer. MSAA follows your renderer's `antialias` too (unless `createEngine({ antialias })` says otherwise; a value that differs from the renderer's runs the post chain's MSAA targets every frame).

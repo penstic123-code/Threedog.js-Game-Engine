@@ -17,6 +17,7 @@ import { readParams, keysSchema } from '../../core/base/params.js';
 import { STRINGS, ERR } from './strings.js';
 import { codedError } from '../../core/base/errorHints.js';
 import { STEP } from '../../core/time/time.js';
+import { resetSignals } from '../../render/effects.js';
 import { weatherDrawModule } from './weatherDraw.js';
 import { isPlainObject } from '../../core/base/util.js';
 import { saveNumberOk, saveValues, SAVE_MAX_SECONDS } from '../../core/base/saveValues.js';
@@ -54,7 +55,7 @@ export class Weather {
     this.types = {};
     for (const k of Object.keys(table)) {
       const v = { ...CALM, ...table[k] };
-      for (const f in v) if (typeof v[f] !== 'number') throw codedError('weather-option', fmt(ERR.field, { k, f, got: String(JSON.stringify(v[f])) }));
+      for (const f in v) if (!Number.isFinite(v[f])) throw codedError('weather-option', fmt(ERR.field, { k, f, got: String(JSON.stringify(v[f])) }));
       this.types[k] = v;
     }
     // a game field one type has ('heat' on 'heatwave') is 0 on the others, so a change always blends between two numbers
@@ -186,6 +187,8 @@ export class Weather {
 
 }
 
+const WEATHER_SIGNALS = ['uWeatherCloud', 'uWind', 'uRain', 'uSnow', 'uWeatherLight', 'uWeatherFog'];   // the shared signals the state writes each frame (handed back on dispose)
+
 /**
  * Weather: two modules for one engine.use: the state (engine.weather, type 'world') and its picture (engine.weatherDraw, type 'picture'; sky optional)
  * @param {WeatherOptions} [opts]
@@ -203,7 +206,7 @@ export function weather(opts = {}) {
       if (opts.auto) w.auto = true;
       // the transition is saved too (current / from / to / t / dur): a save made 30% into sun -> rain loads 30% in, not as full rain, and fires no
       // weather:change (nothing changed for the player). A damaged part, or a weather the game no longer has, loads as a finished switch to that name
-      ctx.saves.register('weather', { notAtomic: 'moves on its own timers like the calendar: an op that sets it means it to stay',
+      ctx.saves.define('weather', { notAtomic: 'moves on its own timers like the calendar: an op that sets it means it to stay',
         save: () => ({ name: w.name, auto: w.auto, autoTimer: w.autoTimer, nextBolt: w.nextBolt, current: { ...w.current }, from: { ...w.from }, to: { ...w.to }, t: w.t, dur: w.dur }),
         load: d => {
           if (!d) return;
@@ -220,6 +223,8 @@ export function weather(opts = {}) {
       return w;
     },
     fixed(dt) { w.tick(dt); },
+    // removed: the signals written below go back to clear weather, not the last storm's values
+    dispose(e) { resetSignals(e, WEATHER_SIGNALS); },
     // the weather as signals (engine.uniforms) every frame, from the state and not its picture: a game that draws its own rain still reads them
     frame(_dt, e) { const U = e.uniforms, c = w.current; U.uWeatherCloud.value = c.cloud; U.uWind.value = c.wind; U.uRain.value = c.rain; U.uSnow.value = c.snow; U.uWeatherLight.value = c.sun; U.uWeatherFog.value = c.fog; },
     // engine.skip: fixed hooks do not run, so the skipped fixed steps are replayed here without events (a bolt nobody saw)

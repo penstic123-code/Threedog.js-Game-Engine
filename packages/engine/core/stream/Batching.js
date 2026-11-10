@@ -24,7 +24,7 @@
 import * as THREE from 'three';
 import { warnOnce, DEV, note, fmt } from '../base/validate.js';
 import { BATCH_LAYER, build, join, leave, dissolve, color, localTint, bounds, snap, same, stored, inBundle } from './batchGroups.js';
-import { isUnder } from '../base/util.js';
+import { isUnder, isShown } from '../base/util.js';
 import { codedError } from '../base/errorHints.js';
 import { notePatch, patchOn } from '../scene/threePatches.js';
 import { engineOwned } from '../scene/things.js';
@@ -176,7 +176,10 @@ export class Batching {
   }
   /** Re-check one object now (after you changed its parts by hand, or set userData.batch on a root already in the scene); normally automatic @param {THREE.Object3D} obj */
   refresh(obj) {
-    const info = this._infoOf(obj), root = info?.root ?? obj;   // a part of a placed object: the object is what goes round again
+    // a part of a placed object: the object is what goes round again. Untracked (none of its meshes qualified, all hlod's, say): the scene child holding the part
+    const info = this._infoOf(obj);
+    let root = info?.root ?? obj;
+    while (!info && root.parent && root.parent !== this.engine.scene) root = root.parent;
     if (info) this._untrack(root);
     this._uncount(root);
     if (root.parent === this.engine.scene) this.incoming.add(root);
@@ -352,28 +355,38 @@ export class Batching {
     snap(r, info.snap);
     if (!r.visible) { this._detach(info); return; }
     const cs = this.cell, cell = Math.floor(r.position.x / cs) + ',' + Math.floor(r.position.z / cs);
-    if (cell !== info.cell) { this._detach(info); this._attach(info); return; }
+    if (cell !== info.cell) { this._detach(info); this._rejoin(info); return; }   // the same judgment as any rejoin: a root that is mirrored as it crosses a cell must not upload
     r.updateMatrixWorld(true);
+    // mirrored now (a scale went negative): _eligible refuses that at tracking, so a live root that turns that way leaves its batch (only itself), not uploaded
+    if (info.entries.some(e => e.slot >= 0 && e.mesh.matrixWorld.determinant() < 0)) { this._release(info, 'mirrored'); return; }
     for (const e of info.entries) if (e.slot >= 0) { e.group.mesh.setMatrixAt(e.slot, e.mesh.matrixWorld); e.group.mesh.instanceMatrix.needsUpdate = true; e.group.dirty = true; }
   }
   /** @internal slow round robin: hidden roots coming back, pending roots that moved cell, batched parts changed behind our back */
   _verify(info) {
     const r = info.root;
+    // A part (or a group above it inside the root) hid itself: same as a hidden root, the model left its batch and rejoins once everything shows again
+    if (info.hidden) {
+      if (!info.entries.every(e => isShown(e.mesh))) return;
+      // what changed while it was out (a transparent material, a child) is judged as at first tracking: _eligible, else the usual eviction
+      if (!info.entries.every(e => this._eligible(e.mesh))) { this._release(info, 'changed while hidden'); return; }
+      info.hidden = false; snap(r, info.snap); if (r.visible) this._rejoin(info); return;
+    }
     if (!this.live.has(info)) {   // not batched: only keep its cell right (so counting stays honest)
       // A root that moves on every visit (a floating pickup, a patrolling prop) is not static: regrouping it each visit cost a detach / attach
       // (and a batch build / dissolve at the minCount edge) forever. After MOVING visits in a row it leaves its group; it rejoins once a visit finds it still
-      if (same(r, info.snap)) { info.moves = 0; if (info.moving) { info.moving = false; if (r.visible) this._attach(info); } return; }
+      if (same(r, info.snap)) { info.moves = 0; if (info.moving) { info.moving = false; if (r.visible) this._rejoin(info); } return; }
       snap(r, info.snap);
       if (info.moving) return;
       this._detach(info);
       if (++info.moves >= MOVING) { info.moving = true; return; }
-      if (r.visible) this._attach(info);
+      if (r.visible) this._rejoin(info);
       return;
     }
     for (const e of info.entries) {
       if (e.slot < 0) continue;
       const m = e.mesh, g = e.group;
-      let why = m.layers.mask !== HIDDEN ? 'layers' : !m.visible ? 'hidden' : m.material !== g.material ? 'material' : m.geometry !== g.geometry ? 'geometry' : m.children.length ? 'children'
+      if (m.layers.mask === HIDDEN && !isShown(m)) { this._detach(info); info.hidden = true; return; }   // hidden is not a change of the model: no eviction, no ban
+      let why = m.layers.mask !== HIDDEN ? 'layers' : m.material !== g.material ? 'material' : m.geometry !== g.geometry ? 'geometry' : m.children.length ? 'children'
         : m.castShadow !== g.cast || m.receiveShadow !== g.receive ? 'shadow flags' : !isUnder(m, r) ? 're-parented' : '';
       if (!why) {
         m.updateWorldMatrix(true, false);
@@ -382,7 +395,17 @@ export class Batching {
       if (why) { this._evict(info, why); return; }
     }
   }
-  /** @internal */
+  /** @internal a root coming back to a batch (shown again, stopped moving, back in a cell) is judged as at first tracking: _eligible, else the usual eviction */
+  _rejoin(info) {
+    info.root.updateMatrixWorld(true);
+    if (info.entries.every(e => this._eligible(e.mesh))) this._attach(info); else this._release(info, 'changed while out of its batch');
+  }
+  /** @internal only this root is ineligible (mirrored, a material swapped while it was out): it draws on its own and its geometry is not banned, other copies keep batching */
+  _release(info, why) {
+    warnOnce(fmt(STRINGS.evicted, { name: info.root.name || info.entries[0].mesh.name || 'model', why }));
+    this._untrack(info.root);
+  }
+  /** @internal a batched part changed behind our back: the geometry is banned too, nothing can tell which copies would do it again */
   _evict(info, why) {
     warnOnce(fmt(STRINGS.evicted, { name: info.root.name || info.entries[0].mesh.name || 'model', why }));
     for (const e of info.entries) this.banned.add(e.mesh.geometry);

@@ -8,7 +8,7 @@ export const specs = [
         engine.timeline.skip(); engine.haltLoop();
         const good = await engine.checkSave();
         let n = 0;
-        engine.saves.register('badpart', { save: () => ({ n: ++n }), load: () => {} });   // load 不还原：每次 save 数字都变
+        engine.saves.define('badpart', { save: () => ({ n: ++n }), load: () => {} });   // load 不还原：每次 save 数字都变
         const bad = await engine.checkSave();
         return { good, bad };
       });

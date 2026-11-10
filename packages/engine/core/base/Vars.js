@@ -12,7 +12,7 @@ export class Vars {
     this.engine = engine;
     this.flags = Object.create(null);      // no prototype: a flag or counter named 'constructor' is unset like any other name
     this.counters = Object.create(null);
-    engine.saves.register('vars', {
+    engine.saves.define('vars', {
       atomic: true,
       save: () => ({ flags: { ...this.flags }, counters: { ...this.counters } }),   // copy: save data must not share objects with the live state
       load: d => {

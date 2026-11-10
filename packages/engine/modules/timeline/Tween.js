@@ -112,6 +112,9 @@ export class Tweener {
   /** Jump a group of tasks (or all) to their end */
   finishAll(group) { for (const t of [...this.list]) if (group === undefined || t.group === group) t.finish(); }
 
+  /** Stop a group of tasks (or all) where they are: nothing is written, what they hold goes back (a dropped cutscene must not paint its end values over a loaded state) */
+  cancelAll(group) { for (const t of [...this.list]) if (group === undefined || t.group === group) t.cancel(); }
+
   /** The one way a task ends: k 1 jumps to the end, null stops where it is. failed { error }: a throw on the way, and the first one is the promise's answer. So finish() never throws and finishAll reaches every task */
   _complete(task, k, failed = null) {
     if (task.done) return;

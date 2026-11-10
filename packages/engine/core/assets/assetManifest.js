@@ -2,10 +2,12 @@
 import { fmt, warnOnce, BASE_URL } from '../base/validate.js';
 import { codedError } from '../base/errorHints.js';
 import { parseSchema, readParams, keysSchema } from '../base/params.js';
+import { readNeeds } from './modelNeeds.js';
 
 const STRINGS = {
   clash: 'assets.manifest(): "{name}" is already registered as a {was} (manifest "{list}"), and now as a {type}; one name is one asset, ' +
     'so the second would replace the first. Rename one, e.g. {name}_{type}',
+  node: 'assets.manifest() models.{name}: node names one node of a file, so it needs the file as a url and a node name as a string, e.g. { url: \'/models/kit.glb\', node: \'Wall.001\' } (no build)',
   replaced: 'assets.manifest(): {type} "{name}" from manifest "{was}" is replaced by manifest "{list}" (the later one wins). If both packs mean their own asset, rename one; '
     + 'if the override is intended (a mod replacing a model), ignore this',
 };
@@ -13,6 +15,9 @@ const STRINGS = {
 const MANIFEST_KEYS = ['name', 'base', 'models', 'textures', 'sounds', 'fonts'];
 /** Keys of one fonts entry: the file, the CSS family it registers (default: the asset name), FontFace descriptors, and the usual asset flags */
 const FONT_KEYS = ['url', 'family', 'weight', 'style', 'stretch', 'unicodeRange', 'display', 'featureSettings', 'variationSettings', 'critical', 'preload'];
+/** What the 'optimized' pack replaces in an entry: the file (so a generator or Texture it replaces goes too: build is checked before url). Everything else stays the game's */
+const FILE_KEYS = new Set(['url', 'lods', 'node', 'build', 'texture']);
+const without = (o, keys) => Object.fromEntries(Object.entries(o).filter(([k]) => !keys.has(k)));
 
 /**
  * hot: { changed: [] } = a dev hot swap (core/assets/assetHot.js) registering the edited packs again: an entry whose build function (or Texture) and url are unchanged
@@ -33,12 +38,17 @@ export function registerManifest(a, pack, hot = null) {
     for (const [name, v] of Object.entries(map)) {
       const o0 = typeof v === 'string' ? { url: v } : typeof v === 'function' ? { build: v } : v?.isTexture && type === 'texture' ? { texture: v } : v;
       if (type === 'font') readParams(`assets.manifest() fonts.${name}`, keysSchema(FONT_KEYS), o0);
-      const o = o0.url ? { ...o0, url: resolve(o0.url), ...(o0.lods && { lods: o0.lods.map(resolve) }) } : o0;
+      if (type === 'model' && o0.node != null && (typeof o0.url !== 'string' || typeof o0.node !== 'string' || o0.build)) throw codedError('asset-misuse', fmt(STRINGS.node, { name }));
+      if (type === 'model' && o0.needs != null) readNeeds(`models.${name}`, o0.needs);   // a typo'd key or a non-list fails here, naming the entry
       const old = a.entries.get(name);
+      // the 'optimized' pack (`threedog assets optimize`) swaps the file only: url, lods and a part's node. The game's other options (needs,
+      // prepare, params, ...) stay, since that pack is written as JSON and cannot carry them
+      const o1 = list === 'optimized' && old?.named && old.type === type ? { ...without(old.opts, FILE_KEYS), ...o0 } : o0;
+      const o = o1.url ? { ...o1, url: resolve(o1.url), ...(o1.lods && { lods: o1.lods.map(resolve) }) } : o1;
       // a model's params is a schema (core/base/params.js format, parsed here so a bad spec fails at registration, naming the field)
       const schema = type === 'model' && o.params ? parseSchema(`assets.manifest() models.${name}.params`, o.params) : null;
       if (hot && old?.named && old.type === type) {
-        if (old.opts.build === o.build && old.opts.texture === o.texture && old.url === (o.url ?? name) && JSON.stringify(old.opts.params ?? null) === JSON.stringify(o.params ?? null)) continue;
+        if (old.opts.build === o.build && old.opts.texture === o.texture && old.opts.node === o.node && old.url === (o.url ?? name) && JSON.stringify(old.opts.params ?? null) === JSON.stringify(o.params ?? null)) continue;
         const was = { ...old };   // the swap pairs the old data with the new
         a._retire(old);
         Object.assign(old, { url: o.url ?? name, opts: o, schema });

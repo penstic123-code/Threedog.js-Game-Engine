@@ -72,7 +72,7 @@ export const specs = [
         };
         let seen = [];
         const mod = E.mod('characters.path', { owner: 'game', set: ({ from, to }) => { seen.push([typeof from.x, typeof to.x]); return gridAStar(from, to); } });
-        const P = E.characters.createPlayer({ control: 'camera', spawn: { x: 5, z: 12 } });
+        const P = E.characters.addPlayer({ control: 'camera', spawn: { x: 5, z: 12 } });
         const run = async (pr, done, n = 2400) => { for (let i = 0; i < n && !done(); i++) { E.step(1 / 60, { render: false, describe: false }); if (i % 100 === 0) await new Promise(res => setTimeout(res, 0)); } return pr; };
         let res = null;
         E.characters.findPath([5, 0, 12], [5, 3, 0], { detailed: true });
@@ -142,7 +142,7 @@ export const specs = [
         out.under = E.characters.findPath([20, 0, 26], [20, 0, 20], { detailed: true }).status;
         out.narrow = E.characters.findPath([0, 0, -6], [0, 0, 6], { detailed: true }).status;
         // a walk in progress: a wall lands across the way
-        const P = E.characters.createPlayer({ control: 'camera', spawn: { x: -6, z: -10 } });
+        const P = E.characters.addPlayer({ control: 'camera', spawn: { x: -6, z: -10 } });
         let res = null; const w = P.walkTo([6, 0, -10]); w.then(v => { res = v; });
         for (let i = 0; i < 30; i++) E.step(1 / 60, { render: false, describe: false });
         const wall = E.collision.addBox([P.position.x + 2, 0, -10], { halfWidth: 0.4, halfDepth: 4 });

@@ -8,7 +8,7 @@
 // language of the game's own shaders; plain three.js materials and lights work on both. createEngine's own default stays WebGL: the choice is written into each new
 // game's main.js. A browser without WebGPU gets createEngine's fallback: 'webgl2', the same game on three's WebGL2 backend, TSL still drawing.
 // Placeholders in text files: __NAME__, __GAMEPLAY_NOTE__, __DEFAULT_LAYER__ (rows of AI.md) and the ROUTE words below. The art always starts in the game's own gray picture/ folder (the engine ships no art).
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { TOOLS, ENGINE } from '../paths.mjs';
@@ -39,7 +39,7 @@ export function gameName(folder) {
 }
 
 const GAMEPLAY = {
-  clean: 'This game starts blank (a scene, a camera, a start screen, autosave, an Esc menu) and has no gameplay yet; build what DESIGN.md describes. For patterns, read the engine recipes (`node_modules/threedog/docs/recipes/`, index in AI.md); `threedog new-game name --open-world` starts on generated ground with a player.',
+  clean: 'This game starts blank (a scene, a camera, a start screen, autosave, an Esc menu) and has no gameplay yet; build what DESIGN.md describes. `npx threedog init --open-world` in a new folder starts on generated ground with a player.',
   pixel: 'This game starts from `--pixel`: a gray floor, a placeholder sprite character in a pixel-snapped orthographic view (`pixelSize`, `pixelSprite`, `pixelSnap`), an NPC with dialogue, a pickup, a start screen, autosave and an Esc menu, no gameplay yet; build what DESIGN.md describes and replace the placeholder sprite sheet in picture/sprites.js with real art.',
   openWorld: 'This game starts from `--open-world`: generated ground, a day/night sky, a follow camera, a player, a start screen, autosave and an Esc menu, no gameplay yet; build what DESIGN.md describes and remove what it does not need.',
 };
@@ -49,7 +49,7 @@ const ROUTE = {
   webgpu: {
     __TSL_IMPORT__: "import 'threedog/tsl';   // first import: this game runs on WebGPU and writes shaders in TSL, recipe 56. A browser without WebGPU runs the same game on three's WebGL2 backend (slower); engine.describe().renderer says which and why",
     __RENDERER__: "renderer: 'webgpu', ",
-    __PICTURE_ROUTE__: "This game runs on WebGPU: shaders are TSL on node materials, recipe 56; GLSL (`ShaderMaterial`, `onBeforeCompile`) stops with an error naming it. A browser without WebGPU\nruns the same game on three's WebGL2 backend, slower; `engine.describe().renderer` says which backend draws, why and what it can do.",
+    __PICTURE_ROUTE__: 'This game runs on WebGPU: shaders are TSL on node materials (recipe 56); GLSL (`ShaderMaterial`, `onBeforeCompile`) stops with an error naming it.\nWithout WebGPU the browser runs it on WebGL2, slower; `engine.describe().renderer` says which backend draws and why.',
     __MATERIAL_IMPORT__: "// Node materials take the same options as the plain ones. A shader here is TSL on a material's fields (colorNode, positionNode, emissiveNode...), recipe 56:\n// import { color, positionWorld, sin } from 'three/tsl'; material.colorNode = color(0x88aa66).mul(sin(positionWorld.y).mul(0.1).add(0.9));\nimport { MeshStandardNodeMaterial } from 'three/webgpu';",
     __STANDARD_MATERIAL__: 'MeshStandardNodeMaterial',
     __OWN_SHADER__: '`new THREE.*Material`, a node material with TSL, recipe 56',
@@ -109,11 +109,16 @@ export function copyTemplates(dir, opts, { skipPackage = false } = {}) {
   const walk = (from, to, top) => {
     mkdirSync(to, { recursive: true });
     for (const e of readdirSync(from, { withFileTypes: true })) {
-      const src = join(from, e.name), dst = join(to, e.name);
+      // gitignore is stored without its dot: npm leaves a .gitignore out of a published package
+      const src = join(from, e.name), dst = join(to, top && e.name === 'gitignore' ? '.gitignore' : e.name);
       if (e.isDirectory()) { walk(src, dst, false); continue; }
       if (skipPackage && top && e.name === 'package.json') continue;
       if (made.includes(dst)) continue;   // an overlay wrote it a moment ago: not something the folder already had
-      if (existsSync(dst)) { kept.push(dst); continue; }
+      if (existsSync(dst)) {
+        // init into a folder that has its own .gitignore: the only edit is one line, so this machine's .threedog/ (perf baseline, shots, logs) is never committed
+        if (top && e.name === 'gitignore' && !/^\/?\.threedog\/?\s*$/m.test(readFileSync(dst, 'utf8'))) appendFileSync(dst, (readFileSync(dst, 'utf8').endsWith('\n') ? '' : '\n') + '.threedog/\n');
+        kept.push(dst); continue;
+      }
       const text = render(readFileSync(src, 'utf8'), opts);
       writeFileSync(dst, text); made.push(dst);
       // AGENTS.md is the same rendered text as CLAUDE.md, for tools that do not read CLAUDE.md. Written only beside a CLAUDE.md made now,

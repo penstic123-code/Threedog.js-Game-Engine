@@ -19,6 +19,7 @@ import * as THREE from 'three';
 import { warnOnce, warnMissing, missingText } from '../base/validate.js';
 import { readParams, keysSchema } from '../base/params.js';
 import { isOptions } from '../base/util.js';
+import { addAim, addFeet, ikRestore, ikRun, ikClear } from './ik.js';
 const GO_KEYS = ['fade'];
 
 // Config keys: a typo (loops: false, state: {...}) would silently play the wrong thing, so both levels are checked like any other options
@@ -61,12 +62,24 @@ export class Animator {
     // A static model (a procedural prop, a model exported without clips) has nothing to play: no dev warnings, no per-frame hook; go() / action() just return null.
     this.hasClips = this.clips.length > 0;
     this._hook = null;
+    /** @internal the time channel's scale for this model, () => number; a Character sets it (useModel.js). null: engine time as it is */
+    this._rate = null;
+    this._ik = [];                // IK layers (ik.js), run after the mixer in the order added
+    this._ikPose = new Map();     // bone IK writes -> { q, p, n }: its pose before IK, put back before the next mixer update
+    /** @internal ground height for addFeet, (x, z, y) => y; a Character hands over its own (platforms, only while grounded) */
+    this._ground = (x, z, y) => engine.surface(x, z, y);
+    /** @internal may the feet stand now; a Character says no while it jumps or swims */
+    this._standing = () => true;
     if (this.hasClips) {
       this._check();
       this.mixer.addEventListener('finished', ev => this._finished(ev.action));
-      this._hook = engine._onAnimate(dt => this.update(engine.still ? 0 : dt));
+      this._needHook();
     }
   }
+  /** @internal the per-frame update; a model without clips gets it only once an IK layer needs it */
+  _needHook() { this._hook ??= this.engine._onAnimate(dt => this.update(this.engine.still ? 0 : dt * (this._rate?.() ?? 1))); }
+  /** @internal */
+  _dropHook() { this._hook?.remove(); this._hook = null; }
   /** Dev check at build time: the same problems check() returns, minus the game's action list (the Animator does not know it). */
   _check() {
     for (const [st, def] of Object.entries(this.states)) if (isOptions(def)) readParams(`assets.animate() ${this._where(st)}`, keysSchema(STATE_KEYS), def);
@@ -113,6 +126,28 @@ export class Animator {
     const t = this.transitions;
     return fade ?? t[`${from}>${to}`] ?? t[`*>${to}`] ?? t[`${from}>*`] ?? this.fade;
   }
+
+  /**
+   * Turn a bone, or a chain spread from the body out, to look at a target, as the last layer on top of the clips (also on a model without clips).
+   * The last bone's forward is the model's front in its bind pose, whatever way the rig's axes point (forward: [x, y, z] in its own axes overrides).
+   * limit: degrees it may turn away from where the animation points it (beyond, it stops at the limit); speed: degrees per second; weight 0-1 fades
+   * in and out over fade seconds; target null looks ahead again. Weight 0 leaves the animation pose exactly; remove() puts it back at once.
+   * @example const look = npc.anim.addAim({ bones: ['Neck', 'Head'], target: engine.player.root, limit: 70 });
+   * look.set({ target: null }); look.remove();
+   * @param {{ bones: string | string[], target?: import('three').Object3D | import('three').Vector3 | [number, number, number] | null, limit?: number, speed?: number, weight?: number, fade?: number, forward?: [number, number, number] }} opts
+   * @returns {{ set(opts: { target?: any, limit?: number, speed?: number, weight?: number, fade?: number }): any, remove(): void, describe(): { kind: string, bones: string[], weight: number } }}
+   */
+  addAim(opts) { return addAim(this, opts); }
+  /**
+   * Feet on the ground: each leg (upper, lower, foot) bends so the foot stands on the ground under it, and the hips lower when one foot must reach down
+   * (stairs, slopes). The ground is the model's own: engine.surface, or for a Character its walking ground with platforms (only while grounded).
+   * legs: [[upper, lower, foot], ...] bone names, found by name when left out; reach: the most a foot moves up or down (m); far: beyond this distance from
+   * the camera it fades out and asks nothing; speed: how fast a foot follows a new height (1/s); ground: (x, z, y) => height overrides the ground.
+   * @example const feet = engine.player.anim.addFeet();   feet.set({ weight: 0 });
+   * @param {{ legs?: string[][], hips?: string, reach?: number, far?: number, speed?: number, weight?: number, fade?: number, ground?: (x: number, z: number, y: number) => number }} [opts]
+   * @returns {{ set(opts: { reach?: number, far?: number, speed?: number, weight?: number, fade?: number, ground?: Function }): any, remove(): void, describe(): { kind: string, bones: string[], weight: number } }}
+   */
+  addFeet(opts) { return addFeet(this, opts); }
 
   /** Set a parameter for blend trees (e.g. speed). */
   set(param, v) { this.params[param] = v; return this; }
@@ -228,6 +263,7 @@ export class Animator {
   /** @internal Per frame: advance fades, split blend-tree weights by parameter, sync stride, then advance the mixer (the engine calls it). */
   update(dt) {
     if (this._held) { this.afterPose?.(dt); return; }   // physics owns the bones (a ragdoll): the mixer writes nothing, attachments still follow the pose
+    if (this._ik.length) ikRestore(this);
     let j = 0;   // fade, stop faded-out layers and compact in place (no arrays per frame)
     for (const l of this._layers) {
       if (l.w < l.target) l.w = Math.min(l.target, l.w + dt * l.rate);
@@ -238,6 +274,7 @@ export class Animator {
     this._layers.length = j;
     this._weights();
     this.mixer.update(dt);
+    if (this._ik.length) ikRun(this, dt);   // IK is the pose's last layer, before anything is attached to it
     this.afterPose?.(dt);   // Character.onPose callbacks (the pose is final here)
   }
   /** @internal is action a also held by a live layer other than l? (states may share a clip, and three keeps one action per clip) */
@@ -274,10 +311,11 @@ export class Animator {
     const l = this._layers.find(x => x.name === this.state), a = l?.actions[0].a, dur = a?.getClip().duration || 0;
     const total = this._layers.reduce((s, x) => s + x.w, 0) || 1;   // shown as shares, like the mixer weights (they sum to 1)
     return { state: this.state, clip: l?.actions[0].clip ?? null, time: a ? r3(a.time) : 0, progress: dur ? r3(a.time / dur) : 0,
-      driven: !!l?.driven, ...(l?.driven && { t: r3(this._t) }), weights: Object.fromEntries(this._layers.map(x => [x.name, r3(x.w / total)])) };
+      driven: !!l?.driven, ...(l?.driven && { t: r3(this._t) }), weights: Object.fromEntries(this._layers.map(x => [x.name, r3(x.w / total)])),
+      ...(this._ik.length && { ik: this._ik.map(x => ({ kind: x.kind, bones: x.names, weight: r3(x.w) })) }) };
   }
   /** Call when no longer needed to stop per-frame updates. */
-  dispose() { this._hook?.remove(); this.mixer.stopAllAction(); }
+  dispose() { this._dropHook(); ikClear(this); this.mixer.stopAllAction(); }
 }
 
 export const handRolled = [{ kind: 'animation', seen: 'an AnimationMixer of its own', use: 'engine.assets.animate(model, { states }): states, crossfades, sync with game time and pause (recipe 13)', quiet: /\bassets\.animate\b/, code: /\bnew\s+(?:THREE\.)?AnimationMixer\s*\(|\bmixer\.update\s*\(/i }];

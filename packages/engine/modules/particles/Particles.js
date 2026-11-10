@@ -44,8 +44,9 @@ import { vec3 } from '../../core/base/math.js';
 import { Effect, NEUTRAL, KEYS, OVER_LIFE, curve } from './effect.js';
 import { warnMissing } from '../../core/base/validate.js';
 import { readParams, keysSchema } from '../../core/base/params.js';
-import { isOptions } from '../../core/base/util.js';
+import { isOptions, isUnder } from '../../core/base/util.js';
 import { codedError } from '../../core/base/errorHints.js';
+import { borrowRenderer } from '../../render/backend.js';
 // one schema per public entry (unknown keys throw in dev with did-you-mean). Effect param values come in many shapes (number or [min, max], color), so most are only checked by key name
 const FX_PARAMS = keysSchema(KEYS, {}, {
   ratePerMeter: { type: 'number', optional: true, min: 0, desc: 'particles per meter the emitter moves' },
@@ -201,18 +202,19 @@ export class Particles {
     const d = this._depth ??= { target: new THREE.WebGLRenderTarget(1, 1, { depthTexture: new THREE.DepthTexture(1, 1) }), frame: -1, camera: null,
       material: new THREE.MeshDepthMaterial({ colorWrite: false, side: THREE.DoubleSide }) };
     if (d.frame === r.info.render.frame && d.camera === camera) return d.target.depthTexture;
-    const size = r.getDrawingBufferSize(_vs), target = r.getRenderTarget(), { autoClear } = r, { autoUpdate } = r.shadowMap, { overrideMaterial, background } = scene, off = [];
+    const size = r.getDrawingBufferSize(_vs), off = [];
     d.target.setSize(size.x, size.y);
     // by layer, not visible: an opaque child of a transparent parent still counts
     scene.traverseVisible(o => { if (o.material && (o.isPoints || [o.material].flat().some(m => !m.depthWrite || m.transmission > 0))) { off.push(o, o.layers.mask); o.layers.disableAll(); } });
-    scene.overrideMaterial = d.material; scene.background = null; r.autoClear = true; r.shadowMap.autoUpdate = false;
-    r.state.buffers.depth.setMask(true);   // the transparent pass left it off, and the clear needs it
-    try { r.setRenderTarget(d.target); r.render(scene, camera); }
-    finally {   // a throwing render must not leave the scene on the depth material with layers off (M11)
-      r.setRenderTarget(target);
-      scene.overrideMaterial = overrideMaterial; scene.background = background; r.autoClear = autoClear; r.shadowMap.autoUpdate = autoUpdate;
-      for (let i = 0; i < off.length; i += 2) off[i].layers.mask = off[i + 1];
-    }
+    // a throwing render must not leave the scene on the depth material with layers off (M11): the renderer and scene come back through the
+    // engine's one borrow (render/backend.js), the layers of the objects switched off here are this pass's own to give back
+    try {
+      borrowRenderer(r, () => {
+        scene.overrideMaterial = d.material; scene.background = null; r.autoClear = true; r.shadowMap.autoUpdate = false;
+        r.state.buffers.depth.setMask(true);   // the transparent pass left it off, and the clear needs it
+        r.setRenderTarget(d.target); r.render(scene, camera);
+      }, { scene });
+    } finally { for (let i = 0; i < off.length; i += 2) off[i].layers.mask = off[i + 1]; }
     d.frame = r.info.render.frame; d.camera = camera;
     return d.target.depthTexture;
   }
@@ -224,11 +226,11 @@ export class Particles {
    * @internal
    */
   update(dt) {
-    if (this.engine.still) dt = 0;   // freeze(owner, { ambient: true }): sparks hold in the air
+    if (this.engine.still) dt = 0;   // freeze(owner, { still: true }): sparks hold in the air
     const cam = this.engine.camera, pr = this.engine.renderer.getPixelRatio(), scale = this.engine.renderer.getSize(_vs).y * pr / (cam.isOrthographicCamera ? 2 / cam.projectionMatrix.elements[5] : 2 * Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2));   // orthographic: pixels per world unit
     for (const h of this.emitters) {
       if (!h.active) { h.last = null; continue; }   // a pause leaves no line from where it stopped to where it starts again
-      if (!h.object.parent) { h.remove(); continue; }   // object removed from the scene: stop automatically
+      if (!isUnder(h.object, this.engine.scene) && !isUnder(h.object, cam)) { h.remove(); continue; }   // object left the scene (it or any group above it was removed; one carried by the camera counts): stop automatically
       const path = h.ratePerMeter > 0 ? this._walked(h, dt) : null;
       h.acc += dt * h.rate;
       const n = Math.floor(h.acc);

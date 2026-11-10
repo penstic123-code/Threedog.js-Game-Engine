@@ -111,8 +111,6 @@ Each row has one owner. Every other entry routes through it. The reasons are in 
 
 **A registration leaves with its module.** `world.present`, `world.simulate`, `rays.addProvider`, `input.touchButton` and `assets.onSwap` take no `ctx`, so a module wraps each in `ctx.track(...)`, or keeps the handle and says where it goes with a `// released:` comment. R65 makes either one an error to skip. A record a kind's presenter drew stays in `world` when the presenter leaves: only its model goes, and the next install of the kind builds it again. Test `Provider swap: every module can leave` takes each module away from a running game in turn.
 
-Each install is its own instance. An async `init` that resumes after its module was unloaded cannot act on a same-named newcomer: what the stale `ctx` tracks is removed at once.
-
 **Failure tiers** (`core/base/errors.js`). A `picture` or `ui` module that throws from a hook gives back its `ctx.borrow` values, is disabled and reported once, and the game keeps running. Elsewhere, a throw freezes gameplay in dev and tests and is recorded in `engine.error`, and it stays frozen until reload, through a new game too, because an error must not be hidden; a release build reports once and keeps running. Core steps such as rendering report once per site.
 
 **Playthroughs.** Per-playthrough state is a save part. `engine.session.newGame / load / quit` end the old playthrough and apply the captured new-game state (`core/saves/session.js`). State not saved stops on a tracked `session:end` listener, or through `session.track` when a failed load must leave it standing, and derived state is rebuilt on `session:start` or `save:loaded`. A `session:end` listener only stops things: whatever starts for the next state waits until every listener ran (flow enters its start state a microtask later), so install order decides nothing. What is taken during play and not saved ends with the playthrough: script, cutscene and physics holds on `engine.control`, `world.anchor` (back to what boot left), function timers. A module's function timer follows the module: tracked during install it comes back at each new playthrough, gone with the module it stays gone. A part or a player that joins after `start()` joins the new-game state: a late part as its `init` left it, a late player where it began, a late pack's `startItems` given again. `audio.state` and the level are save parts; the opening scene saves as a mark, so a new game goes back to it.
@@ -138,7 +136,7 @@ flowchart LR
 
 Fixed steps run at 60 per second (`STEP`, `core/time/time.js`). Then the frame runs `onFrame` callbacks, module `frame` hooks, stream, jobs, the draw, and `afterRender` hooks.
 
-Hooks order by stage first (`control -> ground -> environment -> gameplay -> effects -> late -> audio`), then by `before` / `after` inside a stage, then by install order. `late` is the default, so characters and rigid bodies run after `gameplay` hooks unless they say otherwise. A `before` / `after` that contradicts the stages, or forms a cycle, makes `use()` throw naming the modules (section 8.3 has the one exception).
+Hooks order by stage first (`control -> ground -> environment -> gameplay -> effects -> late -> audio`), then by `before` / `after` inside a stage, then by install order. `late` is the default, so characters and rigid bodies run after `gameplay` hooks unless they say otherwise. A `before` / `after` that contradicts the stages, or forms a cycle, makes `use()` throw naming the modules.
 
 A frozen engine runs no fixed step: `onFixed`, module `fixed`, tick and every time view but `ambient` stop, while frame hooks, stream, jobs and the draw continue.
 
@@ -165,7 +163,7 @@ Tests: `shared points`, `shared points in a running game`, `owned`.
 
 **Skip** (`core/time/skip.js`). A long skip advances in segments that end at each timed thing. Module `fixed` hooks, `onFixed`, physics and near simulation do not run; a module with its own time implements `skip(dt, e, done)`, or sets `noSkip` to say why it has none. Each module declares how it advances in `skipKind` (section 14.2). Far world records catch up once at the end.
 
-**Input** (`core/input/`). Contexts form a stack with base `walk`. The top context shadows lower ones bound to the same key, and is opaque by default. Menus, dialogue and cutscenes push a context with an `owner`. A switch applies at the start of the next fixed step. Modules only declare actions (`ctx.input.action`); the game binds keys. Bindings are the shared point `input.keys`. Only `inputDefaults.js` and `presets.js` may name a key. Test: `input owners`.
+**Input** (`core/input/`). Contexts form a stack with base `walk`. The top context shadows lower ones bound to the same key, and is opaque by default. Menus, dialogue and cutscenes push a context with an `owner`. A switch applies at the start of the next fixed step. Modules only declare actions (`ctx.input.define`); the game binds keys. Bindings are the shared point `input.keys`. Only `inputDefaults.js` and `presets.js` may name a key. Test: `input owners`.
 
 **Control** (`core/ops/control.js`). One control slot per character id, with layers `base < script < cutscene < net`. The highest holder is in charge and lower ones are paused, not cancelled. One owner per layer: a second one throws `control-conflict` in every build, and the first keeps the layer. A direct `character.move()` from anyone else throws `control-bypass` in dev. Holds are not saved. Test: `character control`.
 
@@ -179,13 +177,13 @@ Several local players on one screen. A seat is routing and not a second input sy
 
 `engine.input.seat({ pad, keys })` returns an object that reads like `engine.input` (`down`, `pressed`, `released`, `axis`), through the same contexts, gates and fixed-step snapshot. It hears its own keys and its own pad, nothing else, on any engine of the page: only pads no seat is bound to follow the input owner. Seats of two engines may bind one pad, and both hear it. The game's pad bindings apply to that pad, and the pad leaves `engine.input` until `seat.remove()`. Two seats on one pad or key throw `input-seat`.
 
-`createPlayer({ id, input: seat })` (`modules/characters/player.js`) adds a character with its own world record of kind `player`. One seat drives one player, and `characters.moveInput(seat)` reads a seat from a control function. `engine.player` is the first player, or the one created without an `id`; when it goes, the next player takes the name. The record is saved and the seat is not, so the game makes its seats again after a load.
+`addPlayer({ id, input: seat })` (`modules/characters/player.js`) adds a character with its own world record of kind `player`. One seat drives one player, and `characters.moveInput(seat)` reads a seat from a control function. `engine.player` is the first player, or the one created without an `id`; when it goes, the next player takes the name. The record is saved and the seat is not, so the game makes its seats again after a load.
 
 Limits:
 
 - One context stack serves every seat, so a menu that takes the keys takes them from all seats.
 - A seat has no look input, because a shared screen has one camera. Split screen is not supported (section 17).
-- `engine.actor` names who `engine.input` acts for, and `seat.actor` who a seat acts for (set by `createPlayer`). Interactions run each seat's press, hold, facing and approach as its actor. The prompt stays `engine.actor`'s, since there is one screen, and one hold runs at a time. Markers, auto pickups and a trigger with no `who` measure from `engine.actor`. A trigger's `who` can list other players by record id.
+- `engine.actor` names who `engine.input` acts for, and `seat.actor` who a seat acts for (set by `addPlayer`). Interactions run each seat's press, hold, facing and approach as its actor. The prompt stays `engine.actor`'s, since there is one screen, and one hold runs at a time. Markers, auto pickups and a trigger with no `who` measure from `engine.actor`. A trigger's `who` can list other players by record id.
 - These follow `engine.player` only: the `vehicle` input context, the camera on entering and leaving a vehicle, the touch jump button, and the stream source `engine.stream.player`. Footsteps and NPCs giving way cover every player.
 
 Tests: `L1 seats`, `apartment seats`.
@@ -229,7 +227,7 @@ Tests: `Readiness`, tools test `contracts`.
 
 ### 8.4 Rules
 
-A replaceable rule is a plain shared point with `kind: 'value'` and `per: 'optional'`, read through the internal `ctx.rule` (`Stacks.rule` in `core/ops/stacks.js`). Its value is a built-in name, a function `(facts, engine) => decision`, or `false` for manual. Rules are not saved: whoever set one still holds it after a load. There is no rule registry.
+A replaceable rule is a plain shared point with `kind: 'value'` and `per: 'optional'`, read through the internal `ctx.rule` (`Stacks.rule` in `core/ops/stacks.js`); the design is in [design.md](design.md), section 7.4. Rules are not saved: whoever set one still holds it after a load.
 
 | Rule | Default | Read by |
 |---|---|---|
@@ -293,7 +291,7 @@ flowchart LR
 
 `core/stream/` loads around sources. `core/threads/Commits.js` is how a background result that affects gameplay takes effect: at a fixed tick decided at request time, in a stable order, with a main-thread fallback if it is late. Results that only change the look need not go through it.
 
-Who holds an object's position is a design rule ([design.md](design.md), section 9). The contracts do not state it yet.
+Who holds an object's position is a design rule ([design.md](design.md), section 9). The characters, mover and vehicle contracts state it (section 8.2); data rows state it in code with `positionFrom` on `world.present`.
 
 ## 11. Content, saves and actions
 
@@ -341,7 +339,7 @@ Rule: one limit, one settle, one turn. Files: `core/assets/assetEntry.js`, `core
 
 `core/ops/Ops.js` (with `opsRun`, `opsCheck`, `opsGuard`, `opsHistory`, `opsAtomic`, `opsFail`). `engine.ops.define / run` is one discrete player or NPC action, checked by `can` and logged with tick, source and actor. An op's `ctx` carries `source`, `actor`, `tick`, `frozen` and `session` (the playthrough, `engine.session.id`); a nested op inherits source, actor and session. `ops.guard` warns in dev when saved gameplay state is written outside fixed steps and ops. Continuous input and simulation are not ops.
 
-An op can change any save part, so every engine part answers for it: `atomic: true`, or `notAtomic: '<why>'` (rule R67). Rollback loads the atomic parts back, so what they hold is plain data.
+An op can change any save part, so every engine part answers for it: `atomic: true`, or `notAtomic: '<why>'` (rule R67). Rollback loads the atomic parts back synchronously (an async `load()` is refused there), so what they hold is plain data.
 
 Tests: `ops`, `atomic once`, `rule R67`.
 
@@ -355,7 +353,7 @@ Tests: `ops`, `atomic once`, `rule R67`.
 
 **Picture writers** (`core/inspect/pictureWriters.js`). On the dev server it records which `file:line` last wrote each picture value, and reports `picture-conflict`, `picture-held` and `picture-leftover`. It reports and never blocks, and it is not in bundles or release builds. R48 checks that engine code does not write these values.
 
-**Backends.** `render/backend.js` holds renderer facts that differ. `core/engine/startup.js` chooses WebGL or WebGPU at start, and the choice never switches. `render/fx/` holds the engine's shaders as TSL, published as `threedog/tsl`. `render/slots.js` is the table of semantic patch slots. `render/fxNumbers.js` holds numbers shared by GLSL and TSL. Shader code enters only as named patches (R26), and each has both forms (R49).
+**Backends.** `render/backend.js` holds renderer facts that differ; `render/vertexInputs.js` counts each WebGPU program's vertex inputs before its code is written and names what stacked up over the device limit (guard: `tests/specs/vertex-inputs.mjs`). `core/engine/startup.js` chooses WebGL or WebGPU at start, and the choice never switches. `render/fx/` holds the engine's shaders as TSL, published as `threedog/tsl`. `render/slots.js` is the table of semantic patch slots. `render/fxNumbers.js` holds numbers shared by GLSL and TSL. Shader code enters only as named patches (R26), and each has both forms (R49).
 
 **Pixel ratio.** `core/scene/pixelRatio.js` takes every engine write. `pixelSize` is a mode of it, and while on, the others are held off or refused (`pixel-conflict`).
 
@@ -363,7 +361,9 @@ Tests: `no style option`, `no makeMaterial`, `ships no art`, `one post entry`, `
 
 ## 13. Assets
 
-`core/assets/` registers every model, texture and sound under a name, and code uses names only. One file downloads once. A model copy shares geometry and materials. One lease count covers everything: a model copy is a lease (internal: games keep the copy, only engine modules such as content take one directly), `release(name)` frees only after the last lease ends, and `trim()` frees models with no copy in use. `describe().assets` lists leases and names waiting to be freed. A file that fails falls back to a gray placeholder, silence or the entry's fallback.
+`core/assets/` registers every model, texture and sound under a name, and code uses names only. One name loads once (two names for one file load it twice; a part `{ url, node }` and a path share the file's entry). A model copy shares geometry and materials. One lease count covers everything: a model copy is a lease (internal: games keep the copy, only engine modules such as content take one directly), `release(name)` frees only after the last lease ends, and `trim()` frees models with no copy in use. `describe().assets` lists leases and names waiting to be freed. A file that fails falls back to a gray placeholder, silence or the entry's fallback.
+
+Every model copy that reaches the game or the scene leaves through `Assets.handOut`, which runs the game's `onModel` setup once; prototypes and LOD levels are bare copies (`_bare`). A manifest `{ url, node }` entry (`assetPart.js`) is one node of the file's own path entry and holds a lease on it. Test: `[guard] model setup: every clone handed to the game goes through handOut`.
 
 ## 14. Seeing and checking
 
@@ -426,17 +426,17 @@ Tests: tools test `metadata`, `catalog`, `rule R40`, `rule R64`, `bundle size`, 
 
 ## 15. Tools
 
-A scenario has two ways to pass time. `step` must run all its seconds, and anything less fails. `until` with `within` stops when the state is reached, so the time an ending takes is not written in the file. Both read `STEPPED` in `pageFns.mjs`, whose `state` tells a freeze, a load and an error apart. Test: `Scenario until`.
+A scenario has two ways to pass time. `step` must run all its seconds, and anything less fails. `until` with `within` stops when the state is reached, so the time an ending takes is not written in the file. Both read `STEPPED` in `pageFns.mjs`, whose `state` tells a freeze, a load and an error apart. `until` runs its 0.1 s slices inside the page (one call per 2 s of real time, not per slice). A run marks the engine, so a page reload (a saved file) makes the next call fail with "the page reloaded during the run" instead of going on over a frozen title. Test: `Scenario until`.
 
 A tool that needs more than the public entries goes through `engine._tools` (`core/inspect/toolDoor.js`): draw while halted, run the frame hooks, hand a halt back, read the frame cost. Nothing else in `packages/tools` touches an engine private (R68).
 
-`packages/tools/rules/R*.mjs` holds one file per rule, with a header `Detection:` saying what it flags and its limits, registered in `rules/index.mjs`. `check.mjs` runs hard rules, rules, the type check, content validation and "generated docs up to date", and ends with one line. `bin/threedog.mjs` leads to `threedog/` (dispatch, commands, dev bridge, mcp). `lib/cli-args.mjs` is the one option parser for page-taking commands. Generated docs (`GAMEMAP`, `API.md`, `api/`, `CODEMAP`, `types/generated/`) come from `npm run map`.
+`packages/tools/rules/R*.mjs` holds one file per rule, with a header `Detection:` saying what it flags and its limits, registered in `rules/index.mjs`. `check.mjs` runs hard rules, rules, the type check, content validation and "generated docs up to date", and ends with one line. `bin/threedog.mjs` leads to `threedog/` (dispatch, commands, dev bridge, mcp). `lib/cli-args.mjs` is the one option parser for page-taking commands.
 
-The test runner finds tests by itself (`packages/tools/lib/specs.mjs`): every `tests/specs/*.mjs` exporting `specs`, and every `packages/tools/tests/*.mjs` exporting `name` and `run`. A spec is `{ name, url, run({ ev, check, page }) }`. A malformed file or a repeated name stops the run before any browser starts. `software: true` forces software rendering, and is implied when `run()` calls a pixel API; `serial: true` runs a spec alone. A filter that matches nothing fails loudly. The maintainer logs results in `docs/testing/runs.md` (not in the public repository).
+The test runner finds tests by itself (`packages/tools/lib/specs.mjs`): every `tests/specs/*.mjs` exporting `specs`, and every `packages/tools/tests/*.mjs` exporting `name` and `run`. A spec is `{ name, url, run({ ev, check, page }) }`. A malformed file or a repeated name stops the run before any browser starts. `software: true` forces software rendering, and is implied when `run()` calls a pixel API; `serial: true` runs a spec alone. A filter that matches nothing fails loudly.
 
 ## 16. The 30 module directories
 
-"Slots" lists what the directory's modules hold. "Save" is the save part name. Replacing a slot holder is described in section 17.
+"Slots" lists what the directory's modules hold. "Save" is the save part name. Replacing a slot holder is described in section 8.2.
 
 | Directory | Module (type) | Job | Slots | Save |
 |---|---|---|---|---|

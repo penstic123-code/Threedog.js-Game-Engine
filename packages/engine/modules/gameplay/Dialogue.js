@@ -32,6 +32,8 @@ const NODE_KEYS = ['text', 'next', 'choices', 'do', 'speaker', 'data'], CHOICE_K
 const NONE = Object.freeze([]);
 const OWN_FIELDS = ' (put your own fields in data: { ... })';
 const CHANNELS = ['main', 'bubble'];
+/** What _try answers when the game callback threw */
+const FAIL = Symbol('dialogue callback threw');
 const STR = {
   channel: "dialogue: channel '{got}' is not one of 'main' (the conversation the player reads, locks input) | 'bubble' (a line over its speaker while play goes on)",
   bubbleChoices: "[dialogue] '{name}' node '{id}' has choices: choices need the main channel (the player picks them), so on the bubble channel the script ends there",
@@ -101,14 +103,17 @@ export class Dialogue {
     const step = id => {
       const node = id && id !== 'end' && nodes[id];
       if (!node || stopped) { finish(); return; }
-      const opts = node.choices?.length && this.bubbleChoice === 'ask' ? node.choices.filter(c => !c.if || c.if(this.state, this.engine)) : null;
+      const opts = node.choices?.length && this.bubbleChoice === 'ask' ? this._choicesOf(node) : null;
+      if (opts === FAIL) { finish(); return; }
       if (node.choices?.length && !opts) { warnOnce(fmt(STR.bubbleChoices, { name, id })); finish(); return; }
-      const text = typeof node.text === 'function' ? node.text(this.state, this.engine) : node.text;
-      if (!this._do(node)) { finish(); return; }
+      const text = this._try('dialogue text', () => this._line(node));
+      if (text === FAIL || !this._do(node)) { finish(); return; }   // a throwing line ends this script on its own channel (its onEnter / promise settle), the main dialogue is left alone
       const speaker = node.speaker || (name.startsWith('__say_') ? '' : name);
       if (opts?.length) {   // 'ask': the line stays up with its choices until one is picked (dialogue.choose { index, run })
-        const run = asking = ++this._askSeq, label = c => typeof c.text === 'function' ? c.text(this.state, this.engine) : c.text;
-        cur = this._bubbles.say(at, text, { speaker, seconds: Infinity, queue, run, choices: opts.map(label) });
+        const labels = this._try('dialogue choice', () => opts.map(c => this._line(c)));
+        if (labels === FAIL) { finish(); return; }
+        const run = asking = ++this._askSeq;
+        cur = this._bubbles.say(at, text, { speaker, seconds: Infinity, queue, run, choices: labels });
         this._asks.set(run, { opts, actor, pick: i => { const c = opts[i]; this._asks.delete(run); asking = 0; cur.remove(); step(this._do(c) ? c.next || 'end' : 'end'); } });
         return;
       }
@@ -159,9 +164,11 @@ export class Dialogue {
   }
 
   /** @internal A node's or choice's do. One that throws ends the conversation, as a throwing step ends a cutscene: a line nobody can finish would keep the keys and a say() waiting */
-  _do(x) {
-    try { x.do?.(this.state, this.engine); return true; } catch (err) { reportError(this.engine, err, 'dialogue do', { soft: true }); return false; }
-  }
+  _do(x) { return this._try('dialogue do', () => { x.do?.(this.state, this.engine); }) !== FAIL; }
+  /** @internal A node's or choice's text: a string, or a function of (state, engine) */
+  _line(x) { return typeof x.text === 'function' ? x.text(this.state, this.engine) : x.text; }
+  /** @internal Run a game callback; one that throws is reported (soft, no freeze) and answers FAIL, so the caller ends what it was showing instead of leaving it half open */
+  _try(what, fn) { try { return fn(); } catch (err) { reportError(this.engine, err, what, { soft: true }); return FAIL; } }
 
   _show(id) {
     const a = this.active;
@@ -171,8 +178,8 @@ export class Dialogue {
     if (!node || id === 'end') { this.end(); return; }
     a.node = node; a.id = id;
     a.focus.setNav(null);   // no choices while the new line types
-    const text = typeof node.text === 'function' ? node.text(this.state, this.engine) : node.text;
-    if (!this._do(node)) { this.end(); return; }   // read the line before running effects, so it doesn't see flags just changed
+    const text = this._try('dialogue text', () => this._line(node));
+    if (text === FAIL || !this._do(node)) { this.end(); return; }   // a throwing line ends like a throwing do: a half-open line would keep the focus and the old line   // read the line before running effects, so it doesn't see flags just changed
     if (this.active !== a) return;        // do ended the dialogue or started another
     a.who = node.speaker || a.speaker;
     this.full = String(text ?? ''); this.shown = 0; this.typing = true; this._opts = null;
@@ -186,11 +193,11 @@ export class Dialogue {
     this.typing = false;
     this.shown = this.full.length;
     const a = this.active, e = this.engine;
-    const opts = (a.node.choices || []).filter(c => !c.if || c.if(this.state, e));
-    this._opts = opts.length ? opts : null;
-    const label = c => typeof c.text === 'function' ? c.text(this.state, e) : c.text;
+    const opts = this._choicesOf(a.node);
     // key: the first bound key only ('1', not '1/Numpad1'), so a rebound choice key shows its new name
-    this._choices = opts.map((c, i) => ({ text: label(c), key: i < 9 ? e.input.label('choice' + (i + 1)).split('/')[0] || null : null, data: c.data ?? {} }));
+    const choices = opts === FAIL ? FAIL : this._try('dialogue choice', () => opts.map((c, i) => ({ text: this._line(c), key: i < 9 ? e.input.label('choice' + (i + 1)).split('/')[0] || null : null, data: c.data ?? {} })));
+    if (choices === FAIL) { this.end(); return; }   // a choice that throws ends the dialogue like a line that throws
+    this._opts = opts.length ? opts : null; this._choices = choices;
     // the choice cursor: the menu keys / d-pad / stick move it, confirm picks (the same op as a click or a number key); the part draws view.selected
     if (this._opts) a.focus.setNav({ count: () => this._choices.length, moved: () => this._draw(), confirm: i => e.ops.run('dialogue.choose', { index: i }, this._by) });
     this._draw();
@@ -218,7 +225,14 @@ export class Dialogue {
   }
 
   /** Choices shown for the current line (typing or not). @internal */
-  _visible() { return this._opts ?? (this.active?.node.choices || []).filter(c => !c.if || c.if(this.state, this.engine)); }
+  _visible() {
+    if (this._opts) return this._opts;
+    const opts = this._choicesOf(this.active?.node);
+    if (opts === FAIL) { this.end(); return []; }   // a condition that throws while a line is typing (a number key, an availability check) ends the dialogue like it does when the line is done
+    return opts;
+  }
+  /** @internal The choices of a node whose condition holds; FAIL when a condition threw (the one place choice conditions run) */
+  _choicesOf(node) { return this._try('dialogue choice', () => (node?.choices || []).filter(c => !c.if || c.if(this.state, this.engine))); }
   /** @internal run through the op dialogue.choose */
   _choose(i) {
     if (!this.active) return;
@@ -241,8 +255,8 @@ export class Dialogue {
       if (this.shown >= this.full.length) this._finishTyping();
       else if (Math.floor(this.shown) !== was) this._draw();   // redraw only when another character shows
     }
-    // just opened this frame (the press that opened it does not advance), or the choice cursor already used confirm this frame
-    if (a.focus.fresh || a.focus.consumed) return;
+    // just opened this frame (the press that opened it does not advance), the cursor already used confirm this frame (on the dialogue's choices, or on a window over it), or a window over it owns the keys
+    if (a.focus.fresh || a.focus.consumed || !a.focus.onTop) return;
     const input = this.engine.input, P = this._by;
     if (this.advanceActions.some(x => input.pressedRaw(x))) ops.run('dialogue.advance', {}, P);
     for (let i = 1; i <= 9; i++) if (input.pressedRaw('choice' + i) && this.active && this._visible()[i - 1]) ops.run('dialogue.choose', { index: i - 1 }, P);
@@ -297,7 +311,7 @@ export function dialogue(opts = {}) {
       d = new Dialogue(e, opts);
       // choice1..9 pick a choice by number: declared, never bound here (presets.bindings.dialogNumbers binds 1-9). Optional: the choice cursor
       // (basic menu keys + confirm) and clicks pick choices without them. Context 'dialog', so 1-9 stay free for hotbars outside a conversation
-      for (let i = 1; i <= 9; i++) ctx.input.action('choice' + i, { context: 'dialog', label: 'dialogue.choice', optional: true });
+      for (let i = 1; i <= 9; i++) ctx.input.define('choice' + i, { context: 'dialog', label: 'dialogue.choice', optional: true });
       ctx.track(e.events.on('session:end', () => d._cancel()));   // an open dialogue belongs to the playthrough that opened it
       ctx.ui.define('dialogue', dialogueBox);
       ctx.ui.define('dialogue.bubble', bubblePart, { multi: true });
@@ -324,9 +338,9 @@ export function dialogue(opts = {}) {
     describe(e, ctx) {
       const a = d.active, bubbles = d.bubbles();
       if (!a && !bubbles.length) return;
-      const label = c => (typeof c.text === 'function' ? c.text(d.state, e) : c.text);
       if (ctx.out.ui) {
-        if (a) ctx.out.ui.dialogue = { speaker: a.who, text: d.full, typing: d.typing, choices: (d._opts || []).map(label), selected: d._opts ? a.focus.index ?? 0 : -1, advance: d.advanceActions.map(x => e.input.label(x)).join(' / ') };
+        // choices: the labels already read when the line finished, so inspecting never runs game code
+        if (a) ctx.out.ui.dialogue = { speaker: a.who, text: d.full, typing: d.typing, choices: d._opts ? d._choices.map(c => c.text) : [], selected: d._opts ? a.focus.index ?? 0 : -1, advance: d.advanceActions.map(x => e.input.label(x)).join(' / ') };
         if (bubbles.length) ctx.out.ui.bubbles = bubbles;
       }
     },

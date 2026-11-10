@@ -112,6 +112,7 @@ class Writers {
     const s = e.scene, r = e.renderer;
     this.number(r, 'toneMapping', this.named('renderer.toneMapping', NOT.start));
     this.number(r, 'toneMappingExposure', this.named('renderer.toneMappingExposure', NOT.start));
+    this.number(r.shadowMap, 'enabled', this.named('renderer.shadowMap.enabled', NOT.start));   // the shared point is engine.shadows.enabled; a direct write here is reported like any other
     for (const k of ['environmentIntensity', 'backgroundIntensity']) this.number(s, k, this.named('scene.' + k, NOT.start));
     this.number(s, 'environment', this.named('scene.environment', NOT.none));
     const bg = this.named('scene.background', NOT.start);
@@ -129,21 +130,40 @@ class Writers {
     for (const o of e._owned?.values() ?? []) this.owned(o);   // the view's values exist before this tool does
   }
 
+  /**
+   * A removed watch gives its property back: the accessor answers to the next live record that shares it, and when none is left the plain value returns.
+   * Why: the accessor stays with the first record that hooked it; without this a later watch on the same property, or another record sharing it, recorded nothing
+   */
+  release(rec) {
+    rec.stopped = true;
+    const at = rec.at3, live = (rec.sharers ?? []).filter(s => !s.stopped);
+    if (!at || at.mine.get(at.key) !== rec) return;
+    if (live.length) {
+      const [next, ...rest] = live;
+      next.same = null; next.at3 = at; next.sharers = rest; for (const s of rest) s.same = next;
+      at.mine.set(at.key, next);
+    } else {
+      const v = at.o[at.key];   // no live record: back to a plain property
+      at.mine.delete(at.key);
+      Object.defineProperty(at.o, at.key, { value: v, writable: true, configurable: true, enumerable: true });
+    }
+  }
+
   named(label, why) { const r = newRec(why, () => label); this.top.set(label, r); return r; }
 
   /** Own accessor for one plain value; false when the object has none to replace. Reads and writes pass straight through */
   slot(o, key, rec, after) {
     let mine = this.hooked.get(o);
     const had = mine?.get(key);
-    if (had) { if (had !== rec) rec.same = real(had); return true; }
+    if (had) { if (had !== rec) { rec.same = had; (had.sharers ??= []).push(rec); } return true; }
     const d = Object.getOwnPropertyDescriptor(o, key);
     if (!d || !('value' in d) || !d.configurable) { if (rec.why !== NOT.none || !d) rec.why = NOT.own; return false; }
     if (!mine) this.hooked.set(o, mine = new Map());
-    mine.set(key, rec);
+    mine.set(key, rec); rec.at3 = { o, mine, key };
     let v = d.value;
     const t = this;
     Object.defineProperty(o, key, { configurable: true, enumerable: d.enumerable, get: () => v,
-      set(x) { if (x === v) return; v = x; t.wrote(rec); after?.(x); } });
+      set(x) { if (x === v) return; v = x; t.wrote(mine.get(key) ?? rec); after?.(x); } });   // mine.get: whoever answers for the property now (release may hand it on)
     return true;
   }
   number(o, key, rec) { this.slot(o, key, rec); }
@@ -187,7 +207,7 @@ class Writers {
     if (!watching) rec.why = NOT.hidden;
     real(rec).close = true;
     // the accessors stay, like threePatches.off: they pass values through, and another record may be answering through them
-    return { watching, remove: () => { if (this.top.get(label) === rec) this.top.delete(label); real(rec).close = false; } };
+    return { watching, remove: () => { if (this.top.get(label) === rec) this.top.delete(label); real(rec).close = false; this.release(rec); } };
   }
   /** A color held in a property: the components, and the property itself (light.color = other replaces the object the components were on) */
   color(o, key, rec) {
@@ -228,7 +248,7 @@ class Writers {
 
   /** The hot path: runs on every write that changed a value. No stack unless the header's rules ask for one */
   wrote(hit) {
-    if (page.off || this.drawing || this.e._probing) return;
+    if (page.off || this.dead || hit.stopped || this.drawing || this.e._probing) return;   // stopped: its watch was removed; dead: the engine was disposed. The accessors stay, but do no tracking
     const rec = real(hit), fr = this.frame;
     rec.wrote = fr;
     if (rec.f !== fr) {
@@ -414,7 +434,7 @@ class Writers {
   frameStart() { this.view.sync(); if (this.hooksRan) this.frame++; this.hooksRan = true; }
   /** After the draw. The fixed steps before the next hooks count with that next frame, which is what they lead to */
   frameEnd() { this.drawing = false; this.frame++; this.hooksRan = false; }
-  dispose() { this.view.remove(); this.roots.remove(); }
+  dispose() { this.dead = true; this.view.remove(); this.roots.remove(); }
 }
 
 /** @param {any} e */

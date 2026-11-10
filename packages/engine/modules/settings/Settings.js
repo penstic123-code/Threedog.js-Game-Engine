@@ -16,6 +16,7 @@
 // A game's own settings page (e.g. "Gameplay"):
 //   engine.settings.define('subtitles', true, on => game.subtitles = on);   // custom setting: default value + apply function, autosaved
 //   engine.settings.define('volfog', true, { limits: 'post.volfog.enabled' });   // off holds the game's own effect off, like the shadows row
+// The bloom and ao rows follow post effects by the role they declare (about.acts "glow" / "ao"), whatever the effect is named; every effect with the role follows its row, and the shadows row shows only while a light casts.
 //   engine.settings.addSection('gameplay', {
 //     title: e => e.t('my.gameplay'),
 //     render: (tools, e, s) => tools.row(tools.t('my.subtitles'), tools.toggle('subtitles', s.get('subtitles'))),
@@ -33,7 +34,7 @@ import { makeWindow, injectUICSS, uiFocus } from '../../ui/UI.js';
 import { BUILTIN_SECTIONS } from './sections.js';
 import { STRINGS, CSS } from './strings.js';
 import { SettingsView } from './view.js';
-import { applySetting, allowed, checkLimits, releaseLimits, releaseRow } from './apply.js';
+import { applySetting, allowed, checkLimits, releaseLimits, releaseRow, ROLE_ROWS, roleEffects } from './apply.js';
 import { readParams, keysSchema } from '../../core/base/params.js';
 import { codedError, coded } from '../../core/base/errorHints.js';
 import { warnOnce } from '../../core/base/validate.js';
@@ -52,7 +53,7 @@ const PRESETS = {
 // Preset rows that are shares, and how each share lands on its whole
 const SHARES = { pixelRatio: n => +n.toFixed(2), viewChunks: n => Math.max(1, Math.round(n)), density: n => +n.toFixed(2) };
 // Settings keys that switch a post effect of the same name; a key whose effect the game did not add is hidden and ignored
-const POST_KEYS = ['bloom', 'ao'];
+const POST_KEYS = Object.keys(ROLE_ROWS);
 
 /**
  * The graphics rows a game left out: the { id: 'graphics', omit } entry of sections. An omitted row is the game's value: no control, and no preset or stored value moves it.
@@ -103,17 +104,18 @@ export class Settings extends SettingsView {
     engine.i18n.add(STRINGS);
     // the default opener is the basic cancel key (the UI focus stack hands it to the menu when nothing else is open); another action is the
     // game's, declared here and bound by the game (settings({ action: 'menu' }) + engine.input.bind('menu', ['Tab']))
-    if (action !== 'cancel') track(engine.input.action(action, { label: 'settings.action', owner: 'settings' }));
+    if (action !== 'cancel') track(engine.input.define(action, { label: 'settings.action', owner: 'settings' }));
     injectUICSS(CSS);
 
     const stored = this._read();
     // the player's saved keys: through input.rebind, the one way to rebind (the settings layer of 'input.keys'). It works before the module that
     // declares an action is installed, so nothing waits for "every action registered"
-    for (const [a, k] of Object.entries(stored.bindings || {})) if (Array.isArray(k) && k.length) engine.input.rebind(a, k);
+    for (const [a, k] of Object.entries(stored.bindings || {})) if (Array.isArray(k)) engine.input.rebind(a, k);   // [] is a saved choice (no key), only a missing entry means never saved
     this._defaults = this._currentValues();    // the engine's own values before the player's saved ones: what reset() goes back to
     // Only what the player changed is stored and applied, like input.rebound() for keys. The rest stays with whoever owns it (the tier, adaptive
     // resolution, the game), so one volume change no longer pins every graphics value for all later launches
     /** @internal key -> value; 'quality' names a chosen preset, the rows after it override it */ this._changed = playerValues(stored, this._defaults);
+    /** @internal row key -> the shared points it holds off now (apply.js limitRow): what it gives back, never a fresh query */ this._held = new Map();
     this._values = { ...this._defaults, ...this._picked() };
     this._values.quality = this._matchPreset();
     for (const [k, v] of Object.entries(this._picked())) this._apply(k, v);
@@ -140,6 +142,8 @@ export class Settings extends SettingsView {
     track(engine.events.on('ui:open', id => { if (id === 'settings') this._pause(true); }));
     track(engine.events.on('ui:close', id => { if (id === 'settings') this._pause(false); }));
     track(engine.events.on('i18n:change', () => { if (this._ready) this.save(); }));
+    // an effect added after the player's choice was applied (the game adds its effects after settings installs) still gets it: a row follows an effect by role, so there is no point to wait on by name
+    track(engine.events.on('post:add', name => { for (const k of POST_KEYS) if (this._values[k] === false && roleEffects(engine, k).some(h => h.name === name)) this._apply(k, false); }));
   }
 
   // ---------- reading and writing settings ----------
@@ -157,14 +161,14 @@ export class Settings extends SettingsView {
    * Change a setting: applies at once and saves. Changing a graphics setting turns the preset into "custom". A key no row owns throws: storing it would read back a value nothing
    * applied. Before start() a module's row may still come, so an unknown key waits and init() reports it.
    */
-  set(key, value, { save = true } = {}) {
+  set(key, value, { save = true, apply = true } = {}) {
     if (key === 'quality') return this.preset(value);
     if (!this._hasRow(key)) {
       if (this._ready) throw codedError('settings-row', `settings.set('${key}'): no setting has this key. Known: ${Object.keys(this._values).join(', ')}. Add the row with settings.define('${key}', ...) or the tab that has it (settings({ sections }))`);
       this._early.add(key);
     }
     this._values[key] = value; this._changed[key] = value;
-    this._apply(key, value);
+    if (apply) this._apply(key, value);
     if (key in (this.presets.low || {})) this._values.quality = this._matchPreset();
     if (save) this.save();
     this.win.refresh();
@@ -201,7 +205,7 @@ export class Settings extends SettingsView {
     this._leavesWithModule(() => {
       if (this.custom.get(key) !== row) return;   // the name was defined again: that row is someone else's
       this.custom.delete(key);
-      if (limits) releaseRow(this.engine, limits);
+      if (limits) releaseRow(this, key);
       if (!(key in this._changed)) delete this._values[key];
     });
     return this;
@@ -285,21 +289,30 @@ export class Settings extends SettingsView {
 
   // ---------- storage ----------
   _read() {
-    try { const d = JSON.parse(localStorage.getItem(this.storageKey)); return d && typeof d === 'object' ? d : {}; } catch { return {}; }
+    let why = 'not an object';
+    try {
+      const raw = localStorage.getItem(this.storageKey);
+      if (raw == null) return {};
+      const d = JSON.parse(raw);
+      if (d && typeof d === 'object') return d;
+    } catch (e) { why = e.message; }
+    warnOnce(coded('save-write', `[settings] the stored settings could not be read (${why}); the defaults are used, and the next change overwrites the stored entry`));
+    return {};
   }
   save() {
     const bindings = this.engine.input.rebound();   // only the player's changes; restored through input.rebind on the next launch
     const data = { v: 2, values: { ...this._changed }, bindings, locale: this.engine.i18n.locale };
-    try { localStorage.setItem(this.storageKey, JSON.stringify(data)); } catch { return false; }
-    this.engine.events.emit('settings:change', this.values);
-    return true;
+    let stored = true;
+    try { localStorage.setItem(this.storageKey, JSON.stringify(data)); } catch (e) { stored = false; warnOnce(coded('save-write', `[settings] could not store the settings (${e.message}); the choice is applied but will not survive a reload`)); }
+    this.engine.events.emit('settings:change', this.values);   // also when the write failed: the value is applied, listeners must follow it
+    return stored;
   }
 
   // ---------- applying ----------
   _currentValues() {
     const e = this.engine, v = { pixelRatio: +e.adaptive.base.toFixed(2), shadows: allowed(e, 'shadows.enabled'), tier: null };
     v.antialias = e.post.authoredAA;   // the default, not what this launch runs with: a choice stored for this launch is the player's, and reset() must get past it
-    for (const k of POST_KEYS) v[k] = allowed(e, `post.${k}.enabled`);   // a permission, known before the effect exists: this runs at install, the game adds its effects after
+    for (const k of POST_KEYS) v[k] = roleEffects(e, k).every(h => allowed(e, `post.${h.name}.enabled`));   // a permission, true while no effect of the role exists yet: this runs at install, the game adds its effects after
     v.adaptive = !!e.adaptive.on;
     for (const [bus, level] of Object.entries(e.audio.levels)) v['vol.' + bus] = level;   // one slider per bus, the game's own buses too
     return v;
@@ -326,7 +339,7 @@ export class Settings extends SettingsView {
     const v = this._values, e = this.engine;
     for (const name of Object.keys(this.presets)) {
       const ok = Object.entries(this._presetValues(name)).every(([k, val]) => {
-        if (k === 'tier' || (POST_KEYS.includes(k) && !e.post.get(k))) return true;   // nothing the menu shows: no reason to call the picture custom
+        if (k === 'tier' || (POST_KEYS.includes(k) && !roleEffects(e, k).length)) return true;   // nothing the menu shows: no reason to call the picture custom
         return v[k] === val;
       });
       if (ok) return name;
@@ -414,5 +427,5 @@ export function settings(opts = {}) {
 
 export const handRolled = [
   { kind: 'pause', seen: 'a pause or Esc handler of its own', use: 'settings({ freezeWorld: true }): Esc stops every system and opens the menu (recipe 63); engine.freeze(why) for a pause with no menu', quiet: /\bsettings\(|\bengine\.(freeze|flow|settings)\b|\buiFocus\(/, code: /\b(?:let|var)\s+(?:is|game)?paused\s*=/i, orRaw: /(?:\.key|\.code)\s*===?\s*['"]Escape['"]/, tags: false },
-  { kind: 'settings', seen: 'a settings menu of its own', use: 'the settings module: volume, keys, quality and language in one menu that remembers itself; settings.define adds your own (recipe 26)', quiet: /\bsettings\(|\bengine\.settings\b/, code: /\b(createElement|innerHTML|className|classList|getElementById|querySelector|\.id)\b/, raw: /(?:createElement|innerHTML|className|classList|getElementById|querySelector|\.id\b)[^,;{}]*(?:settings|options-?(?:menu|panel|screen)|pause-?menu)|(?:settings|options|pause)-?(?:menu|panel|screen)[^,;{}]*(?:createElement|innerHTML|className|classList|getElementById|querySelector|\.id\b)/i },
+  { kind: 'settings', seen: 'a settings menu of its own', use: 'engine.settings (settings()): volume, keys, quality and language in one menu that remembers itself; engine.settings.define adds your own (recipe 26)', quiet: /\bsettings\(|\bengine\.settings\b/, code: /\b(createElement|innerHTML|className|classList|getElementById|querySelector|\.id)\b/, raw: /(?:createElement|innerHTML|className|classList|getElementById|querySelector|\.id\b)[^,;{}]*(?:settings|options-?(?:menu|panel|screen)|pause-?menu)|(?:settings|options|pause)-?(?:menu|panel|screen)[^,;{}]*(?:createElement|innerHTML|className|classList|getElementById|querySelector|\.id\b)/i },
 ];

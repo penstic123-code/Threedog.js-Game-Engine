@@ -27,7 +27,7 @@ export const specs = [
         out.terrain = { size: E.terrain.chunkSize === E.ground.chunkSize && E.terrain.chunkSize > 0, gen: typeof E.terrain.generator.surface, T: 'T' in E.terrain, CHUNK: 'CHUNK' in E.terrain };
 
         // the player is still put in the scene by the engine, with no public addTo; a hand-built Character goes through engine.add
-        const p = E.characters.createPlayer({ control: 'camera' });
+        const p = E.characters.addPlayer({ control: 'camera' });
         out.player = { inScene: p.root.parent === E.scene, object: 'object' in p, addTo: 'addTo' in p };
         const c = new T.Character(E, {});
         out.hand = { before: c.root.parent === null };
@@ -49,7 +49,7 @@ export const specs = [
       check('dialogue.charsPerSecond is the option value; cps is gone', r.chars === 17 && !r.cps, s);
       check('weather.defineField draws a field of the table; weather.define is gone', r.field === null && r.weatherDefine === 'undefined', s);
       check('terrain.chunkSize and terrain.generator answer; T and CHUNK are gone', r.terrain.size && r.terrain.gen === 'function' && !r.terrain.T && !r.terrain.CHUNK, s);
-      check('createPlayer still puts the player in the scene; object and addTo are gone', r.player.inScene && !r.player.object && !r.player.addTo, s);
+      check('addPlayer still puts the player in the scene; object and addTo are gone', r.player.inScene && !r.player.object && !r.player.addTo, s);
       check('a hand-built Character enters the scene through engine.add(root)', r.hand.before && r.hand.after, s);
       check('rtsCamera({ pitch }) sets the view: a steeper pitch stands closer over the focus', r.low.pitch === 0.4 && r.high.pitch === 1.4 && r.high.back < r.low.back, s);
       check('rtsCamera({ angle }) is refused as an unknown option', !!r.angle, s);

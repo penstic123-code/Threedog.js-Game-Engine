@@ -72,12 +72,14 @@ CLI options | --crop |
 CLI options | --describe-only |
 CLI options | --dir |
 CLI options | --dry |
+CLI options | --exposure |
 CLI options | --file |
 CLI options | --find |
 CLI options | --fix |
 CLI options | --for |
 CLI options | --force |
 CLI options | --frames |
+CLI options | --freeze-reload |
 CLI options | --full |
 CLI options | --games |
 CLI options | --gpu |
@@ -86,6 +88,7 @@ CLI options | --hidden |
 CLI options | --ignore |
 CLI options | --ignore-ui |
 CLI options | --image |
+CLI options | --impostor |
 CLI options | --in |
 CLI options | --jobs |
 CLI options | --json |
@@ -93,12 +96,14 @@ CLI options | --keep |
 CLI options | --keep-cutscene |
 CLI options | --kind |
 CLI options | --lib |
+CLI options | --light |
 CLI options | --limit |
 CLI options | --live |
 CLI options | --load-timeout |
 CLI options | --lock |
 CLI options | --lod |
 CLI options | --lod-shares |
+CLI options | --material |
 CLI options | --max |
 CLI options | --minutes |
 CLI options | --mode |
@@ -113,6 +118,7 @@ CLI options | --only |
 CLI options | --open-world |
 CLI options | --out |
 CLI options | --page |
+CLI options | --path-trace |
 CLI options | --pixel |
 CLI options | --play |
 CLI options | --plug |
@@ -121,6 +127,7 @@ CLI options | --pos |
 CLI options | --preview |
 CLI options | --project |
 CLI options | --r10-anon |
+CLI options | --read |
 CLI options | --ref |
 CLI options | --ref-region |
 CLI options | --region |
@@ -128,6 +135,7 @@ CLI options | --renderer |
 CLI options | --report |
 CLI options | --rule |
 CLI options | --samples |
+CLI options | --save-baseline |
 CLI options | --scenario |
 CLI options | --shading |
 CLI options | --shot-region |
@@ -137,6 +145,7 @@ CLI options | --size |
 CLI options | --software |
 CLI options | --source |
 CLI options | --spector-url |
+CLI options | --stop |
 CLI options | --strict |
 CLI options | --strict-dom |
 CLI options | --style |
@@ -146,6 +155,7 @@ CLI options | --tier |
 CLI options | --time |
 CLI options | --to |
 CLI options | --tolerance |
+CLI options | --tone |
 CLI options | --top |
 CLI options | --unused |
 CLI options | --update-snapshots |
@@ -163,6 +173,7 @@ createEngine options | antialias | ?boolean
 createEngine options | audio | ?AudioConfig
 createEngine options | batching | ?false | BatchingOptions
 createEngine options | bindings | ?Readonly<Record<string, string | readonly string[]>>
+createEngine options | blockBrowserKeys | ?boolean
 createEngine options | budget | ?BudgetLimits
 createEngine options | canvas | ?HTMLCanvasElement | HTMLElement
 createEngine options | decoders | ?string @experimental
@@ -203,18 +214,17 @@ engine members | calendar | ?Calendar
 engine members | camera | PerspectiveCamera | OrthographicCamera
 engine members | cameraOverride | CameraOverride
 engine members | cameraRig | ?CameraRig
-engine members | catalog | (id?: string | { find?: string; }) => any
+engine members | catalog | (id?: string | { find?: string; }, o?: { offered?: any[]; }) => any
 engine members | characters | ?CharactersApi
 engine members | checkSave | (opts?: { ignore?: string[]; }) => Promise<{ ok: boolean; diffs: { path: string; a: any; b: any; }[]; }>
 engine members | checkSkip | (seconds: number, opts?: { ignore?: string[]; }) => Promise<{ ok: boolean; code?: "frozen" | "rate0"; diffs: { path: string; a: any; b: any; }[]; }>
 engine members | clock | Clock
 engine members | collider3d | ?Collider3D @experimental
 engine members | collision | ?Collision
-engine members | commits | Commits @experimental
 engine members | content | ?Content
 engine members | control | Control
 engine members | counts | () => EngineCounts
-engine members | debug | DebugOverrides & { panel: DebugPanel | null; }
+engine members | debug | DebugApi
 engine members | defineState | (name: string, params: StateParams, opts?: { owner?: string; }) => { owner?: string; remove(): void; }
 engine members | describe | { (opts?: { radius?: number; center?: { x: number; z: number; }; only?: string[]; }): GameState; (section: string | string[]): Partial<GameState> & { unknownSections?: string[]; sections?: string[]; }; add(name: string, fn: (e: Engine, ctx: DescribeContext) => any): { remove(): void; }; }
 engine members | describeText | (opts?: { radius?: number; full?: boolean; path?: string; }) => string
@@ -223,11 +233,11 @@ engine members | dispose | (opts?: { keepContext?: boolean; }) => void
 engine members | disposed | boolean
 engine members | error | EngineError
 engine members | events | Events
-engine members | explain | (q: { op: string; args?: any; actor?: string; } | { value: string; } | { thing: string | Object3D; } | { module: string; } | { capability: string; } | Record<string, any>) => { ok: boolean; code?: string | null; text: string; detail?: any; recent?: any[]; events?: string[]; thing?: HitThing; }
+engine members | explain | (q: { op: string; args?: any; actor?: string; } | { value: string; } | { thing: string | Object3D; } | { module: string; } | { capability: string; } | { asset: string; } | Record<string, any>) => { ok: boolean; code?: string | null; text: string; detail?: any; recent?: any[]; events?: string[]; thing?: HitThing; }
 engine members | flow | ?Flow
 engine members | focus | Vector3
 engine members | fps | number
-engine members | freeze | (owner?: string | { owner?: string; kind?: "title"; ambient?: boolean; }, opts?: { kind?: "title"; ambient?: boolean; }) => OwnerHandle
+engine members | freeze | (owner?: string | { owner?: string; kind?: "title"; still?: boolean; }, opts?: { kind?: "title"; still?: boolean; }) => OwnerHandle
 engine members | frozen | boolean
 engine members | grids | ?Grids @experimental
 engine members | ground | Ground
@@ -250,7 +260,7 @@ engine members | lights | { sun: import("three").DirectionalLight; hemi: import(
 engine members | loadLightmap | (file: string | ArrayBuffer, opts?: { owner?: string; }) => Promise<Lightmap> @experimental
 engine members | loadProbes | (json: ProbeData, opts?: { owner?: string; }) => ProbeSet @experimental
 engine members | loading | Loading
-engine members | mod | (name: string, opts: import("./gameplay").ModOptions) => import("./gameplay").ModHandle @experimental
+engine members | mod | (name: string, opts: import("./gameplay").ModOptions) => import("./gameplay").ModHandle
 engine members | moduleOrder | string[] @experimental
 engine members | modules | Map<string, ModuleDef<any>>
 engine members | movement | Readonly<MovementProfile>
@@ -274,7 +284,7 @@ engine members | picture | any
 engine members | player | Character
 engine members | plugins | { add(files: Record<string, any>, o?: { order?: string[]; off?: string[]; }): any; off(name: string): { off: string[]; note: string; }; on(name: string): { on: string[]; note: string; }; list(): { name: string; file: string; on: boolean; slots: string[]; replacedBy: string | null; }[]; }
 engine members | post | PostFX
-engine members | profile | { (on: boolean): Engine; (): Record<string, number> | null; }
+engine members | profile | { (on: boolean): Engine; (): Record<string, { ms: number; mean: number; p95: number; }> | null; }
 engine members | quests | ?Quests
 engine members | random | Random
 engine members | raycast | (origin: Vec3Like, dir: Vec3Like, opts?: RaycastOptions) => RayHit | null
@@ -289,7 +299,7 @@ engine members | saves | Saves
 engine members | scene | Scene<Object3DEventMap>
 engine members | session | Session
 engine members | setCamera | (kind: CameraKind, opts?: object) => CameraRig
-engine members | setGround | (g: Partial<Ground>) => void
+engine members | setGround | (g: Partial<GroundProvider>) => void
 engine members | setPixelRatio | (p: number) => void
 engine members | setPixelSize | (k: number | null) => void
 engine members | settings | ?Settings
@@ -303,7 +313,7 @@ engine members | snapToGround | <T = Object3D<Object3DEventMap>>(obj: T, offset?
 engine members | stacks | Stacks @experimental
 engine members | start | () => Promise<Engine>
 engine members | startup | StartupReport
-engine members | stateApplied | boolean @experimental
+engine members | stateApplied | boolean
 engine members | stateRefused | { key: string; value: any; reason: string; }[] @experimental
 engine members | step | (seconds: number, opts?: { render?: boolean; frameEvery?: number; describe?: boolean; }) => GameState | null
 engine members | stepBlend | number
@@ -344,13 +354,13 @@ engine sub-objects | adaptive.lowered | ?boolean @experimental
 engine sub-objects | adaptive.max | number
 engine sub-objects | adaptive.min | number
 engine sub-objects | adaptive.on | boolean
+engine sub-objects | adaptive.steps | AdaptiveStep[]
 engine sub-objects | adaptive.target | number
 engine sub-objects | assets.animate | (root: Object3D, config?: AnimatorOptions) => Animator
 engine sub-objects | assets.builder | (name: string) => ((...args: any[]) => any) | null @experimental
 engine sub-objects | assets.cacheMinMs | number
 engine sub-objects | assets.draco | any @experimental
 engine sub-objects | assets.font | (name: string) => Promise<FontFace | null>
-engine sub-objects | assets.forget | (obj: Object3D) => void @experimental
 engine sub-objects | assets.geometry | (nameOrUrl: string) => Promise<BufferGeometry>
 engine sub-objects | assets.gltf | any @experimental
 engine sub-objects | assets.gridFromImage | (nameOrUrl: string, opts?: { channel?: "r" | "g" | "b" | "a" | number; range?: [number, number]; bits?: 8 | 16; }) => Promise<{ data: Float32Array; width: number; height: number; bits: number; }>
@@ -361,6 +371,7 @@ engine sub-objects | assets.mapping | (root: Object3D) => AnimatorOptions | null
 engine sub-objects | assets.memory | { geometries: number; textures: number; }
 engine sub-objects | assets.model | (nameOrUrl: string, opts?: { castShadow?: boolean; receiveShadow?: boolean; static?: boolean; }) => Promise<Object3D>
 engine sub-objects | assets.modelNow | (nameOrUrl: string, opts?: { castShadow?: boolean; receiveShadow?: boolean; static?: boolean; }) => Object3D | null @experimental
+engine sub-objects | assets.onModel | (fn: (model: Object3D, name: string) => void) => { remove(): void; }
 engine sub-objects | assets.palette | Record<string, any>
 engine sub-objects | assets.paramsOf | (name: string) => { schema: Record<string, any>; values: Record<string, any>; tuned: Record<string, any>; } | null @experimental
 engine sub-objects | assets.preload | (onProgress?: (p: number, name: string) => void, opts?: { onlyMarked?: boolean; }) => Promise<{ loaded: number; failed: string[]; ok: boolean; }> @experimental
@@ -405,6 +416,7 @@ engine sub-objects | batching.refresh | (obj: THREE.Object3D) => void
 engine sub-objects | batching.root | THREE.Group<THREE.Object3DEventMap>
 engine sub-objects | batching.stats | BatchingStats
 engine sub-objects | batching.tint | (obj: THREE.Object3D, c: THREE.ColorRepresentation | null) => void
+engine sub-objects | budget.baseline | Record<string, any>
 engine sub-objects | budget.byTag | () => BudgetTagStat[]
 engine sub-objects | budget.checkStartup | (s: { totalMs: number; modules: Record<string, { init?: number; ready?: number; }>; }) => { category: "startupMs" | "moduleMs"; value: number; limit: number; top: { tag: string; ms: number; }[]; }[] @experimental
 engine sub-objects | budget.cost | ApplyCost
@@ -414,6 +426,8 @@ engine sub-objects | budget.enabled | boolean
 engine sub-objects | budget.limitOf | (name: string) => number | undefined @experimental
 engine sub-objects | budget.limits | BudgetLimits @experimental
 engine sub-objects | budget.metric | (name: string, read: () => number, opts?: { limit?: number; }) => Handle
+engine sub-objects | budget.notice | () => string | null
+engine sub-objects | budget.record | () => { where: string; values: { drawCalls: number; triangles: number; cpuMs?: number; modules: Record<string, number>; }; }
 engine sub-objects | budget.report | () => BudgetReport | null
 engine sub-objects | budget.values | () => Record<string, number>
 engine sub-objects | cameraOverride.focus | ?Vector3
@@ -426,15 +440,23 @@ engine sub-objects | clock.speed | number
 engine sub-objects | collider3d.addSolid | (opts: { position: PositionLike; size?: number[]; radius?: number; rotation?: number[] | { x: number; y: number; z: number; w: number; }; friction?: number; }) => Handle @experimental
 engine sub-objects | collider3d.overlap | (position: PositionLike, radius?: number) => boolean @experimental
 engine sub-objects | collider3d.sweep | (from: PositionLike, to: PositionLike, radius?: number) => SweepHit | null @experimental
-engine sub-objects | commits.lag | number @experimental
-engine sub-objects | commits.pending | number @experimental
-engine sub-objects | commits.request | <T = any>(opts: { apply: (result: T) => void; fallback: () => T; valid?: (() => boolean) | null; lag?: number; }) => { due: number; resolve: (result: T) => void; remove: () => void; } @experimental
-engine sub-objects | commits.stats | { applied: number; late: number; dropped: number; } @experimental
 engine sub-objects | control.describe | () => {}
 engine sub-objects | control.forget | (id: string) => void @experimental
 engine sub-objects | control.has | (who: any, owner: string) => boolean
 engine sub-objects | control.of | (who: any) => { waiting: { owner: any; layer: any; }[]; at: any; owner: any; layer: any; }
 engine sub-objects | control.take | (who: any, o?: { owner: string; layer?: "base" | "script" | "cutscene" | "physics" | "net"; step?: (dt: number, ch: any) => ({ x: number; y?: number; z: number; run?: boolean; } | null | false | void); }) => { owner: string; layer: string; id: string; readonly active: boolean; move(x: number, z: number, run?: boolean, dt?: number): boolean; remove(): void; }
+engine sub-objects | debug.clear | (owner: string) => number
+engine sub-objects | debug.defineView | (name: string, def: { what: string; apply: (scene: import("three").Scene) => () => void; }) => { remove(): void; }
+engine sub-objects | debug.override | (owner: string, target: any, patch: string | { visible?: boolean; material?: "flat" | "wire"; apply?: (obj: any) => (() => void) | void; }, value?: any) => { remove(): void; }
+engine sub-objects | debug.overrides | () => any[]
+engine sub-objects | debug.overridesOn | (obj: any) => any[]
+engine sub-objects | debug.panel | DebugPanel
+engine sub-objects | debug.reloadAssets | (packs: any) => Promise<{ why: string; names: string[]; copies: Record<string, number>; ms: number; partsChanged?: string[]; }>
+engine sub-objects | debug.reloadGlsl | (old: string, neu: string, file?: string) => { file: string | null; materials: number; names: string[]; }
+engine sub-objects | debug.view | (mode: "albedo" | "lighting" | "shadow" | "normals" | "overdraw" | "shaderCost" | "off" | string, opts?: { owner?: string; force?: boolean; }) => { mode: string; owner: string | null; what?: string; note?: string; }
+engine sub-objects | debug.viewModes | () => string[]
+engine sub-objects | debug.viewState | () => { mode: string; owner: string | null; what?: string; }
+engine sub-objects | debug.watch | (name: string, object: any, key?: string) => { watching: boolean; remove(): void; }
 engine sub-objects | error.at | string
 engine sub-objects | error.code | string
 engine sub-objects | error.docs | string[]
@@ -454,33 +476,30 @@ engine sub-objects | ground.chunkCollision | ?(cx: number, cz: number) => any @e
 engine sub-objects | ground.chunkSize | ?number
 engine sub-objects | ground.forEachCollider | ?(x: number, z: number, range: number, fn: (cx: number, cz: number, r: number) => void) => void
 engine sub-objects | ground.has | (x: number, z: number) => boolean
-engine sub-objects | ground.height | (x: number, z: number, refY?: number) => number
-engine sub-objects | ground.slope | (x: number, z: number, refY?: number) => number
 engine sub-objects | ground.staticTrimeshes | ?() => { positions: Float32Array; indices: Uint32Array; }[] @experimental
 engine sub-objects | ground.staticVersion | ?() => number @experimental
-engine sub-objects | ground.type | (x: number, z: number, refY?: number) => string
 engine sub-objects | ground.viewRange | ?() => number @experimental
 engine sub-objects | ground.voidY | () => number
-engine sub-objects | ground.waterLevel | number
+engine sub-objects | ground.water | ?(x: number, z: number, refY?: number) => number
 engine sub-objects | i18n.add | (tables: StringTables) => I18n
 engine sub-objects | i18n.fallback | string @experimental
 engine sub-objects | i18n.has | (key: string) => boolean
 engine sub-objects | i18n.languages | string[] @experimental
 engine sub-objects | i18n.locale | string @experimental
 engine sub-objects | i18n.setLocale | (l: string) => void @experimental
-engine sub-objects | input.action | (name: string, o?: { context?: string; label?: string; optional?: boolean; keys?: string | string[]; owner?: string; }) => { name: string; remove(): void; }
 engine sub-objects | input.actions | Map<string, { labelKey: string; context: string; optional: boolean; by: string | null; }>
 engine sub-objects | input.autopilot | Autopilot
 engine sub-objects | input.axis | { x: number; y: number; }
 engine sub-objects | input.bind | (name: string | Readonly<Record<string, string | readonly string[]>>, keys?: string | readonly string[], { owner }?: { owner?: string; }) => { owner: string; remove(): void; }
 engine sub-objects | input.contexts | string[] @experimental
+engine sub-objects | input.define | (name: string, o?: { context?: string; label?: string; optional?: boolean; keys?: string | string[]; owner?: string; }) => { name: string; remove(): void; }
 engine sub-objects | input.describe | () => { stack: string[]; unbound: string[]; rebound: Record<string, string[]>; }
 engine sub-objects | input.down | (action: string) => boolean
 engine sub-objects | input.enabled | boolean
 engine sub-objects | input.gate | (action: string, owner?: string | { owner?: string; for?: number; clock?: string; }) => { owner: string; remove(): void; }
 engine sub-objects | input.holders | { context: string; owner: string; pass: boolean; }[] @experimental
 engine sub-objects | input.isUnbound | (action: string) => boolean
-engine sub-objects | input.keysOf | (action: string) => readonly string[] @experimental
+engine sub-objects | input.keysOf | (action: string) => readonly string[]
 engine sub-objects | input.label | (action: string) => string
 engine sub-objects | input.lastDevice | "keyboard" | "pad" | "touch" @experimental
 engine sub-objects | input.look | { dx: number; dy: number; zoom: number; }
@@ -490,7 +509,7 @@ engine sub-objects | input.pressedRaw | (action: string) => boolean
 engine sub-objects | input.push | (name: string, opts?: { pass?: boolean; owner?: string; }) => { name: string; remove(): void; }
 engine sub-objects | input.rebind | (action: string, keys: string | string[] | null) => void
 engine sub-objects | input.rebound | () => Record<string, string[]>
-engine sub-objects | input.released | (action: string) => boolean @experimental
+engine sub-objects | input.released | (action: string) => boolean
 engine sub-objects | input.seat | (opts?: { pad?: number; keys?: Record<string, string | string[]>; }) => Seat
 engine sub-objects | input.simulate | (action: string, down?: boolean) => void
 engine sub-objects | input.stick | { x: number; y: number; } @experimental
@@ -574,6 +593,7 @@ engine sub-objects | player.move | (dirX: number, dirZ: number, run: boolean, dt
 engine sub-objects | player.moveAmount | number
 engine sub-objects | player.mover | { name: string; controller?: any; body?: any; collider?: any; move(dirX: number, dirZ: number, run: boolean, dt: number, y?: number): void; dispose?(): void; leave?(): void; }
 engine sub-objects | player.onPose | (fn: (character: Character, dt: number) => void) => { remove(): void; }
+engine sub-objects | player.passes | readonly string[]
 engine sub-objects | player.placeAt | (position: PositionLike) => Character
 engine sub-objects | player.playAction | (name: string) => void
 engine sub-objects | player.position | Vector3
@@ -610,15 +630,16 @@ engine sub-objects | plugins.on | (name: string) => { on: string[]; note: string
 engine sub-objects | post.active | boolean
 engine sub-objects | post.add | (x: any, o?: { name?: string; slot?: PostSlot | (string & {}); order?: number; }) => PostHandle
 engine sub-objects | post.antialias | boolean @experimental
-engine sub-objects | post.get | (name: string) => PostHandle | undefined @experimental
-engine sub-objects | post.list | () => { name: string; slot: PostSlot; order: number; enabled: boolean; }[] @experimental
+engine sub-objects | post.byRole | (role: string, name?: string) => PostHandle[] @experimental
+engine sub-objects | post.get | (name: string) => PostHandle | undefined
+engine sub-objects | post.list | () => { name: string; slot: PostSlot; order: number; enabled: boolean; }[]
 engine sub-objects | post.object | () => any @experimental
 engine sub-objects | post.own | (on?: boolean) => void @experimental
 engine sub-objects | post.render | (dt: number, target?: any) => void
 engine sub-objects | post.targets | () => { renderTarget1: any; renderTarget2: any; readBuffer: any; writeBuffer: any; } | null @experimental
 engine sub-objects | random.chance | (p: number) => boolean
 engine sub-objects | random.fromJSON | (d: { seed: number; state: number; } | null | undefined) => void @experimental
-engine sub-objects | random.int | (a: number, b: number) => number @experimental
+engine sub-objects | random.int | (a: number, b: number) => number
 engine sub-objects | random.next | () => number
 engine sub-objects | random.pick | <T>(list: readonly T[]) => T | undefined
 engine sub-objects | random.range | (a: number, b: number) => number
@@ -629,7 +650,6 @@ engine sub-objects | random.state | any
 engine sub-objects | random.toJSON | () => { seed: number; state: number; }
 engine sub-objects | rays.addProvider | (fn: RayProvider) => Handle @experimental
 engine sub-objects | rays.addStatic | (obj: THREE.Object3D | THREE.Object3D[], opts?: { occluder?: boolean; }) => Handle
-engine sub-objects | rays.forget | (obj: THREE.Object3D) => void @experimental
 engine sub-objects | rays.ray | any @experimental
 engine sub-objects | rays.statics | Map<THREE.Object3D<THREE.Object3DEventMap>, { refs: number; occ: number; }> @experimental
 engine sub-objects | runState.blockedBy | string[] @experimental
@@ -640,16 +660,16 @@ engine sub-objects | saves.attachments | (group: string) => Promise<{ group: str
 engine sub-objects | saves.autosave | (minutes?: number) => { remove(): void; }
 engine sub-objects | saves.check | (slot?: string) => null | "missing" | "corrupt" | "tooNew" | "migrate"
 engine sub-objects | saves.collect | () => { format: number; savedAt: number; versions: Record<string, number>; parts: Record<string, any>; }
+engine sub-objects | saves.define | (key: string, provider: SaveProvider) => { remove(o?: { keep?: boolean; }): void; }
 engine sub-objects | saves.export | (slot?: string) => string @experimental
 engine sub-objects | saves.exportFile | (slot?: string, opts?: { files?: boolean; }) => Promise<boolean> @experimental
 engine sub-objects | saves.flush | () => Promise<void>
 engine sub-objects | saves.import | (text: string, slot?: string) => Promise<boolean>
 engine sub-objects | saves.importFile | (file?: Blob, slot?: string) => Promise<string | null>
 engine sub-objects | saves.list | () => { slot: string; savedAt: number; }[]
-engine sub-objects | saves.load | (slot?: string) => Promise<boolean>
+engine sub-objects | saves.load | (slot?: string, { turn }?: { turn?: object; }) => Promise<boolean>
 engine sub-objects | saves.putAttachment | (group: string, id: string, blob: Blob | (() => Promise<Blob>), meta?: any) => Promise<void> @experimental
 engine sub-objects | saves.ready | boolean
-engine sub-objects | saves.register | (key: string, provider: SaveProvider) => { remove(o?: { keep?: boolean; }): void; }
 engine sub-objects | saves.remove | (slot: string) => Promise<void>
 engine sub-objects | saves.removeAttachment | (group: string, id: string) => Promise<void> @experimental
 engine sub-objects | saves.save | (slot?: string) => Promise<boolean>
@@ -658,9 +678,9 @@ engine sub-objects | saves.store | { mode: "idb" | "localStorage"; blobs(group?:
 engine sub-objects | saves.versions | Record<string, number>
 engine sub-objects | saves.whenReady | Promise<void>
 engine sub-objects | session.load | (slot?: string) => Promise<boolean>
-engine sub-objects | session.newGame | () => Promise<boolean>
+engine sub-objects | session.newGame | ({ turn }?: { turn?: object; }) => Promise<boolean>
 engine sub-objects | session.playing | boolean @experimental
-engine sub-objects | session.quit | () => Promise<boolean>
+engine sub-objects | session.quit | ({ turn }?: { turn?: object; }) => Promise<boolean>
 engine sub-objects | session.track | <H extends { remove(): void; }>(handle: H) => H
 engine sub-objects | shaderTerms.cloudShadow | (spec: TermSpec | false) => { remove(): void; }
 engine sub-objects | shaderTerms.season | (spec: TermSpec | ((kind: "foliage" | "ground") => TermSpec) | false) => { remove(): void; }
@@ -672,12 +692,12 @@ engine sub-objects | shadows.csm | any @experimental
 engine sub-objects | shadows.enabled | boolean
 engine sub-objects | shadows.include | <M extends import("three").Material>(material: M) => M
 engine sub-objects | shadows.mapSize | (light: import("three").Light, width: number, height?: number) => void
-engine sub-objects | stacks.define | (name: string, opts?: { kind?: "number" | "value" | "any" | "top" | "one"; base?: any; min?: number; max?: number; per?: boolean | "optional"; save?: boolean; manual?: string; }) => Stack @experimental
+engine sub-objects | stacks.changed | (max?: number) => { name: string; base: any; now: any; how: string; text: string; }[] @experimental
+engine sub-objects | stacks.define | (name: string, opts?: { kind?: "number" | "value" | "any" | "top" | "one"; base?: any; min?: number; max?: number; per?: boolean | "optional"; save?: boolean; manual?: string; important?: boolean; }) => Stack @experimental
 engine sub-objects | stacks.describe | () => Record<string, SharedRow> @experimental
 engine sub-objects | stacks.get | (name: string) => Stack @experimental
 engine sub-objects | stacks.has | (name: string) => boolean @experimental
 engine sub-objects | stacks.list | () => string[] @experimental
-engine sub-objects | stacks.mod | (name: string, opts: ModOptions) => ModHandle @experimental
 engine sub-objects | stacks.of | (owner: string) => string[] @experimental
 engine sub-objects | startup.compileMs | number
 engine sub-objects | startup.firstFrameMs | number @experimental
@@ -716,7 +736,7 @@ engine sub-objects | ui.create | (name: string) => UIPart | null @experimental
 engine sub-objects | ui.define | (name: string, factory: UIPartFactory, def?: UIPartDef) => Handle
 engine sub-objects | ui.describe | () => Record<string, string>
 engine sub-objects | ui.get | (name: string) => UIPart | null
-engine sub-objects | ui.isOpen | (name: string) => boolean @experimental
+engine sub-objects | ui.isOpen | (name: string) => boolean
 engine sub-objects | ui.open | (name: string, data?: object) => boolean
 engine sub-objects | ui.set | (name: string, value: UIPartValue) => void
 engine sub-objects | ui.settled | () => Promise<void>
@@ -768,7 +788,7 @@ engine sub-objects | vars.counter | (key: string) => number
 engine sub-objects | vars.counters | Record<string, number>
 engine sub-objects | vars.flag | (key: string) => any
 engine sub-objects | vars.flags | Record<string, any>
-engine sub-objects | vars.setFlag | (key: string, value?: any) => void @experimental
+engine sub-objects | vars.setFlag | (key: string, value?: any) => void
 engine sub-objects | views.current | string
 engine sub-objects | views.define | (name: string, v: { position: number[]; target?: number[]; fov?: number; }) => { remove(): void; }
 engine sub-objects | views.has | (name: string) => boolean
@@ -785,14 +805,17 @@ error codes | asset-lod |
 error codes | asset-missing-ref |
 error codes | asset-misuse |
 error codes | asset-name-clash |
+error codes | asset-needs |
 error codes | asset-not-loaded |
 error codes | audio-name-clash |
 error codes | audio-synth-gone |
 error codes | audio-unsupported |
 error codes | bad-position |
 error codes | batching-option |
+error codes | budget-option |
 error codes | budget-over |
 error codes | calendar-option |
+error codes | camera-clamped |
 error codes | camera-kind |
 error codes | camera-none |
 error codes | camera-option |
@@ -804,6 +827,7 @@ error codes | collision-misuse |
 error codes | commit-fallback |
 error codes | container |
 error codes | content-id |
+error codes | content-layer-ignored |
 error codes | content-misuse |
 error codes | content-pack |
 error codes | content-place |
@@ -822,6 +846,7 @@ error codes | engine-misuse |
 error codes | engine-terms |
 error codes | engine-two-copies |
 error codes | event-typo |
+error codes | fog-fallback |
 error codes | gameplay-frozen |
 error codes | geometry-undisposed |
 error codes | grid-data |
@@ -844,6 +869,7 @@ error codes | interaction-setup |
 error codes | inventory-misuse |
 error codes | jobs-endless |
 error codes | jobs-slow |
+error codes | level-layer-ignored |
 error codes | level-node |
 error codes | level-size |
 error codes | light-recompile |
@@ -876,6 +902,7 @@ error codes | module-unuse |
 error codes | movement |
 error codes | music-track |
 error codes | nav-build |
+error codes | nav-fallback |
 error codes | nav-height |
 error codes | nav-link |
 error codes | net-option |
@@ -886,6 +913,7 @@ error codes | ops-guard |
 error codes | own-frame |
 error codes | owned-misuse |
 error codes | owned-prop |
+error codes | photo-path-trace |
 error codes | pickup-misuse |
 error codes | picture-conflict |
 error codes | picture-held |
@@ -902,6 +930,7 @@ error codes | pure-function |
 error codes | quest-step |
 error codes | renderer-backend |
 error codes | rigid-misuse |
+error codes | rollback-incomplete |
 error codes | save-autosave |
 error codes | save-bad-record |
 error codes | save-busy |
@@ -910,6 +939,7 @@ error codes | save-key-taken |
 error codes | save-load-threw |
 error codes | save-nested |
 error codes | save-part-threw |
+error codes | save-provider-changed |
 error codes | save-refused |
 error codes | save-stale |
 error codes | save-value |
@@ -950,12 +980,15 @@ error codes | thing-unsaved |
 error codes | threads-crash |
 error codes | threads-option |
 error codes | threads-transfer |
+error codes | time-owner-conflict |
 error codes | tsl-misuse |
 error codes | tween-property |
 error codes | ui-misuse |
 error codes | unknown-name |
 error codes | unknown-option |
+error codes | vegetation-ignored |
 error codes | vegetation-option |
+error codes | vertex-inputs |
 error codes | views-define |
 error codes | water-option |
 error codes | weather-option |
@@ -969,8 +1002,108 @@ error codes | world-plain |
 error codes | world-present |
 error codes | world-record |
 error codes | wrap-misuse |
+events | anim:end |
+events | audio:ready |
+events | camera:change |
+events | camera:shot |
+events | character:fall |
+events | character:jump |
+events | character:land |
+events | character:launch |
+events | character:model |
+events | character:step |
+events | character:water |
+events | content:failed |
+events | day:start |
+events | dialogue:bubble |
+events | dialogue:end |
+events | dialogue:line |
+events | dialogue:start |
+events | engine:error |
+events | engine:ready |
+events | flow:change |
+events | flow:transition |
+events | ground:change |
+events | i18n:change |
+events | input:context |
+events | input:rebind |
+events | interaction:hold |
+events | interaction:interrupt |
+events | item:add |
+events | item:remove |
+events | item:use |
+events | level:failed |
+events | level:loaded |
+events | level:loading |
+events | level:playable |
+events | level:unloaded |
+events | link:enter |
+events | link:exit |
+events | mod:end |
+events | module:disabled |
+events | module:restored |
+events | music:change |
+events | music:stinger |
+events | net:close |
+events | net:join |
+events | net:leave |
+events | net:open |
+events | net:result |
+events | net:sync |
+events | op:rolledBack |
+events | page:blur |
+events | page:contextlost |
+events | page:contextrestored |
+events | page:focus |
+events | page:pointerlock |
+events | photo:denied |
+events | photo:taken |
+events | pickup:take |
+events | post:add |
+events | quest:done |
+events | quest:fail |
+events | quest:part |
+events | quest:start |
+events | quest:step |
+events | quest:unpaid |
+events | rigid:rebuilt |
+events | save:imported |
+events | save:loaded |
+events | save:written |
+events | season:change |
+events | session:end |
+events | session:failed |
+events | session:start |
+events | settings:change |
+events | settings:shadows |
+events | state:applied |
+events | state:placed |
+events | state:replaced |
+events | template:stage |
+events | terrain:chunkFailed |
+events | terrain:void |
+events | time:skip |
+events | timeline:end |
+events | timeline:start |
+events | trigger:enter |
+events | trigger:exit |
+events | ui:close |
+events | ui:open |
+events | vegetation:remove |
+events | vegetation:restore |
+events | vehicle:enter |
+events | vehicle:exit |
+events | water:add |
+events | water:remove |
+events | weather:change |
+events | weather:lightning |
+events | world:add |
+events | world:change |
+events | world:load |
+events | world:remove |
 exports @threedog/post-effects | OUTLINE_OFF_LAYER | number
 exports @threedog/post-effects | ao | (o?: { radius?: number; intensity?: number; enabled?: boolean; order?: number; }) => PostEffect
+exports @threedog/post-effects | autoExposure | (o?: { key?: number; speedUp?: number; speedDown?: number; min?: number; max?: number; enabled?: boolean; order?: number; name?: string; }) => PostEffect @experimental
 exports @threedog/post-effects | bloom | (o?: { strength?: number; radius?: number; threshold?: number; enabled?: boolean; order?: number; }) => PostEffect
 exports @threedog/post-effects | chromatic | (o?: { amount?: number; enabled?: boolean; order?: number; }) => PostEffect
 exports @threedog/post-effects | dof | (o?: { focus?: number; range?: number; falloff?: number; maxBlur?: number; enabled?: boolean; order?: number; }) => PostEffect
@@ -979,6 +1112,7 @@ exports @threedog/post-effects | lightVolumes | (o: { bounds: Box3; density?: nu
 exports @threedog/post-effects | lut | (o?: { lut?: Data3DTexture | null; amount?: number; contrast?: number; saturation?: number; temperature?: number; enabled?: boolean; order?: number; }) => PostEffect
 exports @threedog/post-effects | outline | (o?: { color?: ColorLike; thickness?: number; strength?: number; mode?: "depth" | "normal" | "both"; fadeWithDistance?: boolean; wobble?: number; offLayer?: number | null; enabled?: boolean; order?: number; }) => PostEffect
 exports @threedog/post-effects | paletteLut | (colors: ColorLike[], size?: number) => Data3DTexture
+exports @threedog/post-effects | reflections | (o?: { intensity?: number; maxDistance?: number; thickness?: number; quality?: number; resolutionScale?: number; blurQuality?: number; binaryRefine?: boolean; setup?: (ssr: any) => void; enabled?: boolean; order?: number; name?: string; }) => PostEffect @experimental
 exports @threedog/post-effects | sunShafts | (o?: { light?: Light; density?: number; maxDensity?: number; falloff?: number; color?: any; steps?: number; setup?: (rays: any) => void; enabled?: boolean; order?: number; name?: string; }) => PostEffect @experimental
 exports @threedog/post-effects | temporalAA | (o?: { enabled?: boolean; order?: number; name?: string; }) => PostEffect @experimental
 exports @threedog/post-effects | vignette | (o?: { strength?: number; start?: number; enabled?: boolean; order?: number; }) => PostEffect
@@ -995,7 +1129,7 @@ exports threedog | calendar | (opts?: CalendarOptions) => ModuleDef<Calendar>
 exports threedog | characters | (opts?: CharactersOptions) => ModuleDef<CharactersApi>
 exports threedog | checkOptions | (where: string, opts: object | null | undefined, known: string[], flags?: { loose?: boolean; }) => void @experimental
 exports threedog | collision | (opts?: CollisionOptions) => ModuleDef<Collision>
-exports threedog | compositeGround | (opts: { parts: Array<{ of?: "terrain" | "level"; ground?: Ground; region?: ((x: number, z: number) => boolean) | { volume: { contains(p: { x: number; y: number; z: number; }): boolean; }; }; priority?: number; }>; }) => ModuleDef<void>
+exports threedog | compositeGround | (opts: { parts: Array<{ of?: "terrain" | "level"; ground?: Partial<GroundProvider>; region?: ((x: number, z: number) => boolean) | { volume: { contains(p: { x: number; y: number; z: number; }): boolean; }; }; priority?: number; }>; }) => ModuleDef<void>
 exports threedog | content | () => ModuleDef<Content>
 exports threedog | contentParts | (modules: Record<string, { default: any; } | any>) => any
 exports threedog | createEngine | (opts: EngineOptions) => Engine
@@ -1064,6 +1198,7 @@ exports threedog/tsl | hash | (p: Node) => Node @experimental
 exports threedog/tsl | instanceOffset | (offset: Node) => Node @experimental
 exports threedog/tsl | noise | (p: Node) => Node @experimental
 exports threedog/tsl | objectOrigin | () => Node @experimental
+exports threedog/tsl | pcss | (o?: { lightSize?: number; samples?: number; maxDistance?: number; }) => any @experimental
 exports threedog/tsl | rim | (normal: Node, viewDir: Node, color: Node, strength: Node | number, power: Node | number, shadowSide: Node | number, nl: Node) => Node @experimental
 exports threedog/tsl | season | (color: Node, kind: Node | 0 | 1) => Node @experimental
 exports threedog/tsl | shadowTint | (ambient: Node, tint: Node, strength: Node | number, soft: Node | number, nl: Node, shadow: Node | number) => Node @experimental
@@ -1095,10 +1230,10 @@ module APIs | calendar.seasons | string[] @experimental
 module APIs | calendar.timeOfDay | number
 module APIs | calendar.totalDays | number @experimental
 module APIs | calendar.untilMark | () => number @experimental
+module APIs | characters.addPlayer | (opts: PlayerOptions) => Character
 module APIs | characters.addVehicle | (vehicle: any) => { remove(): void; }
-module APIs | characters.createPlayer | (opts: PlayerOptions) => Character
 module APIs | characters.findPath | { (from: PositionLike, to: PositionLike, opts?: FindPathOptions & { detailed?: false; }): NavPathPoint[] | null; (from: PositionLike, to: PositionLike, opts: FindPathOptions & { detailed: true; }): PathResult; }
-module APIs | characters.findPathAsync | (from: PositionLike, to: PositionLike, done: (path: NavPathPoint[] | null, status: "ok" | "noPath" | "notReady") => void, opts?: { radius?: number; step?: number; maxNodes?: number; }) => { remove(): void; }
+module APIs | characters.findPathAsync | (from: PositionLike, to: PositionLike, done: (path: NavPathPoint[] | null, status: "ok" | "noPath" | "notReady") => void, opts?: { radius?: number; passes?: string[]; step?: number; maxNodes?: number; }) => { remove(): void; }
 module APIs | characters.findSpawn | (position?: PositionLike, opts?: FindSpawnOptions) => Vector3
 module APIs | characters.kit | { beginMove(c: any): boolean; groundAt(c: any, x: number, z: number, y?: number): number; endMove(c: any, dt: number, hit: any, ground?: string): void; ownState(c: any, base: string, speed: number): void; }
 module APIs | characters.linkPose | (t: number, position: Vector3, crossing: LinkCrossing, character: Character) => void @experimental
@@ -1110,8 +1245,8 @@ module APIs | characters.support | (object: any, opts?: { id?: string; safe?: bo
 module APIs | collision.addBlocked | (fn: (x: number, z: number) => boolean, opts?: { bounds?: { minX: number; maxX: number; minZ: number; maxZ: number; }; }) => Handle
 module APIs | collision.addBox | (position: PositionLike, opts?: BoxColliderOptions) => Handle
 module APIs | collision.addCircle | (position: PositionLike, opts?: CircleColliderOptions) => Handle
-module APIs | collision.addObject | (obj: Object3D, opts?: { pad?: number; occluder?: boolean; }) => Handle
-module APIs | collision.addSegment | (a: PositionLike, b: PositionLike, opts?: { thickness?: number; height?: number; y?: number; occluder?: boolean; }) => Handle
+module APIs | collision.addObject | (obj: Object3D, opts?: { pad?: number; occluder?: boolean; layer?: string; }) => Handle
+module APIs | collision.addSegment | (a: PositionLike, b: PositionLike, opts?: { thickness?: number; height?: number; y?: number; occluder?: boolean; layer?: string; }) => Handle
 module APIs | collision.blockedAt | (x: number, z: number, radius?: number) => boolean @experimental
 module APIs | collision.cameraMin | number @experimental
 module APIs | collision.cameraOcclusion | "colliders" | "meshes" | "both" @experimental
@@ -1122,8 +1257,8 @@ module APIs | collision.lineClear | (a: PositionLike, b: PositionLike, opts?: { 
 module APIs | collision.maxClimb | number @experimental
 module APIs | collision.mirror | <P>(fns: { add(type: "box" | "circle", data: any): P; remove(piece: P, data: any): void; }) => { sync(): boolean; clear(): void; readonly size: number; } @experimental
 module APIs | collision.version | number @experimental
-module APIs | collision.walkable | (position: PositionLike, opts?: { radius?: number; }) => boolean
-module APIs | collision.walkableAt | (x: number, z: number, radius?: number) => boolean
+module APIs | collision.walkable | (position: PositionLike, opts?: { radius?: number; passes?: string[]; }) => boolean
+module APIs | collision.walkableAt | (x: number, z: number, radius?: number, y?: number, passes?: readonly string[]) => boolean
 module APIs | collision.walkableWaterMargin | number @experimental
 module APIs | content.condition | (name: string, def: ContentConditionDef) => Content
 module APIs | content.fields | (name: string) => Record<string, ContentField>
@@ -1165,9 +1300,11 @@ module APIs | grids.tileLift | number @experimental
 module APIs | grids.tiles | Record<string, Record<string, any>> @experimental
 module APIs | hlod.add | (target: Object3D | Object3D[], opts?: HlodAddOptions) => HlodHandle @experimental
 module APIs | hlod.cells | HlodCell[] @experimental
+module APIs | hud.addCounter | (id: string, opts: { label?: string; icon?: string; value?: number | string; max?: number; anchor?: HudAnchor; }) => { id: string; set(value: number | string | { label?: string; icon?: string; value?: number | string; max?: number; }): void; remove(): void; }
 module APIs | hud.bar | (id: string, opts: { value: number; max?: number; label?: string; anchor?: HudAnchor; }) => void
 module APIs | hud.bump | (id: string, n?: number) => number
-module APIs | hud.counter | (id: string, opts: { label?: string; icon?: string; value?: number | string; max?: number; anchor?: HudAnchor; }) => void
+module APIs | hud.button | (id: string, opts: { label: string; run: () => void; icon?: string; anchor?: HudAnchor; action?: string; }) => void
+module APIs | hud.hint | (id: string, opts: { action: string; label?: string; anchor?: HudAnchor; }) => void @experimental
 module APIs | hud.marker | (target: HudTarget, opts?: HudMarkerOptions) => HudMarker
 module APIs | hud.markers | HudMarker[]
 module APIs | hud.remove | (id: string) => void
@@ -1263,6 +1400,8 @@ module APIs | photo.scale | number
 module APIs | photo.shadowMapSize | number
 module APIs | photo.subject | () => { name: string; kind: string; distance: number; } | null @experimental
 module APIs | photo.take | (opts?: PhotoTakeOptions) => PhotoShot
+module APIs | photo.trace | (opts?: PhotoTakeOptions & { samples?: number; seconds?: number; }) => Promise<PhotoShot> @experimental
+module APIs | photo.tracing | { samples: number; of: number; } @experimental
 module APIs | pickups.lift | number @experimental
 module APIs | pickups.material | Material<MaterialEventMap>
 module APIs | pickups.nearest | (item?: string | null, from?: PositionLike) => WorldRecord | null
@@ -1274,8 +1413,8 @@ module APIs | quests.advance | (id: string) => boolean
 module APIs | quests.check | () => void
 module APIs | quests.define | (id: string, def: QuestDef) => Quests
 module APIs | quests.isActive | (id: string) => boolean
-module APIs | quests.isDone | (id: string) => boolean @experimental
-module APIs | quests.isFailed | (id: string) => boolean @experimental
+module APIs | quests.isDone | (id: string) => boolean
+module APIs | quests.isFailed | (id: string) => boolean
 module APIs | quests.list | () => { id: string; title: string; desc?: string; done: boolean; failed: boolean; steps: { text: string; target?: HudTarget; done: boolean; current: boolean; parts?: { text: string; target?: HudTarget; optional: boolean; done: boolean; }[]; }[]; }[]
 module APIs | quests.start | (id: string) => void
 module APIs | quests.state | (id: string) => { step: number; steps: number; done: boolean; failed: boolean; active: boolean; visited: string[]; } | null
@@ -1310,7 +1449,7 @@ module APIs | settings.addSection | (id: string, section?: SettingsSection) => S
 module APIs | settings.close | () => void
 module APIs | settings.define | <T = any>(key: string, def: T, apply?: ((value: T, e: Engine) => void) | { apply?: (value: T, e: Engine) => void; limits?: string | string[]; }) => Settings
 module APIs | settings.get | (key: string) => any
-module APIs | settings.isOpen | boolean @experimental
+module APIs | settings.isOpen | boolean
 module APIs | settings.open | () => void
 module APIs | settings.preset | (name: "low" | "medium" | "high" | (string & {})) => void @experimental
 module APIs | settings.presets | Record<string, QualityPreset>
@@ -1377,13 +1516,14 @@ module APIs | vegetation.color | (spec: string | { glsl?: string; tsl?: (ctx: an
 module APIs | vegetation.define | (name: string, opts: VegetationOptions) => Species | Promise<Species>
 module APIs | vegetation.get | (name: string) => Species | undefined
 module APIs | vegetation.instanceAt | (position: PositionLike, opts?: { radius?: number; species?: string | null; }) => VegetationHit | null
-module APIs | vegetation.isRemoved | (species: string, cx: number, cz: number, id: number) => boolean @experimental
+module APIs | vegetation.isRemoved | (species: string, cx: number, cz: number, id: number) => boolean
 module APIs | vegetation.list | () => Species[]
 module APIs | vegetation.material | Material<MaterialEventMap>
 module APIs | vegetation.patches | any[]
+module APIs | vegetation.plantOf | (hit: { object?: unknown; instanceId?: number; } | null | undefined) => VegetationHit | null
 module APIs | vegetation.rebuild | () => void
 module APIs | vegetation.removeInstance | (species: string, cx: number, cz: number, id: number, opts?: { regrowSeconds?: number; }) => string
-module APIs | vegetation.restoreInstance | (species: string, cx: number, cz: number, id: number) => void @experimental
+module APIs | vegetation.restoreInstance | (species: string, cx: number, cz: number, id: number) => void
 module APIs | vegetation.setShadowRing | (name: string, ring: number) => void
 module APIs | vegetation.sway | (spec: string | { glsl?: string; tsl?: (ctx: any) => any; uniforms?: Record<string, any>; } | null) => void
 module APIs | vegetation.view | (hooks: { species?: (sp: Species) => void; change?: (c: TerrainChunk, name: string) => void; ring?: (c: TerrainChunk, ring: number) => void; show?: (c: TerrainChunk, visible: boolean) => void; drop?: (c: TerrainChunk) => void; }) => { remove(): void; }
@@ -1459,7 +1599,7 @@ module options | collision.cameraPad | ?number @experimental
 module options | collision.canopyHeight | ?number
 module options | collision.maxClimb | ?number
 module options | collision.walkableWaterMargin | ?number @experimental
-module options | compositeGround.parts | { of?: "terrain" | "level"; ground?: Ground; region?: ((x: number, z: number) => boolean) | { volume: { contains(p: { x: number; y: number; z: number; }): boolean; }; }; priority?: number; }[]
+module options | compositeGround.parts | { of?: "terrain" | "level"; ground?: Partial<GroundProvider>; region?: ((x: number, z: number) => boolean) | { volume: { contains(p: { x: number; y: number; z: number; }): boolean; }; }; priority?: number; }[]
 module options | debug.open | ?boolean
 module options | dialogue.advanceActions | ?string[]
 module options | dialogue.bubbleChoice | ?"end" | "ask"
@@ -1625,6 +1765,7 @@ module options | particles.effects | ?Record<string, ParticleOptions>
 module options | photo.bloom | ?boolean
 module options | photo.format | ?string
 module options | photo.maxAlbum | ?number @experimental
+module options | photo.pathTracer | ?() => Promise<any> @experimental
 module options | photo.quality | ?number
 module options | photo.scale | ?number
 module options | photo.shadowMapSize | ?number

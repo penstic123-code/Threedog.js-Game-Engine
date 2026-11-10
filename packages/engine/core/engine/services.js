@@ -3,7 +3,7 @@
 // The true order. At run time services call each other in a cycle (commits, ui, session, input, i18n, saves, clock, stacks, time), always through engine.x when a call
 // happens, and nothing runs until createEngine returns. So the only order that counts is what a constructor reads itself:
 //   i18n -> saves (its strings); events + saves -> stacks._hook; stacks + events -> input; stacks + saves -> time -> _poses; saves -> vars; ops -> defineSkipOp; events -> control.
-//   saves.register calls set the order parts save and load: stacks, time, vars, random, scene, then the modules.
+//   saves.define calls set the order parts save and load: stacks, time, vars, random, scene, then the modules.
 //   Made in Engine.js: stacks before this function (drawing parts define points); post, ui and page after it, so a constructor here must not touch those three.
 //   Input binds keys before time exists, so an entry taken then is stamped 0 (Stacks._nowOf), which is what the calendar reads at that moment anyway.
 // A new service goes below everything its constructor reads, and its line is added here; tests/specs/services-order.mjs fails when a constructor reads a service made after it.
@@ -41,13 +41,14 @@ import { defineSkipOp } from '../time/skip.js';
 import { installThings } from '../scene/thingOps.js';
 import { Plugins } from './plugins.js';
 import { watchGameLights } from '../scene/gameLights.js';
+import { tierChanged } from '../scene/tier.js';
 
 /**
  * Create the engine services on `engine` (called once from the Engine constructor, after the renderer, scene and uniforms exist).
  * @param engine  the engine under construction
  * @param o  the createEngine options these services read, already defaulted by the constructor
  */
-export function createServices(engine, { canvas, validate, locale, strings, saveKey, joystick, bindings, audio, decoders, budget, seed, headless, urlState, threads, batching }) {
+export function createServices(engine, { canvas, validate, locale, strings, saveKey, joystick, blockBrowserKeys, bindings, audio, decoders, budget, seed, headless, urlState, threads, batching }) {
   // DEV, not import.meta.env.DEV: the npm test bundle is a production build that sets THREEDOG_TEST, and the spelling check must run there too
   engine.events = new Events({ check: DEV && validate !== false,
     onError: (name, err) => reportListenerError(engine, name, err), now: () => engine.time.tick });   // listener errors are handled by severity (errors.js)
@@ -58,7 +59,7 @@ export function createServices(engine, { canvas, validate, locale, strings, save
   engine.stacks._hook();   // one registry, made early by Engine.js (drawing parts register points); saves and events hook in now
   engine.mod = (name, o) => engine.stacks.mod(name, o);
   engine.stacks.define('input.gate', { kind: 'any', per: true });   // input.gate(action, owner): one entry per owner and action (Input.js)
-  engine.input = new Input(engine, canvas, { joystick, bindings });
+  engine.input = new Input(engine, canvas, { joystick, bindings, blockBrowserKeys });
   engine.events.on('ui:open', id => engine._openWindows.add(id));
   engine.events.on('ui:close', id => engine._openWindows.delete(id));
   engine.audio = new Audio(engine, audio);
@@ -77,12 +78,12 @@ export function createServices(engine, { canvas, validate, locale, strings, save
   engine.rays = new Rays(engine);        // ray registry: engine.raycast / pick
   Object.assign(engine, describeApi(engine));     // describe / describeText / inspect / explain, see Describe.js
   engine.random = new Random(seed ?? (headless ? 1 : Date.now()));   // wall-clock: differs per run when no seed is given
-  engine.saves.register('random', { atomic: true, save: () => engine.random.toJSON(), load: d => engine.random.fromJSON(d) });
+  engine.saves.define('random', { atomic: true, save: () => engine.random.toJSON(), load: d => engine.random.fromJSON(d) });
   engine._urlState = new UrlState(engine, { fromUrl: urlState });
   // who holds the engine still: three named stacks (stacks.js: same owner rules as every shared quantity, holders in describe); haltLoop / freeze / takeCamera in holds.js
   defineHoldStacks(engine);
   // the one quality value (engine.tier): the device gives the base, the player's preset sets over it. settingsSet: on this point the player's choice is a choice, not a restriction
-  engine.stacks.define('tier', { kind: 'value', base: engine._deviceTier, save: false, settingsSet: true, onChange: () => engine.post?._sync() });   // effects held by tier follow it
+  engine.stacks.define('tier', { kind: 'value', base: engine._deviceTier, save: false, settingsSet: true, onChange: () => tierChanged(engine) });   // the post chain and cascades follow it (core/scene/tier.js onTierChange)
   engine.commits = new Commits(engine);          // background results that affect gameplay take effect on a fixed tick (see Commits.js)
   engine.ops = new Ops(engine);                  // one entry point for actions (define / run / can / list / recent), see Ops.js
   engine.views = new Views(engine);              // named fixed camera views for repeatable screenshots (Views.js)

@@ -3,11 +3,15 @@
 // read directly in every caller, each one would need its own WebGPU branch and the next renderer change would miss some of them.
 // Plain three.js equivalent: renderer.info.render / .memory / .programs, renderer.shadowMap.autoUpdate / needsUpdate (WebGL) or
 // light.shadow.autoUpdate / needsUpdate (WebGPU), WEBGL_debug_renderer_info (WebGL) or GPUDevice.adapterInfo (WebGPU).
-// Imports nothing from three (only engine files that do not either): threedog/tsl (render/fx) registers the WebGPU classes here, so WebGL games never load three/webgpu.
+// Imports nothing from three at all, and only engine files that do not either: threedog/tsl (render/fx) registers the WebGPU classes here, so
+// WebGL games never load three/webgpu; and threedog/tsl reaches this file, so importing 'three' here would load WebGLRenderer into it.
+// The two math classes the renderer borrow needs are handed in by the engine core (mathClasses).
 
 import { codedError } from '../core/base/errorHints.js';
+import { warnOnce } from '../core/base/validate.js';
 import { notePatch, patchOn } from '../core/scene/threePatches.js';
 import { isShown } from '../core/base/util.js';
+import { checkVertexInputs } from './vertexInputs.js';
 
 /** Samples of the MSAA the post chain's targets use, on both renderers */
 export const MSAA_SAMPLES = 4;
@@ -32,6 +36,13 @@ export function stats(r) {
     geometries: i.memory.geometries, textures: i.memory.textures };
 }
 
+/**
+ * Whether r has drawn at least once. Why here: WebGLRenderer counts frames in info.render.frame; WebGPURenderer has no such field (its
+ * info.frame is the node frame, which three's own tick moves before anything is drawn) and counts render() calls since start in info.render.calls
+ * @param {any} r @returns {boolean}
+ */
+export const drawnAFrame = r => (isWebGPU(r) ? r.info.render.calls : r.info.render.frame) > 0;
+
 /** Compiled shader programs (WebGLRenderer keeps the list), or null where the renderer keeps none (WebGPU) @param {any} r @returns {number | null} */
 export const programCount = r => isWebGPU(r) ? null : r.info.programs?.length ?? null;
 
@@ -43,19 +54,26 @@ export const programList = r => isWebGPU(r) ? [] : r.info.programs ?? [];
 // last render object built per material is kept (weakly: the material's lifetime) and its NodeBuilderState read on demand.
 // RECENT: the last builds in order, also weak, so a compile error (which three reports without its render object) can be matched back to one.
 const NODE_PROGRAMS = new WeakMap(), RECENT = [], RECENT_MAX = 256;
-notePatch('node-builder-hook', "renderer.debug.onNodeBuilderCreated of a WebGPURenderer: remembers the render object built per material, a game's own hook still runs (render/backend.js)", () => {},
-  { scope: 'engine renderer', lost: 'on WebGPU: shader errors no longer name the material, and shaderCost and the program costs in inspect.perf stay empty' });
+notePatch('node-builder-hook', "renderer.debug.onNodeBuilderCreated of a WebGPURenderer: remembers the render object built per material and counts each program's vertex inputs " +
+  "before its code is written (that builder's buildCode), a game's own hook still runs (render/backend.js)", () => {},
+  { scope: 'engine renderer', lost: "on WebGPU: shader errors no longer name the material, shaderCost and the program costs in inspect.perf stay empty, and a program over the device's vertex inputs fails with three's raw pipeline error" });
 /** @internal core/engine/Engine.js: on WebGPURenderer, remember the render object three builds per material (a game's own hook still runs) @param {any} r */
 export function watchNodePrograms(r) {
   const d = r?.debug;
   if (!isWebGPU(r) || !d || d._threedogPrograms) return;
   const prev = d.onNodeBuilderCreated;
   d.onNodeBuilderCreated = (builder, ro) => {
-    if (ro?.material && patchOn('node-builder-hook')) { NODE_PROGRAMS.set(ro.material, ro); RECENT.push(new WeakRef(ro)); if (RECENT.length > RECENT_MAX) RECENT.shift(); }
+    if (ro?.material && patchOn('node-builder-hook')) {
+      NODE_PROGRAMS.set(ro.material, ro); RECENT.push(new WeakRef(ro)); if (RECENT.length > RECENT_MAX) RECENT.shift();
+      const code = builder.buildCode;
+      // the material's own build only: three's plain stand-in after a failed build gets the same render object, and must not fail again
+      builder.buildCode = function () { if (this.material === ro.material) checkVertexInputs(this, r); return code.call(this); };
+    }
     prev?.(builder, ro);
   };
   d._threedogPrograms = true;
 }
+
 /**
  * @internal render/shaderErrors.js: the newest render object three built that passes test(renderObject), or null
  * @param {(ro: any) => boolean} test @returns {any}
@@ -88,6 +106,14 @@ export function memory(r) {
   const m = r.info.memory;
   return isWebGPU(r) ? { geometries: m.geometries, textures: m.textures } : { ...m };
 }
+
+/** GPU memory in MB as three.js counts it (WebGPURenderer's info.memory.total: textures, buffers, programs it made; an estimate, not driver VRAM). null on
+ *  WebGLRenderer, which keeps counts but no byte sizes @param {any} r @returns {number | null} */
+export const GPU_MEMORY = "estimate: three's own count, not driver VRAM";
+export const gpuMemoryMB = r => isWebGPU(r) ? Math.round(r.info.memory.total / 104857.6) / 10 : null;
+/** Texture bytes as three.js counts them: WebGPURenderer's info.memory.texturesSize, every texture it uploaded (render targets and shadow maps too, which no material
+ *  slot holds; TSL textures sit in nodes, not slots). null on WebGLRenderer, which counts textures but not their bytes @param {any} r @returns {number | null} */
+export const countedTextureBytes = r => isWebGPU(r) ? r.info.memory.texturesSize ?? null : null;
 
 /** Start this frame's counters from zero (the engine renders with info.autoReset off: onRender targets count too) @param {any} r */
 export function resetStats(r) { r.info.reset(); }
@@ -237,7 +263,7 @@ function tierOf(name) {
   try {
     if (matchMedia('(pointer: coarse)').matches) return 'low';
     if (/intel|uhd|iris|mali|adreno|powervr|swiftshader|llvmpipe|software/i.test(name())) return 'low';
-  } catch { /* cannot tell: assume high-end */ }
+  } catch (e) { warnOnce(`[backend] the device tier could not be detected (${e?.message ?? e}); assuming a high-end device`); }   // said once: a wrong guess changes every tier-following default
   return 'high';
 }
 let probedName = /** @type {string | null} */ (null);
@@ -300,9 +326,102 @@ export function freshFrame(r) {
  */
 export function renderOnce(r, scene, camera, target = null) {
   freshFrame(r);
-  const prev = r.getRenderTarget();
-  r.setRenderTarget(target);
-  try { r.render(scene, camera); } finally { r.setRenderTarget(prev); }
+  borrowRenderer(r, () => { r.setRenderTarget(target); r.render(scene, camera); });
+}
+
+// Borrowing the renderer (design.md 4.5): every engine task that changes renderer state to draw something of its own goes through these, so
+// each one puts back the same fields, and puts them back when the draw throws. Before, five places each restored their own subset: one lost
+// the cube face and mip level of the target it gave back, two skipped the restore on a throw, and the engine's next frame drew into the wrong target.
+// The fields are written out below, not looped over a list: each one has its own getter / setter pair on three's renderers.
+// What a task draws into (its own targets, materials, the layers of its own objects) stays the task's to make and free.
+/** One saved state per nesting depth, reused: borrows run every frame (auto exposure, soft particles, onRender hooks), so the saved vectors are not made anew each time */
+const held = [];
+let depth = 0;
+/** three's Vector4 and Color, handed in by core/engine/Engine.js (it imports 'three'; three/webgpu shares the same three.core.js classes) */
+let M = /** @type {{ Vector4: any, Color: any } | null} */ (null), _cv = /** @type {any} */ (null);
+/** @param {{ Vector4: any, Color: any }} classes */
+export function mathClasses({ Vector4, Color }) { M = { Vector4, Color }; _cv = new Vector4(); }
+/**
+ * Save the renderer state a borrow may change. Pair it with releaseRenderer(s, putBack) in a finally (borrowRenderer does both).
+ * Saved: the target with its cube face and mip level, viewport, scissor and scissor test, clear color and alpha, autoClear (and its color / depth /
+ * stencil parts), toneMapping and toneMappingExposure, shadowMap.autoUpdate; on WebGPURenderer also the MRT, the render-object function and the
+ * opaque / transparent switches and the viewport's minDepth / maxDepth. With scene: its overrideMaterial, background and fog (and WebGPU's backgroundNode and fogNode);
+ * with camera: its layers.mask.
+ * WebGLRenderer keeps two of each: what was set (getViewport, getScissor, getScissorTest) and what draws (getCurrentViewport and the GL scissor box / test,
+ * which a setViewport after binding a target changes and a later setRenderTarget overwrites with the target's own). Both are saved and both come back.
+ * clean: true (WebGPU) then sets what three's RendererUtils.resetRendererState sets (no MRT, no render-object function, clear 0x000000 / 1, every autoClear
+ * part on, opaque and transparent on), for a quad drawn inside a node frame that must not inherit the scene pass's MRT.
+ * @param {any} r @param {{ scene?: any, camera?: any, clean?: boolean }} [o] @returns {any}
+ */
+export function holdRenderer(r, { scene = null, camera = null, clean = false } = {}) {
+  const V = /** @type {any} */ (M).Vector4;   // null only when the engine core was never loaded: nothing can hand this file a renderer then
+  const s = held[depth] ??= { viewport: new V(), scissor: new V(), color: new (/** @type {any} */ (M).Color)(), current: new V(), box: new V() };
+  s.depth = depth++; s.r = r; s.scene = scene; s.camera = camera;
+  s.target = r.getRenderTarget(); s.face = r.getActiveCubeFace(); s.mip = r.getActiveMipmapLevel();
+  r.getViewport(s.viewport); r.getScissor(s.scissor); s.scissorTest = r.getScissorTest();
+  r.getClearColor(s.color); s.alpha = r.getClearAlpha();
+  s.autoClear = r.autoClear; s.autoColor = r.autoClearColor; s.autoDepth = r.autoClearDepth; s.autoStencil = r.autoClearStencil;
+  s.toneMapping = r.toneMapping; s.exposure = r.toneMappingExposure; s.shadowAuto = r.shadowMap.autoUpdate;
+  s.gpu = isWebGPU(r);
+  if (s.gpu) {
+    s.mrt = r.getMRT(); s.objectFn = r.getRenderObjectFunction(); s.opaque = r.opaque; s.transparent = r.transparent;
+    // Vector4.copy (getViewport) drops the depth range, and setViewport(vector) puts 0..1 back: read from the canvas target (no public getter)
+    const v = r.getCanvasTarget?.()._viewport; s.minDepth = v?.minDepth ?? 0; s.maxDepth = v?.maxDepth ?? 1;
+  } else {
+    r.getCurrentViewport(s.current);
+    const gl = r.getContext(), b = gl.getParameter(gl.SCISSOR_BOX);   // three keeps the drawing scissor nowhere readable
+    if (b) s.box.set(b[0], b[1], b[2], b[3]); s.boxTest = gl.isEnabled(gl.SCISSOR_TEST);   // b is null on a lost context
+  }
+  if (scene) { s.override = scene.overrideMaterial; s.background = scene.background; s.bgNode = scene.backgroundNode; s.fog = scene.fog; s.fogNode = scene.fogNode; }
+  if (camera) s.layers = camera.layers.mask;
+  if (clean) {
+    if (s.gpu) { r.setMRT(null); r.setRenderObjectFunction(null); r.opaque = r.transparent = true; }
+    r.setClearColor(0x000000, 1); r.autoClear = r.autoClearColor = r.autoClearDepth = r.autoClearStencil = true;
+  }
+  return s;
+}
+/**
+ * End a hold: putBack writes every saved field back; false only lets the slot go (an onRender hook that returned keeps what it left).
+ * Order on WebGLRenderer: the set values, then the target (which draws with its own viewport / scissor), then the drawing area as it was.
+ * @param {any} s @param {boolean} [putBack]
+ */
+export function releaseRenderer(s, putBack = true) {
+  depth = s.depth;
+  const { r, scene, camera } = s;
+  if (putBack) putBackState(s, r, scene, camera);
+  s.r = s.scene = s.camera = s.target = s.mrt = s.objectFn = s.override = s.background = s.bgNode = s.fog = s.fogNode = null;   // a slot keeps no scene alive between borrows
+}
+/**
+ * Run draw() with the renderer borrowed: whatever draw changes of the fields holdRenderer lists is put back afterwards, also when it throws.
+ * Returns what draw returns. Plain three.js equivalent: save each field, try { draw } finally { set each one back }.
+ * @template T @param {any} r @param {() => T} draw @param {{ scene?: any, camera?: any, clean?: boolean }} [o] @returns {T}
+ */
+export function borrowRenderer(r, draw, o) {
+  const s = holdRenderer(r, o);
+  try { return draw(); } finally { releaseRenderer(s); }
+}
+/** @param {any} s @param {any} r @param {any} scene @param {any} camera */
+function putBackState(s, r, scene, camera) {
+  if (scene) {
+    scene.overrideMaterial = s.override; scene.background = s.background; scene.fog = s.fog;
+    // only where it was changed: a WebGL scene gets no such property. fogNode is the fog WebGPURenderer draws (render/fogLook.js), so a pass that
+    // turned it off and threw would otherwise leave scene.fog back but the fog gone for good
+    if (scene.backgroundNode !== s.bgNode) scene.backgroundNode = s.bgNode;
+    if (scene.fogNode !== s.fogNode) scene.fogNode = s.fogNode;
+  }
+  if (camera) camera.layers.mask = s.layers;
+  r.toneMapping = s.toneMapping; r.toneMappingExposure = s.exposure; r.shadowMap.autoUpdate = s.shadowAuto;
+  r.setClearColor(s.color, s.alpha);
+  r.autoClear = s.autoClear; r.autoClearColor = s.autoColor; r.autoClearDepth = s.autoDepth; r.autoClearStencil = s.autoStencil;
+  if (s.gpu) { r.setMRT(s.mrt); r.setRenderObjectFunction(s.objectFn); r.opaque = s.opaque; r.transparent = s.transparent; }
+  const v = s.viewport;
+  r.setViewport(v.x, v.y, v.z, v.w, s.gpu ? s.minDepth : 0, s.gpu ? s.maxDepth : 1); r.setScissor(s.scissor); r.setScissorTest(s.scissorTest);
+  r.setRenderTarget(s.target, s.face, s.mip);
+  if (s.gpu) return;   // WebGPURenderer draws a target with the target's own viewport: the set values above are all it keeps
+  // the drawing viewport differs from the target's own only when setViewport ran after the bind: running it again gives the same rounding;
+  // otherwise (an ArrayCamera's sub-viewport left mid-render) only the GL viewport can be put back
+  if (!r.getCurrentViewport(_cv).equals(s.current)) { r.setViewport(v); if (!r.getCurrentViewport(_cv).equals(s.current)) r.state.viewport(s.current); }
+  r.state.scissor(s.box); r.state.setScissorTest(s.boxTest);   // three's GL state cache: no GL call when already equal
 }
 
 /**
@@ -318,7 +437,7 @@ export function renderOnce(r, scene, camera, target = null) {
  */
 export function compileThrough(r, draw) {
   const own = Object.hasOwn(r, 'render'), real = r.render, jobs = [];
-  r.render = (scene, camera) => { jobs.push(r.compileAsync(scene, camera)); };
+  r.render = (scene, camera) => { const j = r.compileAsync(scene, camera); j.catch(() => {}); jobs.push(j); };   // handled at once: if a later pass throws, Promise.all below is never reached and a rejection would be unhandled
   let out;
   try { out = draw(); } finally { if (own) r.render = real; else delete r.render; }
   return Promise.all(jobs).then(() => out);
@@ -339,10 +458,9 @@ export async function readLayer(r, rt, w, h, layer) {
     for (let y = 0; y < h; y++) out.set(px.subarray(y * row, (y + 1) * row), (h - 1 - y) * row);
     return out;
   }
-  const keep = r.getRenderTarget(), face = r.getActiveCubeFace(), mip = r.getActiveMipmapLevel(), px = new Float32Array(w * h * 4);
-  r.setRenderTarget(rt, layer);   // on WebGL the layer is chosen by what is attached, readRenderTargetPixels has no layer argument
-  r.readRenderTargetPixels(rt, 0, 0, w, h, px);
-  r.setRenderTarget(keep, face, mip);
+  const px = new Float32Array(w * h * 4);
+  // on WebGL the layer is chosen by what is attached, readRenderTargetPixels has no layer argument
+  borrowRenderer(r, () => { r.setRenderTarget(rt, layer); r.readRenderTargetPixels(rt, 0, 0, w, h, px); });
   return px;
 }
 
@@ -359,7 +477,7 @@ export const projectionKey = cam => (cam.isPerspectiveCamera ? `${cam.fov},${cam
 // a sixth part had nothing to copy. Now a .tsl.js file calls registerWebGPUPart(name, impl) once at load, and every user asks
 // webgpuPart(name, who): the same error code and the same fix line wherever threedog/tsl is missing.
 // Module scope, not a page global: the .tsl.js files import this file, so they always fill the table the engine copy using them reads.
-/** @typedef {'classes' | 'nodePatches' | 'particles' | 'post' | 'sky' | 'cascades' | 'shadowCache'} WebGPUPartName */
+/** @typedef {'classes' | 'nodePatches' | 'particles' | 'post' | 'sky' | 'cascades' | 'shadowCache' | 'impostor'} WebGPUPartName */
 /** @type {Map<string, any>} */
 const PARTS = new Map();
 /**
@@ -406,12 +524,15 @@ export function rendererSwapped(engine) { for (const fn of [...(SWAP.get(engine)
  * the adapter is still asked each time, it costs no device. If the GPU goes bad later, three's own fallback still lands and _startRenderer says so.
  * @returns {Promise<string | null>}
  */
-export async function whyNoWebGPU() {
+/** @param {Record<string, number>} [limits] three's requiredLimits of a renderer the engine made: filled before its init() requests the device @param {string} [powerPreference] */
+export async function whyNoWebGPU(limits, powerPreference) {
   const gpu = typeof navigator === 'undefined' ? undefined : /** @type {any} */ (navigator).gpu;
   if (!gpu) return 'navigator.gpu is missing';
   let adapter;
-  try { adapter = await gpu.requestAdapter({ featureLevel: 'compatibility' }); } catch (err) { return `requestAdapter() failed: ${err?.message ?? err}`; }
+  try { adapter = await gpu.requestAdapter({ featureLevel: 'compatibility', powerPreference }); } catch (err) { return `requestAdapter() failed: ${err?.message ?? err}`; }
   if (!adapter) return 'requestAdapter() returned no adapter';
+  // the post chain's merged scene targets (render/fx/postWebGPU.tsl.js) can pass WebGPU's default 32 bytes per pixel; asking what this adapter supports costs nothing and lifts it where the hardware can
+  if (limits) for (const k of ['maxColorAttachmentBytesPerSample', 'maxColorAttachments']) limits[k] ??= adapter.limits[k];
   if (deviceFrom === gpu) return null;
   try { (await adapter.requestDevice()).destroy?.(); } catch (err) { return `requestDevice() failed: ${err?.message ?? err}`; }
   deviceFrom = gpu;

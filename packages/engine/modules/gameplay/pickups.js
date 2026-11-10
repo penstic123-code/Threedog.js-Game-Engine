@@ -14,16 +14,16 @@
 // gray box; pickups({ color, size, lift }) for the plain values; engine.pickups.material is the three.js material the box and geometry-only models draw with;
 // spawn(pos, { mesh }) puts the game's own object down instead.
 import * as THREE from 'three';
-import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
 import { neutralMaterial } from '../../render/neutral.js';
-import { copyPatches, isEngineMade, markEngineMade } from '../../render/patches.js';
+import { cloneMaterial, isEngineMade, markEngineMade } from '../../render/patches.js';
 import { xzOf, yOf } from '../../core/base/math.js';
 import { placeY } from '../../core/scene/ground.js';
 import { warnOnce, needMaterial, fmt } from '../../core/base/validate.js';
 import { readParams, keysSchema } from '../../core/base/params.js';
 import { copyData } from './Container.js';
 import { failure } from '../../core/ops/opsFail.js';
-import { protoOf } from '../../core/assets/namedModel.js';
+import { protoOf, holdProtos, copyLeft, protoLease } from '../../core/assets/namedModel.js';
+import { freeParts, cloneModel } from '../../core/base/freeParts.js';
 import { shadowDefaults } from '../../core/assets/assetEntry.js';
 import { codedError, coded } from '../../core/base/errorHints.js';
 
@@ -148,7 +148,7 @@ export class Pickups {
    * The item goes into the actor's own container (inventory.of(actor)): the local user's bag, a net peer's bag on the host, an NPC's.
    */
   _take(rec, actor) {
-    const e = this.engine, W = e.world;
+    const e = this.engine, W = e.world, had = rec.count;   // W.set changes rec in place, so the count taken is read before it
     let value, left = 0;
     if (rec.item) {
       if (!e.inventory) return failure('noInventory');
@@ -165,7 +165,7 @@ export class Pickups {
     if (left > 0) W.set(rec.id, { count: left });
     else if (rec.respawn > 0) W.set(rec.id, { until: e.clock.now + rec.respawn });
     else W.remove(rec.id);   // world:remove drops the live parts
-    e.events.emit('pickup:take', { pickup: rec.id, item: rec.item ?? null, count: rec.count - left, actor, x: rec.position.x, z: rec.position.z });
+    e.events.emit('pickup:take', { pickup: rec.id, item: rec.item ?? null, count: had - left, actor, x: rec.position.x, z: rec.position.z });
     return { ok: true, value };
   }
 
@@ -204,7 +204,13 @@ function present(pk, track) {
     },
     // only detached: a game's mesh is the game's, a model clone shares geometry / material with its prototype (protoOf), the material is shared by every pickup;
     // the placeholder box is the one thing built here alone, so its geometry is freed
-    dispose: (rec, o) => { o.userData.useHandle?.remove(); o.removeFromParent(); o.traverse(c => { if (c.userData.ownGeometry) /** @type {any} */ (c).geometry.dispose(); }); },
+    dispose: (rec, o) => {
+      o.userData.useHandle?.remove(); o.removeFromParent();
+      // a holder this module built: closed first, so a model that arrives later is not added to it; its copy goes through the one copy teardown (a game's own mesh is not ours to drop)
+      if (o.userData.copyOpen) { o.userData.copyOpen = false; o.userData.lease?.remove(); e.assets.dropCopy(o); }
+      const own = new Set(); o.traverse(c => { if (c.userData.ownGeometry) own.add(/** @type {any} */ (c).geometry); });
+      freeParts(o, x => own.has(x)); copyLeft(e);   // copyLeft: a retired prototype's material this copy drew may go now
+    },
   }));
   // waiting to respawn: when due (game clock) clear until and return to the ground. Far ones are also checked once a second, so they grow back on time even when not nearby
   const wake = rec => { if (rec.until != null && e.clock.now >= rec.until) w.set(rec.id, { until: undefined }); };
@@ -236,18 +242,22 @@ function model(pk, rec) {
   if (obj) obj.castShadow = true;   // a mesh the game passed in stays the game's; only made to cast
   else {
     const color = rec.color ?? def.color ?? null, name = pickupModelName(e, rec.item ?? null, rec.model ?? def.model), holder = new THREE.Group();
-    holder.name = name ?? 'pickup'; holder.userData.name = holder.name; obj = holder;
+    holder.name = name ?? 'pickup'; holder.userData.name = holder.name; holder.userData.copyOpen = true; obj = holder;
     const box = () => {   // the neutral placeholder: also what a model that failed to build falls back to
       const size = pk.size, m = shadowDefaults(new THREE.Mesh(new THREE.BoxGeometry(size, size, size)), {});
       m.userData.ownGeometry = true; drawnBy(pk, m, color); holder.add(m);
     };
     if (!name) box();
     else protoOf(e, pk, name).then(proto => {
-      const o = skeletonClone(proto.obj);   // own bones if it is skinned; geometry / materials stay the prototype's (shadow flags were settled once there, as for content props)
+      if (!holder.userData.copyOpen) return;   // torn down while the model downloaded: nothing is cloned, nothing needs freeing
+      const o = cloneModel(proto.obj);   // own bones if it is skinned; geometry / materials stay the prototype's (shadow flags were settled once there, as for content props)
       // generator gave only geometry: draw it with the pickups material in the item's own color (same color shares one); generators that return a full Object3D / file models stay as they are
       if (proto.fromGeometry) drawnBy(pk, o, color);
+      e.assets.handOut(o, name);
       holder.add(o);
-    }).catch(err => { warnOnce(`pickups: model '${name}' of '${rec.item ?? rec.id}' failed to build (${err?.message ?? err}); showing the gray placeholder box`); box(); });
+      // a file model's copy holds a lease of its own, on the load its prototype came from (a hot swap that fails to build the new model returns the prototype's); a generator's is pinned
+      holder.userData.lease = protoLease(e, proto, 'pickups');
+    }).catch(err => { if (!holder.userData.copyOpen) return; warnOnce(`pickups: model '${name}' of '${rec.item ?? rec.id}' failed to build (${err?.message ?? err}); showing the gray placeholder box`); box(); });
   }
   if (rec.auto) return obj;   // taken by walking into it: no key prompt
   if (!e.interactions) { warnOnce(coded('module-needs', 'Pickups without auto: true are taken with the interact key: install interactions() first.')); return obj; }
@@ -272,7 +282,7 @@ function pickupMaterial(pk, mesh) {
   if (color == null && !vc) return base;
   const key = color + (vc ? ':vc' : '');
   if (!pk._copies.has(key)) {
-    const m = copyPatches(base, base.clone());
+    const m = cloneMaterial(base);
     if (color != null) /** @type {any} */ (m).color?.set(color);
     if (vc) m.vertexColors = true;
     if (isEngineMade(base)) markEngineMade(m);
@@ -349,7 +359,9 @@ export function pickups(opts = {}) {
     name: 'pickups', skipKind: 'exact', type: 'rules', label: 'Pickups', params: PICKUP_PARAMS, options: o, requires: ['world'], optional: ['interactions', 'inventory', 'net'], stage: 'gameplay',
     noSkip: 'auto pickups are spatial; respawn follows the game clock',
     install(e, ctx) {
-      pk = new Pickups(e, o, ctx); defineTake(e, ctx, pk); return pk;   // o: the schema defaults are filled in, the class repeats none
+      pk = new Pickups(e, o, ctx); defineTake(e, ctx, pk);   // o: the schema defaults are filled in, the class repeats none
+      ctx.track(holdProtos(e, pk));   // the model prototypes its pickups clone (namedModel.js): unloading pickups gives them back
+      return pk;
     },
     fixed() { pk._auto(); },
     describe(e, ctx) {   // use the model if present (same object the interactions module reports, merged into one entry); far away only data

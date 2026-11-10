@@ -24,18 +24,19 @@ const NEEDS_NODE = [...VITE, 'test', 'shot', 'perf', 'stress', 'capture', 'galle
 // metadata twice: codemap and apidoc read it, and it reads the api pages apidoc writes; this way one run settles a changed fact
 const MAP = MODE === 'monorepo' ? ['metadata.mjs', 'gentypes.mjs', 'codemap.mjs', 'apidoc.mjs', 'metadata.mjs', 'gamemap.mjs'] : ['gamemap.mjs'];
 export const USAGE = `Usage: threedog ${VITE.join('|')} [game | -w game] · threedog test [-w game] [test name…] · threedog check|types|map · ` +
-  `threedog shot|perf|bake|assets [-w game] … [--gpu|--software] · threedog bake light [-w game] [--out f] [--size n] [--samples n] [--page url] · threedog stress [--only axis,…] · threedog new-game name · threedog init [folder] · threedog picture palette|compare … · threedog content ids [-w game] [--write] · threedog content set|add|remove|stamp|capture … · threedog tune show|write [file] [--apply] · threedog gallery [-w game] [--shots] · threedog how "task" · threedog art list <source> · threedog art copy <source> [names…] [--to art/] [--force] [--dry] · threedog art board [-w game] [--out file.html] [--json] [--live] · threedog lib add|list|status|check|pull|page … (your own art and systems library, ~/.threedog/library) · threedog examples list|pull <name> [--out dir] [--force] · threedog doctor · threedog api-count [--unused] [--json] [--games dirA,dirB] (engine repo) · threedog relay [port] · threedog mcp [-w game] [--allow-js] · dev bridge: threedog ${BRIDGE.join('|')}`;
+  `threedog shot|perf|bake|assets [-w game] … [--gpu|--software] · shot|capture|perf [--size WxH] · threedog bake light [-w game] [--out f] [--size n] [--samples n] [--page url] · threedog stress [--only axis,…] · threedog new-game name · threedog init [folder] · threedog picture palette|compare … · threedog content ids [-w game] [--write] · threedog content set|add|remove|stamp|capture … · threedog tune show|write [file] [--apply] · threedog gallery [-w game] [--shots] · threedog how "task" · threedog art list <source> · threedog art copy <source> [names…] [--to art/] [--force] [--dry] · threedog art board [-w game] [--out file.html] [--json] [--live] · threedog lib add|list|status|check|pull|page … (your own art and systems library, ~/.threedog/library) · threedog examples list|pull <name> [--out dir] [--force] · threedog doctor · threedog api-count [--unused] [--json] [--games dirA,dirB] (engine repo) · threedog relay [port] · threedog mcp [-w game] [--allow-js] · dev bridge: threedog ${BRIDGE.join('|')}`;
 
 const node = (script, args, cwd = process.cwd()) => spawnSync(process.execPath, [join(TOOLS, script), ...args], { stdio: 'inherit', cwd }).status ?? 1;
 /** --help / -h: print the script's header comment instead of running it (`threedog test --help` used to start the whole suite) */
 const wantsHelp = args => args.includes('--help') || args.includes('-h');
+/** The text --help prints for these scripts (their header comments); exported so the CLI test checks each declared option against what --help says */
+export const helpText = scripts => scripts.map(s => {
+  const out = [];
+  for (const l of readFileSync(join(TOOLS, s), 'utf8').split('\n')) { if (l.startsWith('#!')) continue; if (!l.startsWith('//')) break; out.push(l.replace(/^\/\/ ?/, '')); }
+  return out.join('\n');
+}).filter(Boolean).join('\n\n');
 function help(scripts) {
-  const text = scripts.map(s => {
-    const out = [];
-    for (const l of readFileSync(join(TOOLS, s), 'utf8').split('\n')) { if (l.startsWith('#!')) continue; if (!l.startsWith('//')) break; out.push(l.replace(/^\/\/ ?/, '')); }
-    return out.join('\n');
-  }).filter(Boolean).join('\n\n');
-  console.log(text || USAGE);
+  console.log(helpText(scripts) || USAGE);
   return 0;
 }
 
@@ -88,8 +89,9 @@ export function main([cmd, ...rest]) {
   if (BRIDGE.includes(cmd)) return node('threedog/cli.mjs', [cmd, ...rest]);
   if (cmd === 'bake' && rest[0] === 'light') return node('bake-light.mjs', rest.slice(1));   // a sub-command, so a baked model can never be named after it
   if (SCRIPTS[cmd]) return node(SCRIPTS[cmd], rest);
+  if (cmd) { console.error(`Unknown command "${cmd}". Run threedog --help for the commands.`); return 1; }
   console.log(USAGE);
-  return cmd ? 1 : 0;
+  return 0;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href || /[\\/]threedog(\.mjs|\.cmd)?$/.test(process.argv[1] || '')) {

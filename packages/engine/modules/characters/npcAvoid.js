@@ -110,7 +110,7 @@ export class NpcAvoid {
   /** Push ch (the rec's model) apart in x, z, from walkers on its own floor only (nav({ crowd: true }) separates by the mesh). Call after ch.move, edits ch.root.position x, z directly */
   push(rec, ch, dt) {
     const e = this.engine, W = e.world;
-    if (!this.on || e.nav?.crowd) return;
+    if (!this.on || (e.nav?.crowd && ch._agent)) return;   // a walker with a crowd agent is steered by it; one the crowd cannot serve (passes, own path source) is pushed as without a crowd
     const n = W.steps, own = this._start.get(rec.id), r = this.radius ?? e.movement.radius, min = 2 * r;
     if (!own || own.k !== n) return;   // did not enter via NPC.js (goTo called directly): no avoidance
     if (this._gridN !== n) this._file(W, n, min);
@@ -132,6 +132,6 @@ export class NpcAvoid {
     p.x += mx; p.z += mz;
     // skip collision for pushes under half a centimetre (the mover keeps it out of walls next step); in a crowd every NPC is nudged every step, so this saves
     // most collision queries
-    if (mx * mx + mz * mz > 2.5e-5) e.collision?.resolve(p, ch.radius);
+    if (mx * mx + mz * mz > 2.5e-5) e.collision?.resolve(p, ch.radius, ch.passes);
   }
 }

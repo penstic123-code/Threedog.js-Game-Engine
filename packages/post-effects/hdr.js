@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { declared } from './about.js';
 /** @import { PostEffect } from 'threedog' */
 
 /**
@@ -18,7 +19,7 @@ const BLOOM_NODE_STRENGTH = 3;
  * @returns {PostEffect}
  */
 export function bloom({ strength = 0.35, radius = 0.5, threshold = 0.85, enabled, order = 30 } = {}) {
-  return { name: 'bloom', slot: 'hdr', order, enabled, params: { strength, radius, threshold },
+  return { ...declared(bloom), name: 'bloom', slot: 'hdr', order, enabled, params: { strength, radius, threshold },
     create: ({ width, height, params: p }) => new UnrealBloomPass(new THREE.Vector2(width, height), p.strength, p.radius, p.threshold),
     update: (pass, p) => { pass.strength = p.strength; pass.radius = p.radius; pass.threshold = p.threshold; },
     // WebGPU: three's BloomNode returns only the glow, so it is added to the input. Same params do not give the same picture: UnrealBloomPass
@@ -38,7 +39,7 @@ export function bloom({ strength = 0.35, radius = 0.5, threshold = 0.85, enabled
 export function ao({ radius = 0.25, intensity = 1, enabled, order = 20 } = {}) {
   // update in place: GTAOPass keeps its targets and noise, so changing radius never rebuilds it
   const update = (pass, p) => { pass.updateGtaoMaterial({ radius: p.radius }); pass.blendIntensity = p.intensity; };
-  return { name: 'ao', slot: 'hdr', order, enabled, params: { radius, intensity }, update,
+  return { ...declared(ao), name: 'ao', slot: 'hdr', order, enabled, params: { radius, intensity }, update,
     create: ({ scene, camera, width, height, params }) => { const pass = new GTAOPass(scene, camera, width, height); update(pass, params); return pass; },
     // WebGPU: GTAONode on the scene pass's depth (normals reconstructed from depth), its .r darkens the color; intensity mixes toward no AO as blendIntensity does
     node: (input, { display, scenePass, camera, tsl, p }) => {
@@ -47,3 +48,7 @@ export function ao({ radius = 0.25, intensity = 1, enabled, order = 20 } = {}) {
       return tsl.vec4(input.rgb.mul(tsl.mix(tsl.float(1), n.getTextureNode().r, p.intensity)), input.a);
     } };
 }
+
+// the picture menu facts of each effect (about.js says why they sit on the factory)
+bloom.about = { cost: 'medium', on: 'engine.post.add(bloom())', recipe: 'recipes/52-around-the-picture.md "Post effect chain"', limits: 'glows by brightness alone (no per-object choice); reads the light before exposure', acts: 'glow' };
+ao.about = { cost: 'high', on: 'engine.post.add(ao())', recipe: 'recipes/52-around-the-picture.md "Post effect chain"', limits: 'screen space: nothing off screen or hidden behind darkens, thin edges get a halo', acts: 'ao' };

@@ -11,6 +11,7 @@ import { follows } from '../../core/base/follows.js';
 import * as THREE from 'three';
 import { makePlacer, makeNoise } from '../../core/stream/scatter.js';
 import { ChunkStream, bookCollision, collidersNear, ringsReady } from '../../core/stream/chunkStream.js';
+import { select } from './densityMap.js';
 
 export const GROUND_DEFAULTS = { chunkSize: 32, viewChunks: 3, density: 1, seed: 1 };   // shown by engine.catalog too
 
@@ -67,14 +68,28 @@ export class GroundChunks {
     for (const c of this.chunks.values()) if (c.state === 'ready') for (const sp of this.veg.list()) if (!sp.nearOnly || c.plants[sp.name]) this._grow(c, sp);
   }
 
-  _inArea(cx, cz) {
-    // no area given: a level that provides the ground bounds it (its walkable meshes), so plants never grow past the model's edge onto the
-    // flat fallback ground around it; with no level (setGround / flat default) the ground is unbounded and so is the vegetation
+  // the rectangle plants may grow in, or null (unbounded). No area given: a level that provides the ground bounds it (its walkable meshes), so plants
+  // never grow past the model's edge onto the flat fallback ground around it; with no level (setGround / flat default) it is unbounded
+  _rect() {
     const b = this.area ? null : this.engine.level?.heightfield?.bounds;
-    const a = this.area ?? (b && !b.isEmpty() ? { min: [b.min.x, b.min.z], max: [b.max.x, b.max.z] } : null);
+    return this.area ?? (b && !b.isEmpty() ? { min: [b.min.x, b.min.z], max: [b.max.x, b.max.z] } : null);
+  }
+  _inArea(cx, cz) {
+    const a = this._rect();
     if (!a) return true;
     const CH = this.chunkSize;
     return (cx + 1) * CH > a.min[0] && cx * CH < a.max[0] && (cz + 1) * CH > a.min[1] && cz * CH < a.max[1];
+  }
+  // a chunk overlapping the area still holds spots outside it: each plant (and its collider, same index) is tested by its own position
+  _clip(c, r) {
+    const a = this._rect();
+    if (!a || !r.n) return r;
+    const CH = this.chunkSize, ox = c.cx * CH, oz = c.cz * CH, keep = [];
+    for (let i = 0; i < r.n; i++) {
+      const x = ox + r.m[i * 16 + 12], z = oz + r.m[i * 16 + 14];
+      if (x >= a.min[0] && x < a.max[0] && z >= a.min[1] && z < a.max[1]) keep.push(i);
+    }
+    return select(r, keep);
   }
   _ring(c) { return this._stream.ring(c); }
 
@@ -122,7 +137,7 @@ export class GroundChunks {
     c.sphere.radius = Math.hypot(CH / 2, CH / 2, (c.hi - c.lo) / 2 + 8);
   }
   _grow(c, sp) {
-    const r = this._place(c.cx, c.cz, sp.rule, this.density);
+    const r = this._clip(c, this._place(c.cx, c.cz, sp.rule, this.density));
     for (let i = 0; i < r.n; i++) { const y = r.m[i * 16 + 13]; if (y < c.lo) c.lo = y; if (y > c.hi) c.hi = y; }
     this.veg.mount(c, sp.name, r);
   }

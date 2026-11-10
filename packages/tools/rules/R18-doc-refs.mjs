@@ -13,6 +13,7 @@
 //   6. free functions `name(` at the start of a span (error): exported by the engine, named in any d.ts, declared in the doc set or game code,
 //      or a JS / DOM global. ```js blocks are type-checked by R13, so classes 4 and 6 skip them; class 5 reads them in the engine's docs too, because R13 cannot read a block
 //      that does not parse (the inside of an object, a line with an ellipsis). A game's own docs name the game's modules, so there it stays off.
+//   In a game's docs (warn level) class 6 reports only a near miss of an engine export (`createEngin()`), since `build_rig()` is the game's own name.
 //   7. links to `file.md#anchor` and `#anchor` (error): the target has that heading or an <a id>. Why: a recipe's section gets renamed and the link keeps sending readers nowhere.
 // Known limits: names built at runtime and paths without an extension are not checked; class 6 accepts any name a d.ts mentions; option keys are R13's job (js blocks only);
 //   `§` section numbers, chains after a call (`describe().x`: module names decide those), .js template comments, d.ts comments and error texts are not read.
@@ -224,6 +225,8 @@ function checkFn(doc, item, ctx) {
   const m = item.span && item.text.match(/^([A-Za-z_$][\w$]*)\((?!s\))/);   // stair(s) is a plural, not a call
   if (!m || ctx.fns.has(m[1]) || PLACEHOLDER.test(m[1]) || allowed(doc, m[1])) return [];
   const near = closest(m[1], [...ctx.api.exports]);
+  // a game's own docs name its own helpers (a Blender script's build_rig()): only a near miss of an engine export claims to be engine API
+  if (levelOf(doc) === 'warn' && !near) return [];
   return [{ level: levelOf(doc), msg: `\`${m[1]}()\` is not an engine export or a name the d.ts knows${near ? `; did you mean \`${near}()\`?` : ''}`,
     fix: 'fix the name, or import it from where it lives' }];
 }

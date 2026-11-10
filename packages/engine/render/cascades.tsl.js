@@ -36,6 +36,8 @@ class CascadeNode extends CSMShadowNode {
     // _init is the node's own first-build step (cascade stand-in lights, frustums); run it with the engine camera instead of builder.camera
     // (private to three, so not in @types/three)
     if (this.camera === null) /** @type {any} */ (this)._init({ camera: this._engine.camera, renderer: builder.renderer });
+    // the game's filter (pcss from threedog/tsl, or its own) reaches every cascade: three's LightShadow.copy, which made them, leaves filterNode out
+    for (const l of this.lights) l.shadow.filterNode = /** @type {any} */ (this.light).shadow.filterNode;
     return super.setup(builder);
   }
   /** @param {any} frame @returns {boolean} false would make three call it again this frame (NodeFrame) */

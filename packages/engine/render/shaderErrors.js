@@ -115,7 +115,8 @@ function explainBuildError(message) {
   // three logs right after building the stand-in for the failed one, with the same render object: the newest build is the one that failed
   const ro = findNodeBuild(() => true), named = /\[threedog\] (patch|post effect) '/.test(message);
   return `[threedog] node build failed for ${ro ? nodeOwner(ro) : 'a material not among the recent builds'}; three draws it with a plain NodeMaterial instead (the black or white mesh). `
-    + (named ? 'The patch or post effect named above returned the node that failed.'
+    + (/\[vertex-inputs\]/.test(message) ? 'The vertex inputs counted above are the cause (render/vertexInputs.js).'
+      : named ? 'The patch or post effect named above returned the node that failed.'
       : "Not inside a patch's or post effect's node (those are named when they fail): look at the material's own nodes (colorNode, positionNode ...)");
 }
 

@@ -13,7 +13,7 @@
 // renderer when the program compiles, so one material works under any engine and two engines on a page each drive their own time and weather.
 // A patch that moves vertices (shadow: true) owns its shadow: meshes using the material get matching depth and distance
 // materials automatically (see the customDepthMaterial / customDistanceMaterial defaults below), callers never set them.
-// material.clone() does not carry patches (three's Material.copy skips onBeforeCompile): a game applies the effects to the clone again (recipes/09); engine code calls copyPatches(from, to).
+// material.clone() does not carry patches (three's Material.copy skips onBeforeCompile): a game applies the effects to the clone again (recipes/09); engine code copies with cloneMaterial(from).
 //
 // Composition contract (each part is checked, so a bad combination fails loudly in development instead of rendering wrong):
 //   needs.data     program inputs the code reads, named like three's program parameters ('instancing', 'instancingColor',
@@ -87,9 +87,12 @@ function missing(m, p) {
 // Why a patch cannot join the material's list, or '' (composition rules from the header)
 let deriving = false;   // re-entrancy flag, set and cleared inside one synchronous call (never across a frame)
 const CODE = new Map();   // name=cacheKey -> GLSL text, to catch a cacheKey that does not follow the code
-const replaced = p => ['vertex', 'fragment'].flatMap(st => Object.entries(p.glsl?.[st] || {}).filter(([, c]) => typeof c === 'object' && c.replace != null).map(([k]) => st + k));
+// one patch per chunk: a replace, or a slot flagged exclusive (fog sits before tonemapping_fragment, but two fog mixes would stack); the marker names the slot
+const EXCLUSIVE = SLOT_NAMES.filter(n => SLOTS[n].exclusive).map(n => `slot=${n}
+`);
+const replaced = p => ['vertex', 'fragment'].flatMap(st => Object.entries(p.glsl?.[st] || {}).filter(([, c]) => typeof c === 'object' && (c.replace != null || EXCLUSIVE.some(m => (c.before ?? '').includes(m)))).map(([k]) => st + k));
 const DATA = ['instancing', 'instancingColor', 'vertexColors', 'skinning', 'batching'];
-function clash(list, p) {
+function clash(list, p, fresh) {   // fresh: the CODE keys this call adds, so a failed batch can take them back
   for (const d of p.needs?.data || []) if (!DATA.includes(d)) {
     const near = closest(d, DATA);
     return `patch '${p.name}' needs.data names '${d}', which is not a program input; use ${DATA.join(' | ')}` + (near ? ` (did you mean '${near}'?)` : '');
@@ -108,7 +111,7 @@ function clash(list, p) {
   const key = p.name + '=' + (p.cacheKey ?? ''), code = JSON.stringify(p.glsl ?? {}).replace(/\/\/ threedog:(begin|end)[^\\"]*/g, '');
   if (CODE.has(key) && CODE.get(key) !== code)
     return `patch '${p.name}' produced different GLSL under the same cacheKey '${p.cacheKey ?? ''}'; put every value that changes the code into cacheKey`;
-  CODE.set(key, code);
+  if (!CODE.has(key)) { CODE.set(key, code); fresh?.push(key); }
   return '';
 }
 
@@ -139,7 +142,12 @@ function sharedOnce(pars, src) {
   const uniforms = new Set(Array.from(expander()(src).matchAll(DECL), m => m[1])), expand = expander();
   return pars.map(code => expand(code).replace(DECL, (all, name) => uniforms.has(name) ? '' : (uniforms.add(name), all)));
 }
-const PROTO_COMPILE = THREE.Material.prototype.onBeforeCompile;
+const PROTO_COMPILE = THREE.Material.prototype.onBeforeCompile, PROTO_KEY = THREE.Material.prototype.customProgramCacheKey;
+// An engine wrapper put on a material instance (this file's onBeforeCompile / customProgramCacheKey, render/fx/patchNodes.tsl.js's setup methods)
+// carries this key: a function handing back the game's part it wraps (null / three's method when the game had none). The WebGPU route names
+// only the game's GLSL hook by it (render/backend.js), and cloneMaterial carries the game's part instead of a wrapper bound to the original
+/** @internal */
+export const WRAPPED = Symbol.for('threedog.patchWrapper');
 
 function apply(shader, list, m, renderer) {
   for (const p of list) for (const d of p.needs?.data || []) if (!shader[d]) {
@@ -196,12 +204,13 @@ export function patchMaterial(material, patches, { strict = true } = {}) {
     // the game's own onBeforeCompile / customProgramCacheKey: those there before patching and those assigned after patching are all kept here and run first (user decision 5, 2026-11-02).
     // Why an instance accessor instead of a warning: before, a game assigning `m.onBeforeCompile = fn` later silently overwrote the wrapper, losing wind / cloud shadow / season;
     // with a warning an AI could only copy it into the chained form, an extra step for nothing. Now assignment replaces only "the game's part", engine patches still follow, and both apply.
-    let game = m.onBeforeCompile, gameKey = Object.hasOwn(m, 'customProgramCacheKey') ? m.customProgramCacheKey : null;
+    let game = m.onBeforeCompile, gameKey = Object.hasOwn(m, 'customProgramCacheKey') || (!m.isNodeMaterial && m.customProgramCacheKey !== PROTO_KEY) ? m.customProgramCacheKey : null;   // own, or a subclass's override on its prototype (a NodeMaterial's is three's own, keyed by its nodes)
     const own = game !== PROTO_COMPILE;
     const wrapper = function (shader, renderer) { if (game && game !== PROTO_COMPILE) game.call(this, shader, renderer); apply(shader, list, m, renderer); };
     // the wrapper marks itself as the engine's and hands out the game's part: the WebGPU route names only the game's GLSL hook (render/backend.js)
-    wrapper[Symbol.for('threedog.patchWrapper')] = () => game;
+    wrapper[WRAPPED] = () => game;
     const key = () => (gameKey ? gameKey.call(m) : game && game !== PROTO_COMPILE ? game.toString() : '') + '|threedog:' + list.map(p => p.name + '=' + (p.cacheKey ?? '')).join(',');
+    key[WRAPPED] = () => gameKey;   // cloneMaterial carries the game's own key function, not this one (it reads this material's list)
     if (!patchOn('material-compile-accessor')) { m.onBeforeCompile = wrapper; m.customProgramCacheKey = key; }   // three's plain properties: a later assignment replaces both
     else {
       Object.defineProperty(m, 'onBeforeCompile', { configurable: true, enumerable: own, get: () => wrapper, set(fn) { game = fn; m.needsUpdate = true; } });
@@ -210,34 +219,36 @@ export function patchMaterial(material, patches, { strict = true } = {}) {
     m.addEventListener('dispose', () => dropShadow(m));
   }
   // slot form is converted to anchor form at the entry (one internal representation), so the later conflict / shadow / cacheKey checks are the same for both forms; derived ones (copyPatches / shadow material) are already converted
-  const before = list.slice();
-  for (const p of deriving ? patches : withProviders(patches, list).map(anchored)) {
-    // a GLSL-only patch on a NodeMaterial throws even when not strict: skipping it would draw the material without its picture, silently
-    if (m.isNodeMaterial && !deriving && p.tsl == null) throw codedError('shader-patch', `[threedog] patch '${p.name}' has no tsl version; add tsl: (ctx) => ..., or keep this material on WebGLRenderer (${m.type} is a NodeMaterial)`);
-    const nodeGap = m.isNodeMaterial && !deriving ? nodePatches(m).gaps(m, p) : '';
-    if (nodeGap) {
-      if (strict) throw codedError('shader-patch', `[threedog] ${nodeGap}`);
-      warnOnce(coded('shader-patch', `[threedog] ${nodeGap}; skipped`));
-      continue;
+  const before = list.slice(), fresh = [];
+  try {   // any throw (a strict clash, a missing chunk, the NodeMaterial build) puts the list back: a rejected batch leaves no earlier patch installed
+    for (const p of deriving ? patches : withProviders(patches, list).map(anchored)) {
+      // a GLSL-only patch on a NodeMaterial throws even when not strict: skipping it would draw the material without its picture, silently
+      if (m.isNodeMaterial && !deriving && p.tsl == null) throw codedError('shader-patch', `[threedog] patch '${p.name}' has no tsl version; add tsl: (ctx) => ..., or keep this material on WebGLRenderer (${m.type} is a NodeMaterial)`);
+      const nodeGap = m.isNodeMaterial && !deriving ? nodePatches(m).gaps(m, p) : '';
+      if (nodeGap) {
+        if (strict) throw codedError('shader-patch', `[threedog] ${nodeGap}`);
+        warnOnce(coded('shader-patch', `[threedog] ${nodeGap}; skipped`));
+        continue;
+      }
+      const bad = deriving ? '' : clash(list, p, fresh);
+      if (bad) {
+        if (strict) throw codedError('shader-patch', `[threedog] ${bad}`);
+        warnOnce(coded('shader-patch', `[threedog] ${bad}; patch '${p.name}' skipped`));
+        continue;
+      }
+      const gaps = missing(m, p);
+      if (gaps?.length) {
+        const msg = `patch '${p.name}' needs ${gaps.join(', ')}, which ${m.type} does not have`;
+        if (strict) throw codedError('shader-patch', msg + '; use a material that has these chunks, or #include the threedog_* chunks in your own shader');
+        warnOnce(coded('shader-patch', '[threedog] ' + msg + '; skipped'));
+        continue;
+      }
+      const i = list.findIndex(q => q.name === p.name);
+      if (i >= 0) list[i] = p; else list.push(p);
     }
-    const bad = deriving ? '' : clash(list, p);
-    if (bad) {
-      if (strict) throw codedError('shader-patch', `[threedog] ${bad}`);
-      warnOnce(coded('shader-patch', `[threedog] ${bad}; patch '${p.name}' skipped`));
-      continue;
-    }
-    const gaps = missing(m, p);
-    if (gaps?.length) {
-      const msg = `patch '${p.name}' needs ${gaps.join(', ')}, which ${m.type} does not have`;
-      if (strict) throw codedError('shader-patch', msg + '; use a material that has these chunks, or #include the threedog_* chunks in your own shader');
-      warnOnce(coded('shader-patch', '[threedog] ' + msg + '; skipped'));
-      continue;
-    }
-    const i = list.findIndex(q => q.name === p.name);
-    if (i >= 0) list[i] = p; else list.push(p);
-  }
-  if (m.isNodeMaterial) try { nodePatches(m).apply(m, list); } catch (e) { list.splice(0, list.length, ...before); throw e; }
-  else changedClassic(m);
+    if (m.isNodeMaterial) nodePatches(m).apply(m, list);
+  } catch (e) { list.splice(0, list.length, ...before); for (const k of fresh) CODE.delete(k); throw e; }
+  if (!m.isNodeMaterial) changedClassic(m);
   dropShadow(m);
   m.needsUpdate = true;
   return m;
@@ -437,10 +448,36 @@ export function unpatchMaterial(material, name) {
   return material;
 }
 
+// What three's clone leaves behind. NodeMaterial.copy (and Material.copy's fixed list) carries only properties a fresh instance of the class
+// already has, so what a game set on the instance itself was dropped: its own lighting (mat.setupLightingModel = celLighting, the cel.tsl.js
+// example), its own onBeforeCompile, a field its class never declares. The copy then drew with three's plain lighting (Pigforest: every
+// vegetation model tree lost its toon look). Skipped as three's copy skips them: '_' internals, is* flags, ids, userData (copied by three)
+const NOT_CARRIED = /^(?:is[A-Z]|_)|^(?:id|uuid|version|type|userData|clippingPlanes)$/;
+/** The game's part under engine wrappers (WRAPPED), else the value itself */
+const gamePart = v => { while (typeof v === 'function' && v[WRAPPED]) v = v[WRAPPED](); return v; };
 /**
- * Give `to` the patches of `from`, e.g. after `from.clone()` (three's Material.copy does not carry onBeforeCompile, so a clone
- * starts without patches). Returns `to`.
- * @internal engine code that clones materials (vegetation fromModel) calls it
+ * The engine's material copy: from.clone(), plus what the game put on the instance itself (above), plus from's engine patches, each once.
+ * Every engine copy of a material goes through here (vegetation models, tinted characters and pickups, terrain textures, batching).
+ * @internal
+ * @template {Material} M @param {M} from @returns {M}
+ */
+export function cloneMaterial(from) {
+  const to = /** @type {any} */ (from.clone());
+  for (const k of Object.getOwnPropertyNames(from)) {
+    if (NOT_CARRIED.test(k) || Object.hasOwn(to, k)) continue;   // own on the copy: three's copy already carried it (or the class makes it)
+    const d = /** @type {PropertyDescriptor} */ (Object.getOwnPropertyDescriptor(from, k)), raw = d.get ? d.get.call(from) : d.value;
+    // an accessor is the engine's (a classic material's patch chains, the node key: copyPatches makes them again) unless it hands out a
+    // wrapper of the game's part (onBeforeCompile, customProgramCacheKey); three's copy skips accessors of the game's as well
+    if (d.get && !raw?.[WRAPPED]) continue;
+    const v = gamePart(raw);
+    if (v != null && v !== to[k]) to[k] = v;   // null / three's own method: nothing of the game's there
+  }
+  return /** @type {M} */ (copyPatches(from, to));
+}
+
+/**
+ * Give `to` the patches of `from` (three's Material.copy does not carry onBeforeCompile, so a clone starts without patches). Returns `to`.
+ * @internal a copy made from `from` goes through cloneMaterial, which calls this; alone it gives the patches to another material
  * @param {Material} from
  * @param {Material} to
  * @returns {Material}
@@ -458,15 +495,16 @@ export function copyPatches(from, to) {
 // applyEffects to opt in. WeakSet, not userData: userData is carried by clone and written into the file on glTF export, so a game material cloned from an engine one would be mistaken for it.
 const MADE = new WeakSet();
 /**
- * Record a material as engine-made (terrain, vegetation clones, water); returns it.
+ * Record a material (terrain, vegetation clones, water) or a texture as engine-made; returns it. It is also the creator record engine.dispose reads
+ * (core/engine/lifecycle.js): only a marked material or texture is freed there, a texture never because the material it sits on is the engine's.
  * @internal
- * @template {Material} M @param {M} m @returns {M}
+ * @template {Material | import('three').Texture} M @param {M} m @returns {M}
  */
 export function markEngineMade(m) { MADE.add(m); return m; }
 /**
- * Whether the engine made this material (see markEngineMade); a game's `new THREE.*Material` is false.
+ * Whether the engine made this material or texture (see markEngineMade); a game's `new THREE.*Material` is false.
  * @internal
- * @param {Material} m @returns {boolean}
+ * @param {Material | import('three').Texture} m @returns {boolean}
  */
 export function isEngineMade(m) { return MADE.has(m); }
 

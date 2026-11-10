@@ -10,8 +10,11 @@
 import { xzOf, yOf } from '../../core/base/math.js';
 import { surfaceOr } from '../../core/scene/ground.js';
 import { solveBatch, pathHandler, astarDefaults, RES, TILE, tileOf } from './pathJob.js';
-import { codedError } from '../../core/base/errorHints.js';
+import { codedError, coded } from '../../core/base/errorHints.js';
 import { withHeights } from './moveHelpers.js';
+import { reportError } from '../../core/base/errors.js';
+import { warnOnce } from '../../core/base/validate.js';
+import { passesOf } from '../collision/grid.js';
 
 /** Steps between sending a batch and its answers taking effect (4 = 67 ms): enough for a worker round trip, short enough that an NPC barely waits */
 const PATH_LAG = 4;
@@ -36,6 +39,15 @@ export function sourcePath(e, rule, from, to, o) {
   return d?.length ? { status: 'ok', path: d.map(p => ({ ...p, ...point(p) })) } : { status: 'noPath', path: null };
 }
 
+/**
+ * nav() is installed but cannot answer, and has no walkable mesh (procedural terrain has none): paths silently stand on collision A*. Say so once,
+ * in dev. Which method answers is unchanged. Also said while a level is still loading, so the text names both causes (characters may not import the level module).
+ */
+export function noteAStarStandIn(e) {
+  if (!e.nav || e.nav.ready) return;
+  warnOnce(coded('nav-fallback', 'nav() is installed but has no navmesh (it is built from the level ground: that level is still loading, or the terrain is procedural, which has none), so characters.findPath and findPathAsync use collision A* instead. Paths work, but are coarser than a navmesh and nav links / crowds do not apply.'), 'nav-fallback');
+}
+
 /** @internal */
 export class AsyncPaths {
   constructor(e, rule) {
@@ -46,11 +58,13 @@ export class AsyncPaths {
     this.lane = null;
     this.sent = { from: null, meshes: new Map(), ver: -1 };   // what the workers mirror, and of which provider: mesh size -> its revision, collision version
     this.turn = 0;   // bumps with every provider
+    this.ground = 0;   // bumps with every ground:change: a batch computed on the ground before a terrain edit must not land (the navmesh / collision numbers do not move for it)
     this.tiles = new Map();             // 'tx:tz' -> { data, trees, at, bv }
   }
   request(from, to, done, o = {}) {
     if (typeof done !== 'function') throw codedError('character-option', NO_DONE);
-    const [sx, sz] = xzOf(from), [gx, gz] = xzOf(to);
+    const [sx, sz] = xzOf(from), [gx, gz] = xzOf(to), passes = passesOf('characters.findPathAsync()', o.passes);
+    if (passes !== o.passes) o = { ...o, passes };   // the read form: one set of layers is one navmesh
     const h = { sx, sz, gx, gz, sy: yOf(from), gy: yOf(to), o, done, epoch: this.e.commits.epoch, canceled: false, remove() { h.canceled = true; } };
     this.queue.push(h);
     return h;
@@ -60,9 +74,10 @@ export class AsyncPaths {
   /** Which walkable state answers now: navmesh revision, collision version, or nothing */
   key() {
     const e = this.e, from = e.nav?.ready ? e.nav : e.collision;
+    if (from === e.collision) noteAStarStandIn(e);
     // another provider starts its numbers over, so equal ones say nothing: what the workers mirror goes, and a batch of the old one cannot match the new key
     if (from !== this.sent.from) { this.sent = { from, meshes: new Map(), ver: -1 }; this.turn++; }
-    return from === e.nav ? `n${this.turn}.${e.nav.revision}` : from ? `g${this.turn}.${e.collision.version}` : '-';
+    return from === e.nav ? `n${this.turn}.${e.nav.revision}.${this.ground}` : from ? `g${this.turn}.${e.collision.version}.${this.ground}` : '-';
   }
   /** Each fixed step (characters fixed): send up to perStep queued requests as one batch */
   flush() {
@@ -87,7 +102,7 @@ export class AsyncPaths {
       for (let i = 0; i < c.trees.length; i += 3) { const id = c.trees[i] + ',' + c.trees[i + 1]; if (!seen.has(id)) { seen.add(id); trees.push(c.trees[i], c.trees[i + 1], c.trees[i + 2]); } }
     };
     const reqs = list.map(({ sx, sy, sz, gx, gy, gz, o }) => {
-      if (mode === 'nav') { const m = e.nav.mesh(o.radius); return { mode, size: m.size, s: e.nav.point([sx, sy, sz], m), g: e.nav.point([gx, gy, gz], m), reach: e.nav.reach(o.radius), body: e.movement.height }; }
+      if (mode === 'nav') { const m = e.nav.mesh(o.radius, o.passes); return { mode, size: m.size, s: e.nav.point([sx, sy, sz], m), g: e.nav.point([gx, gy, gz], m), reach: e.nav.reach(o.radius), body: e.movement.height }; }
       if (mode === 'none') return { mode };
       const radius = o.radius ?? e.movement.radius, dflt = astarDefaults(radius), step = o.step ?? dflt.step, maxNodes = o.maxNodes ?? dflt.maxNodes;
       // A* may wander this far beyond the start-goal box; bounded by how far maxNodes cells can reach
@@ -95,7 +110,7 @@ export class AsyncPaths {
       for (let tx = tileOf(Math.min(sx, gx) - m); tx <= tileOf(Math.max(sx, gx) + m); tx++)
         for (let tz = tileOf(Math.min(sz, gz) - m); tz <= tileOf(Math.max(sz, gz) + m); tz++) take(tx + ':' + tz, tx, tz);
       const at = (x, z, y) => surfaceOr(e, x, z, y, y);
-      return { mode, s: { x: sx, y: at(sx, sz, sy), z: sz }, g: { x: gx, y: gy === undefined ? undefined : at(gx, gz, gy), z: gz }, body: e.movement.height, climb: e.movement.stepHeight, radius, step, maxNodes, navPending: !!e.nav };
+      return { mode, s: { x: sx, y: at(sx, sz, sy), z: sz }, g: { x: gx, y: gy === undefined ? undefined : at(gx, gz, gy), z: gz }, body: e.movement.height, climb: e.movement.stepHeight, radius, passes: o.passes, step, maxNodes, navPending: !!e.nav };
     });
     return { type: 'batch', key, reqs, tiles, heights, lower, trees };
   }
@@ -129,8 +144,9 @@ export class AsyncPaths {
     if (this.tiles.size > 4096) for (const [kk, o] of this.tiles) if (e.time.tick - o.at >= TILE_TTL) this.tiles.delete(kk);
     return v;
   }
-  /** Forget cached tiles overlapping a world box (ground:change) */
+  /** Forget cached tiles overlapping a world box and retire batches in flight (ground:change) */
   dropTiles({ x0, z0, x1, z1 }) {
+    this.ground++;   // also ends the batches in flight: key() reads it, land() recomputes them on the edited ground
     const span = TILE * RES;
     for (const k of this.tiles.keys()) {
       const [tx, tz] = k.split(':').map(Number);
@@ -150,7 +166,7 @@ export class AsyncPaths {
     if (key[0] === 'g' && this.sent.ver !== e.collision.version) {
       this.sent.ver = e.collision.version;
       const items = [];
-      e.collision.forEachStatic((type, o) => items.push(type === 'box' ? { x: o.x, y: o.y, z: o.z, h: o.h, r: o.r, c: o.c, s: o.s, hw: o.hw, hd: o.hd, box: true } : { x: o.x, z: o.z, r: o.r, box: false }));
+      e.collision.forEachStatic((type, o) => items.push(type === 'box' ? { x: o.x, y: o.y, z: o.z, h: o.h, r: o.r, c: o.c, s: o.s, hw: o.hw, hd: o.hd, ly: o.ly, box: true } : { x: o.x, z: o.z, r: o.r, ly: o.ly, box: false }));
       this.lane.broadcast({ type: 'colliders', items }, 'colliders');
     }
   }
@@ -163,7 +179,7 @@ export class AsyncPaths {
       if (h.canceled) return;
       const from = { x: h.sx, y: h.sy, z: h.sz }, to = { x: h.gx, y: h.gy, z: h.gz }, a = sourcePath(e, this.rule, from, to, h.o) ?? r[i];
       if (a.path) withHeights(e, a.path, from, to);
-      h.done(a.path, a.status);
+      try { h.done(a.path, a.status); } catch (err) { reportError(e, err, 'findPathAsync done', { soft: true }); }   // one request's throw must not leave the rest of the batch without an answer
     });
   }
 }

@@ -28,8 +28,8 @@ export async function run({ check }) {
   // a tag lost in a refactor would silently turn a name that follows Rapier or Recast into a 1.0 promise
   const open = new Set(r.experimental.map(k => k.split(' | ')[1]));
   const must = ['rigid.rapier', 'rigid.world', 'rigid.playerBody', 'rigid.playerCollider', 'nav.navMesh', 'nav.query', 'nav.tileCache', 'nav.helper', 'assets.gltf', 'assets.draco', 'assets.ktx2',
-    'post.object', 'post.targets', 'shadows.csm', 'wind', 'voxelGI', 'temporalAA', 'sunShafts', 'lightVolumes', 'threads', 'commits', 'grids', 'hlod', 'swarm', 'stream.source', 'stream.teleport',
-    'stream.addReadyCheck', 'stream.sources', 'post.get', 'post.own', 'post.antialias', 'post.list', 'terrain.edit', 'terrainDraw', 'vegetationDraw', 'weatherDraw', 'bakeProbes', 'loadProbes',
+    'post.object', 'post.targets', 'shadows.csm', 'wind', 'voxelGI', 'temporalAA', 'sunShafts', 'lightVolumes', 'threads', 'grids', 'hlod', 'swarm', 'stream.source', 'stream.teleport',
+    'stream.addReadyCheck', 'stream.sources', 'post.own', 'post.antialias', 'terrain.edit', 'terrainDraw', 'vegetationDraw', 'weatherDraw', 'bakeProbes', 'loadProbes',
     'loadLightmap', 'moduleOrder', 'player.saveMotion', 'player.loadMotion', 'jobs.loadingMs', 'jobs.maxSteps', 'jobs.slowStepMs', 'stream.unloadFactor',
     'batching.held', 'world.steps', 'level.heightfield'];
   check('[guard] every name of the unstable rows is marked', must.every(n => open.has(n)), must.filter(n => !open.has(n)).join(', '));
@@ -48,4 +48,7 @@ export async function run({ check }) {
   const log = '# Changelog\n\n## Unreleased\n\n- `c` is gone.\n\n## 0.7.1 (x)\n\n- `old` was here.\n';
   check('lock: notes are the text under "## Unreleased" only', unreleased(log).includes('`c`') && !unreleased(log).includes('old'), unreleased(log));
   check('lock: no Unreleased heading means no notes', unreleased('## 0.7.1\n- x\n') === '');
+  // [guard] the ground provider contract stays documented (api/ground.md) while the engine.ground samplers stay out of the lock
+  const surface = await surfaceLines(), gdoc = readFileSync(join(ENGINE, 'docs/api/ground.md'), 'utf8');
+  check('[guard] api/ground.md shows what a provider supplies (height, slope, type), the lock does not list engine.ground.height', ['ground.height(', 'ground.slope(', 'ground.type('].every(n => gdoc.includes(n)) && !surface.some(l => l.startsWith('engine sub-objects | ground.height |')));
 }

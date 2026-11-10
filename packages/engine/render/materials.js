@@ -109,10 +109,12 @@ export function mergeColored(parts, { flat = true } = {}) {
     if (!flat && !g0.attributes.normal) g0.computeVertexNormals();
     const g = g0.index ? g0.toNonIndexed() : flat ? g0.clone() : g0;   // flat rewrites normals: never on the caller's geometry
     if (flat) g.computeVertexNormals();
-    const c = new THREE.Color(hex), p = g.attributes.position.array, n = g.attributes.normal.array;
-    for (let i = 0; i < p.length; i++) { pos.push(p[i]); nor.push(n[i]); }
-    for (let i = 0; i < p.length / 3; i++) col.push(c.r, c.g, c.b);
-    if (keepUV) for (const v of g.attributes.uv.array) uv.push(v);
+    // by getX / getY (not .array): an interleaved attribute's array holds the other attributes too, and its length is not the vertex count
+    const c = new THREE.Color(hex), p = g.attributes.position, n = g.attributes.normal, t = keepUV && g.attributes.uv;
+    for (let i = 0; i < p.count; i++) {
+      pos.push(p.getX(i), p.getY(i), p.getZ(i)); nor.push(n.getX(i), n.getY(i), n.getZ(i)); col.push(c.r, c.g, c.b);
+      if (t) uv.push(t.getX(i), t.getY(i));
+    }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));

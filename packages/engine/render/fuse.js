@@ -5,10 +5,13 @@ import * as THREE from 'three';
 import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { CopyShader } from 'three/addons/shaders/CopyShader.js';
 import { codedError } from '../core/base/errorHints.js';
+import { NOISE_GLSL } from './effects.js';
 /** @import { PostFuse } from './PostFX' */
 
-// Helpers every snippet may call
-const HELPERS = 'float fxHash(vec2 p){ vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }';
+// Helpers every snippet may call: the engine's one hash / value noise (threedogHash, threedogNoise), so a post effect's random pattern is the
+// same as its TSL side's (fx.hash / fx.noise) and as every other effect's
+const HELPERS = `${NOISE_GLSL}
+#define fxHash threedogHash   // the frozen 1.0 name for post snippets (recipe 52), the same function`;
 const EMPTY = { float: () => 0, int: () => 0, vec2: () => new THREE.Vector2(), vec3: () => new THREE.Vector3(), vec4: () => new THREE.Vector4() };
 
 export class FusedPass extends Pass {

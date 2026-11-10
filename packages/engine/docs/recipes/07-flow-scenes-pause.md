@@ -1,6 +1,9 @@
 # Scene transitions and pause (flow)
 
-**In this recipe**: 1. Pause, title, ending · 1b. Start and continue · 2. Changing scene · 2b. Input contexts · 3. Verify · 4. Sessions · 5. Window and device
+> **Covers:** flow states (title, playing, paused, ending), changing scene, input contexts, new game / continue.
+> **Use when:** menus, pause, a title screen, moving between scenes.
+> **Shortest:** `engine.use(flow({ start: 'title' }))`.
+> **Sections:** 1 Pause / title · 1b Title -> start · 2 Changing scene / · 2b Input contexts menus · 3 Verify · 4 New game / · 5 Window and device
 
 Needs the module `flow()` (not in openWorld; add it yourself: `engine.use(openWorld({ camera: 'follow', ...}), flow())`).
 - **Flow states**: title, playing (built-in `playing`), paused (built-in `paused`: freezes gameplay + locks input), ending, ... Only one is active at a time.
@@ -10,20 +13,20 @@ Needs the module `flow()` (not in openWorld; add it yourself: `engine.use(openWo
 ## 1. Pause / title / ending (in main.js)
 ```js
 import { flow, toast } from 'threedog';
-const titleEl = document.getElementById('title'), startBtn = document.getElementById('start');   // elements you wrote in the page html
-engine.use(flow({ start: 'title' }));            // start in the title state (entered after engine:ready)
+const titleEl = document.getElementById('title'), startBtn = document.getElementById('start');  // elements you wrote in the page html
+engine.use(flow({ start: 'title' }));  // start in the title state (entered after engine:ready)
 
 engine.flow.define('title', {
-  freeze: true, lockInput: true, music: 'title',   // music: the track to play on entry (music module), null = stop
+  freeze: true, lockInput: true, music: 'title',  // music: the track to play on entry (music module), null = stop
   enter: (e, from) => { titleEl.hidden = false; },
   exit: (e, to) => { titleEl.hidden = true; },
 });
 engine.flow.define('ending', { freeze: true, lockInput: true, enter: () => toast(engine, 'The end') });
 startBtn.onclick = () => engine.flow.go('playing');
 
-engine.input.action('pause', { label: 'Pause', keys: ['KeyO'] });   // read by action name; Esc is the back key (see below)
+engine.input.define('pause', { label: 'Pause', keys: ['KeyO'] });  // read by action name; Esc is the back key (see below)
 engine.onFrame(() => {
-  if (engine.input.pressedRaw('pause')) engine.flow.go(engine.flow.state === 'paused' ? 'playing' : 'paused');   // paused pushes an opaque input context, so use pressedRaw
+  if (engine.input.pressedRaw('pause')) engine.flow.go(engine.flow.state === 'paused' ? 'playing' : 'paused');  // paused pushes an opaque input context, so use pressedRaw
 });
 engine.events.on('flow:change', ({ from, to }) => console.log(from, '->', to));
 ```
@@ -39,8 +42,8 @@ To reset only part of the run, do not write positions, health and spawns inside 
 Apply it on a fixed tick with `engine.nextFixed(fn)` or a flag read in `onFixed`. No fixed step runs while frozen, so on an end screen with `freeze: true` leave the freeze first:
 ```js
 engine.flow.define('gameOver', { freeze: true, lockInput: true });
-const resetRun = () => engine.vars.bump('tries', 1);   // the game's own reset: positions, health, spawns
-const retry = async () => { engine.flow.go('playing'); await engine.nextFixed(resetRun); };   // this order: frozen, nextFixed never fires
+const resetRun = () => engine.vars.bump('tries', 1);  // the game's own reset: positions, health, spawns
+const retry = async () => { engine.flow.go('playing'); await engine.nextFixed(resetRun); };  // this order: frozen, nextFixed never fires
 ```
 
 ### Back key (Esc): the UI focus stack
@@ -52,7 +55,7 @@ A game's own windows made with `makeWindow` are pushed automatically (`onCancel`
 `uiFocus` is experimental; `engine.input.push` is the stable route to take the keys for a screen of your own.
 ```js
 import { uiFocus } from 'threedog';
-const h = uiFocus(engine).push('myMap', { cancel: () => closeMap() });   // call h.remove() when closing; h.fresh = opened this very frame
+const h = uiFocus(engine).push('myMap', { cancel: () => closeMap() });  // call h.remove() when closing; h.fresh = opened this very frame
 ```
 An entry with a `nav` (every window, the settings menu, dialogue choices) lets go of a locked mouse when it opens. For anything else, `engine.page.releaseLock()` frees the mouse
 (recipe 21); neither counts as the player's Esc, so the pause menu stays shut.
@@ -64,14 +67,14 @@ To open straight into play, pick the start state up front instead of leaving the
 own URL keys (`?time=22:20&weather=storm`, applied after `engine:ready`, weather at once, then `wait` seconds are advanced), so only the game's
 own state needs a key of its own.
 ```js fragment
-const q = new URLSearchParams(location.search), moment = q.get('moment');   // the game's own key: which lamps are lit, the score ...
+const q = new URLSearchParams(location.search), moment = q.get('moment');  // the game's own key: which lamps are lit, the score ...
 engine.use(openWorld({ camera: 'follow' }), flow({ start: moment ? 'playing' : 'title' }));
 engine.flow.define('title', { freeze: true, lockInput: true,
   enter: () => showTitle({ canContinue: engine.saves.list().some(s => s.slot === 'auto') }), exit: () => hideTitle() });
-newBtn.onclick = () => engine.session.newGame();          // -> session:start -> 'playing'
+newBtn.onclick = () => engine.session.newGame();  // -> session:start -> 'playing'
 continueBtn.onclick = () => engine.session.load('auto');  // the same, from the save
 await engine.start();
-if (moment) setUpMoment(moment);   // the game's own data only; in code, time / weather are engine.calendar.timeOfDay = 0.93, weather.set('storm', { seconds: 0 })
+if (moment) setUpMoment(moment);  // the game's own data only; in code, time / weather are engine.calendar.timeOfDay = 0.93, weather.set('storm', { seconds: 0 })
 ```
 The engine's ready-made title (`createEngine({ ui: { title } })`, recipe 26 §5) opens in `start()` the same way: leave `title` out for a moment
 (`ui: { ...(moment ? {} : { title: { title: 'My Game', items: ['continue', 'start'] } }) }`).
@@ -91,10 +94,10 @@ color is one frame old (share `engine.uniforms.uSkyHorizon` instead, recipe 08).
 ```js fragment
 // A level-based game: switch to another map
 await engine.flow.transition(async () => {
-  await engine.level.load('/models/town2.glb');             // or a name from the assets manifest
+  await engine.level.load('/models/town2.glb');  // or a name from the assets manifest
   engine.player.placeAt(engine.level.spawn);
-  engine.cameraRig.follow(engine.player.root);               // the camera jumps straight there instead of flying from far away
-}, { fade: 0.6, autosave: 'auto' });                         // also save slot 'auto' before switching
+  engine.cameraRig.follow(engine.player.root);  // the camera jumps straight there instead of flying from far away
+}, { fade: 0.6, autosave: 'auto' });  // also save slot 'auto' before switching
 
 // Teleport within the same map: no save, music keeps playing
 engine.flow.transition(() => engine.player.placeAt([40, 0, -20]), { music: 'keep' });
@@ -121,17 +124,17 @@ through. Dialogue, windows, full-screen UI parts, cutscenes (while the player is
 opaque one: that is what "locks input" means (`input.enabled` is false while one is on the stack). Who moves a character is separate: a
 cutscene takes its actors' control ([57-control](57-control.md)).
 ```js
-engine.input.action('exit', { label: 'Get out', keys: ['KeyF'], context: 'vehicle' });          // 'interact' has E; give the vehicle its own keys
-engine.input.action('inspect', { label: 'Inspect', keys: ['KeyF'] });                               // gameplay action on the same key
-const h = engine.input.push('vehicle', { pass: true });                          // now F means exit, inspect is shadowed, WASD still works
-h.remove();                                                                       // back on foot
-engine.input.action('menuConfirm', { label: 'OK', keys: ['Space'], context: 'menu' });          // readable only while a window / menu is open
+engine.input.define('exit', { label: 'Get out', keys: ['KeyF'], context: 'vehicle' });  // 'interact' has E; give the vehicle its own keys
+engine.input.define('inspect', { label: 'Inspect', keys: ['KeyF'] });  // gameplay action on the same key
+const h = engine.input.push('vehicle', { pass: true });  // now F means exit, inspect is shadowed, WASD still works
+h.remove();  // back on foot
+engine.input.define('menuConfirm', { label: 'OK', keys: ['Space'], context: 'menu' });  // readable only while a window / menu is open
 ```
 - A switch applies at the start of the next fixed step (the input snapshot), so the press that boarded cannot also get out in the same step. Actions
   the switch blocks lose their held state, and a key cleared this way stays dead until released: closing a menu never leaves a key "still held" and
   keyboard auto-repeat does not bring it back.
 - Losing focus (`blur`, tab hidden) releases every held key.
-- `describe().holds.input` lists the stack with owners (`input.push(name, { owner })`; `input.gate(action, owner)` closes one action, listed in `holds.gates`); the event `input:context { stack }` fires on every change. `characters()` pushes `'vehicle'` while
+- `describe().holds.input` lists the stack with owners (`input.push(name, { owner })`; `input.gate(action, owner)` closes one action, listed in `holds.gates`; `holds.shadowed`: actions a pass context's key hides; `press` also names `shadowed-by:` / `context-off:`); the event `input:context { stack }` fires on every change. `characters()` pushes `'vehicle'` while
   the player drives (its `brake` action lives there).
 - Test: `engine.input.push('menu'); engine.step(1 / 60);` then `input.pressed('attack')` is false.
 
@@ -144,10 +147,10 @@ engine.input.action('menuConfirm', { label: 'OK', keys: ['Space'], context: 'men
 ## 4. New game / continue / back to title / retry (engine.session)
 Every playthrough starts from a clean slate, so a second new game is exactly like the first:
 ```js fragment
-await engine.session.newGame();          // the state right after start(): world, containers, vars, quests, clock, sky, weather, random
-await engine.session.load('slot1');      // continue (title "Continue", settings "Load"); retry: engine.session.load('checkpoint')
-await engine.session.quit();             // back to the title (settings "Back to title"); the title's Start calls newGame
-engine.session.track(engine.events.once('npc:talk', onTalk));   // anything the game adds during play: removed when the playthrough ends
+await engine.session.newGame();  // the state right after start(): world, containers, vars, quests, clock, sky, weather, random
+await engine.session.load('slot1');  // continue (title "Continue", settings "Load"); retry: engine.session.load('checkpoint')
+await engine.session.quit();  // back to the title (settings "Back to title"); the title's Start calls newGame
+engine.session.track(engine.events.once('npc:talk', onTalk));  // anything the game adds during play: removed when the playthrough ends
 ```
 Ending a playthrough drops a running cutscene, removes tracked handles, drops clock timers added after start(), drops background results not yet
 applied (commits), stops the music, applies the start state and snaps the camera to the player. flow goes back to its start state, then to
@@ -160,7 +163,7 @@ applied (commits), stops the music, applies the start state and snaps the camera
 
 ## 5. Window and device (engine.page)
 One place listens to window focus, tab visibility, mouse lock and the WebGL context; modules never add their own listeners.
-- Window in the background / tab hidden: gameplay is frozen by owner `'page'`, a full still (`freeze('page', { ambient: true })`; cutscenes stop too, rendering and UI go on; `engine.frozen` and `runState.owners` show it). `createEngine({ pauseOnBlur: false })` or
+- Window in the background / tab hidden: gameplay is frozen by owner `'page'`, a full still (`freeze('page', { still: true })`; cutscenes stop too, rendering and UI go on; `engine.frozen` and `runState.owners` show it). `createEngine({ pauseOnBlur: false })` or
   `engine.page.pauseOnBlur = false` keeps playing. Coming back resumes with no catch-up burst; a long frame turns into at most 0.1 s of fixed steps,
   and fewer when the steps are heavy (at most about 33 ms of catch-up work per frame; the rest is dropped as a brief slow-down). `engine.step()` never drops time.
 - `engine.events.on('page:blur', () => engine.flow?.go('paused'))` also opens the pause menu. Other events: `page:focus`,

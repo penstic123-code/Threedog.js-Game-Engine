@@ -44,7 +44,7 @@ export function objectOrigin(): Node;
  */
 export function instanceOffset(offset: Node): Node;
 /**
- * GLSL float threedogHash(vec2 p): a repeatable random number 0-1 from a 2D position.
+ * GLSL float threedogHash(vec2 p): a repeatable random number 0-1 from a 2D position (an integer hash of its bits: the same on WebGL and WebGPU).
  * @experimental
  */
 export function hash(p: Node): Node;
@@ -107,6 +107,22 @@ export function rim(normal: Node, viewDir: Node, color: Node, strength: Node | n
  * @experimental
  */
 export function celLighting(): import('three/webgpu').LightingModel;
+/**
+ * A shadow filter for a DirectionalLight whose edge softens with the distance from caster to receiver (PCSS). The game assigns it before the first frame; it reaches the engine's cascades too.
+ * lightSize: edge width per world unit of that distance; samples: filter taps; maxDistance: where the edge stops growing. A spot or point light throws by name.
+ * @example
+ * sun.shadow.filterNode = pcss({ lightSize: 0.04, samples: 16 });
+ * @experimental
+ */
+export function pcss(o?: { lightSize?: number; samples?: number; maxDistance?: number }): any;
+
+// three reads light.shadow.filterNode on WebGPURenderer (ShadowNode); @types/three does not declare it, so `sun.shadow.filterNode = pcss()` would not type-check
+declare module 'three/src/lights/LightShadow.js' {
+  interface LightShadow<TCamera extends import('three').Camera = import('three').Camera> {
+    /** A TSL shadow filter ({ depthTexture, shadowCoord, shadow, depthLayer }) => float lit, e.g. pcss(); read when the shadow node builds */
+    filterNode: any;
+  }
+}
 /**
  * GLSL float threedogWaterWave(vec3 p, float t): the built-in wave sum (height before waveHeight). p = world position * waveScale, t = time * waveSpeed.
  * @example

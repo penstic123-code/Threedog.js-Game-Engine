@@ -43,6 +43,8 @@ export function bridgeDriver(dir, { page } = {}) {
     reload: () => call({ op: 'reload' }),
     /** Close the headless browser the bridge opened (if any); resolves true when one was open */
     closeHeadless: () => call({ op: 'close-headless' }),
+    /** Opt-in: the dev server ignores file saves (no page reload) while on, for at most 10 minutes (scenario / verify --freeze-reload) */
+    freezeReload: on => call({ op: 'freeze-reload', on }),
   };
 }
 

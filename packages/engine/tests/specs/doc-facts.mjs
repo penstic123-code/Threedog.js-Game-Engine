@@ -21,7 +21,7 @@ export const specs = [
       const { strength, radius, threshold } = bloom().params, r52 = recipe('52-around-the-picture.md');
       check('recipe 52 names every bloom option with its real default', r52.includes('`bloom({ strength, radius, threshold })`') && r52.includes(`defaults ${strength}, ${radius}, ${threshold}`), `${strength} ${radius} ${threshold}`);
       check('recipe 09 warns that pool lights pass through walls, and gives a way out', /knows nothing of rooms/.test(recipe('09-materials-lights-models.md')) && /set\(\{ intensity: 0 \}\)/.test(recipe('09-materials-lights-models.md')));
-      check('an unknown content kind and recipe 20 both say rules goes in content/index.js', /list `rules` in content\/index\.js/.test(unknownContent('towers', { kinds: {} })) && /Add `recipes` to `content\/index\.js` like any other file, and `rules` too/.test(recipe('20-content-actions-save.md')));
+      check('an unknown content kind and recipe 20 both say rules goes in content/index.js', /list `rules` in content\/index\.js/.test(unknownContent('towers', { kinds: {} })) && /Add `recipes` and `rules` to `content\/index\.js`/.test(recipe('20-content-actions-save.md')));
       check('recipe 01 says where the canvas is', recipe('01-new-game.md').includes('engine.renderer.domElement'));
       // the calendar can stop or run fast (recipe 06), so a delay on the scale of an action names its channel; world timers of half a minute and more may stay on the calendar
       const dir = join(dirname(fileURLToPath(import.meta.url)), '../..'), sources = [...readdirSync(join(dir, 'docs/recipes')).map(f => `docs/recipes/${f}`), ...['core', 'modules'].flatMap(d => readdirSync(join(dir, d), { recursive: true }).filter(f => f.endsWith('.js')).map(f => `${d}/${f}`))];

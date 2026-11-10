@@ -8,7 +8,8 @@ import * as THREE from 'three';
 import { readParams } from '../core/base/params.js';
 import { codedError, coded } from '../core/base/errorHints.js';
 import { warnOnce, fmt } from '../core/base/validate.js';
-import { mats, noteFillLight, noteEnvironment } from './lit.js';
+import { mats } from './lit.js';
+import { litTwice } from '../core/inspect/pictureChecks.js';
 
 const FORMAT = 'threedog-lightmap', VERSION = 1, MAGIC = 0x4d4c4454;   // 'TDLM'
 const LOAD = { owner: { type: 'string', default: 'game', desc: 'who loaded it (describe().render.lightmap)' } };
@@ -18,7 +19,6 @@ const STRINGS = {
   fetch: 'engine.loadLightmap({file}): the file could not be read ({why}). Bake it with `threedog bake light`',
   missing: 'lightmap: {n} baked mesh(es) not in the scene or changed since the bake ({names}): they keep their old look. Load after the level is built, or bake again',
   moved: 'lightmap: {n} baked mesh(es) moved since the bake ({names}): baked light stays where it was. Moving things use a probe grid, not a lightmap',
-  doubled: 'lightmap is added on top of {what}, which the bake already saw, so that light counts twice. Turn it down on the baked level, or bake without it',
   shared: 'lightmap: a baked mesh shares its material with an unbaked one ({names}): that mesh has no second UV set and samples the map wrongly. Give it its own material',
 };
 
@@ -35,8 +35,20 @@ function parse(buf) {
   if (!Number.isInteger(meta.size) || meta.size < 4 || !Array.isArray(meta.meshes)) throw bad('its table has no size or mesh list');
   const base = (8 + n + 7) & ~7, end = base + meta.size * meta.size * 8;   // 8: the half floats and the 32-bit lists after them need aligned views
   if (end > buf.byteLength) throw bad('the file is cut short');
-  for (const m of meta.meshes) if (end + m.at + (m.count * 3 + m.indices) * 4 > buf.byteLength) throw bad(`the data of mesh ${m.name} is cut short`);
-  return { meta, base };
+  // every entry checked here, before load touches the scene: a typed-array view on a bad offset throws, and a value past the list scrambles the mesh,
+  // both half-way through the swaps if found there (GPT review l2-render 1)
+  const seen = new Set(), views = meta.meshes.map(m => {
+    const name = JSON.stringify(m?.name), whole = v => Number.isInteger(v) && v >= 0;
+    if (typeof m?.name !== 'string' || seen.has(m.name)) throw bad(`mesh ${name} has no name of its own in the table`);
+    seen.add(m.name);
+    if (![m.at, m.count, m.indices, m.vertices].every(whole) || m.at % 4 || !Array.isArray(m.matrix) || m.matrix.length !== 16 || !m.matrix.every(Number.isFinite))
+      throw bad(`the table entry of mesh ${name} is malformed (at, count, indices, vertices: whole numbers, at a multiple of 4; matrix: 16 numbers)`);
+    if (end + m.at + (m.count * 3 + m.indices) * 4 > buf.byteLength) throw bad(`the data of mesh ${name} is cut short`);
+    const at = end + m.at, from = new Uint32Array(buf, at, m.count), index = new Uint32Array(buf, at + m.count * 4, m.indices);
+    if (from.some(v => v >= m.vertices) || index.some(v => v >= m.count)) throw bad(`the data of mesh ${name} names a vertex past its own list`);
+    return { from, index, uv1: new Float32Array(buf, at + (m.count + m.indices) * 4, m.count * 2) };
+  });
+  return { meta, base, views };
 }
 
 /** Unwrapped geometry -> { vertices: the source's count, place: source vertex -> a vertex holding it now, or -1 }. A second file's list speaks of the source, not of the layout the first file left */
@@ -80,24 +92,21 @@ class Lightmap {
   }
   /** Meshes that moved, mapped materials shared with unmapped meshes, and what adds the light again. Runs on describe() and at load, never per frame */
   _checks() {
-    const moved = [], doubled = [], shared = [], onMapped = new Set();
+    const moved = [], shared = [], onMapped = new Set();
     for (const [o] of this._entries) for (const m of mats(o)) onMapped.add(m);
     this._e.scene.traverseVisible(o => {
-      if (noteFillLight(o, doubled)) return;
-      if (o.isLightProbeGrid) doubled.push(`probe grid ${o.name}`);
-      else if (o.isMesh && !this._entries.has(o) && mats(o).some(m => onMapped.has(m))) shared.push(o.name || `${o.type} ${o.id}`);
+      if (o.isMesh && !this._entries.has(o) && mats(o).some(m => onMapped.has(m))) shared.push(o.name || `${o.type} ${o.id}`);
     });
-    noteEnvironment(this._e.scene, doubled);
     for (const [o, matrix] of this._entries) {
       o.updateWorldMatrix(true, false);
       if (o.matrixWorld.elements.some((v, i) => Math.abs(v - matrix[i]) > 1e-3)) moved.push(o.name);
     }
-    return { moved, doubled, shared };
+    return { moved, shared };
   }
   /** describe().render.lightmap row */
   info() {
-    const { moved, doubled, shared } = this._checks();
-    return { file: this.file, size: this.size, meshes: this._entries.size, owner: this.owner, bakedOn: this.backend, skipped: this.skipped, missing: this.missing, moved, doubled, shared };
+    const { moved, shared } = this._checks();
+    return { file: this.file, size: this.size, meshes: this._entries.size, owner: this.owner, bakedOn: this.backend, skipped: this.skipped, missing: this.missing, moved, shared };
   }
   /** Take the map off the meshes and free it (the unwrapped geometry stays: it draws the same). Safe to call twice */
   remove() {
@@ -114,7 +123,7 @@ export const lightmapMethods = {
    * its second UV set and sets plain `material.lightMap`, on WebGL and WebGPU alike. Call it once the level is built, with its lights as they will be
    * played. Nothing runs per frame. Keep the sun real-time; the ambient light the bake saw (hemisphere, environment) has to go, or it counts twice.
    * A wrong file is refused with code `lightmap-data` and nothing is changed. `material.lightMapIntensity` is yours. describe().render.lightmap says what
-   * was skipped, moved or doubled.
+   * was skipped or moved; describe().render.checks names light counted twice.
    * @example userData: floor.userData.static = true;   // then: threedog bake light
    * const light = await engine.loadLightmap('light/level.lightmap');
    * hemi.intensity = 0;
@@ -131,31 +140,36 @@ export const lightmapMethods = {
       if (!res.ok) throw codedError('lightmap-data', fmt(STRINGS.fetch, { file, why: res.statusText }));
       buf = await res.arrayBuffer();
     }
-    const { meta, base } = parse(/** @type {ArrayBuffer} */ (buf));
+    const { meta, base, views } = parse(/** @type {ArrayBuffer} */ (buf));
     const tex = new THREE.DataTexture(new Uint16Array(/** @type {ArrayBuffer} */ (buf), base, meta.size * meta.size * 4), meta.size, meta.size, THREE.RGBAFormat, THREE.HalfFloatType);
     tex.channel = 1; tex.minFilter = tex.magFilter = THREE.LinearFilter; tex.needsUpdate = true;
-    this._lightmap?.remove();
-    const set = new Lightmap(this, meta, tex, o.owner, typeof file === 'string' ? file : 'bytes');
-    const binary = base + meta.size * meta.size * 8, names = new Map();
+    const set = new Lightmap(this, meta, tex, o.owner, typeof file === 'string' ? file : 'bytes'), names = new Map(), swaps = [];
     this.scene.traverse(x => { if (x.isMesh && x.name) names.set(x.name, x); });
-    for (const m of meta.meshes) {
-      const mesh = names.get(m.name);
-      // the vertex count is what the bake's list was made from: another count means another mesh, and its UVs would be noise
-      if (!mesh || mesh.isInstancedMesh || (layouts.get(mesh.geometry)?.vertices ?? mesh.geometry.attributes.position.count) !== m.vertices) { set.missing.push(m.name); continue; }
-      const at = binary + m.at, old = mesh.geometry, from = new Uint32Array(/** @type {ArrayBuffer} */ (buf), at, m.count), list = gatherList(old, from);
-      if (!list) { set.missing.push(m.name); continue; }
-      mesh.geometry = relayout(old, list, new Uint32Array(/** @type {ArrayBuffer} */ (buf), at + m.count * 4, m.indices),
-        new Float32Array(/** @type {ArrayBuffer} */ (buf), at + (m.count + m.indices) * 4, m.count * 2));
-      noteLayout(mesh.geometry, m.vertices, from);
+    // two steps, so a failure leaves the scene as it was: every new geometry is made first, nothing in the scene touched; only then the old map goes and all swap at once
+    try {
+      meta.meshes.forEach((m, i) => {
+        const mesh = names.get(m.name);
+        // the vertex count is what the bake's list was made from: another count means another mesh, and its UVs would be noise
+        if (!mesh || mesh.isInstancedMesh || (layouts.get(mesh.geometry)?.vertices ?? mesh.geometry.attributes.position.count) !== m.vertices) { set.missing.push(m.name); return; }
+        const { from, index, uv1 } = views[i], list = gatherList(mesh.geometry, from);
+        if (!list) { set.missing.push(m.name); return; }
+        swaps.push({ mesh, m, from, geometry: relayout(mesh.geometry, list, index, uv1) });
+      });
+    } catch (err) { for (const x of swaps) x.geometry.dispose(); tex.dispose(); throw err; }
+    this._lightmap?.remove();
+    for (const { mesh, m, from, geometry } of swaps) {
+      const old = mesh.geometry;
+      mesh.geometry = geometry;
+      noteLayout(geometry, m.vertices, from);
       old.dispose();   // nothing else frees its GPU buffers; a mesh that shares it just uploads it again
       for (const x of mats(mesh)) { x.lightMap = tex; x.needsUpdate = true; }
       set._entries.set(mesh, m.matrix);
     }
     this._lightmap = set;
-    const { moved, doubled, shared } = set._checks(), first = l => l.slice(0, 3).join(', ');
+    const { moved, shared } = set._checks(), twice = litTwice(this), first = l => l.slice(0, 3).join(', ');
     if (set.missing.length) warnOnce(coded('lightmap-check', fmt(STRINGS.missing, { n: set.missing.length, names: first(set.missing) })));
     if (moved.length) warnOnce(coded('lightmap-check', fmt(STRINGS.moved, { n: moved.length, names: first(moved) })));
-    if (doubled.length) warnOnce(coded('lightmap-check', fmt(STRINGS.doubled, { what: doubled.join(', ') })));
+    if (twice) warnOnce(coded('lightmap-check', twice));
     if (shared.length) warnOnce(coded('lightmap-check', fmt(STRINGS.shared, { names: first(shared) })));
     return set;
   },

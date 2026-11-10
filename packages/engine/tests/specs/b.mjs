@@ -115,7 +115,7 @@ export const specs = [
       check('one-shot action with lock: go() does not interrupt it while playing', r.blocked === 'wave');
       check('a one-shot action emits anim:end when done and returns to then', r.back === 'idle' && r.ends.includes('wave'), JSON.stringify(r));
       const c = await ev(() => {
-        const p = engine.characters.createPlayer({ control: 'camera', cameraFollow: true, spawn: { x: 0, z: 4 }, model: window.makeRig(), clips: { walk: 'Walk', run: 'Run' } });
+        const p = engine.characters.addPlayer({ control: 'camera', cameraFollow: true, spawn: { x: 0, z: 4 }, model: window.makeRig(), clips: { walk: 'Walk', run: 'Run' } });
         engine.step(0.5);
         const idle = p.anim.state;
         p.playAction('Wave'); engine.step(0.1);

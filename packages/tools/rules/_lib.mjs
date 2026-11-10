@@ -189,7 +189,7 @@ export function engineApi() {
   const namespaces = [];
   for (const s of engine ? checker.getPropertiesOfType(engine) : []) {
     const d = s.declarations?.[0];
-    if (!d || s.name.startsWith('_') || ts.isMethodSignature(d) || ts.isMethodDeclaration(d)) continue;
+    if (!d || s.name.startsWith('_') || s.getJsDocTags(checker).some(t => t.name === 'internal') || ts.isMethodSignature(d) || ts.isMethodDeclaration(d)) continue;
     const t = typeOf(s);
     if (t && ownType(t) && checker.getPropertiesOfType(t).some(m => isMethod(m, t))) namespaces.push({ name: s.name, type: t });
   }

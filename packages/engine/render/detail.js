@@ -7,7 +7,9 @@ import { isOptions } from '../core/base/util.js';
 import { placeholderTexture, hashText } from './effects.js';
 import { declareUniforms } from './uniformDecl.js';
 import { codedError } from '../core/base/errorHints.js';
-import { DETAIL as D, LUMA_601, glslFloat as f } from './fxNumbers.js';
+import { DETAIL as D, LUMA_601, glslFloat as f, hashOffset } from './fxNumbers.js';
+/** A dab salt (whole cells x, y) as the uvec2 added to a cell's first hash step @param {number} x @param {number} y */
+const salt = (x, y) => `uvec2(${hashOffset(x)}u, ${hashOffset(y)}u)`;
 
 /**
  * @typedef {{ texture?: string | import('three').Texture, noise?: 'grain' | 'paper' | 'stroke' | 'dabs', glsl?: string, uniforms?: Record<string, any>,
@@ -35,9 +37,10 @@ float threedogDDabs(vec2 p, float octaves){ float s = 0.5, w = ${f(D.dabWeight)}
   for (int o = 0; o < 3; o++) { if (float(o) >= octaves) break;
     vec2 ip = floor(p); float fo = float(o);
     for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
-      vec2 c = ip + vec2(float(i), float(j));
-      vec2 h = vec2(threedogHash(c + fo * 13.1), threedogHash(c.yx + 7.7 + fo * 5.3));
-      float ang = 6.2832 * threedogHash(c * 1.7 + 3.1 + fo), r = 0.35 + 0.3 * threedogHash(c * 2.3 + 11.9 + fo), tone = threedogHash(c + vec2(5.5, 1.3) + fo);
+      // five hashes of whole cells k + salt (the hash takes cells, a fraction would be cut off); the salt is added to k's first step (effects.js)
+      vec2 c = ip + vec2(float(i), float(j)); highp uvec2 k = threedogHashCell(c + fo * 131.0);
+      vec2 h = vec2(threedogHashStep(k), threedogHashStep(k + ${salt(57, 113)}));
+      float ang = 6.2832 * threedogHashStep(k + ${salt(211, 37)}), r = 0.35 + 0.3 * threedogHashStep(k + ${salt(89, 271)}), tone = threedogHashStep(k + ${salt(163, 199)});
       vec2 d = p - (c + 0.15 + 0.7 * h); float ca = cos(ang), sa = sin(ang);
       d = vec2(ca * d.x + sa * d.y, -sa * d.x + ca * d.y) / vec2(r * 1.3, r * 0.75);
       s = mix(s, tone, (1.0 - smoothstep(0.3, 1.0, length(d))) * w); }

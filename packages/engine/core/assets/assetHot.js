@@ -10,12 +10,13 @@
 // Limits (said in the report): a copy's collision box keeps the size it was placed with until the next load; an InstancedMesh or a merged batch
 // the game built itself from a geometry is not found (only engine paths are).
 import { registerManifest, paramValues } from './assetManifest.js';
-import { protoCaches, protoOf, cachedModel } from './namedModel.js';
-import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
+import { protoSlots, protoOf, dropProto, cachedModel } from './namedModel.js';
 import { list } from '../base/util.js';
 import { reportError } from '../base/errors.js';
 import { codedError } from '../base/errorHints.js';
-import { note } from '../base/validate.js';
+import { note, warnOnce } from '../base/validate.js';
+import { freeRetired } from './assetEntry.js';
+import { partsOf, cloneModel } from '../base/freeParts.js';
 
 // a failed rebuild is reported (soft: the old copies stay on screen) and the swap goes on with the other names
 const failWith = e => (err, what) => reportError(e, err, `asset hot swap: ${what}`, { soft: true });
@@ -60,11 +61,13 @@ async function swapModels(e, changed, why = 'edit') {
     if (type === 'model' && neu) pair(old.value.scene, neu.scene, name);
   }
   // 2. cached builds (what content, pickups and vegetation got): drop them, build every name + params asked for so far again
-  const oldCached = new Map();
+  const oldCached = new Map(), builds = [];
   for (const [k, ent] of [...a.entries]) {
     const n = k.startsWith('cached:') ? k.slice(7, k.indexOf(':', 7)) : null;
     if (n == null || !names.has(n)) continue;
     if (ent.value) oldCached.set(unhashed(k), ent.value);
+    // retired, not just dropped: the load is pinned (Assets.cached), so it waits in a._retired where dispose reaches it, and is freed below once nothing draws it
+    const load = ent.load; a._retire(ent); if (load?.settled) builds.push(load);
     a.entries.delete(k);
   }
   for (const n of names) a._cachedSrc?.delete(n);   // a new source under the same name is not a name clash
@@ -75,13 +78,15 @@ async function swapModels(e, changed, why = 'edit') {
     const o = oldCached.get(unhashed(k)), name = k.slice(7, k.indexOf(':', 7));
     pair(o.geometry ?? o.scene, ent.value.geometry ?? ent.value.scene, name);
   }
-  // 3. prototypes (content props / templates, pickups): a new prototype per old one; copies point at it from now on
-  for (const { api, cache } of protoCaches(e)) for (const [key, p] of [...cache]) {
+  // 3. prototypes (content props / templates, pickups): a new prototype per old one, held by the same consumers; copies point at it from now on.
+  // The old one's lease goes back once the scene below no longer draws its parts (swapped), so trim and release can free the old file then
+  let swapped; const offScene = new Promise(r => { swapped = r; });
+  for (const [key, slot] of protoSlots(e)) {
     const model = JSON.parse(key), name = list(model)[0];
     if (!names.has(name)) continue;
-    const old = await p.catch(() => null);
-    cache.delete(key);
-    const neu = await protoOf(e, api, model).catch(err => { fail(err, `model "${name}"`); return null; });
+    const old = await slot.promise.catch(() => null);
+    let next = null; for (const h of dropProto(e, key, offScene)) next = protoOf(e, h, model);
+    const neu = await next?.catch(err => { fail(err, `model "${name}"`); return null; });
     if (!old || !neu) continue;
     protoNew.set(old, neu);
     pair(old.obj, neu.obj, name);
@@ -91,17 +96,26 @@ async function swapModels(e, changed, why = 'edit') {
   const b = e.batching, batched = !!b?.enabled;
   if (batched) b.enabled = false;
   const count = n => { copies[n] = (copies[n] || 0) + 1; };
-  const oldGeo = new Set(geo.keys());
+  const oldGeo = new Set(geo.keys()), moved = [];
   e.scene.traverse(o => {
     const ud = o.userData;
-    if (ud?.proto && protoNew.has(ud.proto)) ud.proto = protoNew.get(ud.proto);   // content copies: later aligns read the new size
+    // a model() copy whose parts do not pair 1:1 (2 parts became 1) is rebuilt whole from the new load, like the prototype copies below: never a mix of old and new parts
+    const rec = a._instances.get(o), whole = rec && structure.has(rec.e.name) ? a.entries.get(rec.e.name) : null;
+    if (whole?.load?.value) {
+      const was = new Set(); rec.load.value?.scene?.traverse(x => { for (const p of partsOf(x)) was.add(p); });
+      const known = new Set(); rec.load.value?.scene?.traverse(x => { if (x.name) known.add(x.name); });
+      rebuildCopy(a, o, rec.e.name, whole.load.value.scene, whole.load.value.animations, c => {
+        let old = false; c.traverse(x => { if (partsOf(x).some(p => was.has(p))) old = true; });
+        if (old) c.traverse(x => { if (x.name && !known.has(x.name)) warnOnce(`asset hot swap: the parts of "${rec.e.name}" changed, so its copies were rebuilt; objects you attached inside them ("${x.name}") were dropped. Attach them again in onModel`); });
+        return old;
+      }, count, fail);
+    }
+    // content copies: later aligns read the new size, measured once their parts are swapped below
+    if (ud?.proto && protoNew.has(ud.proto)) { ud.proto = protoNew.get(ud.proto); moved.push(ud); }
     // a model whose part count changed: the copy root stays (code holds it), its parts from the old prototype are replaced by the new ones
-    if (ud?.modelKey && structure.has(list(JSON.parse(ud.modelKey))[0]) && !o.isMesh) {
+    if (ud?.modelKey && !whole?.load?.value && structure.has(list(JSON.parse(ud.modelKey))[0]) && !o.isMesh) {   // not twice: a model() copy was rebuilt above
       const neu = [...protoNew.values()].find(p => p.obj.userData.modelKey === ud.modelKey);
-      if (neu) {
-        for (const c of [...o.children]) if (meshesOf(c).some(m => oldGeo.has(m.geometry))) o.remove(c);
-        for (const c of [...skeletonClone(neu.obj).children]) { o.add(c); count(list(JSON.parse(ud.modelKey))[0]); }   // a copy: add() takes c out of the live list
-      }
+      if (neu) rebuildCopy(a, o, list(JSON.parse(ud.modelKey))[0], neu.obj, neu.obj.animations, c => meshesOf(c).some(m => oldGeo.has(m.geometry)), count, fail);
     }
   });
   const seenMat = new Set();
@@ -117,12 +131,33 @@ async function swapModels(e, changed, why = 'edit') {
       for (const k of Object.keys(m)) { const t = tex.get(m[k]); if (t) { m[k] = t.to; m.needsUpdate = true; count(t.name); } }
     }
   });
+  // Leases follow the data: every copy now draws only the new load (a copy whose parts do not pair 1:1 was rebuilt whole above), so its lease moves with it, at this moment
+  const stale = [];
+  e.scene.traverse(o => {
+    const rec = a._instances.get(o), lease = o.userData.lease;
+    const next = rec && names.has(rec.e.name) ? a.entries.get(rec.e.name) : null;
+    if (next?.load?.value && next.load !== rec.load) { a._instances.set(o, { ...rec, e: next, load: next.load, lease: a._lease(next, undefined, undefined, rec.lease.by) }); stale.push(rec.lease); }
+    const own = lease && names.has(lease.name) ? a.entries.get(lease.name) : null;   // content props and pickups lease by name
+    if (own?.load?.value) { stale.push(lease); o.userData.lease = a._lease(own, lease.name, undefined, lease.by); }
+  });
+  // the copy as it stands now (what its setup added stays on it), by the rule content measures every build with: never the bare prototype
+  for (const ud of moved) ud.remeasure?.();
+  swapped();
+  for (const l of stale) l.remove();
   // 5. module hooks: vegetation rebuilds its species from the new models (its materials are patched copies, not found above)
   for (const fn of a._swapHooks ?? []) {
     try { const r = await fn({ names, geometry: geo, material: mat }); for (const [n, k] of Object.entries(r ?? {})) copies[n] = (copies[n] || 0) + k; }
     catch (err) { fail(err, "a module's own copies"); }
   }
   if (batched) b.enabled = true;
+  // the old generated builds: what no scene mesh draws any more goes now (a part something still draws, one the swap could not find, waits for dispose)
+  if (builds.length) {
+    const drawn = new Set(); e.scene.traverse(o => { for (const x of partsOf(o)) drawn.add(x); });
+    for (const load of builds) {
+      let used = false; load.value?.scene?.traverse(o => { if (partsOf(o).some(x => drawn.has(x))) used = true; });
+      if (!used) freeRetired(a, load);
+    }
+  }
 
   const report = {
     why, names: [...new Set(changed.map(c => c.name))], copies, ms: Math.round(performance.now() - t0),   // measure
@@ -131,6 +166,23 @@ async function swapModels(e, changed, why = 'edit') {
   };
   remember(e, report);
   return report;
+}
+
+/**
+ * The one rebuild of a copy whose parts changed (model() copies, content props, pickups): the old parts go through dropCopy (leases, cloned bones, instance buffers),
+ * the new ones are cloned (cloneModel), and the same steps a first build runs follow: the game's onModel setup (the copy root is the same object) and the static rays.
+ * An Animator drives the old skeleton: it is stopped, and unless the setup made a new one the game animates again (one dev warning). Why not rebind: a Character
+ * holds that Animator object and its hooks, and hot reload is a dev aid, so the simplest rule that is never wrong wins.
+ */
+function rebuildCopy(a, o, name, fresh, clips, isOld, count, fail) {
+  const was = a.animatorOf(o);
+  if (was) { was.dispose(); a._animators.delete(o); }
+  for (const c of [...o.children]) if (isOld(c)) { o.remove(c); a.dropCopy(c); }
+  for (const c of [...cloneModel(fresh).children]) { o.add(c); count(name); }   // a copy: add() takes c out of the live list
+  o.animations = clips;
+  try { a._setup?.(o, name); } catch (err) { fail(err, `onModel for "${name}"`); }
+  a.restatic(o);
+  if (was && !a.animatorOf(o)) warnOnce(`asset hot swap: "${name}" has new parts, so its animation was stopped (it drove the old skeleton). Call assets.animate() on the copy again, or reload the page`);
 }
 
 /** Keep the last swaps for describe().assetSwaps, say it in the console and as a toast (dev aid: the AI and the person both see it) */

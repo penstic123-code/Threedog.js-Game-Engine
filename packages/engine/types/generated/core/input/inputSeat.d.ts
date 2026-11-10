@@ -7,7 +7,7 @@ export class Seat {
         keys?: Record<string, string | string[]>;
     });
     /** The gamepad index this seat owns, if any @type {number | undefined} */ pad: number | undefined;
-    /** Who this seat acts for, as engine.actor for engine.input: createPlayer sets the player's id; interactions read it. Set it to hand the seat to a vehicle or a squad member @type {string | null} */ actor: string | null;
+    /** Who this seat acts for, as engine.actor for engine.input: addPlayer sets the player's id; interactions read it. Set it to hand the seat to a vehicle or a squad member @type {string | null} */ actor: string | null;
     /** Same list as engine.input.actions: actions are the game's, a seat only routes them */
     get actions(): any;
     /** Held, as engine.input.down @param {string} action @returns {boolean} */

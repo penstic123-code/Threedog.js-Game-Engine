@@ -55,7 +55,7 @@ export const specs = [
       await ev(setup);
       const r = await ev(async () => {
         const q = mapQuiet(), E = await mapWalkers('map-hold');
-        const p = E.characters.createPlayer({ control: 'camera', spawn: { x: 0, z: 0 } });
+        const p = E.characters.addPlayer({ control: 'camera', spawn: { x: 0, z: 0 } });
         // the documented short move: an ability takes the character and a timer gives it back
         const roll = E.control.take(p, { owner: 'roll', layer: 'script', step: () => ({ x: 0, z: 1, run: true }) });
         E.clock.after(0.4, () => roll.remove(), { channel: 'world' });
@@ -79,7 +79,7 @@ export const specs = [
       const r = await ev(async () => {
         const { mk, createEngine } = threedogThreads, q = mapQuiet(), E = mk(createEngine, 'map-quit');
         let gold = 0;
-        E.saves.register('gold', { save: () => ({ gold }), load: d => { gold = d.gold; } });
+        E.saves.define('gold', { save: () => ({ gold }), load: d => { gold = d.gold; } });
         await E.start();
         gold = 7;
         await E.saves.save('auto');
@@ -107,7 +107,7 @@ export const specs = [
       await ev(setup);
       const r = await ev(async () => {
         const q = mapQuiet(), E = await mapWalkers('map-walk');
-        const p = E.characters.createPlayer({ control: 'camera', spawn: { x: 0, z: 0 } });
+        const p = E.characters.addPlayer({ control: 'camera', spawn: { x: 0, z: 0 } });
         const snap = E.saves.collect(), settle = () => new Promise(s => setTimeout(s, 20));
         const walk = async change => {
           let end = null;
@@ -153,7 +153,7 @@ export const specs = [
       await ev(setup);
       const r = await ev(async () => {
         const q = mapQuiet(), E = await mapWalkers('map-late');
-        const p = E.characters.createPlayer({ control: 'camera', spawn: { x: 1, z: 1 } });
+        const p = E.characters.addPlayer({ control: 'camera', spawn: { x: 1, z: 1 } });
         const begin = p.position.x;
         p.placeAt([9, 0, 9]);
         const moved = p.position.x;
@@ -213,7 +213,7 @@ export const specs = [
     },
   },
   {
-    name: '[guard] session register: a second saves.register on a held key does not silently take the part away from its owner',
+    name: '[guard] session register: a second saves.define on a held key does not silently take the part away from its owner',
     url: PAGE,
     async run({ check, ev }) {
       await ev(setup);
@@ -221,9 +221,9 @@ export const specs = [
         const { mk, createEngine } = threedogThreads, q = mapQuiet(), E = mk(createEngine, 'map-reg');
         await E.start();
         const part = v => ({ save: () => ({ v }), load() {} });
-        E.saves.register('mapKey', part('first'));
+        E.saves.define('mapKey', part('first'));
         let threw = null;
-        try { E.saves.register('mapKey', part('second')); } catch (err) { threw = err.code ?? err.message; }
+        try { E.saves.define('mapKey', part('second')); } catch (err) { threw = err.code ?? err.message; }
         const out = { threw, said: q.said.filter(s => s.includes('mapKey')), holds: E.saves.collect().parts.mapKey?.v };
         E.dispose(); q.back();
         return out;

@@ -20,10 +20,11 @@ export async function run({ check }) {
   const put = (p, t) => { mkdirSync(dirname(join(g, p)), { recursive: true }); writeFileSync(join(g, p), t); };
   try {
     put('package.json', '{"name":"fixture"}');
-    put('assets.js', `export default [{ name: 'g', models: { crate: '/models/crate.glb', spare: '/models/spare.glb', gone: '/models/gone.glb', tree_1: '/models/tree_1.glb', rock: () => null },
+    put('assets.js', `export default [{ name: 'g', models: { crate: '/models/crate.glb', spare: '/models/spare.glb', gone: '/models/gone.glb', rootonly: '/models/decoy.glb', tree_1: '/models/tree_1.glb', rock: () => null },
   textures: { bark: '/tex/bark.png' }, sounds: { door: '/sfx/door.ogg' } }];\n`);
     for (const f of ['models/crate.glb', 'models/spare.glb', 'models/tree_1.glb', 'sfx/door.ogg']) put('public/' + f, 'x'.repeat(10));
     for (const f of ['tex/bark.png', 'tex/orphan.png', 'decals/a.png']) put('public/' + f, PNG);
+    put('models/decoy.glb', 'xx');   // in the game root, not in public/: the url '/models/decoy.glb' does not serve it
     put('content/props.js', `// spare is only in this comment\nexport default [\n  { id: 'a', model: 'crate' },\n  { id: 'b', model: 'barrel' },\n];\n`);
     put('main.js', `import { createMaterials } from './picture/materials.js';
 import './picture/water.js';
@@ -54,6 +55,7 @@ mesh.material = m.grass; other.material = materials.grass;
     check('a file nobody names is unused', st('texture orphan') === 'unused', st('texture orphan'));
     check('a shader file nobody imports is unused, an imported one used', st('shader old') === 'unused' && st('shader wave') === 'used', `${st('shader old')} ${st('shader wave')}`);
     check('a manifest entry whose file is gone is missing', st('model gone') === 'missing', st('model gone'));
+    check('[guard] a manifest url means public/<path> only (the one resolver): a same-named file in the game root does not make it exist', st('model rootonly') === 'missing', st('model rootonly'));
     check('a model name no pack has is missing, with where', st('model barrel') === 'missing' && it('model barrel').uses[0].at === 'content/props.js:4', JSON.stringify(it('model barrel')));
     check('a name built at run time: not traced, never unused', st('model tree_1') === 'not-traced', st('model tree_1'));
     check('a folder joined with a name: not traced', st('texture a') === 'not-traced', st('texture a'));
@@ -64,7 +66,7 @@ mesh.material = m.grass; other.material = materials.grass;
     check('the game\'s own sfx() says nothing about the asset list', !it('sound beep') && st('sound door') === 'used', JSON.stringify(it('sound beep')));
     check('a ShaderMaterial is listed with the shaders', st('shader mat') === 'used', st('shader mat'));
     check('a pulled file is marked from the pull records', st('library barkpack') === 'used' && it('texture bark').library === 'barkpack' && it('library barkpack').pulled === 'unchanged', JSON.stringify(it('library barkpack')));
-    check('summary counts and lists', data.summary.counts.model === 6 && data.summary.missing.length === 2 && data.summary.unused.includes('model spare') && data.summary.notTraced.includes('model tree_1')
+    check('summary counts and lists', data.summary.counts.model === 8 && data.summary.missing.length === 3 && data.summary.unused.includes('model spare') && data.summary.notTraced.includes('model tree_1')
       && data.summary.biggest[0].size > 10, JSON.stringify(data.summary));
     check('the run-time list names the line', data.dynamic.some(d => d.at === 'main.js:6'), JSON.stringify(data.dynamic));
 

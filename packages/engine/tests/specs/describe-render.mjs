@@ -91,7 +91,7 @@ export const specs = [
           const low = engine.describe().render.scale;
           const text = engine.describeText({ full: true });
           engine.setPixelRatio(max); a.on = false;
-          return { dpr, base, low, max, warns: warns.filter(x => /render scale/.test(x)), text };
+          return { dpr, base, low, max, warns: warns.filter(x => /lowered automatically/.test(x)), text };
         } finally { console.warn = w0; }
       });
       check('scale lists current / devicePixelRatio / upscaled / floor', r.base.devicePixelRatio === r.dpr && typeof r.base.upscaled === 'boolean' && r.base.floor === 0.6, JSON.stringify(r.base));
@@ -121,7 +121,7 @@ export const specs = [
           tone: d.render?.toneMapping, exposure: d.render?.exposure, rendererExposure: engine.renderer.toneMappingExposure, run: d.time.run, installed: [...engine.modules.keys()] };
       });
       const want = { ambience: 'audioLocked,on,rules', collision: 'atPlayer,boxes,cameraOcclusion,circles,fields', music: 'current,ducked,gain,intensity,override,pending,playing,ready,ruled,stems,tracks',
-        particles: 'alive,effects,emitters', photo: 'album,keyBound,last,maxAlbum', rigid: 'bodies,colliders,dynamic,fixed,frozen,ready,sleeping,vehicles', water: 'bodies,sea',
+        particles: 'alive,effects,emitters', photo: 'album,keyBound,last,maxAlbum,tracing', rigid: 'bodies,colliders,dynamic,fixed,frozen,ready,sleeping,vehicles', water: 'bodies,sea',
         settings: 'capturing,open,tab,values', debugPanel: 'open' };
       for (const [n, k] of Object.entries(want)) {
         if (n === 'debugPanel' && !r.installed.includes(n)) continue;   // dev builds only

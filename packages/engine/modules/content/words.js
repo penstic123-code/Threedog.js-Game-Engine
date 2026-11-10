@@ -1,5 +1,5 @@
 // Running condition and effect words: content.test and content.run. The vocabulary is rules.js, the built-in meanings are in loader.js.
-import { warnMissing, warnOnce } from '../../core/base/validate.js';
+import { warnMissing, warnOnce, syncOnly } from '../../core/base/validate.js';
 import { coded } from '../../core/base/errorHints.js';
 import { parseClock } from '../../core/time/dayTime.js';
 import { list } from '../../core/base/util.js';
@@ -34,7 +34,7 @@ export function runWords(e, api, effects, a, actor) {
   for (const x of list(a)) for (const [k, v] of Object.entries(x)) {
     const d = effects.get(k);
     if (!d) { warnMissing('effect', k, [...effects.keys()]); continue; }
-    try { const r = d.run(e, d.raw ? v : norm(e, api, d.ref, v), v, ctx); if (isRunFailure(r)) failed.push({ word: k, code: r.code, facts: r.facts }); } catch (err) { first ??= err; threw++; }
+    try { const r = d.run(e, d.raw ? v : norm(e, api, d.ref, v), v, ctx); syncOnly(r, `content word { ${k} }`, true); if (isRunFailure(r)) failed.push({ word: k, code: r.code, facts: r.facts }); } catch (err) { first ??= err; threw++; }
   }
   const answer = failed.length ? failure({ code: failed[0].code, facts: { failed } }) : { ok: true };
   if (failed.length) {

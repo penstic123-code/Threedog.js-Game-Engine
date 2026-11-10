@@ -130,16 +130,20 @@ const PAGE = {
     // Actions go through the public input.simulate (same path as a real key press: the fixed snapshot and the frame "just pressed" see it).
     // A raw key code is sent as a real keyboard event: the engine's own window listener takes it, no private input call
     const down = on => action ? inp.simulate(action, on) : dispatchEvent(new KeyboardEvent(on ? 'keydown' : 'keyup', { code }));
+    // who holds the action is read BEFORE the press: a key that itself opens a window (cancel -> settings) must not be reported blocked by the window it opened
+    const blocked = action ? inp.blockedBy(action) : [];
     const before = e.time.tick;
     down(true);
     e.step(a.seconds, { render: false });
     down(false);
     const m = moved(e, before, a.seconds);
     e.step(1 / 60);
+    // an action the game refuses to read (a window or dialogue was already open, a gate is closed) is refused for a real key too: say so and by whom, not a silent no-op
     const b = brief(e).slice(0, 2), hold = a.seconds > 0.1;
     b[0] = `${hold ? 'Held' : 'Pressed'} ${a.key}${code === a.key ? '' : ' (' + code + ')'}${hold ? ' for ' + a.seconds + ' s' : ''} · ` + b[0];
     b.push(run(e));
-    return { ...m, stopped: !!e.error, text: b.join('\n') };
+    if (blocked.length) b.unshift(`Blocked: ${a.key} did nothing, input is held by ${blocked.join(', ')}`);
+    return { ...m, stopped: !!e.error, blocked, text: b.join('\n') };
   },
   // skip: engine.skip({ to | seconds }): the jump itself is the op time.skip; the sky clock moves, no fixed steps run
   skip: async (a, e, brief, run) => {
@@ -263,7 +267,7 @@ const PAGE = {
   },
   // a source string, not a function: PICTURE is spliced in here because the page wrapper only passes brief / run / at / moved
   picture: `(a, e) => (${PICTURE})(e).join('\\n')`,
-  catalog: (a, e) => ({ data: e.catalog(a.id ?? (a.find ? { find: a.find } : undefined)), ids: [...e.modules.keys()], ops: [...e.ops.defs.keys()] }),
+  catalog: (a, e) => ({ data: e.catalog(a.id ?? (a.find ? { find: a.find } : undefined), a.offered ? { offered: a.offered } : undefined), ids: [...e.modules.keys()], ops: [...e.ops.defs.keys()] }),
   inspect: (a, e) => {
     if (a.at === 'materials' || a.at === 'perf') return e.inspect[a.at]().text;   // threedog inspect materials | perf (engine.inspect.materials / perf)
     const r = e.inspect(a.at), args = x => Object.entries(x || {}).map(([k, v]) => ` ${k}=${v}`).join('');

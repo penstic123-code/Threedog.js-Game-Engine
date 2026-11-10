@@ -5,6 +5,7 @@
 // would rewrite the Euler the mover keeps facing in. The object's own matrix is composed here and matrixAutoUpdate is off just for that draw.
 // Anything that placed the object outside a step (a tween, a frame-driven mover, a platform carried in frame) leaves it different from the step's end: it is then drawn as it stands.
 import * as THREE from 'three';
+import { codedError } from '../base/errorHints.js';
 
 /** Farther than this in one step (squared meters) is a teleport, not motion: drawn at once, never swept across the map */
 const JUMP2 = 16;
@@ -18,9 +19,16 @@ export class StepPoses {
     /** objects whose matrix is held for this draw */ this.held = [];
     engine.time.onMove(() => this.end());
   }
-  /** place(at): how to move o if a solver owns its pose (a rigid body); gone(): what that solver does when o leaves for good. Core names no module, so the solver says both here */
-  add(o, place = null, gone = null) { this.map.set(o, { o, place, gone, last: o.position.clone(), lastRot: o.quaternion.clone(), pos: o.position.clone(), rot: o.quaternion.clone(), moved: false }); }
-  remove(o) { this.map.delete(o); }
+  /** place(at): how to move o if a solver owns its pose (a rigid body); gone(): what that solver does when o leaves for good. Core names no module, so the solver says both here.
+   *  One object, one owner: a second add throws and names the first (two solvers writing one mesh, the last one winning silently, was the bug). owner() names it for that error (a function, so a character's id is read only if it is needed). Returns the owner's handle:
+   *  remove() deletes only this entry, so an owner that is already gone cannot delete a newer one's */
+  add(o, place = null, gone = null, owner = () => 'another owner') {
+    const had = this.map.get(o);
+    if (had) throw codedError('rigid-misuse', `This object already has a physics owner: ${had.owner()}. One object has one owner of its pose (a rigid body, a character); ${owner()} cannot also take it. Remove the first (its remove() / dispose()) or give ${owner()} an object of its own`);
+    const p = { o, owner, place, gone, last: o.position.clone(), lastRot: o.quaternion.clone(), pos: o.position.clone(), rot: o.quaternion.clone(), moved: false };
+    this.map.set(o, p);
+    return { remove: () => { if (this.map.get(o) === p) this.map.delete(o); } };
+  }
   /** o and all under it left for good (engine.remove): a level's root takes the crates placed in it along, and a solver must not keep them solid and unseen */
   forget(o) { if (this.map.size) o.traverse(c => this.map.get(c)?.gone?.()); }
   /** A write moves o outside any step: the object goes there, and whatever solves it too, or the solver's next pose would undo the write */

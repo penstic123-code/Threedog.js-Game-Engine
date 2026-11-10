@@ -39,13 +39,18 @@ function referenceDiff({ P, ref, add }) {
     add('intent', `ref-${k}`, `differs from the reference ${R.file}: ${k} ${R[k]} there, ${S[k]} here (${d[k].relative > 0 ? '+' : ''}${Math.round(d[k].relative * 100)}%); levers: ${levers(P, lk)}.`, Math.abs(d[k].relative));
 }
 
-const HINTS = [shadowInvisible, timeFlat, lightNoEffect, clipped, glare, shadowBlack, shadowEdgeHints, overBudget, lightBalance, cameraInside, blackFrame,
+/** The engine's combination checks, as they came from the page (probe-setup.mjs): judged there, never again here */
+function combination({ probe, add }) {
+  for (const c of probe?.checks ?? []) add(c.kind === 'mistake' ? 'mistake' : 'fact', c.id, c.text, 1);   // a note is a fact: likely, not proven
+}
+
+const HINTS = [combination, shadowInvisible, timeFlat, lightNoEffect, clipped, glare, shadowBlack, shadowEdgeHints, overBudget, lightBalance, cameraInside, blackFrame,
   farClip, fogCover, shaderFacts, lightLayout, transparentOrder, crushed, unknownIntentWords, designWords, referenceDiff];
 
 /**
  * Hints from the screenshot numbers, the page probe (probe.mjs) and the declared intent.
  * @param {{ numbers: any, probe?: any, intent?: any[], isDay?: boolean | null, ref?: any }} o ref: a compareImages result
- * @returns {{ kind: 'contradiction' | 'fact' | 'intent', id: string, text: string }[]}
+ * @returns {{ kind: 'mistake' | 'contradiction' | 'fact' | 'intent', id: string, text: string }[]}
  */
 export function pictureHints({ numbers: N, probe, intent = [], isDay = null, ref = null }) {
   const out = [], sh = probe?.shadows, add = (kind, id, text, size = 0, brief) => out.push({ kind, id, text, size, ...(brief && { brief }) });

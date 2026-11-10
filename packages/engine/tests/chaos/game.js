@@ -91,7 +91,7 @@ export async function buildGame({ saveKey, seed }) {
   E.content.load(CONTENT);
   // on engine:ready, as a game does it: what stands there is part of the new-game state
   const ready = new Promise(res => E.events.once('engine:ready', () => {
-    E.characters.createPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 0 }, model: makeRig() });
+    E.characters.addPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 0 }, model: makeRig() });
     for (const n of NPCS) E.npcs.add({ ...n, model: makeRig() });
     res();
   }));

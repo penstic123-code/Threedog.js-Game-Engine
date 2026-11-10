@@ -7,7 +7,8 @@
 //     data     structured payload where there is one (errors, status, verify, a described path); otherwise null
 //     text     what the CLI prints and the MCP text content carries: the command's lines, then one line saying the state and the way back to normal.
 //              Plain-data outputs (eval / js, describe with a path or --full / --all) get no state line, so their text stays parseable; runtime still has it.
-import { run } from './commands.mjs';
+import { run, options } from './commands.mjs';
+import { parseOptions } from '../lib/cli-args.mjs';
 import { COMMANDS, EXTRA } from './command-table.mjs';
 import { bridgeDriver, devServer, errorText } from './connect.mjs';
 import { diagnose } from './diagnose.mjs';
@@ -25,9 +26,15 @@ const ALL = { ...COMMANDS, ...EXTRA };
  */
 const PAGE_NOT_READY = /the engine stopped before it was ready|timed out waiting for the engine|no ready engine|no engine in the page|did not respond for \d+ minutes/;
 
-/** Output that a caller parses (JSON, a bare value): no state line appended */
-const plain = (cmd, args) => cmd === 'js' || (cmd === 'describe' && args.some((a, i) => a === '--full' || a === '--all'
-  || (!a.startsWith('--') && args[i - 1] !== '--max')));
+/** Output that a caller parses (JSON, a bare value): no state line appended. Arguments run() rejects are already an error answer here, so a parse failure just means "not plain" */
+const plain = (cmd, args) => {
+  if (cmd === 'js') return true;
+  if (cmd !== 'describe') return false;
+  try { const { rest, opt } = options('describe', args); return !!(opt.full || opt.all || rest.length); } catch { return false; }
+};
+
+/** Options of the commands dispatch runs itself (the others are parsed by commands.mjs run()); an unknown one fails with the parser's list of valid ones */
+const OWN = { play: { flags: ['stop'] }, status: {}, verify: { flags: ['freeze-reload', 'save-baseline'], positional: true }, scenario: { flags: ['freeze-reload'], positional: true } };
 
 export async function execute(dir, cmd, args = [], { page, onShot } = {}) {
   // a mistyped command name is answered as that, not as "no dev server" (which is what the bridge check below would say first)
@@ -39,7 +46,9 @@ export async function execute(dir, cmd, args = [], { page, onShot } = {}) {
   if ((args.includes('--help') || args.includes('-h')) && cmd !== 'snap') return { ok: true, code: 'ok', summary: ALL[cmd], runtime: NONE, data: null, text: `threedog ${cmd}: ${ALL[cmd]}` };
   let r, driver, runtime = null, thrown = false, code = null;
   try {
-    if (cmd === 'play') r = await play(dir, { page, stop: args.includes('--stop') });
+    const own = OWN[cmd] && parseOptions(args, OWN[cmd]);
+    if (own?.rest.length > 1) throw new Error(`${cmd} takes one scenario name, got ${own.rest.length}: ${own.rest.join(' ')}`);
+    if (cmd === 'play') r = await play(dir, { page, stop: own.opt.stop });
     else if (cmd === 'status') r = await status(dir, { page });
     else if (cmd.startsWith('picture-')) r = await pictureCommand(dir, cmd, args);
     else if (cmd === 'report') r = await reportCommand(dir, args, { page });   // reads a page only when one is attached
@@ -48,7 +57,13 @@ export async function execute(dir, cmd, args = [], { page, onShot } = {}) {
     else {
       devServer(dir);
       driver = bridgeDriver(dir, { page });
-      r = cmd === 'verify' ? await verify(driver, dir, args[0]) : cmd === 'scenario' ? await scenarioReport(driver, dir, args[0]) : await run(driver, cmd, args, { dir });
+      const freeze = !!own?.opt['freeze-reload'];   // the flag may come before the name
+      if (freeze) {
+        // a dev server started before this option takes the op as "reload the page" (its fallback for an unknown op) and answers null: stop there
+        if (await driver.freezeReload(true) !== true) throw new Error('this dev server was started before --freeze-reload existed and cannot hold reloads: restart it (threedog play --stop, then threedog play) or run without the flag');
+      }
+      try { r = cmd === 'verify' ? await verify(driver, dir, own.rest[0], { saveBaseline: !!own.opt['save-baseline'] }) : cmd === 'scenario' ? await scenarioReport(driver, dir, own.rest[0]) : await run(driver, cmd, args, { dir }); }
+      finally { if (freeze) await driver.freezeReload(false).catch(() => {}); }
     }
     runtime = r.runtime ?? null;
     if (r.image) onShot?.(r.image);   // snap: the picture the caller should see (it may be smaller than the saved file)

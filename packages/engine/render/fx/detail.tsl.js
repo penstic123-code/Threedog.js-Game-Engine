@@ -3,9 +3,9 @@
 // Why not import detail.js: it registers a ShaderChunk and pulls in the WebGL patch machinery, which threedog/tsl must not.
 // The projections (world / triplanar / screen) and the fade are part of the `detail` patch (its uniforms), not callable functions, so they
 // belong to the patch's tsl field; a NodeMaterial gets the same pattern by feeding detailNoise any 2D position it likes.
-import { Fn, vec2, vec3, vec4, float, int, sin, cos, floor, mix, smoothstep, length, cross, dot, normalize, abs, sign, dFdx, dFdy, Loop, Break, If } from 'three/tsl';
-import { hash, noise } from './noise.tsl.js';   // the GLSL side calls the same threedogHash / threedogNoise (#include <threedog_noise>)
-import { DETAIL as D } from '../fxNumbers.js';
+import { Fn, vec2, vec3, vec4, float, int, uint, sin, cos, floor, mix, smoothstep, length, cross, dot, normalize, abs, sign, dFdx, dFdy, Loop, Break, If } from 'three/tsl';
+import { hashCell, hashStep, noise } from './noise.tsl.js';   // the GLSL side calls the same threedogHash / threedogNoise (#include <threedog_noise>)
+import { DETAIL as D, hashOffset } from '../fxNumbers.js';
 
 /** @template {string} T @typedef {import('three/webgpu').Node<T>} N */
 // three's Loop reads `name` (the loop variable's name), but @types/three does not list it yet (a TODO there): the same Loop, typed with names
@@ -31,10 +31,12 @@ const dabs = Fn(/** @param {[N<'vec2'>, N<'float'>]} a */ ([p0, octaves]) => {
     const ip = floor(p).toVar();
     // Why named loop variables: nested Loop() calls default to `i` each, and the inner one would shadow the outer one
     namedLoop({ start: -1, end: 1, condition: '<=', name: 'tdDj' }, { start: -1, end: 1, condition: '<=', name: 'tdDi' }, ({ tdDj, tdDi }) => {
-      const c = ip.add(vec2(float(tdDi), float(tdDj)));
-      const h = vec2(hash(c.add(fo.mul(13.1))), hash(c.yx.add(7.7).add(fo.mul(5.3))));
-      const ang = hash(c.mul(1.7).add(3.1).add(fo)).mul(6.2832), r = hash(c.mul(2.3).add(11.9).add(fo)).mul(0.3).add(0.35);
-      const tone = hash(c.add(vec2(5.5, 1.3)).add(fo));
+      // five hashes of whole cells k + salt, the salt added to k's first step (GLSL detail.js says why)
+      const c = ip.add(vec2(float(tdDi), float(tdDj))), [kx, ky] = hashCell(c.add(fo.mul(131))).map(n => n.toVar());
+      const salted = (/** @type {number} */ sx, /** @type {number} */ sy) => hashStep(kx.add(uint(hashOffset(sx))), ky.add(uint(hashOffset(sy))));
+      const h = vec2(hashStep(kx, ky), salted(57, 113));
+      const ang = salted(211, 37).mul(6.2832), r = salted(89, 271).mul(0.3).add(0.35);
+      const tone = salted(163, 199);
       const d0 = p.sub(c.add(0.15).add(h.mul(0.7))), ca = cos(ang), sa = sin(ang);
       const d = vec2(ca.mul(d0.x).add(sa.mul(d0.y)), sa.negate().mul(d0.x).add(ca.mul(d0.y))).div(vec2(r.mul(1.3), r.mul(0.75)));
       s.assign(mix(s, tone, float(1).sub(smoothstep(0.3, 1, length(d))).mul(w)));

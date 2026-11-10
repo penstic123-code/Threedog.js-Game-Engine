@@ -12,7 +12,7 @@
 
 // Biome rules: checked top to bottom, the first match is the biome there (the last has no condition and is the default).
 // Conditions (all optional): minHeight/maxHeight altitude, maxAboveWater height above water, minSlope slope, minTemp/maxTemp temperature 0-1,
-// minMoist/maxMoist moisture 0-1, minRiver closeness to a river (0-1); any: [cond, cond] matches if either holds.
+// minMoist/maxMoist moisture 0-1, minRiver closeness to a river (0-1); any: [cond, cond] adds "and either of these holds" to the rule's other conditions.
 export const BIOMES = [
   { name: 'beach', maxAboveWater: 1.3 },
   { name: 'snow', any: [{ minHeight: 46 }, { maxTemp: 0.2 }] },
@@ -85,7 +85,8 @@ function groundType(x, z, h, sl, n) {
     const R = P.river, r = Math.abs(fbm(x * R.scale + R.offset[0], z * R.scale + R.offset[1], 3) - 0.5), w = P.riverWidth, bank = w * R.bank, t = 1 - r / bank;
     return r >= bank ? 0 : t * t * (3 - 2 * t) * (r < w ? 1 : R.edge);
   })();
-  const test = c => c.any ? c.any.some(test) : !((c.minHeight != null && h < c.minHeight) || (c.maxHeight != null && h > c.maxHeight) ||
+  // every plain condition of a rule AND, when the rule has `any`, at least one of its alternatives holds
+  const test = c => (!c.any || c.any.some(test)) && !((c.minHeight != null && h < c.minHeight) || (c.maxHeight != null && h > c.maxHeight) ||
     (c.maxAboveWater != null && h >= W + c.maxAboveWater) || (c.minSlope != null && sl < c.minSlope) ||
     (c.minTemp != null && temp() < c.minTemp) || (c.maxTemp != null && temp() > c.maxTemp) ||
     (c.minMoist != null && moist() < c.minMoist) || (c.maxMoist != null && moist() > c.maxMoist) ||

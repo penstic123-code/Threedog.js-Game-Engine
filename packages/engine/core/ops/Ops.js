@@ -10,7 +10,7 @@
 // which lands "after step N" and replays the same. Args must be plain data and self-contained (aim direction goes in the args).
 // The guard (ops.guard) backs "don't go around it": in dev, saved gameplay state written outside loading, fixed steps and ops
 // is reported (see recipes/23-ops.md). Dev argument checks live in opsCheck.js.
-import { DEV, fmt, missingText, warnOnce } from '../base/validate.js';
+import { DEV, fmt, missingText, warnOnce, syncOnly } from '../base/validate.js';
 import { checkTypeRule, asModule } from '../engine/moduleTypes.js';
 import { checkDef, checkArgs, devError, SOURCES } from './opsCheck.js';
 import { coded, codedError } from '../base/errorHints.js';
@@ -50,7 +50,7 @@ export class Ops {
     /** @internal true while route() is held: every write outside allow() is reported, even in fixed steps and ops (own movement, world.move, excepted) */ this._client = false;
     /** Counter that only goes up: each committed op, undo, load and rollback bumps it (a failed op that changed nothing does not); every run result carries it, so "did anything change since I looked" is one compare */
     this.revision = 0;
-    /** @internal depth of atomic runs in progress, and after hooks waiting for the outermost one to commit */ this._txDepth = 0; this._txAfter = [];
+    /** @internal depth of atomic runs in progress, and after hooks waiting for the outermost one to commit */ this._txDepth = 0; this._txAfter = []; /** @internal op:rolledBack announcements waiting for the failed run to leave the stack (opsAtomic.js) */ this._rolled = [];
     this.historySize = 256;
   }
   /** @internal Stamp a failed result with the current revision */
@@ -166,7 +166,14 @@ export class Ops {
   _as(name, ctx, fn) {
     const prev = this._last;
     this._stack.push(name); this._last = ctx;
-    try { return fn(); } finally { this._stack.pop(); this._last = prev; }
+    try { return fn(); } finally { this._stack.pop(); this._last = prev; this._drainRolled(); }
+  }
+  /** @internal Tell the queued op:rolledBack announcements (opsAtomic.js) once the ops stack is empty again: called where it empties (runOp, _as). One drain at a time; ones queued while it runs go out in the same loop (guarded like the other loops) */
+  _drainRolled() {
+    if (this._draining || this._stack.length) return;
+    this._draining = true;
+    try { for (let n = 0; this._rolled.length && n < 16; n++) for (const say of this._rolled.splice(0)) say(); }
+    finally { this._draining = false; this._rolled.length = 0; }   // past the guard the rest is dropped, not left for an unrelated op
   }
 
   /**
@@ -311,7 +318,7 @@ export class Ops {
     if (!d.can) return true;
     const prev = this._inCan; this._inCan = d.name;
     let r;
-    try { r = d.can(this.engine, args, ctx); } finally { this._inCan = prev; }
+    try { r = d.can(this.engine, args, ctx); syncOnly(r, `can() of op '${d.name}'`, true); } finally { this._inCan = prev; }
     if (r === true || (typeof r === 'string' && r) || isStructured(r)) return r;
     const msg = fmt(STRINGS.canResult, { name: d.name, got: JSON.stringify(r) ?? 'undefined' });
     if (DEV) throw devError(msg);

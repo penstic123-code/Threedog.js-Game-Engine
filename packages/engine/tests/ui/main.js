@@ -29,7 +29,7 @@ const ground = new THREE.Mesh(new THREE.PlaneGeometry(60, 60).rotateX(-Math.PI /
 engine.add(ground);
 const withPlaces = new URLSearchParams(location.search).has('at');
 if (withPlaces) { engine.use(content()); engine.content.load({}, { places: { pier: { x: 20, z: -12 } } }); }
-engine.characters.createPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 0 } });
+engine.characters.addPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 0 } });
 engine.dialogue.define('npc', { start: { text: 'Hello', data: { portrait: 'p1' }, choices: [{ text: 'Bye', next: 'end' }] } });
 engine.interactions.add([1, 0, 0], { id: 'lever', label: 'Lever', onUse: () => { window.leverUsed = (window.leverUsed || 0) + 1; } });
 engine.quests.define('walk', { title: 'Walk', steps: [{ text: 'Go north', target: { x: 0, z: -10 }, done: e => e.vars.flag('walked') }] });

@@ -154,17 +154,17 @@ export const specs = [
     },
   },
   {
-    name: '[guard] pause menu: freeze stops gameplay time, ambient uTime (wind / water / clouds) keeps moving; freeze({ ambient: true }) stops it too',
+    name: '[guard] pause menu: freeze stops gameplay time, ambient uTime (wind / water / clouds) keeps moving; freeze({ still: true }) stops it too',
     url: '/tests/perf/index.html?mode=city',
     async run({ check, ev }) {
       const r = await ev(() => {
         const U = engine.uniforms.uTime, at = () => [engine.time.now('real'), U.value];
         const h = engine.freeze('menu'); const [e0, u0] = at(); engine.step(0.5); const [e1, u1] = at(); h.remove();
-        const s = engine.freeze('photo', { ambient: true }); const [, u2] = at(); engine.step(0.5); const [, u3] = at(); s.remove();
+        const s = engine.freeze('photo', { still: true }); const [, u2] = at(); engine.step(0.5); const [, u3] = at(); s.remove();
         return { gameplay: e1 - e0, ambient: u1 - u0, still: u3 - u2 };
       });
       check('frozen: real time stays, uTime advances by the stepped time', r.gameplay === 0 && Math.abs(r.ambient - 0.5) < 0.02, JSON.stringify(r));
-      check('freeze({ ambient: true }): uTime stops too', r.still === 0, JSON.stringify(r));
+      check('freeze({ still: true }): uTime stops too', r.still === 0, JSON.stringify(r));
     },
   },
   {

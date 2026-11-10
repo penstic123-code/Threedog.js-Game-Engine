@@ -85,7 +85,7 @@ export const specs = [
         rig.yaw = 1;
         out.oldSave = await engine.saves.apply(old, 'old'); out.oldYaw = view()[0];
         // a game part writing the rig in its own load() keeps its write
-        engine.saves.register('facing', { save: () => ({ yaw: 0.7 }), load: d => { engine.cameraRig.yaw = d.yaw; } });
+        engine.saves.define('facing', { save: () => ({ yaw: 0.7 }), load: d => { engine.cameraRig.yaw = d.yaw; } });
         engine.saves.save('view2'); await engine.saves.flush();
         await engine.session.load('view2');
         engine.step(0.1);

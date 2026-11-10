@@ -1,5 +1,10 @@
 # A post effect that reads depth (volumetric fog, god rays)
 
+> **Covers:** a post effect that reads depth on both renderers: volumetric fog, god rays.
+> **Use when:** an effect needs the distance behind each pixel.
+> **Shortest:** a Pass that reads the depth texture (§1).
+> **Sections:** One effect, both renderers · Volumetric fog march along · God rays
+
 Fog you march through, light shafts, haze that thickens with distance, edge or focus effects: they all read the scene depth behind each pixel
 and turn it into a distance or a world position. This recipe writes one such effect with both forms, a three.js `Pass` (GLSL) for
 WebGLRenderer and a TSL node for WebGPURenderer, in one effect object. How effects are ordered, switched and tuned is recipe 52's
@@ -26,7 +31,7 @@ class DepthHazePass extends Pass {
         void main() {
           vec4 base = texture2D(tDiffuse, vUv);
           float z = texture2D(tDepth, vUv).x * 2.0 - 1.0;
-          float dist = 2.0 * uNear * uFar / (uFar + uNear - z * (uFar - uNear));   // view distance in world units
+          float dist = 2.0 * uNear * uFar / (uFar + uNear - z * (uFar - uNear));  // view distance in world units
           gl_FragColor = vec4(mix(base.rgb, uColor, 1.0 - exp(-uDensity * dist)), base.a);
         }`,
       depthTest: false, depthWrite: false,
@@ -54,7 +59,7 @@ function depthHazeNode(input, { tsl: T, scenePass, camera, p }) {
 const update = (pass, p) => { pass.material.uniforms.uColor.value.copy(p.color); pass.material.uniforms.uDensity.value = p.density; };
 engine.post.add({ name: 'depthHaze', slot: 'hdr', needsDepth: true, params: { color: new THREE.Color(0.72, 0.76, 0.82), density: 0.02 },
   create: ({ camera, params }) => { const pass = new DepthHazePass(camera); update(pass, params); return pass; }, update, node: depthHazeNode });
-engine.post.get('depthHaze').set({ density: 0.05 });   // live on both renderers
+engine.post.get('depthHaze').set({ density: 0.05 });  // live on both renderers
 ```
 - Slot `hdr`: the effect works in linear color, before tone mapping, so a bright sun shaft can bloom after it.
 - A world position instead of a distance (height fog, a fog volume): on WebGL multiply the clip-space point by `camera.projectionMatrixInverse`,
@@ -71,7 +76,7 @@ for an effect's node). On WebGL it is a plain `for` loop in the fragment shader.
 function marchedFogNode(input, { tsl: T, p }) {
   return T.Fn(() => {
     const acc = T.float(0).toVar();
-    T.Loop(16, ({ i }) => { acc.addAssign(p.density.mul(T.float(i).add(0.5))); });   // your density per step goes here
+    T.Loop(16, ({ i }) => { acc.addAssign(p.density.mul(T.float(i).add(0.5))); });  // your density per step goes here
     return T.vec4(T.mix(input.rgb, p.color, acc.clamp(0, 1)), input.a);
   })();
 }

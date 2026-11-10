@@ -1,5 +1,10 @@
 # Physics: rigid bodies, pushing, joints, vehicles
 
+> **Covers:** rigid bodies, pushing, joints, vehicles, boarding and driving, ragdolls.
+> **Use when:** crates that tumble, doors on hinges, a car or a boat.
+> **Shortest:** `engine.rigid.addBox(mesh, { id })` with `rigid()` installed (§3).
+> **Sections:** 1 Build a car · 2 Boarding and driving · 3 Rigid bodies saves · 3b Ragdoll experimental) · 4 Verify
+
 Any physics body (crates the player pushes, balls, doors on hinges, ropes): §3, read it first when the game has no car. Cars and
 boarding: §1–2.
 
@@ -18,7 +23,7 @@ function makeCar() {
   body.position.y = 0.3; body.castShadow = true; car.add(body);
   const wheels = [[-0.85, 1.2, true, false], [0.85, 1.2, true, false], [-0.85, -1.2, false, true], [0.85, -1.2, false, true]].map(([x, z, steer, drive]) => {
     const w = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.25, 10).rotateZ(Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0x333333 }));
-    w.position.set(x, 0, z); car.add(w);                               // wheels are children of the body: they follow suspension, steering and rolling
+    w.position.set(x, 0, z); car.add(w);  // wheels are children of the body: they follow suspension, steering and rolling
     return { position: [x, 0, z], radius: 0.35, steer, drive, object: w };
   });
   return { car, wheels };
@@ -26,9 +31,9 @@ function makeCar() {
 
 engine.events.on('engine:ready', () => {
   const { car, wheels } = makeCar();
-  car.position.set(10, engine.surface(10, 0) + 1.5, 0);                // place it slightly above the ground and let it drop
+  car.position.set(10, engine.surface(10, 0) + 1.5, 0);  // place it slightly above the ground and let it drop
   const v = engine.rigid.addWheeled(car, { wheels, mass: 600, engineForce: 3000, camera: { distance: 14, height: 2 } });
-  window.car = v;                                                     // handy for tests and the console
+  window.car = v;  // handy for tests and the console
 });
 ```
 Options: `../api/rigid.md` (VehicleOptions). `id` is the stable id saves use (default `vehicle1`, `vehicle2`... in creation order; give one when that order varies).
@@ -71,14 +76,14 @@ where a game re-creates its joints, with the same code that made them:
 ```js fragment
 const R = engine.rigid, J = R.rapier.JointData;
 const post = R.addBox(postMesh, { fixed: true }), door = R.addBox(doorMesh, { mass: 8 });
-function hang() {   // makes the joints; called after the bodies are added, and again after every rebuild
+function hang() {  // makes the joints; called after the bodies are added, and again after every rebuild
   // hinge on the post's right edge, turning around Y; anchors are in each body's local space
   const h = R.world.createImpulseJoint(J.revolute({ x: 0.5, y: 0, z: 0 }, { x: -0.5, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }), post.body, door.body, true);
   h.setLimits(-1.5, 1.5);
   R.world.createImpulseJoint(J.rope(2, { x: 0, y: -0.5, z: 0 }, { x: 0, y: 0.5, z: 0 }), hook.body, weight.body, true);
 }
 hang();
-engine.events.on('rigid:rebuilt', hang);   // { world, player, bodies }: bodies maps the ids you gave addBox / addBall / addHull
+engine.events.on('rigid:rebuilt', hang);  // { world, player, bodies }: bodies maps the ids you gave addBox / addBall / addHull
 ```
 `entry.body` already points at the rebuilt body there; a joint object kept from before belongs to the freed world (hold the new one). A body
 the game made with `world.createRigidBody` is not rebuilt: make anchors with `addBox(mesh, { fixed: true })`. In development a `rigid-misuse`
@@ -99,8 +104,8 @@ stay). Removing a body removes its joints (Rapier does that).
 ## 3b. Ragdoll (experimental)
 
 ```js fragment
-const rd = engine.rigid.ragdoll(enemy, { impulse: [0, 150, -400], position: hit.point });   // a Character, NPC handle, id or skinned Object3D
-engine.clock.after(4, () => rd.remove(), { channel: 'real' });   // back to animation where the body lies; a get-up clip is yours to play
+const rd = engine.rigid.ragdoll(enemy, { impulse: [0, 150, -400], position: hit.point });  // a Character, NPC handle, id or skinned Object3D
+engine.clock.after(4, () => rd.remove(), { channel: 'real' });  // back to animation where the body lies; a get-up clip is yours to play
 ```
 - **Skeletons.** Mixamo, Blender, Unreal, Bip01, VRM and Quaternius names are read by themselves. Otherwise name the parts: `{ bones: { lowerLegL: 'Shin_01' } }`; an unreadable skeleton throws, naming the missing parts.
   Parts: `hips chest head upperArmL lowerArmL upperArmR lowerArmR upperLegL lowerLegL upperLegR lowerLegR`.

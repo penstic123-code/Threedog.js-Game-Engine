@@ -2,7 +2,7 @@
 // Guards: originals unchanged byte for byte, output is KTX2 + Meshopt, the normal map is UASTC / linear and the color map ETC1S / sRGB, a rerun skips,
 // --dry writes nothing, assets.js points at the result. Uses `ktx` (KTX-Software) when it is on PATH (or in THREEDOG_KTX_DIR), else the wasm
 // encoder ktx2-encoder from npm.
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, statSync, copyFileSync } from 'node:fs';
 import { join, resolve, delimiter } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
@@ -72,6 +72,29 @@ export async function run({ check }) {
       await quiet(() => runOptimize(plain, {}));
       const fu2 = await finalUrl();
       check('a game in the old [...optimized, form is migrated and resolves to the optimized copy', /\/optimized\/tri\.glb$/.test(fu2.url) && !/\[\.\.\.optimized, /.test(readFileSync(join(plain, 'assets.js'), 'utf8')), JSON.stringify(fu2));
+      // a { url, node } entry follows its file: the optimized pack re-points it (same node), and a node the file lacks is reported
+      writeFileSync(join(plain, 'assets.js'), `export default [{ name: 'g', models: { part: { url: '/models/tri.glb', node: 'tri' }, bad: { url: '/models/tri.glb', node: 'nope' } } }];
+`);
+      const pr = await quiet(() => runOptimize(plain, { force: true })), pk = readFileSync(join(plain, 'assets.optimized.js'), 'utf8');
+      check('a { url, node } entry is re-pointed to the optimized copy with its node, and a missing node is reported', /"part": \{\s*"url": "\/optimized\/tri\.glb",\s*"node": "tri"/.test(pk) && /model-needs.*"nope"/.test(pr.text), pr.text + pk);
+      // [guard] a part entry is matched by its url's file, not by its entry name: tri: { url: kit.glb, node } must not be re-pointed at the unrelated art/models/tri.glb
+      writeFileSync(join(plain, 'assets.js'), `export default [{ name: 'g', models: { tri: { url: '/models/kit.glb', node: 'Wall' } } }];
+`);
+      await quiet(() => runOptimize(plain, { force: true }));
+      const kitPack = readFileSync(join(plain, 'assets.optimized.js'), 'utf8');
+      check('[guard] a { url, node } entry named like an unrelated model file is not re-pointed at that file', !/"tri"\s*:/.test(kitPack), kitPack);
+      // `needs` is judged on the output too (pruning can drop an empty attach node), in the same list as the part node
+      writeFileSync(join(plain, 'assets.js'), `export default [{ name: 'g', base: '/models/', models: { n: { url: 'tri.glb?v=2', needs: { nodes: ['tri', 'zzz'] } } } }];
+`);
+      const pn = await quiet(() => runOptimize(plain, { force: true }));
+      check('needs is checked on the optimized file, through a pack base and a ?v= tag', /model-needs: model "n" .*node "zzz"/.test(pn.text) && !/node "tri"/.test(pn.text), pn.text);
+      // a cache hit (the file unchanged) judges the part nodes against the manifest of this run, not the stored report
+      writeFileSync(join(plain, 'assets.js'), `export default [{ name: 'g', models: { bad2: { url: '/models/tri.glb', node: 'nope2' } } }];
+`);
+      const pc = await quiet(() => runOptimize(plain, {}));
+      check('on a cache hit a fixed part entry is no longer reported and a new missing node is', /unchanged/.test(pc.text) && /"nope2"/.test(pc.text) && !/"nope"/.test(pc.text), pc.text);
+      writeFileSync(join(plain, 'assets.js'), ORIGINAL);
+      await quiet(() => runOptimize(plain, { force: true }));
       // cache hits still count problems: a stored output-side problem fails --strict (no reconversion)
       const outP = join(plain, 'public/optimized/tri.glb'), mt = statSync(outP).mtimeMs, repPath = join(plain, '.threedog/optimize-report.json'), rep = JSON.parse(readFileSync(repPath, 'utf8'));
       const c0 = await quiet(() => runOptimize(plain, { strict: true }));
@@ -81,6 +104,16 @@ export async function run({ check }) {
       check('cached, no problems: --strict passes', c0.code === 0, c0.text);
       check('cached with a stored problem: a lenient run reports it and exits 0, --strict exits 1, nothing is reconverted',
         c1.code === 0 && /bad-ktx2/.test(c1.text) && c2.code === 1 && /unchanged\s+tri\.glb/.test(c2.text) && statSync(outP).mtimeMs === mt, c1.text + c2.text);
+      // [guard] a cached output that was cut short is not "unchanged": it is converted again
+      writeFileSync(outP, '');
+      const c3 = await quiet(() => runOptimize(plain, { strict: true }));
+      check('a truncated cached output is converted again, not reported unchanged', !/unchanged\s+tri\.glb/.test(c3.text) && statSync(outP).size > 0, c3.text);
+      // [guard] names that differ only in case collide on a case-insensitive file system
+      if (process.platform === 'win32' || process.platform === 'darwin') {
+        copyFileSync(join(plain, 'art/models/tri.glb'), join(plain, 'art/models/Tri.gltf'));
+        const c4 = await quiet(() => runOptimize(plain, {}));
+        check('Tri.gltf next to tri.glb is refused as a name collision', /also becomes.*rename one/.test(c4.text) && c4.code === 1, c4.text);
+      }
     } finally { rmSync(plain, { recursive: true, force: true }); }
 
     const dry = await quiet(() => runOptimize(dir, { dry: true }));

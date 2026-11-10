@@ -9,9 +9,12 @@
 // (make + register a queued chunk), _dispose(c) (release a chunk's content). Hooks passed here: show(c, visible), level(c, ring) (near-only
 // detail per ring), count(c, ring) (instances drawn, for stats).
 import * as THREE from 'three';
-import { xzOf } from '../base/math.js';
+import { xzOf, cameraFrustum } from '../base/math.js';
 
 const COLLIDER_LAG = 30;   // fixed steps before a chunk's collision counts (30 = 0.5 s), times (1 + ring)
+
+/** Fixed steps until collision of a chunk in this ring counts: 0 for the ring the loading screen waits for, else growing with the ring */
+export const colliderLag = (table, ring) => !table.engine.ready && ring <= 1 ? 0 : COLLIDER_LAG * (1 + ring);
 
 /**
  * Book the tick a queued chunk's collision takes effect (engine.commits): set from gameplay alone, so machine speed never changes it. Ring 1, which the
@@ -20,7 +23,7 @@ const COLLIDER_LAG = 30;   // fixed steps before a chunk's collision counts (30 
  */
 export function bookCollision(table, c, ring, { apply, fallback }) {
   c.ticket = table.engine.commits.request({
-    lag: !table.engine.ready && ring <= 1 ? 0 : COLLIDER_LAG * (1 + ring),
+    lag: colliderLag(table, ring),
     apply, fallback,
     valid: () => table.chunks.get(c.key) === c && c.gen === table.gen,
   });
@@ -57,7 +60,7 @@ export class ChunkStream {
     /** stream sources in chunk units: { cx, cz, R, simple }, reused objects (set by follow) */ this.centers = [];
     this._for = [NaN, NaN];   // view distance and table version the wanted list was last built for
     this.ver = 0;             // +1 whenever the table is cleared: the next follow() plans again
-    this._frustum = new THREE.Frustum(); this._m = new THREE.Matrix4();
+    this._frustum = new THREE.Frustum();
     this._d2 = c => { let m = Infinity; for (const s of this.centers) m = Math.min(m, (c.cx - s.cx) ** 2 + (c.cz - s.cz) ** 2); return m; };
     this._byDist = (a, b) => this._d2(a) - this._d2(b);
   }
@@ -110,8 +113,7 @@ export class ChunkStream {
   /** LOD + frustum over ready chunks: level(c, ring) each, show(c, visible) when it changes. Returns { visible, instances } (reused object) */
   cull(camera) {
     camera.updateMatrixWorld();
-    this._m.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-    this._frustum.setFromProjectionMatrix(this._m);
+    cameraFrustum(camera, this._frustum);
     const H = this.hooks, out = this._out ??= { visible: 0, instances: 0 };
     out.visible = 0; out.instances = 0;
     for (const c of this.table.chunks.values()) {

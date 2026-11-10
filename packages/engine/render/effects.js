@@ -61,16 +61,38 @@ export function createUniforms() {
   for (const [k, v] of Object.entries(UNIFORM_DEFAULTS)) u[k] = engineUniform(k, typeof v === 'function' ? v() : v);
   return u;
 }
+/**
+ * Give signals back to their neutral defaults: a module that wrote shared signals every frame calls this when it is removed, or the last value
+ * (a blizzard's uSnow, a winter ground tint) would stay for every reader. The one way to take a written signal back; the defaults are the table above
+ * @internal @param {any} e @param {string[]} names uniform names
+ */
+export function resetSignals(e, names) {
+  for (const n of names) { const d = UNIFORM_DEFAULTS[n], v = typeof d === 'function' ? d() : d, u = e.uniforms[n]; if (v?.isColor || v?.isVector2 || v?.isVector3) u.value.copy(v); else u.value = v; }
+}
 const TEMPLATE = createUniforms();   // what built-in patches name; resolved to the compiling engine's uniforms
 
 // ---------- GLSL ----------
 /**
- * Shared GLSL value noise: threedogHash(vec2), threedogNoise(vec2) (used by sky clouds and cloud shadows)
+ * Shared GLSL value noise: threedogHash(vec2), threedogNoise(vec2) (used by sky clouds and cloud shadows).
+ * One pcg2d core (threedogHashStep, fxNumbers.js HASH), two ways in. Public threedogHash(p): any vec2, hashed by its float bits (exact on
+ * both backends for the same floats; a fractional p such as vUv gives a value per pixel, as the 1.0 contract says). Internal threedogHashCell:
+ * the lattice cell floor(p), for the engine's noise and dabs, because pcg2d's first step is linear: cell (x + 1) starts at
+ * threedogHashCell(x) + mul, so neighbor cells cost an add instead of a conversion and two multiplies (slow on some GPUs).
+ * highp on the uints: a fragment shader's default int precision is mediump in GLSL ES 3.0, and the hash needs all 32 bits.
  * @internal
  */
-export const NOISE_GLSL = `float threedogHash(vec2 p){ return fract(sin(dot(p, vec2(${f(HASH.dir[0])}, ${f(HASH.dir[1])}))) * ${f(HASH.scale)}); }
-  float threedogNoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
-    return mix(mix(threedogHash(i), threedogHash(i+vec2(1,0)), f.x), mix(threedogHash(i+vec2(0,1)), threedogHash(i+vec2(1,1)), f.x), f.y); }`;
+const M = `${HASH.mul}u`;
+// Guarded inside: the dome and the post pass paste it, and a game snippet there may still #include <threedog_noise>
+export const NOISE_GLSL = `#ifndef THREEDOG_NOISE
+#define THREEDOG_NOISE
+  highp uvec2 threedogHashCell(vec2 p){ return uvec2(ivec2(floor(p))) * ${M} + ${HASH.add}u; }
+  float threedogHashStep(highp uvec2 v){ v.x += v.y * ${M}; v.y += v.x * ${M}; v ^= v >> 16u; v.x += v.y * ${M};
+    highp uint x = v.x ^ (v.x >> 16u); return float(x >> 8u) * ${f(1 / 2 ** 24)}; }
+  // b ^= b >> 16: a whole-number float has zero low mantissa bits, and without this fold the x output draws diagonal stripes
+  float threedogHash(vec2 p){ highp uvec2 b = floatBitsToUint(p); b ^= b >> 16u; return threedogHashStep(b * ${M} + ${HASH.add}u); }
+  float threedogNoise(vec2 p){ highp uvec2 v = threedogHashCell(p); vec2 f = fract(p); f = f*f*(3.0-2.0*f);
+    return mix(mix(threedogHashStep(v), threedogHashStep(v + uvec2(${M}, 0u)), f.x), mix(threedogHashStep(v + uvec2(0u, ${M})), threedogHashStep(v + uvec2(${M})), f.x), f.y); }
+#endif`;
 
 // GLSL pieces, also registered as THREE.ShaderChunk.threedog_* so a hand-written ShaderMaterial can #include them.
 // The callable ones (fixed signatures, for your own ShaderMaterial; the automatic patches call the same functions, so the math lives once):
@@ -93,10 +115,7 @@ const CALLABLE = {
     float k = max(position.y, 0.0) * amplitude * uWind;
     return vec3(sw * k + k * ${f(WIND.lean)} * (uWind - 1.0), 0.0, sw * k * ${f(WIND.side)});
   }`,
-  threedog_noise: `#ifndef THREEDOG_NOISE
-  #define THREEDOG_NOISE
-  ${NOISE_GLSL}
-  #endif`,
+  threedog_noise: NOISE_GLSL,
   threedog_cloudShadow: `
   #include <threedog_noise>
   float threedogCloudShadow(vec3 worldPos){

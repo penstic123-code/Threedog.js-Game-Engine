@@ -62,7 +62,7 @@ function diff(rec, base) {
 
 const mapValues = (o, f) => o && typeof o === 'object' ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, f(v)])) : o;
 
-/** Upgrade steps of the world save part (saves.register version 5) @internal */
+/** Upgrade steps of the world save part (saves.define version 5) @internal */
 export const WORLD_MIGRATE = {
   1: d => ({ ...d, records: Object.fromEntries((d?.records || []).map(({ id, ...r }) => [id, r])) }),   // array of records -> keyed by id
   2: d => {   // runtime ids `<kind>-<n>` -> `<kind>#<n>`: record keys, owed keys, and field values that name a renamed record
@@ -195,7 +195,10 @@ function checkWorldSave(d, kindOf, assets) {
 /** Load: replace runtime records wholesale; loaded initial records go back to the original then get the save's changes; unloaded content waits for its add. Independent of the order of content.load @internal */
 export function loadWorld(w, d) {
   checkWorldSave(d, id => w._base.get(id)?.kind, w.engine.assets);   // before anything is cleared: a refused save leaves the world as it was (the rollback then has nothing to undo here)
-  w._v.clear();
+  // a replacement rebuilds every model (its afterLoad hooks and the physics parts rebuild what they attach for the new state); outside one, an atomic op's
+  // rollback puts plain data back and runs no afterLoad, so a model whose record comes back the same stays (views.keepSame)
+  const built = w.engine.saves.replacing ? null : new Map(w.records);
+  if (!built) w._v.clear();
   w.records.clear(); w._cells.clear(); w._unsaved.clear();
   for (const id of [...w._origin.keys()]) if (!w._base.has(id)) w._origin.delete(id);   // runtime records come from the save now (no op to name)
   w._seq = d?.seq ?? 0;
@@ -205,6 +208,7 @@ export function loadWorld(w, d) {
   renamePending(w);   // content/renames.js, before initial records take their diffs
   for (const [id, base] of w._base) if (!w._removed.has(id)) w._insert(w._fromBase(id, base));
   for (const [id, r] of Object.entries(d?.records || {})) w._insert({ id, ...r });
+  if (built) w._v.keepSame(built);
   w.engine.events.emit('world:load', { count: w.records.size });
 }
 

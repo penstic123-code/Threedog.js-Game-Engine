@@ -11,6 +11,7 @@ const str = description => ({ type: 'string', description });
 
 const LABEL = [
   [TIME.advances, 'ADVANCES GAME TIME.'],
+  [['state'], 'No game time unless wait is supplied; wait advances N real seconds.'],
   [TIME.frozenTimeSafe, 'No game time.'],
   [TIME.observes, 'Observes only.'],
 ];
@@ -29,7 +30,7 @@ export const RESULT_SHAPE = 'Every result has text plus structuredContent { ok, 
   'code: ok; blocked = ran and was refused or found a problem; not-ready = page not ready; no-server|starting|busy|page-error|no-bridge = cannot reach the game; ' +
   'command-error = bad arguments or a page exception. runtime.blockedBy: input contexts (win-<id>, ui-<part>, dialogue, cutscene...), error, loading. ' +
   'The text ends with one line on the game state and how to get back to normal play. ' +
-  `${TIME.advances.join(' / ')} advance game time; ${TIME.frozenTimeSafe.join(', ')} do not; everything else only observes.`;
+  `${TIME.advances.join(' / ')} advance game time; ${TIME.frozenTimeSafe.join(', ')} do not (state only with wait=); everything else only observes.`;
 
 /** Bytes of structuredContent.data a tool result carries as is; a larger payload is shortened by shortData */
 export const DATA_MAX = 3000;
@@ -50,6 +51,9 @@ export function shortData(data, cmd) {
 export const OUTPUT_SCHEMA = { type: 'object', required: ['ok', 'code', 'summary', 'runtime'] };
 
 // Descriptions stay short (they are sent every turn): what it does and when to use it; the details live in the schema field descriptions.
+/** The CLI's --freeze-reload as a tool input (scenario, verify): dispatch.mjs parses the flag and holds the dev server's reloads for the run, so the MCP path is the CLI path */
+export const FREEZE = { type: 'boolean', description: 'Saves do not reload the page during the run (for at most 10 minutes), so editing files while it runs cannot wipe its state' };
+export const freezeArg = a => a.freezeReload ? ['--freeze-reload'] : [];
 export const EXTRA_TOOLS = {
   play: {
     description: 'Start the game and connect: starts the dev server if none runs, waits for bridge and engine, returns the page address. Call first when nothing runs.',
@@ -69,8 +73,9 @@ export const EXTRA_TOOLS = {
   },
   verify: {
     description: 'Run a scenario file and report pass or fail plus what it tested and never touched, related tests, and the re-run command. A page error fails it.',
-    schema: { type: 'object', properties: { name: str('Scenario file name without .json (tests/scenarios/<name>.json)') }, required: ['name'] },
-    args: a => [a.name],
+    schema: { type: 'object', properties: { name: str('Scenario file name without .json (tests/scenarios/<name>.json)'), freezeReload: FREEZE,
+      saveBaseline: { type: 'boolean', description: 'Store the draw calls, triangles and module ms in .threedog/perf-baseline.json (this machine); later runs from the same spot say when they are slower' } }, required: ['name'] },
+    args: a => [a.name, ...(a.saveBaseline ? ['--save-baseline'] : []), ...freezeArg(a)],
   },
 };
 
@@ -96,10 +101,12 @@ export const STATIC_TOOLS = {
   how: {
     description: 'What already exists, before building a system or a picture. task: one recommended route, is it installed here. browse: categories, then a category. card: one capability by id. Works with no game.',
     schema: { type: 'object', properties: { task: str('Search: the task in English words, e.g. "tone mapping", "save game", "rain"'), browse: str('"categories" for the first screen, or a category id for its capabilities'), card: str('A capability id from browse: install, dependencies, time, saves, example'),
-      full: { type: 'boolean', description: 'task: also the other routes; card: also the example code' } }, required: [] },
+      read: str('One piece by where it is: a docs pointer (recipes/63-third-person-start.md#4) or an API name (interactions.add.once)'),
+      full: { type: 'boolean', description: 'task: also the other routes; card: also the example code; read: the whole section' } }, required: [] },
     // the answers of `threedog how` (how-answer.mjs): one field each, the same as its flags
     run: async (dir, a) => {
       const how = await import('../how-answer.mjs'), full = !!a.full;
+      if (a.read) return how.readDoc(String(a.read).trim(), { full });
       if (a.card) return how.card(dir, String(a.card).trim(), { full });
       if (a.browse) return how.browse(a.browse === 'categories' ? '' : String(a.browse).trim());
       return how.answer(dir, String(a.task ?? '').trim(), { full });
@@ -108,12 +115,11 @@ export const STATIC_TOOLS = {
   // read-only on purpose: copying writes into the game and can need --force, so it stays a command the user (or AI) runs on purpose (threedog art copy)
   art_list: {
     description: 'What a source of art code offers before `threedog art copy`: modules, exported generator functions with their first JSDoc line, asset files. Source: a game folder, local path or package.',
-    schema: { type: 'object', properties: { source: str('Path relative to the game folder (e.g. "../my-earlier-game") or a package name') }, required: ['source'] },
+    schema: { type: 'object', properties: { source: str('Path relative to the game folder (e.g. "../my-earlier-game") or a package name'), full: { type: 'boolean', description: 'Every module and asset (default: the first few)' } }, required: ['source'] },
     run: async (dir, a) => {
-      const { listArt } = await import('../art.mjs'), r = listArt(String(a.source ?? ''), dir);
-      const lines = [`${r.modules.length} module(s), ${r.assets.length} asset file(s) in ${r.root}`,
-        ...r.modules.flatMap(m => [m.file, ...m.exports.map(e => `  ${e.name}${e.doc ? '  ' + e.doc : ''}`)]), ...r.assets];
-      return { ok: true, text: lines.join('\n'), data: r };
+      const { listArt, artListText } = await import('../art.mjs'), source = String(a.source ?? ''), r = listArt(source, dir);
+      // data: the full list only when asked, so the long list is not sent twice (text and data)
+      return { ok: true, text: artListText(r, !!a.full, r.root, source).join('\n'), data: a.full ? r : { root: r.root, modules: r.modules.length, assets: r.assets.length } };
     },
   },
   // read-only on purpose, like art_list: adding and pulling write files and stay commands (threedog lib add / pull)

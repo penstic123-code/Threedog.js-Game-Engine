@@ -44,7 +44,7 @@ async function kitchen() {
   const e = createEngine({ canvas: document.getElementById('view'), bindings: { ...PRESETS.bindings.walk } });
   const T = TD;
   e.use(T.openWorld({ camera: 'follow', seed: 7, terrain: NOISE.terrainPreset(), calendar: PRESETS.calendar.fourSeasons, weather: PRESETS.weather.temperate }), T.interactions({ ...PRESETS.interactions.nearest }), T.dialogue(), T.inventory(), T.pickups(), T.quests(), T.hud(), T.content(), T.particles(), T.photo());
-  e.characters.createPlayer({ ...PRESETS.player.thirdPerson, spawn: { x: 4, z: 7 } });
+  e.characters.addPlayer({ ...PRESETS.player.thirdPerson, spawn: { x: 4, z: 7 } });
   await e.start();
   e.haltLoop();
   const use = e.use.bind(e);   // 配方里写的 engine.use(xxx()) 在已装了同名模块的全家桶里不算错

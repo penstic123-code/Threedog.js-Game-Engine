@@ -61,7 +61,8 @@ export class SettingsView {
     });
     el.addEventListener('change', ev => {
       const r = ev.target.closest?.('[data-range]'); if (!r) return;
-      this.set(r.dataset.range, +r.value);
+      // the live 'input' above already applied this value; only the two world-rebuilding rows still wait for release
+      this.set(r.dataset.range, +r.value, { apply: r.dataset.range === 'density' || r.dataset.range === 'viewChunks' });
     });
   }
 }

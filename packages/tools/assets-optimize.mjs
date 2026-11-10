@@ -13,6 +13,8 @@ import { resolve, basename, extname, dirname } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
+import { declaredNeeds, entryIssues } from './assets-check/needs.mjs';
+import { gameAssets } from './content-check/load.mjs';
 import { ROOT } from './paths.mjs';
 import { walk } from './lib/text.mjs';
 import { KB, MB, modelStats } from './assets-check/stats.mjs';
@@ -32,6 +34,7 @@ const lodLine = (f, l) => l.skipped ? `  LOD ${f}: skipped, ${l.skipped}` : `  L
 /** What the pack says about one model: its path, plus the level files when it has any (only engine.assets.lod reads those, so a game that did not opt in downloads none) */
 const packEntry = (name, l) => l?.files?.length ? { url: `/optimized/${name}.glb`, lods: l.files.map(x => `/optimized/${x}`) } : `/optimized/${name}.glb`;
 /** Texture GPU bytes once the file is KTX2: block-compressed, ~1 byte per pixel, +1/3 for mips (same estimate as modelStats) */
+const CASE_BLIND = process.platform === 'win32' || process.platform === 'darwin';   // default file systems there treat Tree.glb and tree.glb as one file
 const ktx2Gpu = t => Math.round(t.width * t.height * 4 / 3);
 
 /** Cache key: source bytes (plus the files a .gltf points to), options and tool versions */
@@ -89,6 +92,21 @@ function encodingProblems(doc, ktxParse) {
   return out;
 }
 
+/**
+ * The manifest entries that care about a file's content, { name, url, node, needs, files } (assets-check/needs.mjs, the one reader): `{ url: '/models/kit.glb', node: 'Wall' }`
+ * is one node of a file (core/assets/assetPart.js), and `needs` names nodes and clips the game uses. The file is optimized once like any other; a node entry only needs
+ * its node to survive and to point at the optimized copy, and both are checked on the output (pruning can drop an empty attach node). assets.js is imported through
+ * content check's loader (gameAssets); if that fails these entries are skipped and the run says so.
+ */
+async function partEntries(dir) {
+  const { packs, error } = await gameAssets(dir);   // the same import (under the DOM stand-ins) content check reads names with
+  if (error) return { parts: [], note: `${error.split(/\r?\n/)[0]}: { url, node } entries and needs were not checked` };
+  return { parts: declaredNeeds(packs, dir) };
+}
+
+/** What a file's entries lack, in one list: a part node that is gone, or declared nodes / clips that are gone ('model-needs', the same message as assets check) */
+const partProblems = (doc, parts) => parts.flatMap(p => entryIssues(doc, p)).map(msg => ({ code: 'model-needs', msg }));
+
 /** assets.optimized.js: the pack pointing at the results; assets.js gets the import once (only when it has the usual `export default [` form) */
 function pointGameAtResults(dir, models) {
   const pack = resolve(dir, 'assets.optimized.js');
@@ -144,22 +162,38 @@ export async function runOptimize(dir, opt) {
   console.log(`${dry ? 'Dry run (nothing is written): ' : ''}${files.length} model(s) in ${SRC}`);
   console.log(`Texture encoder: ${encoderName ?? 'none found'}`);
   const outOf = new Map();
+  const { parts, note: partNote } = await partEntries(dir);
+  if (partNote) console.log('  ! ' + partNote);
+  // entries called like an output file that do not mean that file (a { url, node } part, or a url to another file): the plain re-point <name> -> /optimized/<name>.glb would replace their url and drop their node
+  const ownEntry = new Set(parts.filter(p => p.node != null || basename(p.files.path, extname(p.files.path)) !== p.name).map(p => p.name));
   for (const f of files) {
     const name = basename(f, extname(f)), src = resolve(SRC, f), out = resolve(OUT, name + '.glb');
-    if (outOf.has(name)) { console.log(`✗ ${f}: ${outOf.get(name)} also becomes ${name}.glb: rename one`); failed++; continue; }
-    outOf.set(name, f);
+    // Windows and macOS file systems ignore case: Tree.glb and tree.gltf would write the same output file
+    const nameKey = CASE_BLIND ? name.toLowerCase() : name;
+    if (outOf.has(nameKey)) { console.log(`✗ ${f}: ${outOf.get(nameKey)} also becomes ${name}.glb: rename one`); failed++; continue; }
+    outOf.set(nameKey, f);
+    // the entries this output serves; the file they get is public/optimized/<n>.glb. A plain entry is matched by its name (documented); a { url, node } part entry only by the file its url
+    // names (its entry name says which part, not which file: wall: { url: kit.glb, node: 'Wall' } must not take an unrelated wall.glb)
+    const mine = parts.filter(p => (p.node == null && p.name === name) || basename(p.files.path, extname(p.files.path)) === name);
+    for (const p of mine) p.out = name;
     let key;
     try { key = sourceHash(src, toolKey); } catch (e) { console.log(`✗ ${f}: cannot be read (${e.message})`); failed++; continue; }
-    if (!force && existsSync(out) && cache[f] === key) {
+    // a cached output must still be a readable model (a truncated or zeroed file would pass as "unchanged"); unreadable → convert again
+    let outDoc = null, hit = !force && existsSync(out) && cache[f] === key;
+    if (hit) try { outDoc = (await readModel(out)).doc; } catch (e) { console.log(`  ${f}: the optimized file is unreadable (${e.message}), converting again`); hit = false; }
+    if (hit) {
       // No reconversion, but the verdict must match THIS run's flags: the budget problem is judged again against the current --budget, the other
       // problems (source and KTX2 slot checks) do not depend on flags and come from the stored report, so a cache hit cannot hide them from --strict
       console.log(`  unchanged  ${f}`);
       const prev = report[f];
-      names[name] = packEntry(name, prev?.lods);
+      if (!ownEntry.has(name)) names[name] = packEntry(name, prev?.lods);
       if (prev?.lods) console.log(lodLine(f, prev.lods));
       if (prev?.source) {
         const gpu = (prev.source.textures?.list || []).reduce((s, t) => s + ktx2Gpu(t), 0);
-        const now = [...(prev.problems || []).filter(p => p.code !== 'over-budget'), ...(gpu > budget * 1048576 ? [overBudget(gpu, budget)] : [])];
+        // part nodes are judged again too: the manifest may have changed while the file did not (a fixed or a new { url, node } entry)
+        let partNow = [];
+        if (mine.length) partNow = partProblems(outDoc, mine);
+        const now = [...(prev.problems || []).filter(p => p.code !== 'over-budget' && p.code !== 'model-needs' && p.code !== 'part-node-missing'), ...partNow, ...(gpu > budget * 1048576 ? [overBudget(gpu, budget)] : [])];
         for (const p of now) console.log(`  ! ${p.code}: ${p.msg}`);
         problemCount += now.length; prev.problems = now;
       }
@@ -173,6 +207,7 @@ export async function runOptimize(dir, opt) {
     let s1 = null, b = null, lods = null;
     const skip = ratios && lodSkipReason(src0.doc);
     if (dry) {
+      problems.push(...partProblems(src0.doc, mine));
       if (ratios) console.log(skip ? lodLine(f, { skipped: skip }) : `  LOD ${f}: ${triangleCount(src0.doc)} triangles, levels are measured in a real run`);
       console.log(`- ${f}  ${KB(a)}, ${s0.textures.count} texture(s): GPU ≈ ${mem(s0.textures.gpuBytes)} → ${mem(gpuEst)} as KTX2 (estimate); the download size is known after a real run${hasTex && !encoderOk ? '\n  ! no texture encoder is installed: a real run would fail on this file. ' + WASM_HOW : ''}`);
     } else {
@@ -195,12 +230,14 @@ export async function runOptimize(dir, opt) {
       b = statSync(out).size;
       let res; try { res = await readModel(out); } catch (e) { console.log(`✗ ${f}: the output cannot be read back (${e.message})`); failed++; continue; }
       s1 = modelStats(res.doc, res.core);
+      problems.push(...partProblems(res.doc, mine));   // optimize keeps names (flatten / join off); a node that had nothing in it is dropped by prune, so check
       if (ktxParse) problems.push(...encodingProblems(res.doc, ktxParse));
       else if (hasTex && !readBackSkipped) { readBackSkipped = true; console.log('  ! KTX2 read-back check skipped: ktx-parse is not installed, so a texture encoded for the wrong slot would not be reported (npm i -D ktx-parse)'); }
       dropLevels(OUT, name);
       if (skip) lods = { skipped: skip };
       else if (ratios) try { lods = await buildLevels(out, OUT, name, ratios); } catch (e) { console.log(`✗ ${f}: LOD levels failed (${e.message})`); failed++; delete cache[f]; continue; }   // the levels are gone: the next run must not call this model unchanged
-      names[name] = packEntry(name, lods); cache[f] = key; before += a; after += b; done++; gpuB += s0.textures.gpuBytes; gpuA += s1.textures.gpuBytes;
+      if (!ownEntry.has(name)) names[name] = packEntry(name, lods);
+      cache[f] = key; before += a; after += b; done++; gpuB += s0.textures.gpuBytes; gpuA += s1.textures.gpuBytes;
       console.log(`✓ ${f}  ${KB(a)} → ${KB(b)} (${Math.round(b / a * 100)}%, ${Date.now() - t0} ms${encMs ? `, ${encMs} ms of it encoding textures` : ''}); textures ${s0.textures.count} × ${s1.textures.formats.join('+') || '-'}, GPU ≈ ${mem(s0.textures.gpuBytes)} → ${mem(s1.textures.gpuBytes)} (estimate)`);
       if (lods) console.log(lodLine(f, lods));
     }
@@ -208,6 +245,8 @@ export async function runOptimize(dir, opt) {
     problemCount += problems.length;
     report[f] = { sourceBytes: a, outputBytes: b, output: b ? `public/optimized/${name}.glb` : null, source: s0, optimized: s1, lods: lods ?? undefined, problems, dry: dry || undefined };
   }
+  // part entries follow their file: the later pack wins, so the same entry name now reads its node from the optimized copy
+  for (const p of parts) if (p.node != null && names[p.out]) names[p.name] = { url: `/optimized/${p.out}.glb`, node: p.node };
   if (!dry) {
     mkdirSync(STATE, { recursive: true });
     writeFileSync(cachePath, JSON.stringify(cache, null, 1) + '\n');

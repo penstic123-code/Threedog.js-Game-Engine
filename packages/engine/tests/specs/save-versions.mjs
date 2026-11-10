@@ -14,7 +14,7 @@ export const specs = [
         const E = mk(createEngine, 'sv-versions');
         await E.start();
         const loaded = [];
-        E.saves.register('svA', { version: 2, migrate: { 1: d => ({ ...d, up: true }) }, save: () => ({}), load: d => { loaded.push(d); } });
+        E.saves.define('svA', { version: 2, migrate: { 1: d => ({ ...d, up: true }) }, save: () => ({}), load: d => { loaded.push(d); } });
         const bad = { word: { svA: 'oops' }, object: { svA: {} }, zero: { svA: 0 }, half: { svA: 1.5 }, neg: { svA: -1 }, nul: { svA: null }, foreign: { svGone: 'oops' }, list: [1], text: 'oops', number: 3, none: null };
         for (const [k, versions] of Object.entries(bad)) out.apply[k] = await E.saves.apply({ format: 1, versions, parts: { svA: { n: 1 }, svGone: { n: 2 } } }, 'sv');
         out.refusedLoads = loaded.length;
@@ -23,9 +23,9 @@ export const specs = [
         out.loaded = loaded;
         out.keys = {};
         for (const m of ['1.5', '1e0', ' 1', '01', '0', '3', '-1', 'x']) {
-          try { E.saves.register('svK', { version: 3, migrate: { [m]: d => d }, save: () => ({}), load() {} }); out.keys[m] = 'accepted'; } catch (err) { out.keys[m] = err.code; }
+          try { E.saves.define('svK', { version: 3, migrate: { [m]: d => d }, save: () => ({}), load() {} }); out.keys[m] = 'accepted'; } catch (err) { out.keys[m] = err.code; }
         }
-        try { out.ok = !!E.saves.register('svOk', { version: 3, migrate: { 1: d => d, 2: d => d }, save: () => ({}), load() {} }); } catch (err) { out.ok = err.message; }
+        try { out.ok = !!E.saves.define('svOk', { version: 3, migrate: { 1: d => d, 2: d => d }, save: () => ({}), load() {} }); } catch (err) { out.ok = err.message; }
         E.dispose();
         [console.error, console.warn] = quiet;
         return out;

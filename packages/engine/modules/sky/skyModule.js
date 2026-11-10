@@ -2,6 +2,7 @@
 // timers and saves are the calendar's (modules/calendar); the sky reads engine.calendar each frame to draw.
 // Usage and the engine.sky API are documented in Sky.js.
 import { Sky } from './Sky.js';
+import { resetSignals } from '../../render/effects.js';
 import { dropOwned } from '../../core/ops/owned.js';
 import { readParams, keysSchema } from '../../core/base/params.js';
 import { parseClock } from '../../core/time/dayTime.js';
@@ -15,9 +16,12 @@ import { warnOnce } from '../../core/base/validate.js';
 const SKY_OPTIONS = ['time', 'clouds', 'backdrop', 'keyframes', 'sunSize', 'sunGlow', 'sunBrightness', 'moonColor', 'moonBrightness',
   'starDensity', 'dim'];
 const SKY_PARAMS = keysSchema(SKY_OPTIONS);   // keys only: the values take several shapes (time: 'HH:MM' | 0-1), Sky checks them
+// Signals the sky rewrites every frame: handed back to neutral on removal. The rest go back only if this sky last wrote them and nobody took them since:
+// the season / cover tint when it was painted (_seasoned / _covered: a game may write the tint itself), the sun direction when the engine still owns it (_oSun)
+const SKY_SIGNALS = ['uSunColor', 'uSkyTop', 'uSkyHorizon', 'uGroundCover'];
+const TINT_SIGNALS = ['uFoliageTint', 'uGroundTint', 'uFoliageMix', 'uGroundMix'];
 const STRINGS = {
-  timeTwice: "sky({ time }) is the fixed time drawn without a calendar, but calendar() is installed, so the sky draws the calendar's time; " +
-    'start the day with calendar({ time }) and drop sky({ time })',
+  timeTwice: 'calendar owns the time of day while it is installed, so sky({ time }) is unused. Move the starting time to calendar({ time }) and remove sky({ time })',
   noSeason: "applyState({ season }): seasons are the calendar's; install calendar({ seasons: [...] }) (sky alone draws one fixed time)",
 };
 
@@ -37,7 +41,7 @@ export function sky(opts = {}) {
     optional: ['weather', 'calendar'],
     install(e, ctx) { e.i18n.add({ 'zh-CN': { 'module.sky': '天空' }, en: { 'module.sky': 'sky' } });
       // a time given while a calendar draws sits unused: say so, the game still runs and the calendar's time is drawn
-      if (opts.time != null && e.calendar) warnOnce(coded('sky-option', STRINGS.timeTwice), 'sky-time-calendar');
+      if (opts.time != null && e.calendar) warnOnce(coded('time-owner-conflict', STRINGS.timeTwice), 'sky-time-calendar');
       s = new Sky(e, opts);
       // without a calendar the drawn sun tells day from night (night glow reads the measure); a calendar installed later registers its own over it
       const measures = [['daylight', () => s.daylight], ['timeOfDay', () => s.drawnTime]];
@@ -48,7 +52,7 @@ export function sky(opts = {}) {
     // a calendar removed mid-game takes its measures with it: the sky takes the signals back at once, or uDaylight / uTimeOfDay would freeze
     frame(dt) { own(); s.update(); s._envFrame(dt); },
     // the dome goes too: a sky swapped with replaces must not leave the old dome drawn behind the new one
-    dispose() { s._shadowOff(); s._swap.remove(); s._envOff(); s._entries.dispose(); dropOwned(s.engine, s._owned); s.dome.removeFromParent(); s.dome.geometry.dispose(); s.dome.material.dispose(); },
+    dispose(e) { resetSignals(e, SKY_SIGNALS); if (s._seasoned || s._covered) resetSignals(e, TINT_SIGNALS); if (s._oSun.on) resetSignals(e, ['uSunDir']); s._shadowOff(); s._swap.remove(); s._envOff(); s._entries.dispose(); dropOwned(s.engine, s._owned); s.dome.removeFromParent(); s.dome.geometry.dispose(); s.dome.material.dispose(); },
     // scenario params time / season go to the calendar when there is one (its own applyState); without it time sets the fixed time drawn
     stateKeys: ['time', 'season'],
     applyState(e, { time, season }) {

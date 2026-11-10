@@ -28,6 +28,7 @@ export async function run({ check }) {
   const text = readFileSync(join(LIB, 'ascii-meadow', 'ascii.js'), 'utf8'), head = text.slice(0, text.indexOf('function makeAtlas'));
   check('ascii-meadow: the layer goes in through engine.post.add, in the final slot', /engine\.post\.add\(/.test(text) && /slot: 'final'/.test(text));
   check('ascii-meadow: on, cell, glyphs and background are one value each at the top of the file', ['on', 'cell', 'glyphs', 'background'].every(k => new RegExp(`^ +${k}: `, 'm').test(head)));
+  check('ascii-meadow: the glyph atlas is released through ctx.display.own() (a dispose() on the effect definition is never called)', /ctx\.display\.own\(\{ dispose\(\) \{ mine\.map\.dispose\(\)/.test(text) && !/^    dispose\(\)/m.test(text));
   check('ascii-meadow: the cell is CSS pixels, scaled by the pixel ratio', /ASCII\.cell \* engine\.renderer\.getPixelRatio\(\)/.test(text));
   // measured on real WebGPU: at 4 CSS pixels and below a glyph is a dot, so a smaller default would keep the name and lose the characters
   check('ascii-meadow: the default cell is at least 5 CSS pixels', Number(/^ +cell: (\d+)/m.exec(head)?.[1]) >= 5);

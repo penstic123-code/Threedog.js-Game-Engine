@@ -7,11 +7,13 @@ Objective markers, counters, progress bars (hud() module)
 
 ## Methods and properties
 - `hud.marker(target: HudTarget, opts?: HudMarkerOptions) → HudMarker` — Add an objective marker: target is an object, position or place name
-- `hud.counter(id: string, opts: { label?, icon?, value?, max?, anchor? })` — Counter or text status (calling again with the same id = update; calling every frame is fine): counter('fish', { label: '鱼', value: 2, max: 5 }), counter('clock', { value: '08:30' }); no value = the label alone, no label = the value alone (the id is not shown)
+- `hud.addCounter(id: string, opts: { label?, icon?, value?, max?, anchor? }) → { id, set, remove }` — Counter or text status, returns { set(value), remove() } (calling again with the same id = update; calling every frame is fine): addCounter('fish', { label: '鱼', value: 2, max: 5 }), addCounter('clock', { value: '08:30' }); no value = the label alone, no label = the value alone (the id is not shown)
 - `hud.bump(id: string, n?: number) → number` — Add n (default 1) to a number counter, return the new value; one not declared yet starts at 0 with its id as the label
 - `hud.value(id: string) → number | string | undefined` — Current value of a counter or bar (number or text), undefined when there is none; reads what interactions.add({ counter }) has added up
 - `hud.bar(id: string, opts: { value, max?, label?, anchor? })` — Progress bar (calling again with the same id = update; calling every frame is fine, the DOM is untouched when the value is unchanged), value/max 0–max
-- `hud.remove(id: string)` — Delete a counter or progress bar
+- `hud.button(id: string, opts: { label, run, icon?, anchor?, action? })` — Clickable button (calling again with the same id = update): label is text or an i18n key, run() is called on a click / tap. The press never reaches the game and focus goes back to it; a locked mouse has no cursor, so free it first (Esc)
+- `hud.hint(id: string, opts: { action, label?, anchor? })` — (experimental) Key hint "E · Talk" (same id = update): the key text is engine.input.label(action) (the input.noKey text when the action needs a key and has none, as in the prompt), so it follows rebinding and keyboard / pad switching; label is text or an i18n key. A button with `action` shows its key too
+- `hud.remove(id: string)` — Delete a counter, progress bar, button or key hint
 - Properties:
   - `markers: HudMarker[]` All markers
 

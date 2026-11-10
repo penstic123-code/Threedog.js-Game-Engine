@@ -9,6 +9,107 @@ Taking over a game: its status notes first. A new feature: docs/AI.md or threedo
 - [AI.md](docs/AI.md): entry table, commands, verification rules, conventions
 - [API.md](docs/API.md): API index; one page per module in docs/api/
 
+## Which one
+
+- Say it happened, no answer; cause chain, randomness: docs/recipes/06-clock-events.md
+- Player actions, UI buttons (can refuse): docs/recipes/23-ops.md §1
+- A value several systems change; one-holder parts: docs/recipes/55-mods-time-wrap.md §"The rules in full"
+- Content: items, NPCs, places, packs; change an entry for good: docs/recipes/20-content-actions-save.md §1b
+- Save game, load game, autosave, story flags, counters: docs/recipes/20-content-actions-save.md §4
+- Preferences outside the save; turn off my effect: docs/recipes/26-ui-parts.md §6
+- Timers, skip time; game time: rules, AI: docs/recipes/06-clock-events.md §1
+- What shows: animation, camera, HUD (engine.stepBlend): docs/recipes/06-clock-events.md §1
+- Picture per frame: docs/recipes/62-picture-code.md §0
+
+## Picture and sound
+
+- The picture in three.js (picture/): lights, fog, exposure, parts: docs/recipes/62-picture-code.md §0, 34-environment-lighting.md
+- Picture, writers; try a value: docs/recipes/52-around-the-picture.md §"Who writes it", 62-picture-code.md §3c
+- Materials, textures, a module's picture: docs/recipes/09-materials-lights-models.md §1
+- Own material or shader (toon, cel shading): docs/recipes/43-shader-patches-surfaces.md §"Your own material", 56-webgpu-tsl.md §"A minimal TSL material"
+- WebGPU (new games' default), TSL node materials, WebGL fallback: docs/recipes/56-webgpu-tsl.md §"WebGPU or WebGL"
+- three.js idioms, own renderer: docs/recipes/50-own-renderer.md
+- Dust, smoke: docs/recipes/64-particles.md
+- Sky, season tints, weather, wet roads: docs/recipes/08-weather-sky.md §1
+- Water, rain, snow cover (own rain: THREE.md): docs/recipes/44-water-weather-hooks.md
+- Shadows: blur, follow, cost: docs/recipes/45-cascaded-shadows.md
+- Own far, fov; clouds: docs/recipes/52-around-the-picture.md §"Atmosphere"
+- Environment light, reflections, probes, lightmaps, GI, culling: docs/recipes/34-environment-lighting.md §"Environment maps"
+- Post passes: color grading, bloom, outline, depth, AO: docs/recipes/52-around-the-picture.md §"Post effect chain", 59-depth-post-effects.md
+- Many lights (torches); windows, signs at night: docs/recipes/09-materials-lights-models.md §1b
+- Picture from a reference; judge: docs/recipes/35-picture-from-reference.md §"The loop", 60-judge-the-picture.md
+- Reuse effects, models of old games: docs/recipes/05-props-bake.md
+- Sound, music, ambience: docs/recipes/31-audio.md
+
+## Rules, state, time
+
+- Items, chests, shops, gold; things to pick up: docs/recipes/03-items-pickups.md §"Items and pickups", 22-shop-gold.md
+- Quests, objective markers: docs/recipes/04-quests.md §1
+- What can the player do here, why not: docs/recipes/51-capability-catalog.md §1
+- New game / continue, scene flow, fades, pause for a menu, cutscenes: docs/recipes/07-flow-scenes-pause.md §4
+- Slow or speed up time, bullet time: docs/recipes/55-mods-time-wrap.md §"Time channels"
+- Time of day, day / night, seasons: docs/recipes/08-weather-sky.md §4, 06-clock-events.md
+- Multiplayer: docs/recipes/27-net.md §1
+
+## Characters, input, UI
+
+- Third-person start (player walks, walking player, pause): docs/recipes/63-third-person-start.md §1
+- Player, characters: docs/recipes/57-control.md §"Who takes what", 13-animation.md
+- Keys, gamepad, rebinding, seats: docs/recipes/58-input.md §1
+- Camera: followCamera (third person), first person, fixedCamera, rts; setCamera: docs/recipes/21-camera.md §1
+- 2D, side-scroller, orthographic; 2D lights: docs/recipes/21-camera.md §6
+- Pixel art: docs/recipes/62-picture-code.md §4b
+- Skeletal animation, IK: docs/recipes/13-animation.md §3, 15-perf.md
+- Pathfinding, navmesh, NPC jumps and gaps, gates: docs/recipes/12-navmesh.md §2
+- Physics, ragdoll, collision, vehicles: docs/recipes/11-vehicles.md §3
+- Ray / mouse picking, shooting, lock-on: docs/recipes/19-shooting-picking.md §1
+- Prompts, trigger zones: docs/recipes/20-content-actions-save.md §3
+- Press E on a mesh: docs/recipes/03-items-pickups.md
+- Reskin UI: docs/recipes/26-ui-parts.md §"Reskin"
+- Start at a place: docs/recipes/07-flow-scenes-pause.md §2
+- NPC conversation: talk to an NPC, what NPCs do: docs/recipes/02-npc.md §1
+- Speech bubble over a head, barks: docs/recipes/26-ui-parts.md §4
+- UI, menus, HUD, languages, settings, photo mode: docs/recipes/26-ui-parts.md §1, 26-ui-parts.md §6
+- Action game: hp, attacks, enemy AI, drops: docs/recipes/32-action-game.md §1
+- Ambient occlusion, soft shadows: docs/recipes/52-around-the-picture.md
+- Many bullets, debris: docs/recipes/65-swarm.md §"Which tool for many things"
+- Enemy crowds, flocks: docs/recipes/65-swarm.md §"Which tool for many things"
+
+## Project, world, content
+
+- New game, project layout, preset start: docs/recipes/01-new-game.md §0
+- Put something in the scene: docs/recipes/40-scene.md §1
+- Reusable objects (prefabs), groups of them: docs/recipes/30-templates.md §1
+- Props, many repeated objects, static batching: docs/recipes/05-props-bake.md §2b
+- What is this thing, does it persist: docs/recipes/30-templates.md §5, 40-scene.md §9
+- Teleport the player, far-away and saved objects, streaming: docs/recipes/18-world.md §6, 33-stream-sources.md
+- Blender level: docs/recipes/10-blender-level.md §1
+- Grass, trees: docs/recipes/05-props-bake.md §2e, 36-ground-plants.md
+- Terrain, height: docs/recipes/28-terrain.md §2
+- Ground picture: docs/recipes/36-ground-plants.md §"Ground color", 53-ground-up-close.md
+- Grid placement, plots, build on cells; a grid from a PNG: docs/recipes/29-grid.md §1, 28-terrain.md §9
+- Assets, loading; code-made models; LOD; setup per model: docs/recipes/05-props-bake.md §3, 15-perf.md
+- Blender -> GLB art; fixed views before / after: docs/recipes/46-blender-art-route.md §1, 05-props-bake.md §2f
+
+## Composing modules
+
+- Replace a module (dialogue, camera): docs/recipes/55-mods-time-wrap.md §"Replacing a module"
+- Your own module: type, requires, swap a part (provides + { replaces }): docs/recipes/14-custom-module.md §1, 49-game-module-contract.md
+- Drop-in file per piece, no main.js: docs/recipes/40-scene.md
+
+## Advanced
+
+- Own ground or plant drawing, keep collision: docs/recipes/28-terrain.md §6
+- Worker results, far records' models, raw navmesh or physics, content sections, own mover: docs/recipes/15-perf.md, 18-world.md, 12-navmesh.md, 11-vehicles.md, 14-custom-module.md, 57-control.md
+
+## Troubleshooting and speed
+
+- Broke; describe, explain, shot: which tool: docs/recipes/16-dev-bridge.md §11
+- Picture looks wrong: judge it: docs/recipes/60-judge-the-picture.md §"How to judge"
+- Drive and check the live game: docs/recipes/16-dev-bridge.md §1
+- Slow, low fps: docs/recipes/15-perf.md §1
+- Deploy: docs/recipes/61-deploy.md
+
 ## Recipes
 
 - [01-new-game](docs/recipes/01-new-game.md): Starting a new game

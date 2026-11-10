@@ -1,21 +1,26 @@
 # Shared values, exclusive slots, time channels and wrapping module methods
 
+> **Covers:** shared values (`engine.mod`), exclusive slots, time channels, wrapping and replacing modules.
+> **Use when:** several systems change one value, or a module needs replacing.
+> **Shortest:** `engine.mod('move.speed', { owner, mul: 0.5 })`.
+> **Sections:** The rules in full · Picture points follow the · Time channels · Fixed-step order onFixed fn · Wrapping a module method · Replacing a module · Who holds what
+
 A shared value is something several owners change: the game, a module, an effect. Name it, say who you are, say how you change it:
 
 ```js
-engine.time.channel('enemies');                               // a channel of your own exists once you name it (world, player and calendar are built in)
-const slow = engine.mod('time.enemies', { owner: 'bullet-time', mul: 0.35, for: 2 });   // bullet time; slow.remove() ends it early
-engine.mod('time.world', { owner: 'hitstop', set: 0, layer: 'system', for: 0.06 });      // decide on a higher layer: hides everything below
+engine.time.channel('enemies');  // a channel of your own exists once you name it (world, player and calendar are built in)
+const slow = engine.mod('time.enemies', { owner: 'bullet-time', mul: 0.35, for: 2 });  // bullet time; slow.remove() ends it early
+engine.mod('time.world', { owner: 'hitstop', set: 0, layer: 'system', for: 0.06 });  // decide on a higher layer: hides everything below
 
 const storm = () => ({ name: 'storm', type: 'rules', install(e, ctx) {
-  ctx.mod('time.world', { mul: 0.8, layer: 'effect' });       // inside a module: owned by it, gone when the module goes
+  ctx.mod('time.world', { mul: 0.8, layer: 'effect' });  // inside a module: owned by it, gone when the module goes
 } });
 
-const myBag = () => ({ name: 'myBag', type: 'rules', provides: ['inventory'], install(e) { /* ... */ } });   // only one may hold 'inventory'
-engine.use(myBag(), { replaces: 'inventory' });               // swap the engine's part: the old one leaves with all its changes
+const myBag = () => ({ name: 'myBag', type: 'rules', provides: ['inventory'], install(e) { /* ... */ } });  // only one may hold 'inventory'
+engine.use(myBag(), { replaces: 'inventory' });  // swap the engine's part: the old one leaves with all its changes
 const shop = () => ({ name: 'shop', type: 'rules', requires: ['inventory'] }); // depend on the slot, not on a module name
 
-engine.describe().shared['time.world'];   // { value: 0.8, writer: 'default', how: 'default 1 × storm 0.8', also: [{ owner: 'storm', ... }] }
+engine.describe().shared['time.world'];  // { value: 0.8, writer: 'default', how: 'default 1 × storm 0.8', also: [{ owner: 'storm', ... }] }
 ```
 
 What to remember:
@@ -31,10 +36,10 @@ input gates; shadow on / quality and post parameters are on them too. Your own o
 materials and textures are plain three.js: never registered, never a conflict. Which tool to reach for: `../CONVENTIONS.md` "Customization ladder".
 
 ```js
-engine.mod('time.player', { owner: 'haste', mul: 1.2, for: 5 });                   // haste on the player
-const menu = engine.freeze('pause-menu');  /* ... */  menu.remove();   // pause menu: the picture, UI and ambient uTime (wind, water, clouds) keep running; { ambient: true } stops those too
-engine.input.gate('jump', { owner: 'stun', for: 1.5 });                            // no jumping while stunned
-engine.wrap(engine.inventory, 'add', (next, id, n = 1, o) =>                      // a weight rule on top of the engine's inventory
+engine.mod('time.player', { owner: 'haste', mul: 1.2, for: 5 });  // haste on the player
+const menu = engine.freeze('pause-menu');  /* ... */  menu.remove();  // pause menu: the picture, UI and ambient uTime (wind, water, clouds) keep running; { still: true } stops those too
+engine.input.gate('jump', { owner: 'stun', for: 1.5 });  // no jumping while stunned
+engine.wrap(engine.inventory, 'add', (next, id, n = 1, o) =>  // a weight rule on top of the engine's inventory
   carried() + weightOf(id) * n > 30 ? { ok: false, code: 'tooHeavy' } : next(id, n, o), { owner: 'weight' });
 ```
 
@@ -62,15 +67,18 @@ engine.wrap(engine.inventory, 'add', (next, id, n = 1, o) =>                    
 - Base values are yours: `player.speed = 6` is always fine; modifiers go through `engine.mod('move.speed', { owner, id: 'player', mul })`.
 - Your own point: `engine.stacks.define('damageTaken', { per: true, min: 0 })`, then `engine.stacks.get('damageTaken').value(enemyId)`;
   `kind: 'value'` holds a color, a string or a flag (set only), `kind: 'one'` is an exclusive slot (what `provides` makes).
+- "What is being changed right now": `engine.describeText()` has one line `Values being changed now: move.speed[player] 6 → 4.2 (default 6 × haste 1.4 × mud 0.5), …`,
+  read from `engine.stacks.changed()` (the dev panel shows the same list): the points off their base or capped by a setting, furthest first, at most five.
+  `engine.stacks.define(name, { important: true })` keeps a point on that line even at its base and before the cap, for the few values a reader must always see.
 - Saved: `engine` to `effect` entries. Not saved: `settings` (the settings module re-applies the player's choices), `system`, `debug`.
 
 ## Picture points follow the same rule
 `shadows.enabled`, `post.<name>.enabled`, `sky.tint`, `sky.flash` and `ground.cover` are shared points like the rest.
 `sky.tint`, `ground.cover` (blend by amount) and `sky.flash` (adds) are written with `engine.mod`.
 ```js
-const hold = engine.mod('shadows.enabled', { owner: 'cutscene', layer: 'system', set: false });   // decides over the game
-engine.describe().shared['shadows.enabled'];                                                      // who decided and who is hidden
-hold.remove();                                                                                    // the handle ends yours
+const hold = engine.mod('shadows.enabled', { owner: 'cutscene', layer: 'system', set: false });  // decides over the game
+engine.describe().shared['shadows.enabled'];  // who decided and who is hidden
+hold.remove();  // the handle ends yours
 ```
 - The exact number whatever else is stacked: set on `{ layer: 'system' }` (the player's settings can still lower it), or write the three.js value.
 - The settings menu only restricts (`shadows` off is `shadows.enabled` set false on the settings layer), so neither a game's nor a cutscene's `enabled: true`
@@ -81,7 +89,7 @@ hold.remove();                                                                  
 
 - `engine.onFixed(dt => moveEnemies(dt), { channel: 'enemies' })`: dt is that channel's scaled dt. Without `channel` dt is real (1/60): cooldowns
   and UI timers are not slowed by bullet time by accident.
-- `engine.characters.createPlayer` drives the player on channel `'player'`; `new Character(engine, { channel })` picks one for other characters.
+- `engine.characters.addPlayer` drives the player on channel `'player'`; `new Character(engine, { channel })` picks one for other characters.
 - `engine.world.simulate('slime', { near, far, channel: 'enemies' })`: near and far dt follow the channel too (NPCs: their own channel).
 - `engine.clock.rate` is the calendar speed (fast-forward a day), separate from the channels.
 - One time source: `engine.time.tick` is the only counter; `engine.time.now('real' | 'ambient' | 'calendar' | channel)` are read-only views of it
@@ -110,10 +118,10 @@ Other modules `requires: ['inventory']` and work with whichever holds it. `engin
 holder (its tracked handles, its `ctx.mod` entries, its `dispose`) before the new install, and puts it back if that fails, with its save data and content sections. Either way the holder is a fresh install, so `module:restored` fires with the fresh modules once their `init` is done: content sections load again, as a `content.load` on a running game would (a newcomer with its own format may refuse a pack written for the old holder: that part stays out, with a warning naming the pack), and what game code defined on the old holder by hand it defines again on that event. Level walls and solid props need no event: they go into whichever `collision` or `collider3d` is installed, also one that came late or came back.
 
 Most replaceable modules have a contract (`modules/gameplay/*.contract.js`, `modules/*/contract.js`; object contract `modules/characters/vehicle.contract.js`; the rest and what cannot be replaced: CONVENTIONS.md "What can be replaced"): the api, fields, ops, events
-and save keys other code relies on, and nothing more (the engine's callers use only that surface). `runContract(contract, () => myInventory(), { check })`
+and save keys other code relies on, and nothing more (the engine's callers use only that surface). `await runContract(contract, () => myInventory(), { check })`
 from `@threedog/tools/contract` checks a replacement (in a game installed from npm too); `tests/contract/` in the engine's repository (not shipped) holds small
 whole replacements such as `fakeInventory.js`.
-A camera module's `prepare` hook: `runContract(contract, () => myCamera(), { check, prepare: e => { e.camera = ... } })` adds what it needs to the
+A camera module's `prepare` hook: `await runContract(contract, () => myCamera(), { check, prepare: e => { e.camera = ... } })` adds what it needs to the
 small engine. A vehicle is checked as an object: `runContract(vehicleContract, () => myBoat, { check })`.
 
 ## Who holds what

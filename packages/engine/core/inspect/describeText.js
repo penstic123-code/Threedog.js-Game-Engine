@@ -9,7 +9,7 @@ const STRINGS = {
   head: '[Game state] running {s} s{flags}',
   actions: 'Can do (engine.ops): {list}',
   error: '[Error, gameplay frozen] {where}: {message}', errorAt: ' ({at})',
-  errorHint: ' | Code: {code} | Fix: {fix} Read: {docs}', disabled: 'Disabled picture / ui modules (they threw): {list}', blocked: 'Blocked modules: {list}',
+  errorHint: ' | Code: {code} | Fix: {fix} Read: {docs}', disabled: 'Disabled picture / ui modules (they threw): {list}', blockedModules: 'Blocked modules: {list}',
   halted: ', halted', headless: ', headless', notReady: ', still loading',
   waiting: 'Loading: {waiting} ({pending} pending, {done}/{total} done)', loadFailed: 'Load failed{blocked}: {list}', blocked: ' (start blocked)',
   loadWarn: 'Loaded with missing references: {list}',
@@ -36,9 +36,11 @@ const STRINGS = {
   nearItem: '  - {name} [{kind}] {dist} m, {dir}, {rel}{use}',
   use: ', interact: {label}',
   modules: 'Modules: {list}',
-  perf: 'Perf: fps {fps}, CPU {cpu} ms/frame, draw calls {calls}, triangles {tris}{chunks}',
+  perf: 'Perf: fps {fps}, CPU {cpu} ms/frame{frames}, draw calls {calls}, triangles {tris}{chunks}',
+  cpuFrames: ' (median of {n} frames)',
   chunks: ', chunks loaded {loaded} / visible {visible} / queued {queued}',
   extra: '{name}: {json}',
+  changed: 'Values being changed now: {list}',
   tables: 'Engine tables (entries; describe <name> for one): {list}',
   more: '... {n} more modules: {names} (describe <name> for one)',
   nearMore: '  ... {n} more',
@@ -57,12 +59,12 @@ import { fmt } from '../base/validate.js';
 import { r1 } from '../base/math.js';
 import { getPath } from '../base/util.js';
 
-const NEAR_SUMMARY = 5, LINE = 110;
+const NEAR_SUMMARY = 5, LINE = 110, CHANGED_ROW = 120, CHANGED_LINE = 360;
 const tr = (table, k) => (k != null && STRINGS[table][k]) || (k ?? STRINGS.none);
 const n1 = v => (typeof v === 'number' ? r1(v) : v);
 // Standard fields get sentences above; data from other modules is squeezed into one JSON line
 const SHOWN = new Set(['nearbyRadius', 'ready', 'error', 'disabledModules', 'loading', 'audio', 'time', 'player', 'camera', 'nearby', 'actions', 'ui', 'cutscene',
-  'modules', 'perf', 'weather', 'render', 'threePatches']);   // threePatches: page-wide, the same every call; describe() JSON carries it, the text stays short
+  'modules', 'perf', 'changed', 'weather', 'render', 'threePatches']);   // threePatches: page-wide, the same every call; describe() JSON carries it, the text stays short
 // engine bookkeeping in describe(): one count each in the summary, the content one describeText({ path }) away
 const TABLES = new Set(['holds', 'input', 'control', 'shared', 'wraps', 'slots', 'scene', 'owned', 'picture', 'renderer']);
 const argText = a => Object.entries(a || {}).map(([k, v]) => `${k}=${Array.isArray(v) ? v.join(',') : v}`).join(' ');
@@ -108,7 +110,7 @@ export function describeText(d, { full = false, path, maxLines = 30, game = [] }
   }
   if (d.disabledModules?.length) L.push(fmt(STRINGS.disabled, { list: d.disabledModules.join(', ') }));
   const blocked = Object.entries(d.moduleStates ?? {}).filter(([, s]) => s.startsWith('blocked')).map(([n, s]) => `${n} ${s}`);
-  if (blocked.length) L.push(fmt(STRINGS.blocked, { list: blocked.join('; ') }));
+  if (blocked.length) L.push(fmt(STRINGS.blockedModules, { list: blocked.join('; ') }));
   if (t.clock) L.push(fmt(STRINGS.time, { clock: t.clock, day: t.day, season: t.season ? ', ' + tr('season', t.season) : '', dayNight: t.isDay ? STRINGS.day
     : STRINGS.night }));
   const w = d.weather, wl = d.weatherDraw ?? {};   // weather state, and what of it is drawn (the drawing half)
@@ -143,9 +145,15 @@ export function describeText(d, { full = false, path, maxLines = 30, game = [] }
   if (d.actions) L.push(fmt(STRINGS.actions,
     { list: d.actions.map(a => `${a.ok ? '✓' : '✗'} ${a.op}${a.args && Object.keys(a.args).length ? ' ' + argText(a.args) : ''}${a.ok ? '' : ` (${a.code})`}`).join(' · ') }));
   const pf = d.perf;
-  L.push(fmt(STRINGS.perf, { fps: pf.fps ?? '-', cpu: pf.cpuMs ?? '-', calls: pf.drawCalls, tris: pf.triangles, chunks: pf.chunks
+  L.push(fmt(STRINGS.perf, { fps: pf.fps ?? '-', cpu: pf.cpuMs ?? '-', frames: pf.cpuFrames ? fmt(STRINGS.cpuFrames, { n: pf.cpuFrames }) : '', calls: pf.drawCalls, tris: pf.triangles, chunks: pf.chunks
     ? fmt(STRINGS.chunks, pf.chunks) : '' }));
+  if (pf.notice) L.push(pf.notice);   // over the game's budget, slower than its baseline, resolution lowered (engine.budget.notice)
   if (full && d.render?.text) L.push(d.render.text);   // render block only in the full text; the summary stays short (describe render shows it)
+  if (d.changed) {   // bounded: names, values and how-chains are game data, so each row and the whole line are cut (the full rows are describe shared)
+    const rows = d.changed.map(c => { const x = String(c.text).replace(/\s+/g, ' '); return x.length > CHANGED_ROW ? x.slice(0, CHANGED_ROW - 1) + '…' : x; });
+    const all = rows.join('; ');
+    L.push(fmt(STRINGS.changed, { list: all.length > CHANGED_LINE ? all.slice(0, CHANGED_LINE - 1) + '… (describe shared for all)' : all }));
+  }
   L.push(fmt(STRINGS.modules, { list: d.modules.map(m => `${m.name} (${m.type})`).join(', ') }));
   if (full) {
     for (const k in d) if (!SHOWN.has(k)) L.push(fmt(STRINGS.extra, { name: k, json: JSON.stringify(d[k]) }));

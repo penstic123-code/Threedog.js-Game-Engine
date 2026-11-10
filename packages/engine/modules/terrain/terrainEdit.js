@@ -33,7 +33,7 @@ export class TerrainEdits {
     this.t = new Map();     // cell key -> ground type of cell [i, i + 1) x [j, j + 1)
     this.ver = new Map();   // chunk key 'cx,cz' -> edit version (jobs carry it; an older result is stale)
     this.attach();
-    ctx.saves.register('terrain', { notAtomic: 'height data is too large to copy for each atomic run, and its load rebuilds meshes', save: () => this.save(), load: d => this.load(d) });
+    ctx.saves.define('terrain', { notAtomic: 'height data is too large to copy for each atomic run, and its load rebuilds meshes', save: () => this.save(), load: d => this.load(d) });
   }
   /** Point the main-thread generator at the edit maps (again after the generator is rebuilt, e.g. a height map finished loading) */
   attach() { this.mgr.generator.useEdits(this.h, this.t); }
@@ -119,12 +119,16 @@ export class TerrainEdits {
     m._adopt(c, t);   // data only: each draw part copies the new arrays in its change(c) hook
     m._emit('change', c);
     const P = m.plants;
+    c.detailDone.clear();   // edits can change what grows here, so near-only species are asked again
     for (const sp of P.list()) {
-      if (sp.nearOnly && !c.plants[sp.name]) continue;   // detail not loaded here; when it is, its job carries the edits
-      P.mount(c, sp.name, T.place(c.cx, c.cz, sp.rule, m.density));   // an empty result drops the old plants inside vegetation.mount
+      const e = c.near[sp.name], here = !!c.plants[sp.name];
+      // a near-only collider ticket not yet applied (or an empty answer already applied) is booked again from this edit: the same tick whether or not the job had answered
+      if (e && (!e.done || !here)) { m._cancelNear(c, sp.name); m._book(c, sp); }
+      if (sp.nearOnly && !here) continue;   // detail not loaded here; when it is, its job carries the edits
+      m._mountPlants(c, sp.name, T.place(c.cx, c.cz, sp.rule, m.density));   // an empty result drops the old plants inside vegetation.mount
     }
     // new token: the physics module rebuilds this chunk's collision; edits can change what grows here, so near-only species are asked again
-    c.colToken = {}; c.level = -1; c.detailDone.clear();
+    c.colToken = {}; c.level = -1;
   }
 
   save() {

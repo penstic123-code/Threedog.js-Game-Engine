@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { ROOT, rel, abs, gameDirs, CONTENT_RULES_REL } from '../paths.mjs';
 import { balanced, splitTop } from '../lib/text.mjs';
+import { assetFiles } from '../lib/asset-url.mjs';
 import { withDomStub } from './dom-stub.mjs';
 
 // The engine's content vocabulary (path read from paths.mjs); content-check.mjs and gamemap.mjs also take mergeRules etc. from here
@@ -168,10 +169,8 @@ export function missingAssetFiles(dir, assets) {
   const out = [], winners = new Map();
   for (const pack of assets.packs) for (const kind of ['models', 'textures', 'sounds']) for (const [name, entry] of Object.entries(pack?.[kind] || {})) winners.set(`${kind}/${name}`, { kind, name, entry, base: pack.base });
   for (const { kind, name, entry, base } of winners.values()) {
-    const url = typeof entry === 'string' ? entry : entry?.url;
-    if (typeof url !== 'string' || /^([a-z][a-z\d+.-]*:|\/\/)/i.test(url)) continue;
-    const path = (url.startsWith('/') ? url : (base ?? '/') + url).split(/[?#]/)[0];
-    if (!existsSync(join(dir, 'public', path))) out.push(`assets.js: ${kind} "${name}" names ${path}, which is not in public/: put the file there or fix the path`);
+    const f = assetFiles(dir, typeof entry === 'string' ? entry : entry?.url, base);   // null: remote / inline / a generator
+    if (f && !existsSync(f.served)) out.push(`assets.js: ${kind} "${name}" names ${f.path}, which is not in public/: put the file there or fix the path`);
   }
   return out;
 }

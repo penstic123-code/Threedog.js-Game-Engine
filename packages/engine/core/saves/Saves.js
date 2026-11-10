@@ -1,6 +1,6 @@
 // Saves: each module registers "how to save and load", and saving collects them all. Supports multiple slots, autosave, and export / import (text, file).
 //
-// engine.saves.register('garden', { version: 2, migrate: { 1: d => ({ ...d, beds: [] }) }, save, load });   // shape changed: raise version, add the step
+// engine.saves.define('garden', { version: 2, migrate: { 1: d => ({ ...d, beds: [] }) }, save, load });   // shape changed: raise version, add the step
 // if (await engine.saves.save('slot1')) toast(engine, 'Saved');   await engine.saves.load('slot1');   // both return Promise<boolean>
 // Text export / import and .json files (with attachments): saveFiles.js. Applying a save (checks, rollback): saveApply.js. Format: recipe 20 "Save format".
 // Failure paths never lose data: a part whose save() throws, or a failed write, keeps the previous save (false + toast); a corrupt / newer / unmigratable
@@ -28,19 +28,21 @@ import { StateReplace } from './stateReplace.js';
 
 // Developer messages (console text for developers, never shown in the game UI)
 const DEV_STRINGS = {
-  keyTaken: "saves.register('{key}'): the key already has an owner, whose part would stop being saved",
+  keyTaken: "saves.define('{key}'): the key already has an owner, whose part would stop being saved",
   saveThrew: "save() of save part '{k}' threw ({msg}); slot '{slot}' was not written and keeps its previous save",
   stale: "[saves] slot '{slot}' was not written: another tab or window of this game saved it after this one last loaded or saved it, and overwriting would lose that newer progress. This tab now lists the newer save; load it to continue from it, or save into another slot",
   noIdb: '[saves] IndexedDB is unavailable (possibly private mode); saves fall back to localStorage (about 5MB cap) and attachments (such as photos) will not be saved.',
   staleRemove: "[saves] slot '{slot}' was not deleted: another tab or window of this game saved it after this one last saw it. This tab lists that save again",
+  badFirst: "saves.define('{key}'): first must be true, false or a finite number (lower loads earlier, true counts as 0), got {got}",
   staleBlob: "[saves] attachment '{group}/{id}' was not changed: another tab or window of this game wrote it after this one last saw it. Read saves.attachments('{group}') first, or use another id",
   busy: 'saves.collect() was called during a load, so it would hold half of each state. Wait for the load, or use saves.save, which waits by itself',
-  owner: "saves.register('{key}'): that key already has a part, and this one takes it over: the first owner's data is no longer saved. Remove the first part, or use another key",
+  owner: "saves.define('{key}'): that key already has a part, and this one takes it over: the first owner's data is no longer saved. Remove the first part, or use another key",
   autosave: 'saves.autosave(minutes): minutes must be a positive number of minutes of play, got {got}',
-  protoName: "saves.register('__proto__'): a save cannot hold a part with this name (assigning it swaps the parts object's prototype, and save text drops it on reading), so its data would be lost without a word. Pick another name",
+  asyncAtomic: "saves.define('{key}'): an atomic part's load must be synchronous, but it is an async function. An atomic op's rollback puts the part back before the op returns; a load still running after its first await would write the old data over what the outer op committed, its events past the mute. Make load plain (do the async work before), or drop atomic: true",
+  protoName: "saves.define('__proto__'): a save cannot hold a part with this name (assigning it swaps the parts object's prototype, and save text drops it on reading), so its data would be lost without a word. Pick another name",
 };
 
-/** What saves.register takes: without a working save and load the failure would wait for the player's first save or load */
+/** What saves.define takes: without a working save and load the failure would wait for the player's first save or load */
 const PROVIDER = { save: 'function', load: 'function', first: 'any?', version: 'any?', migrate: 'any?', atomic: 'any?', notAtomic: 'string?', checkNewGame: 'any?' };
 
 /** Save data as a save file would hold it: no reference into the part's live state stays behind */
@@ -85,14 +87,14 @@ export class Saves {
     this.whenReady = this._init().then(() => { this.ready = true; });
   }
   /**
-   * Register "how to save and load"; key is this part's name in the save. Parts with first: true load first (the level); a load returning a Promise makes later
+   * Define "how to save and load"; key is this part's name in the save. Parts with first: true load first (the level); first may be a number, lower loads earlier, true counts as 0 (zones that need the level: 1); a load returning a Promise makes later
    * parts wait.
    * version (default 1): raise it by 1 whenever what save() returns changes shape, and add migrate[oldVersion] = data => newData; load sees only the current
    * shape.
    * A save whose part is newer than this build's version is refused as a whole (load returns false, the save is kept).
    * load(data, turn): turn is this replacement's identity. Pass it on, level.load(x, { turn }) or content.load(x, { turn }): those wait for a running load to end, except with its turn.
    * A part registered after a save was loaded (a module installed later) is handed its data from that save: at once when idle, else right after the replacement under way.
-   * atomic: true joins this part to atomic ops: it is copied before an atomic op runs and put back if the op fails (plain data only; afterLoad does not run on rollback).
+   * atomic: true joins this part to atomic ops: it is copied before an atomic op runs and put back if the op fails (plain data only; afterLoad does not run on rollback; load synchronous: an async function is refused here).
    * checkNewGame(data): dev only, called once start() finished with this part's data in the new-game state, to warn about what should not be there yet
    * (world: records placed by code instead of content). The part knows its own format; core only hands the data over.
    * Returns a handle: remove() takes the part out and keeps its data as unattached data (it rides in later saves and goes back to a part registered under
@@ -101,29 +103,33 @@ export class Saves {
    * @param {SaveProvider} provider
    * @returns {{ remove(o?: { keep?: boolean }): void }}
    * @example
-   * engine.saves.register('garden', { save: () => garden.toJSON(), load: d => garden.fromJSON(d) });
+   * engine.saves.define('garden', { save: () => garden.toJSON(), load: d => garden.fromJSON(d) });
    * // later the format gains beds: version 2, and a step that upgrades version-1 data
-   * engine.saves.register('garden', { version: 2, migrate: { 1: d => ({ ...d, beds: [] }) }, save: () => garden.toJSON(), load: d => garden.fromJSON(d) });
+   * engine.saves.define('garden', { version: 2, migrate: { 1: d => ({ ...d, beds: [] }) }, save: () => garden.toJSON(), load: d => garden.fromJSON(d) });
    */
-  register(key, provider) {
-    checkTypeRule(this.engine, 'saves.register', `registered save part '${key}'`);
-    // told, not taken: the first owner would stop being saved with nothing said. A module that goes gives the key back first (ctx.saves.register), so a swap never lands here
+  define(key, provider) {
+    checkTypeRule(this.engine, 'saves.define', `defined save part '${key}'`);
+    // told, not taken: the first owner would stop being saved with nothing said. A module that goes gives the key back first (ctx.saves.define), so a swap never lands here
     if (this.providers.has(key)) throw codedError('save-key-taken', fmt(DEV_STRINGS.keyTaken, { key }));
-    readParams(`saves.register('${key}')`, PROVIDER, provider);
+    readParams(`saves.define('${key}')`, PROVIDER, provider);
+    if (provider.first !== undefined && typeof provider.first !== 'boolean' && !Number.isFinite(provider.first)) throw codedError('module-params', fmt(DEV_STRINGS.badFirst, { key, got: JSON.stringify(provider.first) }));
     if (key === '__proto__') throw codedError('module-params', DEV_STRINGS.protoName);
     const { save, load, first = false, version = 1, migrate = {}, atomic = false, checkNewGame = null } = provider;
+    // shortcut: only a load declared async is known here; a plain function that returns a Promise is refused when the rollback meets it (restoreParts, saveApply.js)
+    if (atomic === true && load.constructor?.name === 'AsyncFunction') throw codedError('module-params', fmt(DEV_STRINGS.asyncAtomic, { key }));
     checkPartVersion(key, version, migrate);
     const f = this._foreign, held = Object.hasOwn(f.parts, key) ? { data: copyData(f.parts[key]), version: f.versions[key] ?? 1 } : null;
     const part = { save, load, first, version, migrate, atomic: atomic === true, checkNewGame };
     if (DEV && this.providers.has(key)) warnOnce(fmt(DEV_STRINGS.owner, { key }), `save-owner-${key}`);   // the newer owner takes it, as a replaced module does; the older one stops being saved
     this.providers.set(key, part);
-    this.engine.session._late(key);   // a part registered after start() (a module installed later) joins the new-game state as it is now
-    if (held) adoptPart(this, key);
+    try { this.engine.session._late(key); }   // a part registered after start() (a module installed later) joins the new-game state as it is now
+    catch (err) { this.providers.delete(key); this.engine.session._lateParts.delete(key); throw err; }   // define() hands back no handle on a throw, so the key must not stay taken
+    if (held) adoptPart(this, key, part);
     return { remove: ({ keep = true } = {}) => {
       if (this.providers.get(key) !== part) return;   // a stale handle: the key belongs to someone newer
       this.providers.delete(key);
-      let left = held;
-      if (keep && !Object.hasOwn(this._foreign.parts, key)) try { const d = partData(key, part); left = d == null ? null : { data: copyData(d), version }; }
+      let left = held;   // removed while its late data loads (adoptPart): that data goes back unattached, not the half-loaded state
+      if (keep && !part.adopting && !Object.hasOwn(this._foreign.parts, key)) try { const d = partData(key, part); left = d == null ? null : { data: copyData(d), version }; }
       catch (err) { reportError(this.engine, err, `save() of part '${key}' while it was removed`, { soft: true }); }
       if (left) { this._foreign.parts[key] = left.data; this._foreign.versions[key] = left.version; }
     } };
@@ -138,7 +144,7 @@ export class Saves {
   /** @internal */
   async _init() {
     const idb = await this.store.open();
-    if (!idb) warnOnce(coded('indexeddb', DEV_STRINGS.noIdb));
+    if (!idb) warnOnce(coded('indexeddb', DEV_STRINGS.noIdb + (this.store.openError ? ` (IndexedDB said: ${this.store.openError.message})` : '')));
     try {
       for (const r of await this.store.slots()) {
         this._rev.set(r.slot, r.rev ?? ''); this._mine.set(r.slot, r.rev ?? '');   // also for a save made before this ran: its write comes after and expects this record
@@ -162,7 +168,7 @@ export class Saves {
   }
   /**
    * Store a binary attachment outside the world save (a photo, a replay). It rides in the queue of save writes, so flush() waits for it, and exportFile() carries it.
-   * Pass a function to make the bytes when the write runs: flush() then waits for that too. Without IndexedDB it is not kept.
+   * Pass a function to make the bytes when the write runs: flush() then waits for that too. Without IndexedDB it is not kept: it rejects with save-write.
    * Rejects with save-stale, changing nothing, when another tab wrote this id since this tab last saw it; attachments(group) is how a tab looks.
    * @example await engine.saves.putAttachment('replay', 'run-1', blob, { score: 12 });
    * @param {string} group what the attachment is for
@@ -292,7 +298,9 @@ export class Saves {
    */
   async _showStored(slot, still) {
     if (!still()) return;
-    const stored = await this.store.getSlot(slot).catch(() => null);
+    let stored;
+    try { stored = await this.store.getSlot(slot); }
+    catch (e) { reportError(this.engine, e, `saves slot '${slot}' could not be read back after a failed write; the list keeps the last known record, which the disk may not hold`, { soft: true }); return; }   // "cannot read" is not "no save": dropping the slot would hide a save that may exist
     if (still()) this._show(slot, stored);
   }
   /** @internal */
@@ -344,10 +352,11 @@ export class Saves {
    * game back.
    * To continue or retry with nothing of the current playthrough left over, use engine.session.load(slot).
    * @param {string} [slot]
+   * @param {{ turn?: object }} [o]  turn: the running request's own (what a save part's load(), an afterLoad or a module's applyState was given): the call then runs inside that request instead of waiting behind it for itself, as level.load({ turn }) does
    * @returns {Promise<boolean>}
    * @example if (!(await engine.saves.load('quick'))) toast(engine, 'No quick save');
    */
-  load(slot = 'auto') { return this._replace.run(null, () => this._load(slot)); }
+  load(slot = 'auto', { turn } = {}) { return this._replace.run(null, () => this._load(slot), { turn }); }
   /** @internal Load a slot inside a turn already taken; with base (a collect() result) the save goes on top of it, so a part missing from the save gets base's state (session.load) */
   _load(slot, base) { return loadSlot(this, slot, base); }
   /** All slots, newest first (synchronous, reads the in-memory index) @returns {{ slot: string, savedAt: number }[]} */
@@ -421,7 +430,7 @@ export class Saves {
     return (this._auto = h);
   }
   /** @internal Stop autosave (called by engine.dispose) */
-  dispose() { this._auto?.remove(); this._bc?.close(); this._bc = null; this._queue.finally(() => this.store.close()); }   // close the database only after queued writes finish
+  dispose() { this._auto?.remove(); this._bc?.close(); this._bc = null; this._queue.then(() => this.whenReady).catch(() => {}).finally(() => this.store.close()); }   // close the database only after queued writes finish and the open (which sets store.db later) is done
 }
 
-export const handRolled = [{ kind: 'save', seen: 'a save of its own in localStorage', use: "engine.saves: autosave(minutes), register('game', { version: 1, save, load }), and Continue on the start screen (recipe 63); versions, slots and a corrupt save are handled", quiet: /\bengine\.saves\b/, code: /\blocalStorage\.setItem\s*\(/, notRaw: /setItem\s*\(\s*(?![^,)]*(?:save|progress))[^,)]*(?:volume|mute|lang|locale|theme|music|sfx|quality|sensitiv|brightness|fullscreen|tutorial|dismiss|setting|pref|option|keybind)/i }];
+export const handRolled = [{ kind: 'save', seen: 'a save of its own in localStorage', use: "engine.saves: autosave(minutes), define('game', { version: 1, save, load }), and Continue on the start screen (recipe 63); versions, slots and a corrupt save are handled", quiet: /\bengine\.saves\b/, code: /\blocalStorage\.setItem\s*\(/, notRaw: /setItem\s*\(\s*(?![^,)]*(?:save|progress))[^,)]*(?:volume|mute|lang|locale|theme|music|sfx|quality|sensitiv|brightness|fullscreen|tutorial|dismiss|setting|pref|option|keybind)/i }];

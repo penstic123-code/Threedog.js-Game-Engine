@@ -1,85 +1,79 @@
 # World data: things that must be saved, grow, and keep changing while far away
 
-**In this recipe**: 1. Three steps · 2. How to change data · 3. Example: a crop grows on the calendar, press E to… · 4. Data written in content ·
-4b. One object from start to end · 5. Example: something that wanders · 6. Near, far, camera, player · 7. Time and ordering rules · 8. Querying nearby things ·
-9. zone and data limits
+> **Covers:** world records: things that are saved, grow and change while far away.
+> **Use when:** an object must live on outside the view or across levels.
+> **Shortest:** `engine.world.add({ id, kind, position })`.
+> **Sections:** 1 Three steps data · 2 How to change · 3 Example a crop · 4 Data written in · 4b One object from · 5 Example something that · 6 Near, far, camera · 7 Time and ordering · 8 Querying nearby things · 9 zone and data
 
-Requires module `world()` (already included in the `openWorld()` preset). The interaction prompts in the examples need
-`interactions({ ...presets.interactions.nearest })`, the inventory needs `inventory()` (keys: `presets.bindings.interact` / `.inventory`). The API list is in
-`../api/world.md`; this page explains how to use it and what the rules are.
+Requires `world()` (part of `openWorld()`); the examples also use `interactions({ ...presets.interactions.nearest })` and `inventory()`. API: `../api/world.md`.
 
-Anything in the game that "must remember its state, survive level changes, and keep changing while far away" (chests, NPCs, zombies, crops, trees the
-player planted, the player itself) is one **plain data record** in `engine.world`: a stable id, a kind, a position, plus your own fields. The model is
-just how it looks when the camera is near; unloading a chunk / level tears down only the model and never loses the data; a save stores only data; far
-away, with no model, the data is still simulated.
-A decorative rock is a props entry in `content/props.js` (an authored record, saved only if play moves or removes it); `engine.add(mesh)` is for
-transient effects. Everything placed in a level comes from content, so a new game equals the content.
-Many copies of one interactive object (chests, beds, campfires) with the same model, interaction and container: define it once as a content template
-and place instances (recipe 30-templates.md); the template is the shared read-only definition, the record holds only the instance state.
+Anything that must remember its state, survive level changes and keep changing while far away (chests, NPCs, crops, the player itself) is one **plain data
+record** in `engine.world`: a stable id, a kind, a position, plus your own fields. The model is only how it looks when near; unloading tears down the model,
+never the data; a save stores only data; far away the data is still simulated. A decorative rock is a props entry (recipe 05); many copies of one interactive
+object are a content template with instances (recipe 30-templates.md), whose records hold only the instance state.
 
 ## 1. Three steps: data, picture, change
 ```js
 const W = engine.world;
-W.add({ id: 'zombie_1', kind: 'zombie', position: [10, 0, -4], hp: 10 });   // fields must be plain values; without an id one is numbered automatically (saved)
+W.add({ id: 'zombie_1', kind: 'zombie', position: [10, 0, -4], hp: 10 });  // fields must be plain values; without an id one is numbered automatically (saved)
 W.present('zombie', {
-  build: rec => new THREE.Mesh(zombieGeo, zombieMat),   // required: built when the camera is near (may be async); world adds it to the scene at rec.position
-  update: (rec, obj, dt) => { obj.visible = rec.hp > 0; },   // optional: called every frame for records that have a model; change the picture from the data
-  dispose: (rec, obj) => engine.remove(obj),   // optional: first argument is the data, second the model; this is the default
-  show: rec => rec.hp > 0,   // optional: false = this record has no model right now (picked up, waiting to respawn)
-  radius: 40,   // optional: how near to build the model (meters or a function); default world.radius (60)
+  build: rec => new THREE.Mesh(zombieGeo, zombieMat),  // required: built when the camera is near (may be async); world adds it to the scene at rec.position
+  update: (rec, obj, dt) => { obj.visible = rec.hp > 0; },  // optional: called every frame for records that have a model; change the picture from the data
+  dispose: (rec, obj) => engine.remove(obj),  // optional: first argument is the data, second the model; this is the default
+  show: rec => rec.hp > 0,  // optional: false = this record has no model right now (picked up, waiting to respawn)
+  radius: 40,  // optional: how near to build the model (meters or a function); default world.radius (60)
 });
 W.simulate('zombie', {
-  near: (rec, dt, obj) => { W.move(rec.id, { x: rec.position.x + dt, z: rec.position.z }); },   // near the player: every fixed step; obj may not be built yet (null), gameplay must not depend on it
-  far: (rec, dt) => { rec.hp = Math.min(10, rec.hp + dt * 0.1); },   // far away: once every farEvery seconds; dt is accumulated seconds (it can catch up a long time at once)
+  near: (rec, dt, obj) => { W.move(rec.id, { x: rec.position.x + dt, z: rec.position.z }); },  // near the player: every fixed step; obj may not be built yet (null), gameplay must not depend on it
+  far: (rec, dt) => { rec.hp = Math.min(10, rec.hp + dt * 0.1); },  // far away: once every farEvery seconds; dt is accumulated seconds (it can catch up a long time at once)
 });
 ```
 - If `build` throws, fails, or returns something that is not an object, the error is reported once and does not block the loading screen
   (`world.ready`); it retries when you walk away and come back.
 - `show` is re-evaluated when `world.set` changes data of that kind. Calling `present` again for the same kind tears down old models with the old
   dispose and rebuilds them with the new one.
-- Animation, particles and other things that only matter per frame go in `present.update`, not in simulate. It runs after world placed the model
-  on its record, so picture-only motion written there stays: `update: (rec, obj, dt) => { obj.getObjectByName('legL').rotation.x = Math.sin(rec.walk * 9) * 0.5;
+- Per-frame picture work (animation, particles) goes in `present.update`, which runs after world placed the model, so motion written there stays: `update: (rec, obj, dt) => { obj.getObjectByName('legL').rotation.x = Math.sin(rec.walk * 9) * 0.5;
   obj.position.x += rec.stagger * 0.1; }` (a leg swing, a stagger offset). Moving the model from anywhere else is put back next frame, with a warning.
+- world places only the position of a model your `build` returns: apply `rec.rot` / `rec.scale` yourself (your units, on the root or a child),
+  and again in `update` to follow later writes. Content props and templates turn and size theirs.
 
 ## 2. How to change data
 - Discrete changes (open a chest, switch growth stage, get picked up, change direction) use `W.set(id, { opened: true })`: it emits `world:change` and
   re-evaluates `show`. Don't `set` every step. id / kind cannot be changed (to change the kind, remove then add).
 - Things that change every step (position, timers, pathfinding state) are changed directly on the rec's fields inside simulate, and position with
   `W.move`: no event, cheap.
-- Both ways are saved (a save compares contents, it does not rely on events). `move` emits no event: if the picture needs to follow position, compare in
-  `update`.
+- Both ways are saved (a save compares contents). `move` emits no event: a picture that follows position compares in `update`.
 - Don't hold a rec object for long: loading a save replaces it with a new object. Keep the id and call `W.get(id)` when you need it.
 - Position forms: Vector3 / object / `[x, y, z]` / `{ x, z }` (a missing y keeps the old one). NaN or an array with only two numbers
   throws immediately, in release too, and writes nothing.
 
 ## 3. Example: a crop grows on the calendar, press E to harvest when ripe
-The key idea: **don't accumulate every step; record the time it was planted, `plantedAt = clock.now`, and growth = now - planted time**. Whether the
-player walked away, loaded a save, or fast-forwarded with `engine.step(60)`, the result is right, and no simulate is needed.
+The key idea: **record `plantedAt = clock.now` and compute growth = now - planted time** instead of accumulating every step: right after walking away, a save load or `engine.step(60)`, with no simulate.
 ```js
 import { presets, THREE } from 'threedog';
 
-const GROW = 120;   // ripe after 120 calendar seconds (the unit of clock.now)
-const growth = rec => Math.min(1, (engine.clock.now - rec.plantedAt) / GROW);   // 0..1
+const GROW = 120;  // ripe after 120 calendar seconds (the unit of clock.now)
+const growth = rec => Math.min(1, (engine.clock.now - rec.plantedAt) / GROW);  // 0..1
 const geo = new THREE.ConeGeometry(0.25, 0.8, 6);
 
 engine.world.present('crop', {
   build(rec) {
     const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0x6aa84f }));
     m.castShadow = true;
-    m.userData.use = engine.interactions.add(m, { label: 'Harvest', radius: 2, enabled: () => growth(rec) >= 1, onUse: () => harvest(rec) });   // can be harvested only when ripe
+    m.userData.use = engine.interactions.add(m, { label: 'Harvest', radius: 2, enabled: () => growth(rec) >= 1, onUse: () => harvest(rec) });  // can be harvested only when ripe
     return m;
   },
-  update(rec, obj) {   // grows bigger, changes color when ripe
+  update(rec, obj) {  // grows bigger, changes color when ripe
     const g = growth(rec);
     obj.scale.setScalar(0.3 + 0.7 * g);
     obj.material.color.setHex(g >= 1 ? 0xe8a33d : 0x6aa84f);
   },
-  dispose(rec, obj) { obj.userData.use.remove(); engine.remove(obj); },   // an interaction you registered yourself must be removed yourself
+  dispose(rec, obj) { obj.userData.use.remove(); engine.remove(obj); },  // an interaction you registered yourself must be removed yourself
 });
 
 function harvest(rec) {
   engine.inventory.add('carrot', 2);
-  engine.world.remove(rec.id);   // delete the data after harvesting (the model goes with it). To "grow back after a while": world.set(rec.id, { plantedAt: engine.clock.now }); to hide temporarily: return false from show
+  engine.world.remove(rec.id);  // delete the data after harvesting (the model goes with it). To "grow back after a while": world.set(rec.id, { plantedAt: engine.clock.now }); to hide temporarily: return false from show
 }
 
 // the player plants one: an op, because saved state changes only in a fixed step or an op (recipe 23 §5); a key, a button or a test runs it
@@ -147,8 +141,8 @@ avoidance), see recipe 02 "Changing behavior / custom behavior"; below is the pu
 ```js
 engine.world.present('chicken', { build: rec => makeChicken() });
 engine.world.simulate('chicken', {
-  near: (rec, dt) => wander(rec, dt),   // near: a small step every fixed step
-  far:  (rec, dt) => wander(rec, dt),   // far: catch up once every farEvery seconds
+  near: (rec, dt) => wander(rec, dt),  // near: a small step every fixed step
+  far:  (rec, dt) => wander(rec, dt),  // far: catch up once every farEvery seconds
   farEvery: 2,
 });
 function wander(rec, dt) {
@@ -162,7 +156,7 @@ function wander(rec, dt) {
 - **Near / far is decided by the gameplay anchor `world.anchor`**: by default the position of the player record (`engine.focus` when there is no
   player). A cutscene or photo mode moves the camera away, but the player's surroundings are still simulated as near: gameplay results do not depend
   on the camera. For a top-down strategy game centered on a base, set `W.anchor = baseObject`; set it back to `null` to restore the default.
-- **The player is a record too**: the id and kind added by `createPlayer` are both `'player'`; position, facing, motion state (vx, vz, vy, facing,
+- **The player is a record too**: the id and kind added by `addPlayer` are both `'player'`; position, facing, motion state (vx, vz, vy, facing,
   grounded...) and which vehicle it is on (vehicle) live in the record and are saved, and it is never torn down by walking away. Only the character's
   mover changes the position and then writes it back to the record. `world.move`, `world.set` and `thing.set` on a live character (the player, an NPC with
   a model) are its `placeAt`: it goes there, standing on what is there, and the record says where it stands. A seated rider gets out to go there; undo of that `thing.set`
@@ -179,7 +173,7 @@ function wander(rec, dt) {
   copies the model position back to the data at the end of every fixed step; when not simulated near, the data decides and the model follows the data.
   A write to the record (`world.move`, `world.set`, `thing.set`, or `rec.position` itself, seen at the end of the step) moves the model, and a rigid body on
   that model goes along at rest, however the body was made. `rot` and `scale` on a template with a `body` build a new body where the record stands; with your
-  own `present` they are your fields, so read them there.
+  own `present` and `positionFrom: 'view'` they are your fields, so read them there.
   A model moved by a physics body saves its position, not the physics solver state: after a load, resting bodies settle again and can differ by ~0.01
   mm, so replays that must match exactly should not depend on physics props.
 - Radius: present / simulate each take their own `radius` (meters or a function); without it they follow `world.radius` (default 60).
@@ -201,14 +195,14 @@ function wander(rec, dt) {
 - The owed time and the simulation step count are saved: after loading they are caught up the same way, and the same save gives the same result
   however many fixed steps run per frame. For things measured on the calendar (grows in a few days, respawns at a time), record `engine.clock.now` and compare.
 - **Far in workers** (thousands of crops, spawners or machines): `W.simulate('crop', { far, worker: true })`. Each step's far batch runs in `engine.threads` workers and is written
-  back 4 fixed steps later through `engine.commits`; a late reply runs on the main thread, so threads on / off / slow give **bit-identical** records, and only fields far changed are written
+  back 4 fixed steps later through `ctx.commits`; a late reply runs on the main thread, so threads on / off / slow give **bit-identical** records, and only fields far changed are written
   back. `far` must be self-contained: it is recompiled from source and sees only `(rec, dt)` and globals like `Math`; an outside variable throws (also with `threads: false`, so you find
   it in development). Limit: a save taken while a batch is in flight re-simulates that stretch after loading (equal within float tolerance, not bit-identical).
 
 ## 8. Querying nearby things
 ```js
 let crowd = 0;
-engine.world.forEachNear(engine.player, 5, (rec, d2) => { if (rec.kind === 'zombie') crowd++; });   // no allocation, no sorting; world.query sorts nearest first and returns an array
+engine.world.forEachNear(engine.player, 5, (rec, d2) => { if (rec.kind === 'zombie') crowd++; });  // no allocation, no sorting; world.query sorts nearest first and returns an array
 ```
 For things that query neighbors every step (hundreds of zombies avoiding each other) use `forEachNear`; inside the callback don't add / remove / move,
 note them down and change them after the loop.

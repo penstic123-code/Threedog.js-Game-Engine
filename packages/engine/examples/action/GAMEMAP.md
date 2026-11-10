@@ -23,7 +23,7 @@ Content: actions 4 · audio 1 · items 1 · places 1 · props 8 (from templates 
 
 ## Read for this game (per installed module: recipe · api page; core API: `node_modules/threedog/docs/api/engine.md`)
 
-- world: `node_modules/threedog/docs/recipes/66-common-tasks.md` · `node_modules/threedog/docs/api/world.md`
+- world: `node_modules/threedog/docs/recipes/18-world.md` · `node_modules/threedog/docs/api/world.md`
 - calendar: `node_modules/threedog/docs/recipes/06-clock-events.md` · `node_modules/threedog/docs/api/calendar.md`
 - sky: `node_modules/threedog/docs/recipes/08-weather-sky.md` · `node_modules/threedog/docs/api/sky.md`
 - collision: `node_modules/threedog/docs/recipes/12-navmesh.md` · `node_modules/threedog/docs/api/collision.md`
@@ -106,7 +106,6 @@ Code that breaks saves or manages world models: none (rule R33).
 
 - hud.bar('hp') — main.js
 - hud.bar('enemy') — main.js
-- hud.counter('gem') — main.js
 
 ## Key actions defined by the game (the engine's own are in node_modules/threedog/docs/CODEMAP.md)
 

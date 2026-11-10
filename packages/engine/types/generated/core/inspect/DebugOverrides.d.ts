@@ -110,6 +110,4 @@ export class DebugOverrides {
     overrides(): any[];
     /** Active overrides on one object, for engine.explain({ thing: id }) */
     overridesOn(obj: any): any[];
-    /** Undo everything, drop / restore what the views put back, re-apply */
-    dispose(): void;
 }

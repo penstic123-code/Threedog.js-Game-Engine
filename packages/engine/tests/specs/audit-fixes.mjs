@@ -54,7 +54,7 @@ export const specs = [
       check('wrap: the next call no longer has it', log.join('') === 'cb', log.join('')); hb.remove();
 
       // 9. 读档时还没定义的频道：channel() 定义时补上存档的 now 和事件定时
-      const parts = {}, eng = { saves: { register: (n, o) => { parts[n] = o; } } };
+      const parts = {}, eng = { saves: { define: (n, o) => { parts[n] = o; } } };
       eng.stacks = new Stacks(eng);
       const T = new Time(eng);
       parts.time.load({ channels: { world: 5, player: 5, enemies: 42 }, timers: [{ channel: 'enemies', due: 50, event: 'boom', data: 1 }] });
@@ -101,7 +101,7 @@ export const specs = [
       const c = { cx: 0, cz: 0, plants: { grass: { n: 1 } }, colliders: { grass: [1] }, collidersAll: { grass: [1] } };
       const V = { species: new Map([['grass', {}]]), host: { CHUNK: 32 }, _removed: new Map(), applyEdits: Vegetation.prototype.applyEdits, _emit: (k, cc, n) => told.push(k + ':' + n) };
       Vegetation.prototype.mount.call(V, c, 'grass', { n: 0, k: [] });
-      VegetationDraw.prototype.change.call({ meshes: new Map([[c, { group: { remove: o => removed.push(o) }, ims: { grass: old } }]]) }, c, 'grass');
+      VegetationDraw.prototype.change.call({ kinds: new Map(), meshes: new Map([[c, { group: { remove: o => removed.push(o) }, ims: { grass: old } }]]) }, c, 'grass');
       check('vegetation mount: an empty result drops the record and its colliders, the picture drops the old mesh (removed + disposed)',
         !c.plants.grass && !c.colliders.grass && told.includes('change:grass') && disposed === 1 && removed[0] === old,
         JSON.stringify({ plants: Object.keys(c.plants), disposed, colliders: Object.keys(c.colliders), told }));

@@ -1,11 +1,11 @@
 // What any characters module must provide (fields: see gameplay/inventory.contract.js; shared check: @threedog/tools/contract).
 // The player is the world record 'player' (saved with world, not under a key of its own); jumps, landings, launches and falls are events other
 // modules listen to, fired by the character itself (not exercised by the shared check: they need a player on ground). kit is what a game's mover calls (mover.contract.js).
-// What createPlayer and control.characterOf hand out is character.contract.js: every member other modules use, the world protocol among them.
+// What addPlayer and control.characterOf hand out is character.contract.js: every member other modules use, the world protocol among them.
 // position: who may write a character's position (design.md section 9). The record follows the character, so a write to the record of a live character is a placeAt (world.move).
 export default {
   name: 'characters',
-  api: ['createPlayer', 'removePlayer', 'findSpawn', 'findPath', 'findPathAsync', 'support', 'moveInput', 'carryRiders', 'addVehicle'],
+  api: ['addPlayer', 'removePlayer', 'findSpawn', 'findPath', 'findPathAsync', 'support', 'moveInput', 'carryRiders', 'addVehicle'],
   fields: ['kit'],
   resolves: true,   // calls engine.control.resolveWith; what it answers with is character.contract.js
   position: {

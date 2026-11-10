@@ -1,4 +1,4 @@
-// Shared acceptance scene "Sky courier" (docs/plans/2026-11-06-batch7-design.md): tests/sky-courier/main.js is game code on the public API; this spec plays it and reads public state only.
+// Shared acceptance scene "Sky courier" (docs/plans/done/2026-11-06-batch7-design.md): tests/sky-courier/main.js is game code on the public API; this spec plays it and reads public state only.
 // Why a whole scene: each feature passed on a stand-in, and what breaks is where they meet (a mover above a physics world, a path with a vertical leg, water asked at a height).
 const PAGE = '/tests/sky-courier/index.html';
 const ready = page => page.waitForFunction(() => window.ready === true, null, { timeout: 30000 });

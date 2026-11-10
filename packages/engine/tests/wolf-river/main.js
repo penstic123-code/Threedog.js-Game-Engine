@@ -75,7 +75,7 @@ const huntLog = () => {
     } },
     install(engine, ctx) {
       e = engine;
-      ctx.saves.register('quests', { version: 3, save: () => ({ state: Object.fromEntries(hunts) }), load: d => { hunts.clear(); for (const [k, v] of Object.entries(d.state ?? {})) if (v.prey) hunts.set(k, v); } });
+      ctx.saves.define('quests', { version: 3, save: () => ({ state: Object.fromEntries(hunts) }), load: d => { hunts.clear(); for (const [k, v] of Object.entries(d.state ?? {})) if (v.prey) hunts.set(k, v); } });
       return log;
     },
     describe: () => ({ hunts: hunts.size }),
@@ -92,7 +92,7 @@ const game = window.game = { THREE, riverX, LEVEL, HALF, huntLog, ANIMAL, Charac
 engine.events.on('engine:ready', async () => {
   const water = ribbon(); engine.scene.add(water);
   game.river = engine.addWaterBody({ query: river, bounds: { min: { x: -14, y: -9, z: -60 }, max: { x: 14, y: 9, z: 60 } }, mesh: water });
-  engine.characters.createPlayer({ ...presets.player.thirdPerson, spawn: { x: 20, z: 0 }, model: await engine.assets.model('animal') });
+  engine.characters.addPlayer({ ...presets.player.thirdPerson, spawn: { x: 20, z: 0 }, model: await engine.assets.model('animal') });
   window.ready = true;
 });
 engine.start();

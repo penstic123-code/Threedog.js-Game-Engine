@@ -2,6 +2,7 @@
 // one spot's brightness says whether a shadow is there. Why the static box is moved on purpose: a kept shadow staying behind is the only outside proof that it was not redrawn.
 import * as THREE from 'three';
 import * as TG from 'three/webgpu';
+import { vec4 } from 'three/tsl';
 import 'threedog/tsl';
 import { createEngine } from '../../index.js';
 import { backendName, renderOnce } from '../../render/backend.js';
@@ -111,8 +112,40 @@ window.shadowCache = async () => {
   const v = next?.instanceMatrix.version;
   if (next) next.instanceMatrix.needsUpdate = true;   // what a write to an instance does
   await shot();
-  r.batch.keptAgain = next?.instanceMatrix.version !== v && node._instanced.get(next) === next?.instanceMatrix.version;
+  r.batch.liveFirst = !!next && !node._kept.has(next);   // a refill just happened (the replaced batch): the written mesh draws live until the next one
+  for (let i = 0; i < 8; i++) await shot();
+  r.batch.keptAgain = next?.instanceMatrix.version !== v && node._instanced.get(next)?.v === next?.instanceMatrix.version;
+  // 不许绕开：边走边加载时 batching 几乎每帧都写实例；每次写都重画整张保留图，比不开缓存还贵。合并成每 REFILL_EVERY 个阴影帧最多一次
+  const fills0 = node._fills, own = node.renderShadow;
+  let calls = 0;
+  node.renderShadow = function (f) { calls++; return own.call(this, f); };
+  for (let i = 0; i < 24; i++) { if (next) next.instanceMatrix.needsUpdate = true; await shot(); }
+  delete node.renderShadow;
+  r.batch.streaming = { writes: 24, shadowFrames: calls, fills: node._fills - fills0 };
+  // 不许绕开：藏起来的（植被出了 maxRing、区块被放掉）也要重画，不能只看实例版本，否则留下已经不在的东西的影子
+  if (next) next.visible = false;
+  await shot();
+  r.batch.hiddenRedrawn = !!next && !node._instanced.has(next);
+  if (next) next.visible = true;
   wide.remove(); row.removeFromParent();
   return r;
+};
+/** renderer.shadowMap.transmitted: a static box whose castShadowNode (three's transmitted-shadow color) is red tints its shadow; kept, the tint must still be there on a frame that skips the box */
+window.transmitted = async () => {
+  const R = engine.renderer, was = R.shadowMap.transmitted;
+  R.shadowMap.transmitted = true;
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2).translate(0, 1, 0), Object.assign(new TG.MeshStandardNodeMaterial({ color: 0xff2020 }), { castShadowNode: vec4(1, 0.1, 0.1, 1) }));
+  glass.position.set(-5, 0, 5); glass.castShadow = true; town.add(glass);
+  [ground.material, boxMat].forEach(m => { m.needsUpdate = true; });
+  // the spot's red minus blue: the tint of the glass box's shadow on gray ground
+  const tint = b => { const v = new THREE.Vector3(-6.75, 0, 5).project(cam), cx = Math.round((v.x + 1) / 2 * W), cy = Math.round((1 + (window.__glRows ? v.y : -v.y)) / 2 * H), k = (cy * W + cx) * 4; return b[k] - b[k + 2]; };
+  await shot();
+  const off = tint(await shot());
+  const kept = engine.shadows.cache(sun, { static: town });
+  await shot(); await shot();
+  const on = tint(await shot());   // a later frame: the box is skipped, its tint comes from the kept map
+  kept.remove(); glass.removeFromParent(); R.shadowMap.transmitted = was;
+  [ground.material, boxMat].forEach(m => { m.needsUpdate = true; });
+  return { off, on };
 };
 window.ready = true;

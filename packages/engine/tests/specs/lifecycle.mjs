@@ -55,7 +55,7 @@ export const specs = [
         const quiet = [console.error, console.warn]; console.error = console.warn = () => {};
         const E = mk(createEngine, 'lc-fail');
         let bad = false;
-        E.saves.register('lcBad', { save: () => ({ v: 1 }), load: () => { if (bad) throw new Error('lc boom'); } });
+        E.saves.define('lcBad', { save: () => ({ v: 1 }), load: () => { if (bad) throw new Error('lc boom'); } });
         await E.start();
         E.step(0.5, { render: false });
         const hits = { tracked: 0 }, events = [];
@@ -310,7 +310,7 @@ export const specs = [
         const E = mk(createEngine, 'lc-async-load');
         await E.start();
         const st = { hp: 100 };
-        E.saves.register('lcHero', { save: () => ({ hp: st.hp }), async load(d) { st.hp = d.hp; await new Promise(res => setTimeout(res, 5)); E.events.emit('lc:heroLoaded'); } });
+        E.saves.define('lcHero', { save: () => ({ hp: st.hp }), async load(d) { st.hp = d.hp; await new Promise(res => setTimeout(res, 5)); E.events.emit('lc:heroLoaded'); } });
         let boom = true;
         E.events.on('lc:heroLoaded', () => { if (boom) throw new Error('lc listener boom'); });
         const d = E.saves.collect(); d.parts.lcHero = { hp: 5 };
@@ -343,14 +343,14 @@ export const specs = [
         await E.start();
         const st = { hp: 100 };
         let breakB = true;
-        E.saves.register('lcLive', { save: () => st, load: d => { Object.assign(st, d); } });
-        E.saves.register('lcBreak', { save: () => ({ n: 1 }), load: () => { if (breakB) throw new Error('lc part boom'); } });
+        E.saves.define('lcLive', { save: () => st, load: d => { Object.assign(st, d); } });
+        E.saves.define('lcBreak', { save: () => ({ n: 1 }), load: () => { if (breakB) throw new Error('lc part boom'); } });
         const d = JSON.parse(JSON.stringify(E.saves.collect())); d.parts.lcLive = { hp: 5 };
         out.ok = await E.saves.apply(d);
         out.hp = st.hp;
         // a part whose save() is not plain data cannot be a rollback point: the load is refused before anything changes
         breakB = false;
-        E.saves.register('lcFn', { save: () => ({ f: () => 1 }), load: () => {} });
+        E.saves.define('lcFn', { save: () => ({ f: () => 1 }), load: () => {} });
         out.ok2 = await E.saves.apply(d); out.hp2 = st.hp;
         E.dispose();
         [console.error, console.warn] = quiet;
@@ -361,27 +361,30 @@ export const specs = [
     },
   },
   {
-    name: 'Lifecycle: a hook that disposes the engine ends the real-time frame; dispose frees every kind of scene object',
+    name: 'Lifecycle: a hook that disposes the engine ends the real-time frame; dispose frees what the engine put in the scene, not what the game did',
     url: PAGE,
     async run({ check, ev }) {
       const r = await ev(async () => {
         const { mk, createEngine, THREE } = threedogThreads;
         const E = mk(createEngine, 'lc-gone');
         await E.start();
-        const b = new THREE.BatchedMesh(1, 3, 3, new THREE.MeshBasicMaterial()), free = b.dispose;
-        let batched = 0, steps = 0, jobs = 0, begun = 0;
+        // design.md 6.2: a BatchedMesh the game made is the game's to free; one a module put in the scene (owner 'engine:<module>') goes with the engine
+        const batch = () => new THREE.BatchedMesh(1, 3, 3, new THREE.MeshBasicMaterial()), b = batch(), own = batch(), free = b.dispose;
+        let batched = 0, engineBatched = 0, steps = 0, jobs = 0, begun = 0;
         b.dispose = function () { batched++; return free.call(this); };
+        own.dispose = function () { engineBatched++; return free.call(this); };
         E.scene.add(b);
+        E.add(own, { owner: 'engine:test' });
         const run = E.jobs.run, begin = E.time._beginStep;
         E.jobs.run = function (o) { jobs++; return run.call(this, o); };
         E.time._beginStep = function () { begun++; return begin.call(this); };
         E.onFixed(() => { steps++; E.dispose(); });
         const n = E._catchUp(0.1);   // what the real-time loop does with a long frame, then its frame part
         E._frameHooks(0.1);
-        return { n, steps, begun, jobs, batched };
+        return { n, steps, begun, jobs, batched, engineBatched };
       });
       check('the fixed step that disposed is the last one, and the frame part does nothing', r.n === 1 && r.steps === 1 && r.begun === 1 && r.jobs === 0, JSON.stringify(r));
-      check('dispose frees a BatchedMesh in the scene (its matrix textures)', r.batched === 1, JSON.stringify(r));
+      check('dispose frees an engine-owned BatchedMesh (its matrix textures) and leaves the game\'s own', r.engineBatched === 1 && r.batched === 0, JSON.stringify(r));
     },
   },
   {

@@ -7,7 +7,7 @@ const warn = console.warn;
 console.warn = (...a) => { warns.push(String(a[0])); warn(...a); };
 const engine = window.engine = createEngine({ bindings: { ...presets.bindings.walk, ...presets.bindings.interact, ...presets.bindings.inventory }, canvas: document.getElementById('view'), ui: { loading: false }, saveKey: 'test-placeholders', adaptiveResolution: false });
 engine.use(world(), terrain({ viewChunks: 2 }), collision(), followCamera(), characters(), interactions({ ...presets.interactions.nearest }), inventory(), pickups());
-engine.characters.createPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 0 } });
+engine.characters.addPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 0 } });
 engine.npcs.add({ id: 'walker', name: 'walker', position: [3, 0, -2] });
 engine.inventory.define('gem', { name: 'gem' });
 window.gemPickup = engine.pickups.spawn({ x: -2, z: 2 }, { give: 'gem' });

@@ -24,7 +24,13 @@ export const specs = [
       check('engine.shadows.mapSize resizes both maps and both shadows stay', r.resized.size === 1024 && r.resized.kept === 1024 && isDark(r.resized.still, lit) && isDark(r.resized.mover, lit), JSON.stringify(r.resized));
       check('remove(): three\'s own node again, the same picture', r.removed.node && r.removed.changed < 0.5, JSON.stringify(r.removed));
       check('a batch answers for its originals: static by their root, kept, and not static with one moving original', r.batch.made && r.batch.byRoot && r.batch.kept && !r.batch.oneMoving, JSON.stringify(r.batch));
-      check('an instance that moved, or a batch replaced, redraws the kept map with no redraw() call', r.batch.keptAgain && r.batch.replaced, JSON.stringify(r.batch));
+      check('an instance that moved draws live at once and is kept again after the refill; a batch replaced redraws the kept map with no redraw() call', r.batch.liveFirst && r.batch.keptAgain && r.batch.replaced, JSON.stringify(r.batch));
+      // 不许绕开: instance writes every frame (streaming) refill the kept map at most once per REFILL_EVERY (8) shadow frames, not once per write
+      const st = r.batch.streaming;
+      check(`instance writes every frame: ${st?.fills} refills for ${st?.writes} writes over ${st?.shadowFrames} shadow frames`, st && st.fills >= 1 && st.fills <= Math.ceil(st.shadowFrames / 8) + 1 && st.fills < st.writes, JSON.stringify(st));
+      const t = await ev(() => window.transmitted());
+      check('transmitted shadows: a static box with a red castShadowNode tints its shadow, and the kept map keeps the tint (its color copied with the depth)', t.off > 20 && Math.abs(t.on - t.off) < 0.25 * t.off, JSON.stringify(t));
+      check('a kept instanced mesh hidden (a vegetation ring past maxRing, a dropped chunk) redraws the kept map: no shadow of what is gone', r.batch.hiddenRedrawn, JSON.stringify(r.batch));
     },
   },
 ];

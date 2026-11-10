@@ -22,8 +22,8 @@ export async function run({ check }) {
   check('[guard] the fix names the // runtime: tag', /\/\/ runtime: <reason>/.test(scanText("engine.content.spawn('b', p);\n")[0]?.fix ?? ''));
 
   // a save part: the engine calls load(data), a second parameter means the data went to the wrong name
-  check('saves.register with load(e, data) warns, arrow, method and function alike', flagged("engine.saves.register('a', { save, load: (e, d) => go(d) });\nengine.saves.register('b', { save, load(e, d) { go(d); } });\nengine.saves.register('c', { save, load: function (e, d) { go(d); } });\n", 3, 'warn'));
-  check('load(data), an optional second parameter and a part held in a variable are fine', flagged("engine.saves.register('a', { save, load: d => go(d) });\nengine.saves.register('b', { save, load(d, opts = {}) { go(d, opts); } });\nengine.saves.register('c', part);\n", 0));
+  check('saves.define with load(e, data) warns, arrow, method and function alike', flagged("engine.saves.define('a', { save, load: (e, d) => go(d) });\nengine.saves.define('b', { save, load(e, d) { go(d); } });\nengine.saves.define('c', { save, load: function (e, d) { go(d); } });\n", 3, 'warn'));
+  check('load(data), an optional second parameter and a part held in a variable are fine', flagged("engine.saves.define('a', { save, load: d => go(d) });\nengine.saves.define('b', { save, load(d, opts = {}) { go(d, opts); } });\nengine.saves.define('c', part);\n", 0));
 
   // allowed: rebuilt by code every start
   check('startup engine.add / scene.add / colliders / rigid / interactions / rays / grids / stream are fine', flagged('engine.add(windmill, { id: \'windmill\' });\nengine.scene.add(sky);\n'
@@ -43,5 +43,11 @@ export async function run({ check }) {
   // warnings: code managing a model world places every frame
   check('engine.add of a world.view() model warns', flagged("engine.onFrame(() => engine.add(engine.world.view('chest-1')));\n", 1, 'warn'));
   check('writing a world model transform warns (direct, through a const, .set)', flagged("engine.world.view('a').position.x = 3;\nconst m = engine.world.view('b');\nm.rotation.y += 1;\nm.position.set(0, 1, 0);\n", 3, 'warn'));
+  const wield = "async function wield() {\n  const m = prepareModel(await engine.assets.model(w.model));\n  m.position.set(0, 0, 0); m.quaternion.identity(); m.scale.setScalar(1);\n  bone.add(m);\n}\n";
+  check('a model loaded by assets.model and hung on a bone may have its transform written, even when another function names a world.view() model m', flagged(wield, 0)
+    && flagged(wield + "function other() { const m = engine.world.view(id); }\n", 0));
+  check('[guard] a world.view() model in the same function or an outer scope is still flagged', flagged("function a() { const m = engine.world.view(id); m.position.set(0, 1, 0); }\n", 1, 'warn')
+    && flagged("const m = engine.world.view(id);\nfunction a() { m.scale.setScalar(2); }\n", 1, 'warn')
+    && flagged("function a(m) { m.position.x = 1; }\nfunction b() { const m = engine.world.view(id); m.position.x = 1; }\n", 1, 'warn'));
   check('the model in present update is not flagged', flagged("engine.world.present('chest', { build, update(rec, obj) { obj.rotation.y = rec.rot; } });\n", 0));
 }

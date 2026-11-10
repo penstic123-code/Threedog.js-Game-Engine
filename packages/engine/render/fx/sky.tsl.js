@@ -11,7 +11,7 @@
 // only GLSL throws [webgpu-needs-tsl] by name on this renderer; the GLSL form keeps drawing on WebGLRenderer unchanged.
 import * as TSL from 'three/tsl';
 import { MeshBasicNodeMaterial, BackSide } from 'three/webgpu';
-import { noise } from './noise.tsl.js';
+import { noise, hash } from './noise.tsl.js';
 import * as FX from './library.tsl.js';
 import { uniforms as engineUniforms, valueNode } from './uniforms.tsl.js';
 import { codedError } from '../../core/base/errorHints.js';
@@ -19,7 +19,7 @@ import { registerWebGPUPart } from '../backend.js';
 import { SKY as K } from '../fxNumbers.js';
 
 const { Fn, positionGeometry, varying, float, vec2, vec3, vec4, select, mix, pow, max, dot,
-  floor, fract, step, smoothstep, clamp, normalize, If } = TSL;
+  floor, step, smoothstep, clamp, normalize, If } = TSL;
 
 /** @template {string} T @typedef {import('three/webgpu').Node<T>} N */
 /**
@@ -46,12 +46,6 @@ function nodesOf(u, engine) {
   }
   return n;
 }
-
-/** GLSL h3 (the star hash) */
-const h3 = Fn(/** @param {[N<'vec3'>]} a */ ([p0]) => {
-  const p = fract(p0.mul(K.starMul).add(K.starAdd)).mul(K.starScale);
-  return fract(p.x.mul(p.y).mul(p.z).mul(p.x.add(p.y).add(p.z)));
-});
 
 /** clouds dim toward SKY.nightDim at night (GLSL nightDim + (1 - nightDim) * (1 - night)) */
 const nightDim = (/** @type {SkyNodes} */ U) => U.uNight.oneMinus().mul(1 - K.nightDim).add(K.nightDim);
@@ -141,7 +135,7 @@ function domeColor(U, kind, clouds, layers) {
       col.assign(mix(col, cl.rgb, cl.a)); clA.assign(cl.a);
     });
     // stars behind the clouds, dimmed by the weather's cover (see the GLSL comment in shader.js)
-    const star = step(U.uStars.oneMinus(), h3(g)).mul(U.uNight).mul(smoothstep(0, K.starFade, d.y)).mul(clA.oneMinus())
+    const star = step(U.uStars.oneMinus(), hash(vec2(g.x.add(g.z.mul(K.starZ)), g.y))).mul(U.uNight).mul(smoothstep(0, K.starFade, d.y)).mul(clA.oneMinus())
       .mul(clamp(U.uWeatherCloud, 0, 1).mul(U.uStarCloudDim).oneMinus());
     col.addAssign(vec3(star));
     // fog band (fog.js DOME_FOG): always built, switched by uFogBand

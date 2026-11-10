@@ -5,12 +5,12 @@
 // clone and GLB export and object references do not; so a procedural builder and a baked / hand-made GLB with those names animate the same way.
 import * as THREE from 'three';
 import { neutralMaterial } from '../../render/neutral.js';
-import { copyPatches, isEngineMade, markEngineMade } from '../../render/patches.js';
+import { cloneMaterial, isEngineMade, markEngineMade } from '../../render/patches.js';
 import { warnOnce } from '../../core/base/validate.js';
 
 /** Warned once when no model gives the character a body */
 export const NO_CHARACTER = 'characters: no model given, so characters are gray capsules (a placeholder). Character bodies are assets: '
-  + "register a pack's models (engine.assets.manifest(yourAssets)) and pass createPlayer({ model: 'yourBody' }), "
+  + "register a pack's models (engine.assets.manifest(yourAssets)) and pass addPlayer({ model: 'yourBody' }), "
   + "a GLB asset name ({ model: 'hero' }), or a ready body ({ rig })";
 
 /**
@@ -23,7 +23,7 @@ export function rigFromObject(root) {
   if (!d) return null;
   const get = n => {
     const o = n ? root.getObjectByName(n) : null;
-    if (n && !o) warnOnce(`character model "${root.name || 'model'}": userData.rig names "${n}", but the model has no object with that name`);
+    if (n && !o) warnOnce(`character model "${root.name || 'model'}": userData.rig names "${n}", but the model has no object with that name. Change the name in root.userData.rig to an existing descendant's name, or rename that object in the model; check with root.getObjectByName(name)`);
     return o || null;
   };
   const joints = {};
@@ -41,7 +41,7 @@ export function tintParts(root, colors) {
   root.traverse(o => {
     const c = o.isMesh ? colors[o.userData.part] : null;
     if (c == null || !o.material?.color) return;
-    o.material = copyPatches(o.material, o.material.clone()); o.material.color.set(c);   // the tinted copy keeps wind / cloud / pack shader patches
+    o.material = cloneMaterial(o.material); o.material.color.set(c);   // the tinted copy keeps wind / cloud / pack shader patches
   });
 }
 
@@ -51,7 +51,7 @@ export const capsuleDefault = () => neutralMaterial('character', { color: 0x8a8a
 /** A capsule's material: the shared one, or a copy of it in the character's own color (a material without .color has nothing to tint) @internal */
 export function capsuleMaterial(base, color) {
   if (color == null) return base;
-  const m = copyPatches(base, base.clone());
+  const m = cloneMaterial(base);
   m.color?.set(color);
   if (isEngineMade(base)) markEngineMade(m);
   return m;

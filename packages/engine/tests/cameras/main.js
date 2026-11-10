@@ -40,7 +40,7 @@ const fader = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshLambe
 fader.position.set(4, 1, -4);
 engine.add(fader);
 
-const player = engine.characters.createPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 0 } });
+const player = engine.characters.addPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 0 } });
 
 // Cutscene used by the tests
 window.cutscene = (opts = {}) => engine.timeline.play([
@@ -51,7 +51,7 @@ window.cutscene = (opts = {}) => engine.timeline.play([
   ] },
   { wait: 0.4 },
 ], { skippable: true, letterbox: true, ...opts });
-engine.input.action('testCutscene', { label: 'testCutscene', keys: ['KeyC'] });
+engine.input.define('testCutscene', { label: 'testCutscene', keys: ['KeyC'] });
 engine.onFrame(() => { if (engine.input.pressed('testCutscene')) window.cutscene(); });
 
 window.engine = engine; window.player = player; window.THREE = THREE; window.boxes = boxes; window.fader = fader;

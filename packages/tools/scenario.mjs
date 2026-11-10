@@ -26,6 +26,7 @@ const TOL = 0.01;
 // the wait for the engine is pageFns READY (one poll for the commands and the scenarios)
 async function pagePrepare(a, e) {
   e.haltLoop();
+  e.__scenarioRun = a.run;   // the mark of this run on this engine: a reloaded page has a new engine without it (see guarded)
   const s = { ...a.state };
   if (typeof s.pos === 'string' && s.pos.startsWith('@')) {
     const rec = e.world?.get(s.pos.slice(1));
@@ -84,9 +85,16 @@ const hint = (name, list) => { const c = name && closest(name, list); return c ?
  * @param {{ check: (label: string, ok: boolean, detail?: string) => void, file?: string, snapDir?: string, onPrepared?: () => Promise<void> }} opts
  */
 export async function runScenario(driver, sc, { check, file = sc.name, snapDir, onPrepared }) {
-  const ev = (fn, arg) => driver.evaluate(fn.toString(), arg);
+  // Vite reloads the page when any file is saved (another agent, an editor). A reload throws away the halt, the scenario state and the time stepped, and the title
+  // would freeze every later step, so a run does not go on over it: every call into the page checks the run's mark first and stops with the reason.
+  const run = Math.random().toString(36).slice(2);
+  const reloaded = new Error(`${file}: the page reloaded during the run (a file was saved, so the dev server reloaded it), and the run's state is gone. Run it again; to keep reloads out, save files after the run, or run \`threedog scenario|verify <name> --freeze-reload\` (the dev server ignores saves during the run; the saves show after the next reload)`);
+  const lost = e => /Execution context was destroyed|Target (page, context or browser )?has been closed|navigation/i.test(String(e?.message));
+  const guard = src => `async a => { if (window.engine?.__scenarioRun !== ${JSON.stringify(run)}) throw new Error('PAGE_RELOADED'); return await (${src})(a); }`;
+  const guarded = async call => { try { return await call(); } catch (e) { throw lost(e) || /PAGE_RELOADED/.test(String(e?.message)) ? reloaded : e; } };
+  const ev = (fn, arg) => guarded(() => driver.evaluate(guard(fn.toString()), arg));
   lint(sc, null, file);   // a malformed file fails before the page state changes
-  const ops = await ev(`async a => (${pagePrepare})(a, await (${READY})())`, { state: sc.state ?? {} });
+  const ops = await guarded(() => driver.evaluate(`async a => (${pagePrepare})(a, await (${READY})())`, { state: sc.state ?? {}, run }));
   lint(sc, ops, file);
   await onPrepared?.();   // evidence takes its baseline here: scenario state applied, no step run yet
   const layers = [];
@@ -104,7 +112,7 @@ export async function runScenario(driver, sc, { check, file = sc.name, snapDir, 
       ok = !r.short; if (!ok) check(`${n}step ${s.step}`, false, `stepped ${r.moved} of ${s.step} s: ${r.why}`);
     }
     else if ('until' in s) { const why = await reach(ev, s.until, s.within); ok = !why; if (!ok) check(`${n}until ${JSON.stringify(s.until)}`, false, why); }
-    else if ('press' in s) { const r = await command(driver, 'press', [String(s.press)]); ok = r.ok; if (!ok) check(`${n}press ${s.press}`, false, r.text); }
+    else if ('press' in s) { await ev(() => 0); const r = await guarded(() => command(driver, 'press', [String(s.press)])); ok = r.ok && !r.blocked?.length; if (!ok) check(`${n}press ${s.press}`, false, r.text); }
     else if ('state' in s) { const refused = await ev(pageState, { state: s.state }); ok = !refused.length; if (!ok) check(`${n}state`, false, refusedText('state', refused)); }
     else if ('expect' in s) {
       const d = await ev(pageDescribe);
@@ -130,20 +138,44 @@ export async function runScenario(driver, sc, { check, file = sc.name, snapDir, 
  * (loading, a hold that may lift) pass as real seconds, so the deadline ends every wait.
  */
 async function reach(ev, want, within) {
-  const SLICE = 0.1, missing = d => Object.entries(want).filter(([p, v]) => !same(atPath(d, p), v)).map(([p]) => `${p} is ${JSON.stringify(atPath(d, p)) ?? 'nothing'}`);
-  for (let left = within, r; ;) {
-    const miss = missing(await ev(pageDescribe));
-    if (!miss.length) return null;
-    if (r?.state === 'error') return r.why;
-    if (left <= 0) return r?.state === 'loading' ? `still loading after ${within} s`
-      : r?.state === 'frozen' ? `${r.why} before the state came: ${miss.join(', ')}`
-      : `not reached within ${within} s: ${miss.join(', ')}`;
-    const slice = Math.min(SLICE, left);
-    r = await ev(`a => (${STEPPED})(window.engine, a.seconds)`, { seconds: slice });
-    left -= slice;
-    if (r.state !== 'running' && r.state !== 'error') await new Promise(res => setTimeout(res, slice * 1000));
+  // The loop runs in the page: one round trip per chunk of wall time instead of per 0.1 s of game time (150 s of game time took minutes). Same steps as before: a
+  // fixed 0.1 s slice, the condition read before each one, and `left` counted down by the slice. A chunk ends after CHUNK ms so a page that blocks is noticed,
+  // and the total wall time is capped so a wait that moves no game time cannot hang.
+  const wallEnd = Date.now() + Math.max(60, within * 4) * 1000;
+  for (let left = within, r = null; ;) {
+    const o = await ev(PAGE_REACH, { want, left, within, r, chunk: 2000 });
+    if (o.done) return o.why;
+    ({ left, r } = o);
+    if (Date.now() > wallEnd) return `gave up after ${Math.round((Date.now() - wallEnd) / 1000 + Math.max(60, within * 4))} s of real time with ${+left.toFixed(1)} of ${within} s of game time left`;
   }
 }
+
+/** One chunk of the wait, run in the page (self-contained: its helpers are sent as source). Answers { done, why } or { done: false, left, r } to go on */
+async function pageReach(a) {
+  const e = window.engine, SLICE = 0.1, started = Date.now();
+  let lastYield = started;
+  const missing = d => Object.entries(a.want).filter(([p, v]) => !same(atPath(d, p), v)).map(([p]) => `${p} is ${JSON.stringify(atPath(d, p)) ?? 'nothing'}`);
+  let left = a.left, r = a.r;
+  for (;;) {
+    const miss = missing(JSON.parse(JSON.stringify(e.describe())));
+    if (!miss.length) return { done: true, why: null };
+    if (r?.state === 'error') return { done: true, why: r.why };
+    if (left <= 0) return { done: true, why: r?.state === 'loading' ? `still loading after ${a.within} s`
+      : r?.state === 'frozen' ? `${r.why} before the state came: ${miss.join(', ')}`
+      : `not reached within ${a.within} s: ${miss.join(', ')}` };
+    const slice = Math.min(SLICE, left);
+    r = stepped(e, slice);
+    left -= slice;
+    if (r.state !== 'running' && r.state !== 'error') await new Promise(res => setTimeout(res, slice * 1000));
+    // Give the event loop a turn: worker replies, fetches and awaited jobs only run between macrotasks. Every iteration while the engine waits on async work (stream builds, jobs,
+    // commits, worker requests), otherwise every 50 ms of wall time, so a condition that is pure sync keeps its speed
+    const busy = !e.stream.ready || e.jobs.pending || e.commits.pending || [...(e.threads?.lanes ?? [])].some(l => l.tasks?.size);
+    // threads.lanes / tasks are internal: if they disappear the loop falls back to the 50 ms yield. A MessageChannel post, not setTimeout: a background tab clamps timers to 1 s
+    if (busy || Date.now() - lastYield > 50) { await new Promise(res => { const c = new MessageChannel(); c.port1.onmessage = () => { c.port1.close(); res(); }; c.port2.postMessage(0); }); lastYield = Date.now(); }
+    if (Date.now() - started > a.chunk) return { done: false, left, r };
+  }
+}
+const PAGE_REACH = `async a => { const TOL = ${TOL}, sorted = ${sorted}, atPath = ${atPath}, same = ${same}, stepped = ${STEPPED}; return (${pageReach})(a); }`;
 
 /** Scenario files of a workspace (tests/scenarios/*.json) */
 export function scenarioFiles(dir) {

@@ -32,7 +32,7 @@ engine.collision.addBox({ x: -20, z: 10 }, { halfWidth: 3, halfDepth: 0.3, heigh
 const marker = new THREE.Mesh(new THREE.BoxGeometry(6, 0.4, 6), new THREE.MeshBasicMaterial({ color: 0xff3366 }));
 marker.name = 'marker'; engine.add(marker);
 
-const player = engine.characters.createPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 0 } });
+const player = engine.characters.addPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 0 } });
 
 // yaw 0: the camera sits on the +z side of the player and looks toward -z
 const SCENES = {

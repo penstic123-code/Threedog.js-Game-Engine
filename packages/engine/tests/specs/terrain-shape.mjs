@@ -90,7 +90,7 @@ export const specs = [
         // 5. physics and falling: a player stands at the center; a ball is thrown at the side wall from the void
         const voids = [];
         let east = false;   // stands still until the walk east below
-        const P = A.characters.createPlayer({ control: () => (east ? { x: 1, z: 0 } : null), spawn: { x: 0, z: 0 } });
+        const P = A.characters.addPlayer({ control: () => (east ? { x: 1, z: 0 } : null), spawn: { x: 0, z: 0 } });
         const R = A.rigid;
         for (let i = 0; i < 300 && !(R.terrain.get('0,0')?.ready && R.terrain.get('0,-1')?.ready); i++) { A.step(1 / 60, { render: false }); await wait(); }
         let rimX = 0; while (A.ground.has(rimX + 0.25, 0)) rimX += 0.25;

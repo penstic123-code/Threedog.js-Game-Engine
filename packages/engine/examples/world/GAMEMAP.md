@@ -30,7 +30,7 @@ Content: actions 4 · audio 3 · containers 1 · dialogues 1 · items 4 · npcs 
 
 ## Read for this game (per installed module: recipe · api page; core API: `node_modules/threedog/docs/api/engine.md`)
 
-- world: `node_modules/threedog/docs/recipes/66-common-tasks.md` · `node_modules/threedog/docs/api/world.md`
+- world: `node_modules/threedog/docs/recipes/18-world.md` · `node_modules/threedog/docs/api/world.md`
 - terrain: `node_modules/threedog/docs/recipes/28-terrain.md` · `node_modules/threedog/docs/api/terrain.md`
 - vegetation: `node_modules/threedog/docs/recipes/36-ground-plants.md` · `node_modules/threedog/docs/api/vegetation.md`
 - calendar: `node_modules/threedog/docs/recipes/06-clock-events.md` · `node_modules/threedog/docs/api/calendar.md`
@@ -73,7 +73,7 @@ content/*.js is content data: how to write it in `node_modules/threedog/docs/rec
 | content/rules.js | 24 |  |
 | content/templates.js | 6 |  |
 | content/vegetation.js | 33 |  |
-| main.js | 173 | Open-world example (slow photography life): riverside cabin + an old fisherman who walks by the clo… |
+| main.js | 176 | Open-world example (slow photography life): riverside cabin + an old fisherman who walks by the clo… |
 | models.js | 39 | Models this game builds in code: the cabin (registered by name in main.js, placed by content/props.… |
 | picture/index.js | 21 | @ts-check The open world's picture: wiring only. Each part writes plain three.js; one onRender driv… |
 | picture/lights.js | 42 | @ts-check Sun or moon and the ambient, from the sky of this moment (sky.js) and the weather. One sh… |
@@ -149,7 +149,6 @@ Code that breaks saves or manages world models: none (rule R33).
 ## Objective markers and HUD (hud module)
 
 - Quest first-light step 1 is marked automatically
-- hud.counter('film') — main.js
 
 ## Key actions defined by the game (the engine's own are in node_modules/threedog/docs/CODEMAP.md)
 

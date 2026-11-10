@@ -27,10 +27,10 @@
 //   that fails halfway leaves no ghost listener behind (review 0.4 A; the rollback spec checks every built-in module).
 //   ctx.mod(point, o) = ctx.track(engine.mod(point, { ...o, owner: ctx.name })): a module's changes to shared values go with it too.
 //   ctx.rule(name, default, names?) = a replaceable rule on a plain shared point: .decide(id, facts) gives a built-in name, false for manual, or what the game's function answered.
-//   ctx.input.action(name, { context }) / ctx.input.bind(name, keys): the module's input declarations and bindings, gone with it too.
-//   ctx.ops.define, ctx.saves.register, ctx.ui.define, ctx.stream.addReadyCheck, ctx.budget.metric, ctx.things.addSource / explainWith, ctx.ground.provide / addColliders:
+//   ctx.input.define(name, { context }) / ctx.input.bind(name, keys): the module's input declarations and bindings, gone with it too.
+//   ctx.ops.define, ctx.saves.define, ctx.ui.define, ctx.stream.addReadyCheck, ctx.budget.metric, ctx.things.addSource / explainWith, ctx.ground.provide / addColliders:
 //   the same registrars, recorded in the one scope with kind, id, owner and instance (engine.catalog(name).resources reads it). Built-in modules register only through
-//   these (tools/tests/module-boundaries). A save part leaving keeps its data as unattached data of the save (Saves.register), so a module unloaded for a while loses nothing.
+//   these (tools/tests/module-boundaries). A save part leaving keeps its data as unattached data of the save (Saves.define), so a module unloaded for a while loses nothing.
 //   Every install is its own instance (engine._modInst: name -> token): a ctx belongs to one install, not to a name. An async init that resumes after
 //   its module was unloaded (replaces, a plugin removed) and a same-named one installed must not act on the newcomer: a stale ctx verb does nothing and gives a spent handle, because
 //   the owner name is shared and doing it first would replace the newcomer's entry (dev warning naming the module); what it tracks is removed at once; its completion or failure
@@ -44,9 +44,9 @@
 // Dependencies: requires must be installed first (throws if missing). optional is a soft dependency: an array is only recorded (for GAMEMAP and rule R16);
 //   written as { module: 'what is lost without it' }, start() warns once in dev when it is missing: use this form for optional dependencies
 //   that change gameplay results, which must not be skipped silently.
-import { warnOnce, DEV, fmt, closest } from '../base/validate.js';
+import { warnOnce, DEV, fmt, closest, syncOnly } from '../base/validate.js';
 import { codedError, coded } from '../base/errorHints.js';
-import { reportError } from '../base/errors.js';
+import { reportError, removeEach } from '../base/errors.js';
 import { catalog, catalogSnap, catalogClaim } from '../inspect/catalog.js';
 import { readParams } from '../base/params.js';
 import { slotMethods, isUseOpts, checkProvides, slotTaken, giversOf, CORE_SLOTS } from './moduleSlots.js';
@@ -68,9 +68,12 @@ const STRINGS = {
     + "or your own module with provides: ['{dep}'] (then engine.{dep} is your module's API){typo}",
   typo: " (did you mean '{hint}'? installed: {list})",
   clash: 'module name {name} clashes with an existing engine property; pick another name',
+  twoGivers: "module {named} is named '{cap}' and module {giver} provides '{cap}', so requires, engine.has and engine.{cap} could each reach a different one. "
+    + 'Rule: one name answers to one module. Fix: give one of them another name, or unload {named} first when {giver} takes its place',
   slotClash: "module {name} provides '{slot}', but engine.{slot} is already an engine property, so dependents could not reach it there. Fix: pick another slot name",
   lateInit: 'init of module {name} (installed after start)',
   groundClaim: "module {name} called ctx.ground.provide, but ground is an exclusive capability it did not claim. Fix: add 'ground' to its provides",
+  blocked: "module {name} cannot run: it requires '{dep}', and {by} is {state}. It stays off until {by} runs again (engine.explain({ module: '{name}' }) says more)",
   critical: "critical module {name} cannot run: it requires '{dep}', and {by} is {state}. Fix what stopped {by}, or drop critical from {name}",
   conflict: 'module {a} (stage "{sa}") sets {kind}: ["{said}"], but module {b} is in stage "{sb}", which always runs {kind} stage "{sa}" (stage order: {list}); '
     + 'before / after only order modules inside one stage. Fix: give both modules the same stage, or remove {kind}: ["{said}"] from {a}',
@@ -166,7 +169,7 @@ export const moduleMethods = {
         const ctx = this._modCtx(m);
         this._picture?.installing(m);
         for (const slot of m.provides ?? []) ctx.track(this._slot(slot, m.name).take({ owner: m.name }));   // shared-taken when another module holds it
-        const api = asModule(this, m, () => m.install?.(this, ctx)) ?? m;   // asModule: the type checks know who is installing (moduleTypes.js)
+        const api = asModule(this, m, () => { const r = m.install?.(this, ctx); syncOnly(r, `install() of module ${m.name}`, true); return r; }) ?? m;   // asModule: the type checks know who is installing (moduleTypes.js)
         catalogClaim(this, m.name, snap);   // ops / save parts / describe names it registered show under it in engine.catalog()
         this.modules.set(m.name, m);
         if (m.name) this[m.name] = api;
@@ -183,7 +186,7 @@ export const moduleMethods = {
         this.modules.delete(m.name); this._modState.delete(m.name); this._modInst.delete(m.name);
         if (had) this[m.name] = prev; else delete this[m.name];   // put back what was there (an undefined slot stays undefined), never blank it
         this._dropTracked(m.name);
-        if (installed) try { m.dispose?.(this); } catch { /* the install error below is the one to report */ }
+        if (installed) try { syncOnly(m.dispose?.(this), `dispose() of module ${m.name}`, true); } catch (e2) { reportError(this, e2, `dispose() of module ${m.name} after its install failed`, { soft: true }); }   // reported, but the install error below stays the primary one
       }
       this._sortHooks();
       if (removed.length) this._putBack(removed, order, base);
@@ -205,7 +208,7 @@ export const moduleMethods = {
   },
   /**
    * @internal a failed swap leaves the game as it was: the replaced modules install fresh (their old handles already went), their save parts take back their data as a part registered
-   * late does (Saves.register), and 'module:restored' tells whoever fed them, because a fresh install has no definitions, as after a swap that worked: content sections load again (modules/content).
+   * late does (Saves.define), and 'module:restored' tells whoever fed them, because a fresh install has no definitions, as after a swap that worked: content sections load again (modules/content).
    * What game code defined by hand it defines again on that event. Colliders of the level and of props need no event: they check the holder themselves.
    * @param {any[]} removed  in install order @param {string[]} order  the module names to go back to @param {string | null} base  the new-game state to go back to
    */
@@ -230,6 +233,9 @@ export const moduleMethods = {
       if (!m) continue;
       if (typeof m === 'function') throw codedError('module-called', fmt(STRINGS.called, { name: m.name }));
       if (names.has(m.name)) { warnOnce(coded('module-name', fmt(STRINGS.twice, { name: m.name }))); continue; }
+      // one name, one module: requires, has and engine.<name> read a module name and a provides alike (giversOf), so two modules answering to one name
+      // would bind each of them to a different one (and unloading the provider would clear engine.<name> under the other). Both orders, also inside one call
+      if (holders.has(m.name)) throw codedError('module-name', fmt(STRINGS.twoGivers, { named: m.name, giver: holders.get(m.name), cap: m.name }));
       if (typeof m.ready === 'function') warnOnce(coded('engine-misuse', fmt(STRINGS.readyHook, { name: m.name })));
       if (m.order != null) throw codedError('module-stage', fmt(STRINGS.order, { name: m.name, list: Object.keys(STAGES).join(', ') }));
       if (m.stage != null && !(m.stage in STAGES))
@@ -243,7 +249,8 @@ export const moduleMethods = {
       for (const slot of m.provides ?? []) {
         if (holders.has(slot)) throw slotTaken(slot, holders.get(slot), m.name);
         holders.set(slot, m.name);
-        if (slot !== m.name && !gone.has(slot) && !names.has(slot) && !CORE_SLOTS.has(slot) && slot in this && this[slot] !== undefined && !this._slotAlias?.has(slot))
+        if (slot !== m.name && names.has(slot)) throw codedError('module-name', fmt(STRINGS.twoGivers, { named: slot, giver: m.name, cap: slot }));
+        if (slot !== m.name && !gone.has(slot) && !CORE_SLOTS.has(slot) && slot in this && this[slot] !== undefined && !this._slotAlias?.has(slot))
           throw codedError('module-provides', fmt(STRINGS.slotClash, { name: m.name, slot }));
       }
       if (DEV && m.params && m.options) readParams(m.name, m.params, m.options);   // a definition built by hand still gets its options checked
@@ -270,7 +277,8 @@ export const moduleMethods = {
     const snap = catalogSnap(this);
     // the instance and its ctx are taken now, not when the microtask runs: by then a same-named module may be installed in its place
     const inst = this._modInst.get(m.name), ctx = this._modCtx(m, inst), live = () => this._isLive(m.name, inst);
-    L._track(Promise.resolve().then(() => asModule(this, m, () => m.init(this, ctx))).then(
+    // live() again when the microtask runs: an unuse in the same turn already disposed it, and an init after dispose would leak what it makes
+    L._track(Promise.resolve().then(() => (live() ? asModule(this, m, () => m.init(this, ctx)) : undefined)).then(
       () => { L._done(task); if (live()) { catalogClaim(this, m.name, snap); this._setModState(m, 'running'); this.session._lateInit([...(this._modTracked.get(m.name) ?? [])].filter(h => h.kind === 'save').map(h => h.id)); } },
       e => {
         L._fail(task, e);
@@ -279,8 +287,17 @@ export const moduleMethods = {
         this._setModState(m, 'failed'); this._dropTracked(m.name); reportError(this, e, fmt(STRINGS.lateInit, { name: m.name }), { module: m });
       }));
   },
-  /** @internal is this install (token from engine._modInst) still the module installed under its name? */
-  _isLive(name, inst) { return !this.disposed && inst !== undefined && this._modInst.get(name) === inst; },
+  /** @internal the one gate for module hooks, the loop's and afterLoad (saveApply.js): registered (init not run yet), initializing, failed, disabled, blocked run none */
+  _runsHooks(name) { return this._modState.get(name) === 'running' && !this._modBlocked.has(name); },
+  /**
+   * @internal may this install (token from engine._modInst) still register? It is the one under its name and not closed. Closed = its signal aborted (_dropTracked:
+   * unload, rollback, failed init), set before the cleanup runs, so a late callback and a remove() that calls ctx.track during that cleanup are both refused (design 6.1)
+   */
+  _isLive(name, inst) { return this._wasRunning(name, inst, false) && !inst.ac.signal.aborted; },
+  /** @internal is this the install under its name (and, with running, did it run)? The question a save part asks while its install closes: a module that ran keeps its data on unload */
+  _wasRunning(name, inst, running = true) {
+    return !this.disposed && inst !== undefined && this._modInst.get(name) === inst && (!running || this._modState.get(name) === 'running');
+  },
   /** @internal the ctx install / init receive: track(handle) ties a handle to the module's life (see the top of this file) */
   _modCtx(m, inst = this._modInst.get(m.name)) {
     const name = m.name;
@@ -310,6 +327,8 @@ export const moduleMethods = {
     // Why read back after writing: a setter may keep something else than it was handed, and that is what "still mine" has to compare with.
     // Why one holder: a borrow is one party's temporary use. Two overlapping ones ended oldest first brought an ended value back, and a value with two parties is what
     // shared points own (engine.mod). A holder whose value the game replaced has lost it, so that property is free again.
+    // Why the holder is asked on the way back too, not only the value: a later borrow may write the same value the lost one wrote, and then the value alone cannot tell them apart.
+    // Why a batch is undone when a setter throws: no handle exists yet to give the first properties back, so they would stay written with nobody holding them.
     const borrow = ifLive((obj, values) => {
       if (!obj || typeof obj !== 'object' || !values || typeof values !== 'object') throw codedError('module-handle', fmt(BAD_BORROW, { name, got: `${String(obj)}, ${String(values)}` }));
       let lent = this._borrowed.get(obj);
@@ -318,19 +337,34 @@ export const moduleMethods = {
         const t = lent.get(key);
         if (t && Object.is(obj[key], t.wrote)) throw codedError('module-handle', fmt(BORROW_HELD, { name, key, holder: t.name }));
       }
-      const taken = Object.keys(values).map(key => { const was = obj[key]; obj[key] = values[key]; const t = { key, was, wrote: obj[key], name }; lent.set(key, t); return t; });
-      const h = { borrow: true, remove: () => {
+      const taken = [];
+      // each property on its own: a setter that throws while giving back must not keep the others written, and its holder record goes either way (the list is
+      // already emptied, so nothing could clean it later). Returns the first such error, which the caller throws after the rest went back
+      const giveBack = () => {
+        let failed = null;
         for (const t of taken.splice(0)) {
-          if (Object.is(obj[t.key], t.wrote)) obj[t.key] = t.was;
-          if (lent.get(t.key) === t) lent.delete(t.key);
+          try { if (lent.get(t.key) === t && Object.is(obj[t.key], t.wrote)) obj[t.key] = t.was; }
+          catch (err) { failed ??= { err }; }
+          finally { if (lent.get(t.key) === t) lent.delete(t.key); }
         }
+        return failed;
+      };
+      try { for (const key of Object.keys(values)) { const was = obj[key]; obj[key] = values[key]; const t = { key, was, wrote: obj[key], name }; lent.set(key, t); taken.push(t); } }
+      catch (err) {   // the write error stays the primary one; a failure undoing it is reported on its own (soft), not lost
+        const undo = giveBack();
+        if (undo) reportError(this, undo.err, `giving back a failed borrow of module ${name}`, { soft: true });
+        throw err;
+      }
+      const h = { borrow: true, remove: () => {
+        const failed = giveBack();
         this._modTracked.get(name)?.delete(h);   // a module that borrows often (a cutscene a minute) does not pile up dead handles, as with control below
+        if (failed) throw failed.err;
       } };
       return track(h);
     });
     // input: declare actions / bind the keys the game handed the module, owned by the module (removed with it); never a key of its own
     const input = {
-      action: ifLive((n, o) => track(this.input.action(n, { ...o, owner: name }))),
+      define: ifLive((n, o) => track(this.input.define(n, { ...o, owner: name }))),
       bind: ifLive((n, keys) => track(this.input.bind(n, keys, { owner: name }))),
     };
     // control: engine.control.take with the module as default owner, tracked, so a module that goes (unload, rollback, replaces) hands back every
@@ -362,10 +396,10 @@ export const moduleMethods = {
     // Why ctx verbs and not "the module installing now": the callback that registers may run long after install; inst says which install it belongs to
     const own = (kind, id, h) => track(Object.assign(h, { kind, id, owner: name, inst }));
     const owned = (kind, add) => ifLive((id, ...rest) => own(kind, id, add(id, ...rest)));
-    // a part keeps its data only when the module ran: a rolled-back or failed install has only half-built state to offer (Saves.register)
-    const register = ifLive((key, part) => {
-      const h = this.saves.register(key, part);
-      return own('save', key, { remove: () => h.remove({ keep: this._isLive(name, inst) && this._modState.get(name) === 'running' }) });
+    // a part keeps its data only when the module ran: a rolled-back or failed install has only half-built state to offer (Saves.define)
+    const defineSave = ifLive((key, part) => {
+      const h = this.saves.define(key, part);
+      return own('save', key, { remove: () => h.remove({ keep: this._wasRunning(name, inst) }) });   // runs after the install closed: not _isLive
     });
     // declared, not just called: _planUse finds a ground conflict from provides before anything installs, which a call inside install() could not give
     const provideGround = ifLive(g => {
@@ -376,14 +410,16 @@ export const moduleMethods = {
     const feeds = (capability, fn) => {
       const f = { name: capability, fn };
       (this._feeders ??= []).push(f);
-      return track({ remove: () => this._feeders.splice(this._feeders.indexOf(f), 1) });
+      return track({ remove: () => { const i = this._feeders.indexOf(f); if (i >= 0) this._feeders.splice(i, 1); } });   // a handle removed twice must not take the next feeder
     };
     // signal: aborts when this install ends (_dropTracked), the one lifecycle; an async init checks it after each await instead of keeping its own flag
-    return { name, signal: inst?.ac.signal, track, mod, borrow, feeds, input, control, whileCompiling,
+    // commits: a module reaches the commit queue through its ctx; a game outside a module uses engine.nextFixed (engine.commits is internal)
+    return { name, signal: inst?.ac.signal, track, mod, borrow, feeds, input, control, whileCompiling, commits: this.commits,
       // rule: a replaceable rule of this module, set by anyone with engine.mod(name, { owner, id?, set }). Not tracked: the point outlives a module that shares it, its entries go with their owners
-      rule: (n, def, names) => this.stacks.rule(n, def, names),
+      // a closed install defines no rule: Stacks.rule would define a point for good under a name a later module may need. It still answers like a rule, with its default
+      rule: (n, def, names) => (stale() ? { name: n, value: () => def, decide: (_id, facts) => (typeof def === 'function' ? def(facts, this) : def) } : this.stacks.rule(n, def, names)),
       ops: { define: owned('op', (n, def) => this.ops.define(n, def)) },
-      saves: { register },
+      saves: { define: defineSave },
       ui: { define: owned('ui', (n, factory, def) => this.ui.define(n, factory, def)) },
       stream: { addReadyCheck: owned('ready', (n, fn) => this.stream.addReadyCheck(n, fn)) },
       budget: { metric: owned('metric', (n, read, o) => this.budget.metric(n, read, o)) },
@@ -397,16 +433,7 @@ export const moduleMethods = {
     const set = this._modTracked.get(name);
     if (!set) return;
     this._modTracked.delete(name);
-    for (const h of [...set].reverse()) { if (h._timer) this.session._dropTimer(h._timer); try { h.remove(); } catch (err) { reportError(this, err, `remove() of a handle module ${name} tracked`, { soft: true }); } }
-  },
-  /**
-   * @internal a module disabled after an error stays installed, so its other handles wait for unload, but what it borrowed goes back now: nothing keeps that value up any more.
-   * Newest first, like unload: oldest first would leave a first borrow's value in place of the original.
-   */
-  _returnBorrowed(name) {
-    for (const h of [...this._modTracked.get(name) ?? []].reverse()) if (h.borrow) {
-      try { h.remove(); } catch (err) { reportError(this, err, `remove() of a borrow module ${name} made`, { soft: true }); }
-    }
+    removeEach(this, [...set].reverse(), `remove() of a handle module ${name} tracked`, h => { if (h._timer) this.session._dropTimer(h._timer); });
   },
   /** @internal move a module to a new state and refresh the hooks (initializing / failed modules run none) */
   _setModState(m, state) {
@@ -430,7 +457,7 @@ export const moduleMethods = {
    * @returns {any}
    * @example engine.catalog();  engine.catalog('sky');  engine.catalog('shop.buy');  engine.catalog({ find: 'buy' })
    */
-  catalog(id) { return catalog(this, id); },
+  catalog(id, o) { return catalog(this, id, o); },
   /**
    * Is a module of this name, or a provider of this capability, installed? Installed only: engine.explain({ module: name }) says whether it is running.
    * @param {string} name
@@ -451,8 +478,7 @@ export const moduleMethods = {
     this._refreshBlocks();
     for (const k of HOOKS) this._hooks[k] = [];
     for (const m of order) {
-      const st = this._modState.get(m.name);
-      if (st !== 'running' || this._modBlocked.has(m.name)) continue;   // registered (init not run yet), initializing, failed, disabled, blocked: no hooks
+      if (!this._runsHooks(m.name)) continue;
       let c = hookCache.get(m);
       if (!c) hookCache.set(m, c = {});
       for (const k of HOOKS) if (m[k]) this._hooks[k].push(c[k] ??= { fn: m[k].bind(m), name: m.name, mod: m });
@@ -472,7 +498,7 @@ export const moduleMethods = {
         if (givers.some(up)) continue;
         const p = givers[0], state = !p ? 'missing' : blocks.has(p.name) ? 'blocked' : this._modState.get(p.name);
         by.push({ requires: dep, module: p?.name ?? null, state });
-        if (state === 'failed' || dead.has(p?.name)) dead.add(m.name);   // waiting ends by itself; a failure does not
+        if (state === 'failed' || state === 'disabled' || dead.has(p?.name)) { dead.add(m.name); warnOnce(fmt(STRINGS.blocked, { name: m.name, dep, by: p.name, state })); }   // waiting ends by itself; a failure does not, so it is said once
       }
       if (by.length) blocks.set(m.name, by);
       const ok = !by.length && this._modState.get(m.name) === 'running';

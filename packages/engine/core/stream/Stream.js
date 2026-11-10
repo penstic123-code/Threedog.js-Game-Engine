@@ -7,10 +7,10 @@
 //   h.remove();                     // no longer needed (a built one is unloaded)
 // Stream sources (stream.player, stream.camera, stream.source(...), stream.teleport(...)) are the one list every distance-based loader reads: stream entries,
 // world models, terrain chunks, hlod and rigid colliders (the Source class is in streamSources.js).
-// build runs in engine.jobs spread over frames (nearest first); when build returns an object synchronously it is attached to the scene on the spot inside that
-// job (built / ready are already correct when engine.step returns),
-// and a returned Promise is awaited before attaching. Unloads only beyond radius x unloadFactor (walking back and forth does not rebuild); keep: true never
-// unloads.
+// build runs in engine.jobs spread over frames (nearest first); a returned Promise is awaited first. An object whose materials the renderer has compiled
+// is attached on the spot inside that job (built / ready are correct when engine.step returns). After start, one bringing a material the renderer has not drawn
+// is readied first (prepare.js: textures uploaded, shaders compiled off the frame) and attached a task later, so the frame that first shows it does not hitch.
+// Unloads only beyond radius x unloadFactor (walking back and forth does not rebuild); keep: true never unloads.
 // At startup start() waits for everything registered within radius to finish building before the loading screen goes away. The grid cell size cellSize is
 // shared with hlod.
 /** @import { StreamEntryOptions, StreamHandle, StreamSource, StreamSourceOptions } from '../../types/core' */
@@ -21,6 +21,7 @@ import { codedError } from '../base/errorHints.js';
 import { fmt } from '../base/validate.js';
 import { surfaceOr } from '../scene/ground.js';
 import { Source, SOURCE_KEYS, SOURCE_STRINGS } from './streamSources.js';
+import { Prepare } from './prepare.js';
 
 const KEYS = ['position', 'radius', 'build', 'dispose', 'keep', 'priority'];
 const FULL = { detail: 'full' };
@@ -49,6 +50,7 @@ export class Stream {
     /** @internal */ this._sources = new Set();
     /** @internal Bumps when a source is added, removed or moved with at() */ this._version = 0;
     /** @internal name -> (source) => boolean */ this._checks = new Map();
+    /** @internal textures and shaders of streamed content readied before its first draw (prepare.js) */ this._prep = new Prepare(engine);
     /** Built-in source at the player (engine.focus without one): full detail and physics @type {StreamSource} */
     this.player = this.source(() => engine.player?.position ?? engine.focus, { name: 'player' });
     /** Built-in source at the camera focus engine.focus: full detail, no physics @type {StreamSource} */
@@ -294,15 +296,32 @@ export class Stream {
     // a failed build is tried again the next time a stream source moves (want goes back to false); reported once, the game goes on without it
     // counted down once: engine.add or a game dispose can throw after _built counted, and queued below 0 means ready is false for good
     let open = true;
-    const settle = () => { if (open) { open = false; this.queued--; } };
+    const settle = () => { if (open) { open = false; if (!this.engine.disposed) this.queued--; } };   // dispose() zeroed queued: a build failing after it counts nothing
     const fail = err => { settle(); this.live.delete(h); h.want = false; reportError(this.engine, err, 'stream build', { soft: true }); };
     this.engine.jobs.add(() => {
       if (!h.want || !this.entries.has(h)) return this._built(h, null, settle);
       const t0 = performance.now(), r = h.def.build();   // measure: the 'stream' stage of engine.budget.cost
       this.engine.budget.cost.end('stream', t0);
-      if (r && typeof r.then === 'function') return r.then(obj => this._built(h, obj, settle), fail);
-      this._built(h, r, settle);   // synchronous build: attach to the scene on the spot
+      // shortcut: an async build's result is readied outside the job budget (it lands in a promise callback); route it through a job if that shows in applyUploadMs
+      if (r && typeof r.then === 'function') return r.then(obj => this._show(h, obj, settle, fail), fail);
+      this._show(h, r, settle, fail);   // synchronous build: attach on the spot when nothing needs readying
     }, { priority: (h.def.priority ?? 0) - near }).catch(fail);
+  }
+  /** @internal Ready obj's textures and shaders first (prepare.js), then attach; queued stays counted until then, so ready and teleport wait for it */
+  _show(h, obj, settle, fail) {
+    if (this.engine.disposed) return this._late(h, obj);
+    let wait = null;
+    // the object exists but belongs to nobody until _built: a preprocess that throws (texture upload) must free it, or the retry builds a second one beside it
+    try { wait = obj && !obj.parent && h.want ? this._prep.run(obj) : null; } catch (err) { try { this._dispose(h, obj); } catch (e2) { reportError(this.engine, e2, 'stream build', { soft: true }); } throw err; }
+    if (wait) wait.then(() => { if (this.engine.disposed) this._late(h, obj); else this._built(h, obj, settle); }).catch(fail); else this._built(h, obj, settle);
+  }
+  /**
+   * @internal A build that finished after engine.dispose: dispose() zeroed queued and released the scene, so neither settle (queued below 0) nor engine.remove
+   * may run. The game's own dispose still does, as for any unwanted build: it may free what the scene walk never sees (a lease, a body). Its error is reported, not settled
+   */
+  _late(h, obj) {
+    if (!obj || !h.def.dispose) return;
+    try { h.def.dispose(obj); } catch (err) { reportError(this.engine, err, 'stream build', { soft: true }); }
   }
   /** @internal Build finished (obj null means nothing was built): discard it if no longer wanted, otherwise attach to the scene */
   _built(h, obj, settle) {

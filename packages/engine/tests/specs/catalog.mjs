@@ -63,7 +63,7 @@ export const specs = [
           install(e) {
             e.ops.define('catTest.poke', { desc: 'poke it', args: { n: { type: 'int', default: 1, min: 1, max: 5 }, who: 'string?' },
               can: (e2, a) => a.n < 5 ? true : 'tooMany', run: (e2, a) => { seen = a.n; return a.n; }, reasons: { tooMany: 'At most 4' } });
-            e.saves.register('catTestState', { version: 2, migrate: { 1: d => d }, save: () => ({}), load: () => {} });
+            e.saves.define('catTestState', { version: 2, migrate: { 1: d => d }, save: () => ({}), load: () => {} });
             return { push() {}, _hidden: 1 };
           },
           init(e) { e.describe.add('catTestInfo', () => ({ ok: true })); },

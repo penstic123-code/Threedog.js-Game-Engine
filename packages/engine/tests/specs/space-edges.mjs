@@ -12,7 +12,7 @@ export const specs = [
         const E = mk(T.createEngine, 'edge-walk');
         E.use(T.world(), T.collision(), T.characters({ npcs: false }));
         await E.start(); E.haltLoop();
-        const P = E.characters.createPlayer({ control: 'camera', spawn: { x: 0, z: 0 } });
+        const P = E.characters.addPlayer({ control: 'camera', spawn: { x: 0, z: 0 } });
         const go = (speed, x0, dir) => {
           const m = E.mod('move.speed', { owner: 't', set: speed }), h = E.control.take(P, { owner: 't', layer: 'script' });
           P.placeAt([x0, 0, 0]); P.velocity.set(speed * dir, 0);
@@ -174,7 +174,7 @@ export const specs = [
           res.after = sample();
           res.edge = +Math.abs(E.surface(CH, 0) - rapierY(CH, 0)).toFixed(4);
           // a character walking the steep ground, simple mover: its feet stay on the surface every step
-          const P = E.characters.createPlayer({ control: 'camera', spawn: { x: 3, z: 3 } }), h = E.control.take(P, { owner: 't', layer: 'script' });
+          const P = E.characters.addPlayer({ control: 'camera', spawn: { x: 3, z: 3 } }), h = E.control.take(P, { owner: 't', layer: 'script' });
           let worst = 0;
           for (let i = 0; i < 240; i++) { h.move(Math.cos(i * 0.02), Math.sin(i * 0.02), false, 1 / 60); if (P.grounded) worst = Math.max(worst, Math.abs(P.position.y - E.surface(P.position.x, P.position.z))); }
           res.feet = +worst.toFixed(4);

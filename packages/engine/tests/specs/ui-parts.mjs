@@ -1,7 +1,7 @@
 // 界面件 engine.ui：每块界面（加载、提示、标题、HUD 标记 / 计数 / 进度条、对话框、交互提示、任务日志、触屏摇杆按钮）都能换成游戏自己的或关掉；设置可选分页。页面 tests/ui。
 // [守] 全关模式下引擎不许画出任何界面 DOM：谁绕开 engine.ui 直接建元素，这条就会红。
 
-const DOM = ['.threedog-loading', '.threedog-toast', '.threedog-title', '.threedog-hud-marker', '.threedog-hud-counter', '.threedog-hud-bar', '.threedog-hud', '.threedog-dlg', '.threedog-prompt', '.threedog-win-quests', '.threedog-stick', '.threedog-touch-bar'];
+const DOM = ['.threedog-loading', '.threedog-toast', '.threedog-title', '.threedog-hud-marker', '.threedog-hud-counter', '.threedog-hud-bar', '.threedog-hud-button', '.threedog-hud', '.threedog-dlg', '.threedog-prompt', '.threedog-win-quests', '.threedog-stick', '.threedog-touch-bar'];
 
 export const specs = [
   {
@@ -67,7 +67,7 @@ export const specs = [
       const t = await ev(async () => {
         engine.haltLoop();
         engine.quests.start('walk'); engine.step(0.6);
-        engine.hud.counter('fish', { label: 'Fish', value: 2, max: 5 }); engine.hud.bar('hp', { value: 0.5, label: 'HP' });
+        engine.hud.addCounter('fish', { label: 'Fish', value: 2, max: 5 }); engine.hud.bar('hp', { value: 0.5, label: 'HP' });
         engine.step(0.1);
         const o = {
           toast: [...document.querySelectorAll('.threedog-toast')].map(x => x.textContent).join('|'),
@@ -76,7 +76,7 @@ export const specs = [
         };
         engine.hud.remove('hp');
         o.barGone = !document.querySelector('.threedog-hud-bar');
-        engine.hud.counter('gun', { value: 12, max: 48 }); engine.step(0.1);
+        engine.hud.addCounter('gun', { value: 12, max: 48 }); engine.step(0.1);
         o.noLabel = [...document.querySelectorAll('.threedog-hud-counter')].at(-1)?.textContent;
         engine.hud.remove('gun');
         engine.hud.bar('nolabel', { value: 0.5 }); engine.step(0.1);
@@ -128,7 +128,7 @@ export const specs = [
       const r = await ev(async (DOM) => {
         engine.haltLoop();
         engine.quests.start('walk'); engine.step(0.6);
-        engine.hud.counter('fish', { value: 3 }); engine.hud.bar('hp', { value: 0.2 });
+        engine.hud.addCounter('fish', { value: 3 }); engine.hud.bar('hp', { value: 0.2 });
         engine.inventory?.add('x');
         engine.dialogue.start('npc'); engine.step(1);
         const dlg = engine.describe().ui.dialogue?.choices.join();
@@ -162,7 +162,7 @@ export const specs = [
         uiLog.length = 0;
         engine.ui.close('title');
         engine.quests.start('walk'); engine.step(0.6);
-        engine.hud.counter('fish', { label: 'Fish', value: 1 }); engine.hud.remove('fish');
+        engine.hud.addCounter('fish', { label: 'Fish', value: 1 }); engine.hud.remove('fish');
         engine.dialogue.start('npc'); engine.step(1);
         uiLog.filter(x => x[0] === 'dialogue' && x[1] === 'update').at(-1)[2].choose(0);   // the part answers by calling choose(): that is the op
         const dlgOp = engine.ops.recent('dialogue.choose').at(-1);

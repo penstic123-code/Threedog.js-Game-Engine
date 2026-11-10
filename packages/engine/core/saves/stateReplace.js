@@ -8,6 +8,9 @@
 //     the caller's next lines) and a direct apply / load on those lines runs at once and takes over. The older job's hooks are then skipped:
 //     they would rebuild for a state that is gone, and the newer job's hooks rebuild for the one that stayed. Not past something already in line:
 //     apply(x); save('s'); apply(y) would store y.
+//     A late part's job (adoptPart) adds to the state, it replaces nothing, so paused it holds nobody back: a read (a save, a content commit) on those lines goes
+//     at once, and another late part takes over, its afterLoad round rebuilding for both. Held, use(content()); content.load(...) or a failed replaces putting
+//     its module back would leave the next line without its data until a microtask later; nothing it skips is half loaded (paused means every part is in).
 //   - One marker. `replacing` is true from reading the save through its parts, afterLoad and any rollback; begin() / end() bracket that span
 //     (saveApply.js). Ops read it (opsFail.js) instead of knowing freeze names, so a game's own freeze never looks like a load and a load never
 //     looks like a menu. A session's turn is longer than the marker on purpose: session:end listeners (a skipped cutscene's last steps) and
@@ -51,6 +54,7 @@ export class StateReplace {
     /** True from reading a save until its load or rollback ended */ this.replacing = false;
     /** The freeze while the replacement waits on something */ this.freeze = null;
     /** How many stateTurns are open */ this.turns = 0;
+    /** Restore jobs (restoring) not ended yet: while any is, end() leaves the marker and the freeze on */ this.restores = 0;
     /** Which saved state the game holds: moves when a load starts changing parts, goes back when it fails. A level change does not move it, so what a level load's caller asked next survives (commits.epoch moves for both) */ this.generation = 0;
   }
 
@@ -58,15 +62,18 @@ export class StateReplace {
    * Run fn when its turn comes: at once when idle, else after the jobs before it. Returns what fn returned, as a Promise.
    * @param {string | null} key  same key as the last job in line: join it instead of running again
    * @param {() => any} fn
-   * @param {boolean} [behind]  never take over a paused job: fn adds to the state that job leaves, it does not replace it (adoptPart)
+   * @param {{ behind?: boolean, whole?: boolean, turn?: object }} [o]  behind: a late part (adoptPart), fn adds to the state the running job leaves: it takes over only a paused late part's job (_passable).
+   *   whole: the job is one request from its first line to its last (a scene request, applyState), so it never pauses for a direct apply to take over.
+   *   turn: the turn of the request asking. When it is the running one, fn is part of that request and runs now, inside it: in line it would wait for itself
    * @returns {Promise<any>}
    */
-  run(key, fn, behind = false) {
+  run(key, fn, { behind = false, whole = false, turn } = {}) {
+    if (turn && this.job?.turn === turn) { try { return Promise.resolve(fn()); } catch (err) { return Promise.reject(err); } }
     const last = this.waiting.at(-1) ?? this.job;
     if (key && last?.key === key) return last.done;
-    const job = { key, fn, done: null, settle: null, paused: false, turn: Object.freeze({}) };
+    const job = { key, fn, done: null, settle: null, paused: false, whole, behind, turn: Object.freeze({}) };
     job.done = new Promise(res => { job.settle = res; });
-    if (this.job && (behind || !this.job.paused || this.waiting.length)) this._line(job); else this._start(job);
+    if (this.job && (behind && !this._passable() || !this.job.paused || this.waiting.length)) this._line(job); else this._start(job);
     return job.done;
   }
 
@@ -76,7 +83,7 @@ export class StateReplace {
    * @returns {Promise<any>}
    */
   read(fn) {
-    if (!this.job) return fn();
+    if (!this.job || this._passable()) return fn();
     let give;
     const job = { key: null, fn: () => { try { give(fn()); } catch (err) { give(Promise.reject(err)); } }, done: new Promise(res => { give = res; }), settle() {}, paused: false };   // a throw reaches the one who asked, and the line goes on
     this._line(job);
@@ -88,10 +95,10 @@ export class StateReplace {
    * @param {Promise<any>} p
    */
   restoring(p) {
-    const job = { key: null, fn: () => p, done: p, settle() {}, paused: false };
-    this.begin(); this.hold();
-    const over = () => this.endOf(job);
-    p.then(over, over);   // before _start's own: the job still holds the turn when the marker goes off
+    // the job ends itself once p settled and its turn came (_start's next). Asked while another job runs (an atomic op inside applyState), that job's own end()
+    // must not drop the marker, and nothing else would raise it again: restores keeps it on until this one ends
+    const job = { key: null, fn: () => p, done: p, settle() {}, paused: false, restoring: true };
+    this.restores++; this.begin(); this.hold();
     if (this.job) this.waiting.unshift(job); else this._start(job);
   }
 
@@ -113,17 +120,29 @@ export class StateReplace {
   _start(job) {
     this.job = job; this.moved = performance.now();   // measure: a sign of life for those in line
     const next = () => {
+      if (this.job !== job) return;   // not its turn any more: taken over
+      if (job.restoring) { this.restores--; this.end(); }   // the old state is whole again: gameplay and the line go on
+      // the notice is still this job's turn: a load asked in a state:replaced listener goes in line. Were the turn cleared first, that load would start at once and the
+      // job in line beside it right after (review l2 #1). Not paused either: a paused job would let it take over and skip the line
+      job.paused = false;
+      if (job.changed) this.engine.events.emit('state:replaced', { undone: job.changed === 'undone' });
       if (this.job !== job) return;
       this.job = null;
-      if (job.changed) this.engine.events.emit('state:replaced', { undone: job.changed === 'undone' });
-      const n = this.waiting.shift();
-      if (n) this._start(n);
-    };   // not its turn any more: taken over
+      this._next();
+    };
     let out;
     try { out = job.fn(); } catch (err) { out = Promise.reject(err); }
     if (typeof out?.then === 'function') out.then(next, next);
     else next();
     job.settle(out);
+  }
+  /** A paused late part's job with nobody in line: what comes next does not wait for its afterLoad round (top of the file) */
+  _passable() { return !!this.job?.paused && this.job.behind && !this.waiting.length; }
+  /** The one place the next job starts: only when no job holds the turn, so a job ending inside another's notice cannot start a second one beside it */
+  _next() {
+    if (this.job) return;
+    const n = this.waiting.shift();
+    if (n) this._start(n);
   }
 
   /** The state starts being replaced (the marker's span: top of the file) */
@@ -134,7 +153,7 @@ export class StateReplace {
    *  apply, and a job already holding the freeze is mid-load, so neither pauses. Returns the job, for resume */
   pause() {
     const job = this.job;
-    if (!job.key && !this.freeze) { job.paused = true; this.replacing = false; }
+    if (!job.key && !job.whole && !this.freeze) { job.paused = true; this.replacing = false; }
     return job;
   }
   /** The wait ended: false when a newer job took over, else the marker is back on */
@@ -148,7 +167,7 @@ export class StateReplace {
   /** The replacement waits on something: stop fixed steps until end() */
   hold() { this.freeze ??= this.engine.freeze(FREEZE); }
   /** The load or its rollback ended */
-  end() { this.replacing = false; this.freeze?.remove(); this.freeze = null; }
+  end() { if (this.restores) return; this.replacing = false; this.freeze?.remove(); this.freeze = null; }
 }
 
 /**

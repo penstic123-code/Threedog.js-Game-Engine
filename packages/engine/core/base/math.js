@@ -19,6 +19,28 @@ const XZ_ERR = 'A horizontal position needs finite x and z: pass [x, y, z] (a 2-
 /** Round to one decimal (describe, budget reports) @param {number} v @returns {number} */
 export const r1 = v => Math.round(v * 10) / 10;
 
+const _vp = new THREE.Matrix4();
+/**
+ * The camera's view frustum for culling math, read with the camera's own depth convention. Why: THREE.Frustum defaults to WebGL clip depth (-1..1);
+ * a WebGPU camera (or one with reversed depth) has a different near plane, so a default frustum calls things drawn that the near plane cuts.
+ * The three inspect checks and the chunk stream share this one, so they agree with what the renderer culls.
+ * @param {any} cam @param {THREE.Frustum} [out] @returns {THREE.Frustum}
+ */
+export function cameraFrustum(cam, out = new THREE.Frustum()) {
+  cam.updateMatrixWorld();   // also refreshes cam.matrixWorldInverse
+  return out.setFromProjectionMatrix(_vp.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse), cam.coordinateSystem, cam.reversedDepth);
+}
+/** Value at share q of the sorted samples (0.5 = median, 0.95 = p95; linear between neighbours), 0 for none. The one helper for "typical frame"
+ * readings (module timing, frame time): one long frame (a GC pause, a chunk build) moves a mean, not this @param {ArrayLike<number>} a @param {number} q */
+export function quantile(a, q) {
+  const s = Array.from(a).sort((x, y) => x - y), n = s.length;
+  if (!n) return 0;
+  const i = (n - 1) * q, lo = Math.floor(i);
+  return s[lo] + (s[Math.min(n - 1, lo + 1)] - s[lo]) * (i - lo);
+}
+/** @param {ArrayLike<number>} a */
+export const median = a => quantile(a, 0.5);
+
 /**
  * Show a value someone set (style post params, exposure, light intensity) without changing it: 4 significant digits, never fewer than
  * the integer part. r1 is for measurements (positions, ms); a set value rounded to one decimal misreports it (bloom 0.25 read as 0.3,
@@ -29,6 +51,12 @@ export const rv = v => (Number.isFinite(v) && v !== 0 ? Number(v.toPrecision(Mat
 
 /** An angle in radians as the same turn in -PI..PI; of a difference, the short way round @param {number} a @returns {number} */
 export const wrapAngle = a => Math.atan2(Math.sin(a), Math.cos(a));
+
+/** rot / scale of a world record as [x, y, z]: a number is the facing about Y and a uniform scale; an array sets each axis (Euler order XYZ). The one reading,
+ *  shared by content models and the editor, so a record turns the same wherever it is read @param {{ rot?: number | number[] }} rec */
+export const rotOf = rec => Array.isArray(rec.rot) ? rec.rot : [0, rec.rot ?? 0, 0];
+/** @param {{ scale?: number | number[] }} rec @param {number} [mul] */
+export const scaleOf = (rec, mul = 1) => (Array.isArray(rec.scale) ? rec.scale : [rec.scale ?? 1, rec.scale ?? 1, rec.scale ?? 1]).map(v => v * mul);
 
 const _world = new THREE.Vector3();
 /** Where an Object3D stands: a position argument is a place in the world, and a child's .position is one in its parent's space */

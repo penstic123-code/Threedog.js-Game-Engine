@@ -5,7 +5,7 @@
 //   engine.use(mine(), { replaces: 'inventory' })  unload the holder first (its tracked handles, slot, ctx.mod entries, drawing parts, dispose)
 // Why the slot is a shared point and not a module-name table: one owner registry for everything (describe().shared shows the holder beside
 // every shared value, ctx.track releases it with the rest), so there is no second mechanism to learn. Kept apart from modules.js only for size.
-import { DEV, fmt, closest, warnOnce } from '../base/validate.js';
+import { DEV, fmt, closest, warnOnce, syncOnly } from '../base/validate.js';
 import { codedError, coded } from '../base/errorHints.js';
 import { reportError } from '../base/errors.js';
 import { PICTURE_SLOTS } from '../scene/pictureSlots.js';
@@ -132,7 +132,7 @@ export const slotMethods = {
   _unuse(name, swapping = false) {
     const m = this.modules.get(name);
     this._dropTracked(name);
-    try { m.dispose?.(this); } catch (err) { reportError(this, err, fmt(STRINGS.unuse, { name }), { soft: true }); }
+    try { syncOnly(m.dispose?.(this), `dispose() of module ${name}`, true); } catch (err) { reportError(this, err, fmt(STRINGS.unuse, { name }), { soft: true }); }
     this._picture?.partGone(m, swapping);
     this.modules.delete(name); this._modState.delete(name); this._modInst.delete(name); delete this[name];
     this._sortHooks();

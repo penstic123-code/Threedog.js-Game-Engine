@@ -198,7 +198,7 @@ export const specs = [
           if (s.shadowOnly) continue;
           if (!CODE[name]) { out.wrong.push(name + ': no probe code in this test'); continue; }
           const m = applyEffects(new THREE.MeshStandardMaterial(), { clouds: false, patches: [{ name: 'p_' + name, slot: name, glsl: CODE[name] }] });
-          const text = src(m)[s.stage + 'Shader'], inc = `#include <${s.anchor}>`, code = `// threedog:begin patch=p_${name} slot=${name}\n${CODE[name]}\n// threedog:end`;
+          const text = src(m)[s.stage + 'Shader'], inc = `#include <${s.anchor}>`, code = `// threedog:begin patch=p_${name} slot=${name}\n${CODE[name]}${s.closes ? '\n' + s.closes : ''}\n// threedog:end`;
           const ok = s.at === 'after' ? text.includes(inc + '\n' + code) : s.at === 'before' ? text.includes(code + '\n' + inc) : !text.includes(inc) && text.includes(code);
           if (!ok) out.wrong.push(name);
           const mesh = new THREE.Mesh(g, m); mesh.frustumCulled = false; scene.add(mesh);

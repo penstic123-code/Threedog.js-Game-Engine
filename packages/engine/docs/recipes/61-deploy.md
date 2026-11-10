@@ -1,5 +1,10 @@
 # Deploy: put the built game on a web server, at the site root or under a sub-path
 
+> **Covers:** putting the built game on a web server, at the root or under a sub-path.
+> **Use when:** publishing the game.
+> **Shortest:** `npm run build`, then copy `dist/`.
+> **Sections:** At the site root · Under a sub-path https · The server
+
 `npm run build` writes the game to its `dist/`: plain files (HTML, JS, assets) that any static web server serves. Copy the whole folder.
 
 ## At the site root (`https://example.com/`)

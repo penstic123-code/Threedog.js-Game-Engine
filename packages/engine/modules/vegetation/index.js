@@ -74,12 +74,12 @@ export function vegetation(opts = {}) {
     frame(dt, e) { own?.update(e.stream.sources(), e.camera); },
     fixed(dt) { v.tick(dt); }, skip(dt, e, done) { if (done) v.tick(1); },
     describe(e, ctx) { if (own) ctx.out.perf.vegetation = { loaded: own.stats.loaded, visible: own.stats.visible, queued: own.stats.queued }; },
-    dispose(e) { own?.dispose(); v?._view?.remove(); v?._planter?.remove(); } };
+    dispose(e) { own?.dispose(); v?.detach(); } };
   const lookModule = {
     // the same vegetation({...}) call (its options are the data part's; the draw part reads the species' define() options)
     name: 'vegetationDraw', skipKind: 'none', type: 'picture', label: 'Vegetation drawing', params: VEG_PARAMS, options: opts, requires: ['vegetation'], provides: ['vegetation-draw'], stage: 'effects',
     install(e) { e.i18n.add({ 'zh-CN': { 'module.vegetationDraw': '植被外观' }, en: { 'module.vegetationDraw': 'vegetation drawing' } }); drawPart = new VegetationDraw(e, v); return drawPart; },
-    frame() { drawPart.updateFade(); },
+    frame() { drawPart.updateFade(); drawPart.updateCards(); },
     describe() { return { chunks: drawPart?.meshes.size ?? 0 }; },
     dispose() { drawPart?.dispose(); drawPart = null; },
   };

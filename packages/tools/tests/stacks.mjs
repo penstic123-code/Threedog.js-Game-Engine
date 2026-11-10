@@ -1,6 +1,7 @@
 // Modifier stacks (core/ops/stacks.js), the one way several systems change a shared quantity: combine rules per op x layer, only the owner ends its
 // entry, a stale handle ends nothing, two owners setting one layer warn (release; dev throws), save / load round trip, holders(); pause / freeze / camera ride on it.
 // The "no way around it" check: claims.js and the engine's private holder fields are gone, so nothing can hold the engine still beside the stacks.
+import { fakeSaves } from './fixtures/fake-saves.mjs';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -14,7 +15,7 @@ export const name = 'modifier stacks: engine.mod combine rules, owners, save, ho
 /** A minimal engine: saves, events and the stacks; the holds from holds.js on top */
 function fake() {
   const parts = {}, events = [], on = {};
-  const e = Object.defineProperties({ elapsed: 0, camera: { fov: 60, updateProjectionMatrix() {} }, _oFov: { mark() {} }, saves: { register: (k, p) => { parts[k] = p; } }, _loop() {}, disposed: false, page: { _sync() {} },
+  const e = Object.defineProperties({ elapsed: 0, camera: { fov: 60, updateProjectionMatrix() {} }, _oFov: { mark() {} }, saves: fakeSaves((k, p) => { parts[k] = p; }), _loop() {}, disposed: false, page: { _sync() {} },
     events: { emit: (n, d) => events.push([n, d]), on: (n, f) => { (on[n] ??= []).push(f); return { remove() {} }; } } }, Object.getOwnPropertyDescriptors(holdMethods));
   e.stacks = new Stacks(e); e.stacks._hook(); e.mod = (n, o) => e.stacks.mod(n, o);
   defineHoldStacks(e);   // the engine's own hold stacks (halt does the loop side effect itself)
@@ -146,4 +147,23 @@ export async function run({ check }) {
   const oldPriority = ['core', 'modules', 'ui'].flatMap(d => walk(join(ENGINE, d))).filter(f => /\.mod\([^)]*\bpriority:/.test(readFileSync(f, 'utf8')));
   check('no engine.mod call passes priority (layer replaced it)', !oldPriority.length, oldPriority.join(', '));
   check('the layer table lives only in sharedPoint.js', !/\bPRIORITY\s*=\s*\{/.test(readFileSync(join(ENGINE, 'core/ops/stacks.js'), 'utf8')) && /export const LAYERS/.test(readFileSync(join(ENGINE, 'core/ops/sharedPoint.js'), 'utf8')));
+
+  // stacks.changed(): the "Values being changed now" rows (describeText line and dev panel folder read the same function)
+  const ce = fake(), C = ce.stacks;
+  C.define('speed', { base: 6 }); C.define('calm', { base: 1 }); C.define('alarm', { base: 0, important: true });
+  ce.mod('speed', { owner: 'haste', mul: 1.4 }); ce.mod('speed', { owner: 'mud', mul: 0.5 });
+  let rows = C.changed();
+  check('changed: a point two owners modify shows with its how-string', rows[0].name === 'speed' && rows[0].how === 'default 6 × haste 1.4 × mud 0.5' && rows[0].text === 'speed 6 → 4.2 (default 6 × haste 1.4 × mud 0.5)', JSON.stringify(rows));
+  check('changed: an untouched point is not listed, an important one shows at its base', !C.changed().some(r => r.name === 'calm') && C.changed().some(r => r.name === 'alarm' && r.now === 0));
+  check('changed: important: not a boolean throws shared-value', code(() => C.define('bad', { important: 'yes' })) === 'shared-value');
+  for (let i = 0; i < 7; i++) { C.define(`p${i}`, { base: 10 }); ce.mod(`p${i}`, { owner: 'o', add: i + 1 }); }
+  rows = C.changed();
+  // a per-record point is read with the record's own base (the character's speed): changed() compares against that one
+  C.define('mv', { per: 'optional' });
+  C.get('mv').value('hero', 6); ce.mod('mv', { owner: 'mud', id: 'hero', mul: 0.5 });
+  C.get('mv').value('hero', 6);
+  const mvRow = C.changed().find(r => r.name === 'mv[hero]');
+  check('changed: a per-record point uses the base it is read with (6 → 3, not 1 → 0.5)', mvRow?.text === 'mv[hero] 6 → 3 (default 6 × mud 0.5)', JSON.stringify(mvRow));
+  C.get('mv').dropId('hero');
+  check('changed: more than 5 shows 5, the important point kept, furthest from base first', rows.map(r => r.name).join() === 'p6,p5,p4,p3,alarm', rows.map(r => r.name).join());
 }

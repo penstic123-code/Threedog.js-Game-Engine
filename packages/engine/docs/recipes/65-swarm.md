@@ -1,5 +1,10 @@
 # Swarm: shots, crowds, pickups, debris by the thousand
 
+> **Covers:** swarm: thousands of shots, crowds, pickups or debris in one draw.
+> **Use when:** very many simple moving things.
+> **Shortest:** `engine.use(swarm())`, then `engine.swarm({ name, capacity, geometry, material })`.
+> **Sections:** Which tool for many · The id rule handles · Hits near · The same thing in · Drawing · Time, saves, limits · Pure picture GPU compute
+
 ```js
 import * as THREE from 'three';
 import { swarm } from 'threedog';
@@ -8,12 +13,12 @@ const bullets = engine.swarm({
   name: 'bullets', capacity: 4096,
   geometry: new THREE.SphereGeometry(0.1, 6, 4),
   material: new THREE.MeshBasicMaterial({ color: 0xffffff }),
-  fields: ['vx', 'vz', 'life'],                        // your own number columns, beside x, y, z
+  fields: ['vx', 'vz', 'life'],  // your own number columns, beside x, y, z
 });
-bullets.onStep((d, i, dt) => {                         // set once; runs every fixed step, for each live object
+bullets.onStep((d, i, dt) => {  // set once; runs every fixed step, for each live object
   d.x[i] += d.vx[i] * dt;
   d.z[i] += d.vz[i] * dt;
-  return (d.life[i] -= dt) > 0;                        // false removes it; anything else keeps it
+  return (d.life[i] -= dt) > 0;  // false removes it; anything else keeps it
 });
 engine.onFixed(() => {
   if (engine.input.pressed('fire')) bullets.spawn({ x: 0, y: 1, z: 0, vx: 20, life: 2 });
@@ -45,9 +50,9 @@ Two numbers, never mixed up.
 `swarm.row(handle)` turns a handle into today's row, -1 when it is gone. `free` takes a handle; given a row by mistake it throws `[swarm-handle]`.
 ```js
 const enemies = engine.swarm({ name: 'enemies', capacity: 2000, fields: ['hp'] });
-let target = enemies.spawn({ x: 5, z: 2, hp: 3 });     // a handle: safe to keep
+let target = enemies.spawn({ x: 5, z: 2, hp: 3 });  // a handle: safe to keep
 engine.onFixed(() => {
-  const i = enemies.row(target);                       // today's row, -1 once it died
+  const i = enemies.row(target);  // today's row, -1 once it died
   if (i < 0) return;
   enemies.data.hp[i] -= 1;
   if (enemies.data.hp[i] <= 0) enemies.free(target);
@@ -68,7 +73,7 @@ shots.onStep((d, i, dt) => {
   crowd.near(d.x[i], d.z[i], 0.6, (c, j) => {
     hit = true;
     if ((c.hp[j] -= 1) <= 0) crowd.free(c.id[j]);
-    return false;                                      // false stops the query: this shot is spent
+    return false;  // false stops the query: this shot is spent
   });
   return !hit;
 });
@@ -88,7 +93,7 @@ const creeps = engine.swarm({ name: 'creeps', capacity: 500, fields: ['along', '
 const towers = [{ x: 4, z: 4, target: -1 }];
 engine.onFixed(() => {
   for (const t of towers) {
-    if (creeps.row(t.target) >= 0) continue;           // still alive: keep shooting it
+    if (creeps.row(t.target) >= 0) continue;  // still alive: keep shooting it
     t.target = -1;
     creeps.near(t.x, t.z, 8, (d, i) => { t.target = d.id[i]; return false; });
   }
@@ -131,10 +136,10 @@ WebGPU device to be worth it: without one, use `engine.particles` or a swarm. Pi
 code needs an answer back: reading a GPU buffer takes frames, so `near` and hits are out.
 Build it with three's TSL as in three's own compute examples (an `instancedArray` buffer, compute nodes, a `SpriteNodeMaterial` reading the buffer through `positionNode`). What the engine adds is where each call goes:
 ```js fragment
-import 'threedog/tsl';                                // before createEngine
-const gpu = /** @type {any} */ (engine.renderer);     // a WebGPURenderer: the engine's type also covers WebGL
-await gpu.computeAsync(seed);                         // once, to fill the buffer
-engine.onFrame(d => { uDt.value = engine.frozen ? 0 : d; });   // time as a uniform set here, so a freeze stops the snow
-engine.onRender(() => { gpu.compute(fall); });        // the shader here, so it runs once per drawn frame
-snow.frustumCulled = false;                           // the sprite's own bounds know nothing of the flakes
+import 'threedog/tsl';  // before createEngine
+const gpu = /** @type {any} */ (engine.renderer);  // a WebGPURenderer: the engine's type also covers WebGL
+await gpu.computeAsync(seed);  // once, to fill the buffer
+engine.onFrame(d => { uDt.value = engine.frozen ? 0 : d; });  // time as a uniform set here, so a freeze stops the snow
+engine.onRender(() => { gpu.compute(fall); });  // the shader here, so it runs once per drawn frame
+snow.frustumCulled = false;  // the sprite's own bounds know nothing of the flakes
 ```

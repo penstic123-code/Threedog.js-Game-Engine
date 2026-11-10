@@ -11,6 +11,21 @@ export function forcedTier(search = typeof location === 'undefined' ? '' : locat
   return TIERS.includes(t) ? t : null;
 }
 
+/** @type {WeakMap<any, Set<() => void>>} per engine: the parts that rebuild when engine.tier changes */
+const FOLLOWERS = new WeakMap();
+/**
+ * Follow engine.tier while running: fn runs once after every change (a preset, the device found at start). Why one notice: the post chain followed
+ * the tier and the cascades read it only when made, so a preset changed one and not the other (GPT review l2-render 2). Pixel ratio does not follow
+ * here: a settings preset writes its own ratio, and a second writer would undo the player's. @param {any} e @param {() => void} fn @returns {{ remove(): void }}
+ */
+export function onTierChange(e, fn) {
+  if (!FOLLOWERS.has(e)) FOLLOWERS.set(e, new Set());
+  FOLLOWERS.get(e).add(fn);
+  return { remove: () => { FOLLOWERS.get(e)?.delete(fn); } };
+}
+/** The tier stack's onChange (core/engine/services.js) @param {any} e */
+export function tierChanged(e) { for (const fn of [...(FOLLOWERS.get(e) ?? [])]) fn(); }
+
 /** The name under engine.saves.storageKey of a player's MSAA choice */
 export const MSAA_KEY = 'msaa';
 /**

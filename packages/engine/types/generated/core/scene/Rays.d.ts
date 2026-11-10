@@ -9,7 +9,7 @@ export class Rays {
     /** The three.js Raycaster (firstHitOnly is on) @type {any} @experimental */
     ray: any;
     /**
-     * Register a static object and every mesh under it (an array also works; meshes over 256 triangles get a BVH); occluder: true also blocks the camera. Returns a handle { remove() }.
+     * Register a static object and every mesh under it (an array also works; meshes over 256 triangles get a BVH); occluder: true also blocks the camera. Returns a handle { remove() }. Matrices are read once per tick and frame: a registered mesh moved between two rays of one step needs updateMatrixWorld() first.
      * Only visible objects are hit. Something that is merely not drawn is still hit: batched originals, far hlod originals and the full model of a far assets.lod sit on a reserved layer, with their visible true.
      * Unregisters automatically on geometry dispose or engine.remove.
      * @param {THREE.Object3D | THREE.Object3D[]} obj
@@ -20,8 +20,6 @@ export class Rays {
     addStatic(obj: THREE.Object3D | THREE.Object3D[], opts?: {
         occluder?: boolean;
     }): Handle;
-    /** Unregister every mesh under the object (engine.remove calls this automatically) @param {THREE.Object3D} obj @experimental */
-    forget(obj: THREE.Object3D): void;
     /** A module merges its own hits (rigid adds rigid bodies; asked only when targets is 'all'). Returns a handle { remove() } @param {RayProvider} fn @returns {Handle} @experimental */
     addProvider(fn: RayProvider): Handle;
 }

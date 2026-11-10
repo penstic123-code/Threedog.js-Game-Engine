@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import * as TG from 'three/webgpu';
 import { Fn, float, vec3, vec4, positionGeometry, positionLocal, positionWorld, positionView, positionViewDirection, normalView, faceDirection,
-  modelWorldMatrix, cameraPosition, normalize, abs, diffuseColor, color } from 'three/tsl';
+  modelWorldMatrix, cameraPosition, normalize, abs, floor, diffuseColor, color } from 'three/tsl';
 import * as pub from 'threedog/tsl';
 import { createEngine } from '../../index.js';
 import { bindUniforms } from '../../render/engineUniforms.js';
@@ -110,19 +110,47 @@ const detailGLSL = (kind, on) => new THREE.ShaderMaterial({ vertexShader: VERT, 
   uniforms: { ...engine.uniforms, uBase: { value: new THREE.Color(0.6, 0.5, 0.4) } }, defines: { ...(on ? { FX_DETAIL: 1 } : {}), DETAIL_KIND: kind } });
 const detailTSL = kind => Object.assign(new TG.MeshBasicNodeMaterial(), {
   colorNode: vec3(0.6, 0.5, 0.4).mul(detailNoise(positionWorld.xz.mul(DETAIL_SCALE), kind, DETAIL_OCT).rgb.add(0.5)) });
-// GLSL bump: the same line the `detail` patch writes into three's normal chunk, with the noise height at the world position
-const bumpGLSL = on => {
-  const m = new THREE.MeshLambertMaterial({ color: 0xb0a080 });
-  if (on) m.onBeforeCompile = s => {
-    s.vertexShader = 'varying vec3 vTdW;\n' + s.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\nvTdW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-    s.fragmentShader = '#include <threedog_detail>\nvarying vec3 vTdW;\n' + s.fragmentShader.replace('#include <normal_fragment_maps>',
-      `#include <normal_fragment_maps>\nnormal = threedogDetailBump(-vViewPosition, normal, threedogDetailNoise(vTdW.xz * ${DETAIL_SCALE.toFixed(2)}, 0, ${DETAIL_OCT.toFixed(1)}).a, ${BUMP.toFixed(2)}, faceDirection);`);
-  };
-  return m;
-};
-const bumpTSL = () => Object.assign(new TG.MeshLambertNodeMaterial({ color: 0xb0a080 }), {
-  normalNode: detailBump(positionView, normalView, detailNoise(positionWorld.xz.mul(DETAIL_SCALE), 0, DETAIL_OCT).a, BUMP, faceDirection) });
-
+// The shared hash / value noise drawn raw (gray = 0.6 * (0.5 + value)), so their own value range is measured and compared, not only through detail.
+// 'hash' feeds cells (floor); 'hashFract' fractional inputs, fine cells times FRACT_STEP: 27 of them share one integer cell, so a per-cell
+// hash would draw flat blocks, while the 1.0 contract (any vec2 in, a value per input) changes value from one fine cell to the next.
+// Why not a raw position: a varying differs in its last bits between WebGL and WebGPU (real WebGPU: 24% of pixels), and a hash of the bits
+// is exact only for the same floats; a cell times a constant is one correctly rounded multiply, the same float on both.
+const FRACT_STEP = 0.0371;
+const RAW_FRAG = `#include <threedog_noise>
+varying vec3 vWorld;
+void main(){
+  float n = 0.0;
+  #ifdef FX_RAW
+  n = RAW_KIND == 0 ? threedogNoise(vWorld.xz * ${DETAIL_SCALE.toFixed(2)}) : RAW_KIND == 1 ? threedogHash(floor(vWorld.xz * ${(DETAIL_SCALE * 4).toFixed(2)}))
+    : threedogHash(floor(vWorld.xz * 8.0) * ${FRACT_STEP});
+  #endif
+  gl_FragColor = vec4(vec3(0.6 * (0.5 + n)), 1.0);
+}`;
+const rawGLSL = (kind, on) => new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: RAW_FRAG, uniforms: { ...engine.uniforms },
+  defines: { ...(on ? { FX_RAW: 1 } : {}), RAW_KIND: kind } });
+const rawTSL = kind => Object.assign(new TG.MeshBasicNodeMaterial(), {
+  colorNode: vec3((kind === 0 ? pub.noise(positionWorld.xz.mul(DETAIL_SCALE)) : kind === 1 ? pub.hash(floor(positionWorld.xz.mul(DETAIL_SCALE * 4)))
+    : pub.hash(floor(positionWorld.xz.mul(8)).mul(FRACT_STEP))).add(0.5).mul(0.6)) });
+// The bump compared by its normal, not by a lit color: the two backends take screen-space derivatives differently (WGSL leaves dpdx coarse or
+// fine to the device), and a lit color turns a degree of normal difference into a pixel difference. Normal drawn as color (n * 0.5 + 0.5).
+// At BUMP_SCALE a pattern cell spans tens of pixels, as on a live bump (the detail patch fades the bump out where a cell nears a pixel); at
+// DETAIL_SCALE the finest octave is 2 pixels wide and coarse vs fine derivatives of it disagree everywhere (real WebGPU: 61% over 10 degrees).
+const BUMP_SCALE = 0.25;
+const NORMAL_VERT = `varying vec3 vVP; varying vec3 vN; varying vec3 vWorld;
+void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); vVP = -mv.xyz; vN = normalMatrix * normal;
+  vWorld = (modelMatrix * vec4(position, 1.0)).xyz; gl_Position = projectionMatrix * mv; }`;
+const NORMAL_FRAG = `#include <threedog_detail>
+varying vec3 vVP; varying vec3 vN; varying vec3 vWorld;
+void main(){
+  vec3 n = normalize(vN);
+  #ifdef FX_BUMP
+  n = threedogDetailBump(-vVP, n, threedogDetailNoise(vWorld.xz * ${BUMP_SCALE.toFixed(2)}, 0, ${DETAIL_OCT.toFixed(1)}).a, ${BUMP.toFixed(2)}, gl_FrontFacing ? 1.0 : -1.0);
+  #endif
+  gl_FragColor = vec4(n * 0.5 + 0.5, 1.0);
+}`;
+const normalGLSL = on => new THREE.ShaderMaterial({ vertexShader: NORMAL_VERT, fragmentShader: NORMAL_FRAG, defines: on ? { FX_BUMP: 1 } : {} });
+const normalTSL = () => Object.assign(new TG.MeshBasicNodeMaterial(), {
+  colorNode: detailBump(positionView, normalView, detailNoise(positionWorld.xz.mul(BUMP_SCALE), 0, DETAIL_OCT).a, BUMP, faceDirection).mul(0.5).add(0.5) });
 // ---------- lighting: wrap / shadowTint / rim on a shadowed Lambert scene ----------
 // GLSL: the engine's real `lighting` patch (it calls the callable chunk). TSL: the lighting slot as E2 found it (experiments/webgpu/e2/tsl/lightingSlot.js):
 // wrap the material's LightingModel, capture the sun in direct(), shape reflectedLight at the end of start() (= lights_fragment_end).
@@ -253,6 +281,25 @@ const shotGPU = async (r, scene) => { r.setRenderTarget(gpuRT); r.setClearColor(
   const b = new Uint8Array(await r.readRenderTargetPixelsAsync(gpuRT, 0, 0, W, H)); r.setRenderTarget(null); return b; };
 /** share of pixels pixelmatch (threshold 0.1) calls different, in % */
 const diff = (a, b) => +(100 * pixelmatch(a, b, null, W, H, { threshold: 0.1 }) / (W * H)).toFixed(3);
+/** mean / std of the drawn value (R = 255 * 0.6 * (0.5 + value)) over the drawn pixels: the noise's own range, before vs after a change */
+const stats = a => { let n = 0, s = 0, s2 = 0;
+  for (let i = 0; i < a.length; i += 4) { if (a[i] + a[i + 1] + a[i + 2] <= 30) continue; const v = a[i] / 255 / 0.6 - 0.5; n++; s += v; s2 += v * v; }
+  const m = s / n; return { mean: +m.toFixed(3), std: +Math.sqrt(s2 / n - m * m).toFixed(3) }; };
+/** Angle between two normal pictures (n * 0.5 + 0.5) per drawn pixel: share over ANGLE_LIMIT degrees in %, median and 99th percentile in degrees */
+const ANGLE_LIMIT = 10;
+const angles = (a, b) => { const d = [];
+  for (let i = 0; i < a.length; i += 4) {
+    if (a[i] + a[i + 1] + a[i + 2] <= 30 || b[i] + b[i + 1] + b[i + 2] <= 30) continue;
+    const u = [0, 1, 2].map(k => a[i + k] / 127.5 - 1), v = [0, 1, 2].map(k => b[i + k] / 127.5 - 1);
+    const c = (u[0] * v[0] + u[1] * v[1] + u[2] * v[2]) / Math.hypot(...u) / Math.hypot(...v);
+    d.push(Math.acos(Math.min(1, Math.max(-1, c))) * 180 / Math.PI);
+  }
+  d.sort((x, y) => x - y);
+  return { over: +(100 * d.filter(x => x > ANGLE_LIMIT).length / Math.max(1, d.length)).toFixed(3), p50: +(d[Math.floor(d.length * 0.5)] ?? 0).toFixed(2), p99: +(d[Math.floor(d.length * 0.99)] ?? 0).toFixed(2), px: d.length }; };
+/** share of drawn pixels (%) whose red equals the pixel to their right: ~100 for flat blocks, ~1 for a value per pixel */
+const same = a => { let n = 0, k = 0;
+  for (let i = 0; i < a.length - 4; i += 4) { if ((i / 4) % W === W - 1 || a[i] + a[i + 1] + a[i + 2] <= 30 || a[i + 4] + a[i + 5] + a[i + 6] <= 30) continue; n++; if (a[i] === a[i + 4]) k++; }
+  return +(100 * k / n).toFixed(2); };
 const lit = a => { let n = 0; for (let i = 0; i < a.length; i += 4) if (a[i] + a[i + 1] + a[i + 2] > 30) n++; return +(n / (W * H)).toFixed(2); };
 
 /** Set the engine values each case needs (clouds strong and small enough to vary across the ground, a season tint in both modes) */
@@ -262,8 +309,30 @@ function setValues(U, w = 1) {
   U.uGroundTint.value.setRGB(0.9, 0.6, 0.3); U.uGroundMix.value = 0; U.uFoliageTint.value.setRGB(0.8, 0.3, 0.1); U.uFoliageMix.value = 0.5;
 }
 
+// Structure of the hash over whole-number cells (one cell per pixel, cells -256..255): neighbor correlation along x, y and the diagonal.
+// Why: mean / std and parity cannot see stripes (both backends draw the same ones); a correlated hash shows here. GLSL only: parity covers TSL.
+function hashStructure() {
+  const N = 512, rt = new THREE.WebGLRenderTarget(N, N), q = new THREE.Mesh(new THREE.PlaneGeometry(2, 2)), oc = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  const sc = new THREE.Scene(); sc.add(q);
+  const out = {};
+  for (const [k, expr] of [['bits', 'threedogHash(c)'], ['cell', 'threedogHashStep(threedogHashCell(c))']]) {
+    q.material = new THREE.ShaderMaterial({ vertexShader: 'void main(){ gl_Position = vec4(position.xy, 0.0, 1.0); }',
+      fragmentShader: `#include <threedog_noise>
+void main(){ vec2 c = floor(gl_FragCoord.xy) - 256.0; gl_FragColor = vec4(vec3(${expr}), 1.0); }` });
+    gl.setRenderTarget(rt); gl.render(sc, oc); const b = new Uint8Array(N * N * 4); gl.readRenderTargetPixels(rt, 0, 0, N, N, b); gl.setRenderTarget(null);
+    const v = (x, y) => b[(y * N + x) * 4];
+    const corr = (dx, dy) => { let sa = 0, sb = 0, sab = 0, saa = 0, sbb = 0, n = 0;
+      for (let y = 0; y < N - 1; y++) for (let x = 0; x < N - 1; x++) { const a = v(x, y), c = v(x + dx, y + dy); sa += a; sb += c; sab += a * c; saa += a * a; sbb += c * c; n++; }
+      return +((sab / n - sa / n * sb / n) / Math.sqrt((saa / n - (sa / n) ** 2) * (sbb / n - (sb / n) ** 2))).toFixed(4); };
+    out[k] = { x: corr(1, 0), y: corr(0, 1), d: corr(1, 1) };
+    q.material.dispose();
+  }
+  rt.dispose();
+  return out;
+}
+
 window.fxParity = async () => {
-  const U = engine.uniforms, out = { cases: {} };
+  const U = engine.uniforms, out = { cases: {}, stats: {}, structure: hashStructure() };
   setValues(U);
   const gpu = await gpuRenderer(U);
   const CASES = {
@@ -273,7 +342,9 @@ window.fxParity = async () => {
       fx === 'tsl' ? tslMat([0.3, 0.6, 0.2], 'SEASON', 0) : glslMat(U, [0.3, 0.6, 0.2], fx ? 'SEASON' : null, 0)),
     ...Object.fromEntries(['grain', 'paper', 'stroke', 'dabs'].map((k, kind) => ['detailNoise.' + k,
       fx => groundScene(fx === 'tsl' ? detailTSL(kind) : detailGLSL(kind, fx))])),
-    detailBump: fx => litScene(fx === 'tsl' ? bumpTSL() : bumpGLSL(fx)),
+    noise: fx => groundScene(fx === 'tsl' ? rawTSL(0) : rawGLSL(0, fx)),
+    hash: fx => groundScene(fx === 'tsl' ? rawTSL(1) : rawGLSL(1, fx)),
+    hashFract: fx => groundScene(fx === 'tsl' ? rawTSL(2) : rawGLSL(2, fx)),
     ...Object.fromEntries(Object.entries(LIT).map(([k, o]) => ['lighting.' + k, fx => litScene(fx === 'tsl' ? litTSL(o) : litGLSL(fx ? o : null))])),
     waterWave: fx => waterScene(fx === 'tsl' ? waterTSL('WAVES') : waterGLSL(fx ? 'WAVES' : null)),
     'waterSurface.wave': fx => waterScene(fx === 'tsl' ? waterTSL('SURFACE', 'wave') : waterGLSL(fx ? 'SURFACE' : 'WAVES', 'wave')),
@@ -283,7 +354,12 @@ window.fxParity = async () => {
   for (const [name, make] of Object.entries(CASES)) {
     const on = shotGL(make(true)), off = shotGL(make(false)), tsl = await shotGPU(gpu, make('tsl'));
     out.cases[name] = { parity: diff(on, tsl), effect: diff(on, off), lit: lit(tsl) };
+    if (/^(noise|hash|detailNoise)/.test(name)) out.stats[name] = { gl: stats(on), tsl: stats(tsl) };
+    if (name === 'hashFract') out.stats[name].same = same(on);
   }
+  // detailBump: the bumped normal on both sides, compared by angle
+  const nOn = shotGL(litScene(normalGLSL(true))), nOff = shotGL(litScene(normalGLSL(false))), nTsl = await shotGPU(gpu, litScene(normalTSL()));
+  out.bump = { ...angles(nOn, nTsl), effect: angles(nOn, nOff).over };
 
   // a value changed on engine.uniforms reaches both sides (no second copy): wind 1 -> 2.5, same materials, drawn again
   const glWind = windScene(glslMat(U, [0.2, 0.5, 0.3], 'WIND')), gpuWind = windScene(tslMat([0.2, 0.5, 0.3], 'WIND'));

@@ -1,0 +1,4 @@
+node_modules
+dist
+# tool output and this machine's perf baseline (threedog shot --save-baseline): never shared
+.threedog

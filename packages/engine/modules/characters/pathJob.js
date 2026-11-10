@@ -29,7 +29,7 @@ function floorAt({ tiles, heights, lower }, x, z, y, climb) {
 
 /** Walkability from a batch: ground shape from the floor the walker is on, colliders tested exactly: the ground's own (terrain trees, sent with the batch) and the collision module's (mirrored grid) */
 function snapshotWalkable(batch, q, grid, trees) {
-  return (x, z, y) => !!floorAt(batch, x, z, y, q.climb)?.ok && !gridBlocks(trees, x, z, q.radius) && !(grid && gridBlocks(grid, x, z, q.radius, y, q.body));
+  return (x, z, y) => !!floorAt(batch, x, z, y, q.climb)?.ok && !gridBlocks(trees, x, z, q.radius) && !(grid && gridBlocks(grid, x, z, q.radius, y, q.body, q.passes));
 }
 
 /** The worker's engine.surface(x, z, y); no ground there (the void of terrain({ shape }), or outside the sent tiles) leaves the walker at its height, as surfaceOr does */

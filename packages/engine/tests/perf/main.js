@@ -155,7 +155,7 @@ if (mode === 'native') {
       engine.vegetation.define(name, { geometry: geo(model), lodGeometry: lod ? geo(lod) : undefined, ...rest });
     }
     engine.assets.manifest(worldArt);
-    engine.characters.createPlayer({ ...presets.player.thirdPerson, model: 'humanoid', spawn: { x: home.x + 4, z: home.z + 7 } });
+    engine.characters.addPlayer({ ...presets.player.thirdPerson, model: 'humanoid', spawn: { x: home.x + 4, z: home.z + 7 } });
   } else if (mode === 'props') {
     propsScene(engine);
   } else {
@@ -180,15 +180,16 @@ if (mode === 'native') {
     run(frames, { move = 0 } = {}) {
       engine.haltLoop();
       frame();   // warm-up
-      engine.profile(true);   // time module hooks
+      const timing = engine.profile() !== null;   // dev builds time modules all along: put it back as it was
+      engine.profile(true);   // time module hooks afresh
       renderMs = 0; sc.renders = sc.calls = 0;
       engine.input.autopilot = move ? { x: 0, y: 1, speed: move } : null;
       const t0 = performance.now();
       for (let i = 0; i < frames; i++) frame();
       const ms = (performance.now() - t0) / frames;
       engine.input.autopilot = null;
-      const modules = engine.profile();
-      engine.profile(false);
+      const modules = Object.fromEntries(Object.entries(engine.profile()).map(([k, p]) => [k, p.mean]));   // the run's average per frame
+      if (!timing) engine.profile(false);
       const info = engine.renderer.info.render;
       return { cpuMs: r2(ms), renderMs: r2(renderMs / frames), drawCalls: info.calls, triangles: info.triangles, shadowRenders: sc.renders,
         shadowCalls: Math.round(sc.calls / Math.max(1, sc.renders)), modules };
@@ -238,5 +239,6 @@ function skyLayers(e, { layers = [] } = {}) {
   layers.forEach((l, i) => e.sky.layer(l.name ?? `layer${i}`, l));
   return e;
 }
-window.threedogTest = { THREE, patchesOf, skyLayers, fakeAssets, engineWith, Character, characters, protoOf, neutralMaterial, isEngineMade, rampTexture, toGLB, applyEffects, patchMaterial, materialPatches, SLOTS, terrainMaterial, copyPatches, createEngine,
+import * as tsl from 'three/tsl';   // scene.fogNode = tsl.fog(...) for the fog readers (tests/specs/group-p5.mjs)
+window.threedogTest = { tsl, THREE, patchesOf, skyLayers, fakeAssets, engineWith, Character, characters, protoOf, neutralMaterial, isEngineMade, rampTexture, toGLB, applyEffects, patchMaterial, materialPatches, SLOTS, terrainMaterial, copyPatches, createEngine,
   injectUICSS, NOISE_GLSL, createTerrain, worldScene, worldArt, worldModels, sky, calendar, postEffects, outline, ShaderPass, CopyShader, water, weather, terrain, Reflector, world, grids, particles, pickups, triggers, music };   // packages/engine/tests/specs/c.mjs bake round-trip test uses it

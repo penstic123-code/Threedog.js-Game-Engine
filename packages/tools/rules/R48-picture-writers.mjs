@@ -16,6 +16,7 @@ const PROPS = ['toneMappingExposure', 'shadowMap.enabled', 'shadowMap.type', 'en
 export const WRITERS = [
   ['core/engine/startup.js', '*', 'the WebGL fallback copies every renderer setting onto the new renderer: a copy of the current value, not a decision'],
   ['render/shadows.js', 'shadowMap.enabled', 'engine.shadows, the shadow capability: the game asks for it'],
+  ['render/backend.js', 'toneMappingExposure', 'releaseRenderer gives back the value its borrow saved: a copy of the value before, not a decision'],
 ];
 
 /** The prop an assignment target ends in, or null (only property names count, no calls) */

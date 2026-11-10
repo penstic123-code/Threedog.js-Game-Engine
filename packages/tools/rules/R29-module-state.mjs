@@ -9,6 +9,7 @@ const ALLOW = [
   ['core/base/validate.js', 'page-wide by design and documented there: one validate switch and one warn-once set per page'],
   ['modules/timeline/Tween.js', 'tweenId: owner names for the page-wide allowOwned set must be unique across engines'],
   ['render/patches.js', 'deriving: re-entrancy flag around one synchronous patchMaterial call, always cleared in finally'],
+  ['core/scene/gameLights.js', 'areaTables: three keeps the RectAreaLight tables in page-wide statics, so loading them is once per page'],
 ];
 
 export default {

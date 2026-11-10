@@ -30,6 +30,7 @@ import { loadGray } from '../../core/scene/grayMap.js';
 import { prepareShape, voidWatcher } from './terrainShapeMain.js';
 import { TerrainDraw, checkGround } from './draw.js';
 import { codedError } from '../../core/base/errorHints.js';
+import { onTierChange } from '../../core/scene/tier.js';
 
 const NO_HEIGHT = 'terrain(): no height function or height map was given, so the ground is flat gray at y = 0 (a placeholder, not a picture). '
   + 'Pass terrain({ height, groundType }) or a preset, e.g. terrain({ ...terrainPreset() }) with terrainPreset from @threedog/terrain-noise';
@@ -105,10 +106,12 @@ export function terrain(opts = {}) {
       const hm = state.cfg.heightmap, mk = state.cfg.shape?.mask;
       const needH = hm?.url && !hm.data, needM = mk?.url && !mk.data;
       if (!needH && !needM) return;
-      const cfg2 = state.cfg = { ...state.cfg };   // recolor rebuilds from the current config
-      if (needH) cfg2.heightmap = { ...hm, ...await loadGray(hm.url), url: undefined };
-      if (needM) cfg2.shape = { ...cfg2.shape, mask: { ...mk, ...await loadGray(mk.url), url: undefined } };
-      w.reinit(cfg2, speciesRules(w));
+      // the live object, edited in place and never swapped for a copy: the tier listener (terrainDraw install) edits colorResolution on the same object while the images
+      // load, and a copy taken before the await would reinit the workers at the old resolution
+      const live = state.cfg;
+      if (needH) live.heightmap = { ...hm, ...await loadGray(hm.url), url: undefined };
+      if (needM) live.shape = { ...live.shape, mask: { ...mk, ...await loadGray(mk.url), url: undefined } };
+      w.reinit(live, speciesRules(w));
     },
     isReady(e) { return e.stream.sources().every(s => w.readyAt(s)); },
     dispose() { w.dispose(); },
@@ -122,6 +125,17 @@ export function terrain(opts = {}) {
       // the colors the workers bake into each chunk: no chunk is generated before the first frame, so this reinit only swaps the config
       state.cfg = { ...state.cfg, ...drawConfig(e, cfg) };
       w.reinit(state.cfg, speciesRules(w));
+      // the low-tier color map follows the tier (a stored preset arrives after this install). A resolution the game gave in terrain({}) stays; recolor cannot set one
+      // (it is not in recolor's keys), so the only other writer is this listener. Followed by reinit, the path recolor takes too: every chunk is generated again, which is
+      // fine at a settings change (and before the first frame it is free). Only colorResolution is changed, on the live object: init above may still be loading images into it
+      ctx.track(onTierChange(e, () => {
+        const c = state.cfg;
+        if (cfg.colorResolution != null) return;
+        const want = drawConfig(e, { ...c, colorResolution: undefined }).colorResolution;
+        if (want === c.colorResolution) return;
+        if (want == null) delete c.colorResolution; else c.colorResolution = want;   // a key holding undefined would hide createTerrain's default
+        w.reinit(c, speciesRules(w));
+      }));
       // effects false (terrain({ material, effects: false })): the game's material is drawn untouched
       drawPart = w.drawPart = new TerrainDraw(e, w, { material, effects: material == null || effects !== false, detail, sideMat,
         config: { get: () => state.cfg, set: c => { state.cfg = c; }, species: () => speciesRules(w) } });

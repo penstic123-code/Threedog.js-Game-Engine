@@ -30,8 +30,8 @@ export const specs = [
         // 2. per-type rules: a warning at the write, with the rule and the fix; the write goes through
         const pictureOp = err(() => engine.use({ name: 'mtPictureOp', type: 'picture', install(e) { e.ops.define('mt.buy', { run() {} }); } }));
         const pictureWorld = err(() => engine.use({ name: 'mtPictureWorld', type: 'picture', install(e) { e.world.add({ kind: 'mtThing', position: { x: 0, y: 0, z: 0 } }); } }));
-        const uiKeys = err(() => engine.use({ name: 'mtUiKeys', type: 'ui', install(e, ctx) { ctx.input.action('mtOpen'); ctx.input.bind('mtOpen', ['KeyM']); } }));
-        const uiSave = err(() => engine.use({ name: 'mtUiSave', type: 'ui', install(e) { e.saves.register('mtPanel', { save: () => 1, load() {} }); } }));
+        const uiKeys = err(() => engine.use({ name: 'mtUiKeys', type: 'ui', install(e, ctx) { ctx.input.define('mtOpen'); ctx.input.bind('mtOpen', ['KeyM']); } }));
+        const uiSave = err(() => engine.use({ name: 'mtUiSave', type: 'ui', install(e) { e.saves.define('mtPanel', { save: () => 1, load() {} }); } }));
         // a hook going against the rule later is seen too (the frame hook runs as the module)
         let hooked = false;
         engine.use({ name: 'mtPictureLater', type: 'picture', frame(dt, e) { if (!hooked) { hooked = true; e.ops.define('mt.later', { run() {} }); } } });
@@ -41,7 +41,7 @@ export const specs = [
         out.thrown = [pictureOp, pictureWorld, uiKeys, uiSave].map(e => e?.message ?? null);
         out.said = said.filter(s => s.includes('[module-type-rule]'));
         out.wentThrough = engine.has('mtPictureOp') && engine.ops.defs.has('mt.buy') && engine.has('mtUiKeys') && engine.saves.providers.has('mtPanel');
-        const fine = err(() => engine.use({ name: 'mtRules', type: 'rules', install(e) { e.ops.define('mt.ok', { run: () => 1 }); e.saves.register('mtRules', { save: () => 1, load() {} }); } }));
+        const fine = err(() => engine.use({ name: 'mtRules', type: 'rules', install(e) { e.ops.define('mt.ok', { run: () => 1 }); e.saves.define('mtRules', { save: () => 1, load() {} }); } }));
         out.rulesFine = !fine && engine.ops.defs.has('mt.ok');
         // 3. requires names a capability: both fixes
         const need = err(() => engine.use({ name: 'mtNeedy', type: 'rules', requires: ['scoreboard'], install() {} }));
@@ -81,7 +81,7 @@ export const specs = [
       check('2. picture module defining an op: warned with rule + fix', said(/mtPictureOp \(type 'picture'\) defined op mt\.buy.*Fix: define the op in a rules/s), JSON.stringify(r.said));
       check('2. picture module writing a world record: warned', said(/world records are game state.*ops\.run/s), JSON.stringify(r.said));
       check('2. ui module binding keys: warned', said(/bound keys.*engine\.input\.bind/s), JSON.stringify(r.said));
-      check('2. ui module registering a save part: warned', said(/registered save part 'mtPanel'/), JSON.stringify(r.said));
+      check('2. ui module registering a save part: warned', said(/defined save part 'mtPanel'/), JSON.stringify(r.said));
       check('2. a picture module doing it in its frame hook is seen too', said(/mtPictureLater/), JSON.stringify(r.said));
       check('2. the same writes from a rules module are fine', r.rulesFine);
       check('3. missing capability: names both fixes (the engine part, or your own provides)', r.need.code === 'module-requires'

@@ -25,7 +25,7 @@ Not used yet (check these before writing the system yourself):
 - inventory: items, stacks, containers and pickups: `inventory()` + key map presets.bindings.inventory, content/items.js (node_modules/threedog/docs/recipes/03-items-pickups.md)
 - collision: walls and blocking for characters: `collision()` (in openWorld), template `collide` (node_modules/threedog/docs/recipes/18-world.md)
 - characters: player and NPC movement, spawn, schedules: `characters()` (in openWorld), content/npcs.js (node_modules/threedog/docs/recipes/02-npc.md)
-- saves: save your own state: `engine.saves.register(key, { version, save, load })` (node_modules/threedog/docs/recipes/20-content-actions-save.md)
+- saves: save your own state: `engine.saves.define(key, { version, save, load })` (node_modules/threedog/docs/recipes/20-content-actions-save.md)
 - interactions: press a key near a thing: `interactions({ ...presets.interactions.nearest })` (E, nearest; the game picks the pick mode and keys), template `interact: { label, op }` (node_modules/threedog/docs/recipes/30-templates.md)
 - quests: goals with steps, conditions and rewards: `quests()` + key map presets.bindings.quests, content/quests.js (node_modules/threedog/docs/recipes/04-quests.md)
 - swarm: many same-kind moving things (shots, crowds, flocks, debris) in typed arrays, drawn as one mesh: `swarm()` (node_modules/threedog/docs/recipes/65-swarm.md)

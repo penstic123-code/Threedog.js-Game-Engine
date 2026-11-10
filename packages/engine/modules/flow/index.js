@@ -27,7 +27,7 @@ const FLOW_PARAMS = keysSchema(['start']);
  */
 export function flow(opts = {}) {
   readParams('flow', FLOW_PARAMS, opts);
-  let e = null, sig = null, chain = Promise.resolve(), held = null, frozen = null;
+  let e = null, sig = null, chain = Promise.resolve(), held = null, frozen = null, leaving = false, queued = null;
   const states = new Map([['playing', {}], ['paused', { freeze: true, lockInput: true }]]);
   // turn freeze / input lock on or off for one state
   const hold = (def, on) => {
@@ -46,15 +46,18 @@ export function flow(opts = {}) {
     go(name) {
       const to = states.get(name);
       if (!to) { warnMissing('flowState', name, [...states.keys()]); return; }
+      // a go() asked from inside an exit waits for it: the state is still the old one there, and leaving it twice would recurse or overwrite the state just entered
+      if (leaving) { queued = name; return; }
       const from = api.state, def = states.get(from);
       if (from === name) return;
-      def.exit?.(e, name);
+      leaving = true;
+      try { def.exit?.(e, name); } catch (err) { queued = null; throw err; } finally { leaving = false; }
       hold(def, false);
       api.state = name;
       hold(to, true);
       if (to.music !== undefined) to.music === null ? e.music?.stop() : e.music?.play(to.music);
-      to.enter?.(e, from);
-      e.events.emit('flow:change', { from, to: name });
+      try { to.enter?.(e, from); e.events.emit('flow:change', { from, to: name }); } catch (err) { queued = null; throw err; }
+      if (queued !== null) { const next = queued; queued = null; api.go(next); }   // the exit's own go(), now that this change is complete
     },
     /** Scene transition: lock input → fade out → fade music → (autosave: 'auto' saves slot 'auto') → fn() → wait for modules ready → fade in → unlock. Repeated calls are queued.
      *  A new game or load that goes through before the fade out ends drops the transition, one still in line included, as if it was never asked: fn was written for the state that is gone.
@@ -78,7 +81,7 @@ export function flow(opts = {}) {
           if (autosave === 'auto') e.saves.save('auto');
           turn = stateTurn(e);   // from here until the far door stands, the world is between two states
           await e.ops.allow(async () => { await fn?.(); });   // the scene swap is loading: the ops guard lets its writes through
-          await whenSettled(e);
+          await whenSettled(e, undefined, true);
           if (sig?.aborted) return;
           if (m && prev && !m.current && !m.ruled && !replaced()) m.play(prev);   // no track rule: resume the previous track after the switch. A new game or load has its own music, however fn started it; a level load nobody awaited is still this playthrough
           await fadeScreen(e, 0, { seconds: fade });
@@ -113,7 +116,7 @@ export function flow(opts = {}) {
     dispose() { frozen?.remove(); held?.remove(); frozen = held = null; },
     // ?play / applyState({ play }): leave the start state (a title) the way its Start button does; session:start then goes to 'playing'
     stateKeys: ['play'],
-    applyState(e, { play }) { if (play != null && opts.start && opts.start !== 'playing' && api.state === opts.start) return e.session.newGame(); },
+    applyState(e, { play }, turn) { if (play != null && opts.start && opts.start !== 'playing' && api.state === opts.start) return e.session.newGame({ turn }); },   // inside the scene request's turn: in line it would wait for itself
     describe() { return { state: api.state, transitioning: api.transitioning }; },
   };
 }

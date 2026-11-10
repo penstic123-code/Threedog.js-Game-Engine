@@ -18,6 +18,9 @@ const run = async ({ page, check, ev }) => {
   const o = await ev(() => window.occlusionOutline());
   console.log('  outline numbers:', JSON.stringify(o));
   check(`outline with occlusion: ${o.boxes} boxes in view change no line (${o.differs} pixels)`, o.boxes > 0 && o.differs === 0, JSON.stringify(o));
+  // 不许绕开: shadow lights the engine makes (cascades on a settings / tier change) get the hidden layer at once, not at the next timed walk (~1 s of missing shadows)
+  const s = await ev(() => window.occlusionCascades());
+  check(`cascades built while culling hides: every fresh shadow camera sees hidden casters within 2 frames (took ${s.frames})`, s.hidden === 21 && s.lights >= 2 && s.frames >= 1 && s.frames <= 2, JSON.stringify(s));
   // 不许绕开: fallback 'webgl' rebuilds the boxes for the renderer that stayed
   const f = await ev(() => window.occlusionFallback());
   check('start() falling back to WebGLRenderer keeps culling running, on a WebGL query', f.webgl && f.query && !f.gpuHook, JSON.stringify(f));

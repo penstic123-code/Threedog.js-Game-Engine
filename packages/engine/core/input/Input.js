@@ -2,7 +2,7 @@
 // Why: keys can be rebound in settings, and on-screen key hints follow automatically.
 //
 // Who does what (one rule each, so an AI can predict it):
-//   - a module DECLARES actions and the context they belong to, never keys: ctx.input.action('choice1', { context: 'dialog', optional: true })
+//   - a module DECLARES actions and the context they belong to, never keys: ctx.input.define('choice1', { context: 'dialog', optional: true })
 //   - the GAME BINDS keys: createEngine({ bindings: { jump: ['Space'] } }), engine.input.bind('jump', ['Space']) or a whole preset map
 //     engine.input.bind(presets.bindings.dialogNumbers). The basics (WASD / arrows move, confirm, cancel, UI cursor) are the one default preset.
 //   - the PLAYER REBINDS: engine.input.rebind('jump', ['KeyJ']) (the settings menu calls it and saves it).
@@ -34,7 +34,7 @@ import { bindKeyboard } from './inputKeyboard.js';
 import { pollPad, keyLabel } from './inputPad.js';
 import { Seat, moveAxis } from './inputSeat.js';
 import { BASIC_KEYS, BASIC_LABELS, BOUND_LABELS } from './inputDefaults.js';
-import { initContexts, pushContext, readableMap, applyContexts, settledStack, BASE_CONTEXT } from './inputContext.js';
+import { initContexts, pushContext, readableMap, blockers, applyContexts, settledStack, BASE_CONTEXT } from './inputContext.js';
 
 const NONE = Object.freeze([]);
 const ACTION_OPTS = ['context', 'label', 'optional', 'keys', 'owner'];
@@ -43,7 +43,7 @@ const ACTION_OPTS = ['context', 'label', 'optional', 'keys', 'owner'];
 /** Input: read by "action", not by "key". Key names are the browser's KeyboardEvent.code, e.g. 'KeyE', 'Space', 'ShiftLeft'; gamepad keys are 'PadA' etc. */
 export class Input {
   /** @internal */
-  constructor(engine, canvas, { joystick = 'auto', bindings = {}, padDeadzone = 0.18, padLookSpeed = 9 } = {}) {
+  constructor(engine, canvas, { joystick = 'auto', bindings = {}, padDeadzone = 0.18, padLookSpeed = 9, blockBrowserKeys = true } = {}) {
     /** @internal */ this.engine = engine;
     /** @internal */ this.canvas = canvas;
     /** @internal */ this.keys = new Set();
@@ -73,6 +73,7 @@ export class Input {
     /** @internal the shared point holding every action's keys (record id = action); its base is the default preset */
     this._keys = engine.stacks.define('input.keys', { kind: 'value', per: true, save: false, settingsSet: true, onChange: () => { this._readable = null; } });
     /** @internal 'Touch:<action>' keys of on-screen buttons (inputTouch.js), added to keysOf */ this._touchKeys = new Map();
+    /** @internal createEngine({ blockBrowserKeys }): while playing, bound keys do not reach the browser (inputKeyboard.js) */ this.blockBrowserKeys = blockBrowserKeys;
     /** @internal */ this.padDeadzone = padDeadzone;
     /** @internal */ this.padLookSpeed = padLookSpeed;
     /** @internal */ this.padStick = { x: 0, y: 0 };
@@ -96,7 +97,7 @@ export class Input {
 
   // ---------- actions ----------
   /**
-   * Declare an action: its context and display name, never its keys (the game binds those). Modules call ctx.input.action (owned by the module,
+   * Declare an action: its context and display name, never its keys (the game binds those). Modules call ctx.input.define (owned by the module,
    * removed with it); a game's own action can pass keys to declare and bind in one line.
    * context: the input context it is read in (default 'walk'); readable only while that context is on the stack and not shadowed, see push().
    * optional: true = the module works without it (number keys for dialogue choices), so reading it unbound is silent.
@@ -104,16 +105,16 @@ export class Input {
    * @param {string} name
    * @param {{ context?: string, label?: string, optional?: boolean, keys?: string | string[], owner?: string }} [o]
    * @returns {{ name: string, remove(): void }} remove() takes the declaration (and keys given here) away
-   * @example ctx.input.action('choice1', { context: 'dialog', label: 'dialogue.choice', optional: true });   // in a module: no keys
-   * @example engine.input.action('brake', { context: 'vehicle', keys: ['KeyB', 'PadLT'] });                     // a game's own action, bound at once
+   * @example ctx.input.define('choice1', { context: 'dialog', label: 'dialogue.choice', optional: true });   // in a module: no keys
+   * @example engine.input.define('brake', { context: 'vehicle', keys: ['KeyB', 'PadLT'] });                     // a game's own action, bound at once
    */
-  action(name, o = {}) {
+  define(name, o = {}) {
     const bad = Object.keys(o).filter(k => !ACTION_OPTS.includes(k));
-    if (bad.length) throw codedError('unknown-option', `input.action('${name}', { ${bad.join(', ')} }): known options are ${ACTION_OPTS.join(', ')}. Keys are bound by the game: engine.input.bind('${name}', ['KeyX'])`, TypeError);
+    if (bad.length) throw codedError('unknown-option', `input.define('${name}', { ${bad.join(', ')} }): known options are ${ACTION_OPTS.join(', ')}. Keys are bound by the game: engine.input.bind('${name}', ['KeyX'])`, TypeError);
     const { context = BASE_CONTEXT, label, optional = false, keys, owner = 'game' } = o;
     const cur = this.actions.get(name);
     if (cur?.by && cur.by !== owner && cur.context !== context) {
-      throw codedError('input-action-context', `input.action('${name}'): '${cur.by}' already declared it in context '${cur.context}', now '${owner}' declares it in '${context}'. `
+      throw codedError('input-action-context', `input.define('${name}'): '${cur.by}' already declared it in context '${cur.context}', now '${owner}' declares it in '${context}'. `
         + `Rule: an action belongs to one context. Fix: give one of them another name (e.g. '${owner}.${name}'), or declare it in the same context`);
     }
     // a second owner declaring the same action in the same context shares the first declaration (two modules may read one 'interact')
@@ -201,7 +202,7 @@ export class Input {
   /** @internal */
   _keyUp(code) { this._muted.delete(code); if (this.keys.delete(code)) { this.justReleased.add(code); this._accR.add(code); } }
   /**
-   * A local player's share of the input on a shared screen: its own keys and gamepad, read like engine.input (axis, down, pressed, released). Pass it to createPlayer({ id, input }).
+   * A local player's share of the input on a shared screen: its own keys and gamepad, read like engine.input (axis, down, pressed, released). Pass it to addPlayer({ id, input }).
    * pad: gamepad index; that pad leaves engine.input and answers the game's pad bindings here. keys: { action: keys } for this seat alone. Two seats on one pad or key throw `input-seat`.
    * @example const two = engine.input.seat({ pad: 1, keys: { moveForward: 'KeyI', moveBack: 'KeyK', moveLeft: 'KeyJ', moveRight: 'KeyL', jump: 'KeyU' } });
    * @param {{ pad?: number, keys?: Record<string, string | string[]> }} [opts] @returns {Seat}
@@ -230,12 +231,13 @@ export class Input {
   /**
    * All keys bound to an action: the player's rebinding, else the game's bind, else the default preset (basics only); plus its touch button
    * @param {string} action @returns {readonly string[]}
-   * @experimental
    */
   keysOf(action) {
     const k = this._keys.value(action, BASIC_KEYS[action] ?? null) ?? NONE, t = this._touchKeys.get(action);
     return t ? [...k, t] : k;
   }
+  /** @internal Every key that can drive an action: its bound keys, plus each seat's own keys and its '@pad' gamepad keys. The context switch lets go of all of them @param {string} action @returns {string[]} */
+  _sourcesOf(action) { return [...new Set([...this.keysOf(action), ...this.seats.flatMap(s => s._keysOf(action))])]; }
   /** @internal reading an undeclared action is most likely a misspelled name; a declared one nobody bound says how to bind it (dev, once) */
   _known(action) {
     const a = this.actions.get(action);
@@ -269,7 +271,6 @@ export class Input {
   /**
    * Just released (which copy is read is the same as pressed; for things like release-to-fire after charging) @param {string} action @returns {boolean}
    * @example if (engine.input.released('fire')) shoot(charge);
-   * @experimental
    */
   released(action) { return this._has(action, 'released'); }
   /**
@@ -282,7 +283,7 @@ export class Input {
    * Push an input context (an action group, like a Unity Action Map). The top context shadows lower actions bound to the same key.
    * Opaque by default (nothing below is readable: menus, dialogue, cutscenes); { pass: true } lets unrelated lower actions keep working (vehicle, build mode).
    * Applies at the start of the next fixed step; actions it blocks lose their held state (no stuck keys after a menu closes). Join a context with
-   * input.action(name, { context }); menu keys: pressedRaw.
+   * input.define(name, { context }); menu keys: pressedRaw.
    * @param {string} name e.g. 'vehicle', 'dialog', 'menu', 'cutscene', 'build' (the base context is 'walk')
    * owner (default the name) is who pushed it, listed in describe().holds.input
    * @param {{ pass?: boolean, owner?: string }} [opts]
@@ -320,6 +321,19 @@ export class Input {
     this._known(action);
     const o = typeof owner === 'string' ? { owner } : owner;
     return this.engine.mod('input.gate', { ...o, id: action });
+  }
+  /**
+   * Why a game action cannot be read right now, for a driver about to press it or that pressed it and saw nothing happen; [] when it is readable. Every cause,
+   * top down: an opaque input context above the action's own ('win-settings', 'dialogue'...), 'shadowed-by:<context>' (a pass-through context above binds
+   * the same key), or 'context-off:<context>' alone (its own context is not on the stack); then the owners of the action's gate. Pushes and removes
+   * count at once, as in holders. A real key is blocked the same way, so this is the game's rule, not the driver's.
+   * Without an action: every opaque context, which is runState.blockedBy's input part (one list, so the two never disagree)
+   * @param {string} [action] @returns {string[]}
+   * @internal
+   */
+  blockedBy(action) {
+    if (action == null) return this.holders.filter(h => !h.pass).map(h => h.context);
+    return [...blockers(this, action, settledStack(this)), ...(this._gated(action) ? this._gateStack.names(action) : [])];
   }
   /** @internal true while someone holds this action's gate */
   _gated(action) { return (this._gateStack ??= this.engine.stacks.get('input.gate')).size(action) > 0; }
@@ -363,6 +377,6 @@ export class Input {
 }
 
 export const handRolled = [
-  { kind: 'keys', seen: 'a raw keydown / keyup listener', use: "engine.input.action('jump', { label, keys }) in a module, the game binds keys with engine.input.bind (rebinding, contexts, gamepad); read engine.input.pressed(name) (recipe 58)", raw: /(?:^|[^\w.])(?:(?:window|document|self|globalThis|canvas|document\.body|[\w.]*domElement)\.)?(?:addEventListener\s*\(\s*['"]|on)key(?:down|up)\b/, yields: { kind: 'pause', raw: /['"]Escape['"]/ } },
+  { kind: 'keys', seen: 'a raw keydown / keyup listener', use: "engine.input.define('jump', { label, keys }) in a module, the game binds keys with engine.input.bind (rebinding, contexts, gamepad); read engine.input.pressed(name) (recipe 58)", raw: /(?:^|[^\w.])(?:(?:window|document|self|globalThis|canvas|document\.body|[\w.]*domElement)\.)?(?:addEventListener\s*\(\s*['"]|on)key(?:down|up)\b/, yields: { kind: 'pause', raw: /['"]Escape['"]/ } },
   { kind: 'lock', seen: 'an input lock of its own', use: "engine.input.push('ride', { owner }) takes the keys and h.remove() gives them back: no key sticks, and describe().holds.input shows who holds them (recipe 07 §2b)", quiet: /\b(engine|e|eng|ctx)\.input\.(push|gate)\b|\blockInput\b/, code: /\b(?:let|var)\s+(?:input|controls?|keys)(?:Locked|Disabled|Enabled|Frozen)\s*=/i, tags: false },
 ];

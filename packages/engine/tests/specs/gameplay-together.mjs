@@ -12,9 +12,9 @@ export const specs = [
         E.use(T.world(), T.collision(), T.characters(), T.inventory(), T.pickups(), T.triggers());
         await E.start(); E.haltLoop();
         E.inventory.define('coin', { name: 'Coin' });
-        E.characters.createPlayer({ control: 'camera', spawn: { x: 0, z: 0 } });
+        E.characters.addPlayer({ control: 'camera', spawn: { x: 0, z: 0 } });
         const seat = E.input.seat({ keys: { moveForward: 'KeyI' } });
-        E.characters.createPlayer({ id: 'two', input: seat, control: 'camera', spawn: { x: 20, z: 0 } });
+        E.characters.addPlayer({ id: 'two', input: seat, control: 'camera', spawn: { x: 20, z: 0 } });
         const entered = [];
         E.triggers.add({ shape: 'sphere', position: [20, 0, 0], radius: 3, tag: 'p2', onEnter: (t, who, id) => entered.push(id) });
         E.triggers.add({ shape: 'sphere', position: [0, 0, 0], radius: 3, tag: 'p1', onEnter: (t, who, id) => entered.push(id) });
@@ -82,7 +82,7 @@ export const specs = [
         const E = mk(T.createEngine, 'one-flow');
         E.use(T.world(), T.collision(), T.characters(), T.interactions({ pick: 'nearest' }), T.inventory(), T.pickups(), T.quests({ notify: false, checkInterval: 0.05 }), T.dialogue({ charsPerSecond: 0 }), T.triggers(), T.timeline());
         await E.start(); E.haltLoop();
-        const P = E.characters.createPlayer({ control: 'camera', spawn: { x: 0, z: 0 } });
+        const P = E.characters.addPlayer({ control: 'camera', spawn: { x: 0, z: 0 } });
         const steps = s => E.step(s, { render: false });
         const bag = E.inventory.of('player');
         E.inventory.define('gem', { name: 'Gem' }); E.inventory.define('medal', { name: 'Medal' });

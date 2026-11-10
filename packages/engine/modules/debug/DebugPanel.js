@@ -10,7 +10,7 @@ import { stats } from '../../render/backend.js';
 /** engine.debug.panel (the debug panel) */
 export class DebugPanel {
   /** @internal */
-  constructor(engine, { open = false } = {}) {
+  constructor(engine, { open = false } = {}, mod = null) {
     /** @internal */ this.engine = engine;
     /** Panel root element @type {HTMLElement} */
     this.el = document.createElement('div');
@@ -70,7 +70,7 @@ export class DebugPanel {
       return i;
     };
     if (e.calendar) {
-      bind('ts', () => e.clock.rate, v => e.mod('clock.rate', { owner: 'debug', set: v, layer: 'debug' }), v => v + '×');   // the panel's own entry: the game's rate comes back when it is ended
+      bind('ts', () => e.clock.rate, v => mod('clock.rate', { set: v, layer: 'debug' }), v => v + '×');   // ctx.mod: the module's own tracked entry, so the game's rate comes back when the panel leaves
       /** @internal */ this.tod = bind('tod', () => e.calendar.timeOfDay, v => e.calendar.timeOfDay = v, () => e.calendar.clock);
     }
     const ws = q('[data-s="weather"]');
@@ -124,13 +124,13 @@ const DEBUG_PANEL_PARAMS = keysSchema(['open']);
  */
 export function debug(opts = {}) {
   readParams('debugPanel', DEBUG_PANEL_PARAMS, opts);
-  let d = null; const prof = { n: 0, t: 0, cpu: 0 };
+  let d = null; const prof = { n: 0, t: 0 };
   return {
     name: 'debugPanel', skipKind: 'none', type: 'ui', params: DEBUG_PANEL_PARAMS, options: opts, label: 'Debug panel', optional: ['calendar', 'weather', 'terrain'],
     install(e, ctx) { e.i18n.add({ 'zh-CN': { 'module.debugPanel': '调试面板' }, en: { 'module.debugPanel': 'debug panel' } });
-      d = new DebugPanel(e, opts); e.debug.panel = d;
+      d = new DebugPanel(e, opts, ctx.mod); e.debug.panel = d;
       // the toggle action has no key of its own (presets.bindings.debug binds F3); optional: the panel works by code (panel.el.hidden) too
-      ctx.input.action('debugPanel', { label: 'debug.toggle', optional: true });
+      ctx.input.define('debugPanel', { label: 'debug.toggle', optional: true });
       return d;
     },
     dispose(e) { if (e.debug.panel === d) e.debug.panel = null; d?.el.remove(); },
@@ -138,11 +138,11 @@ export function debug(opts = {}) {
     // open matters to a screenshot (the panel covers a corner)
     describe() { return { open: !d.el.hidden }; },
     afterRender(dt, e) {
-      prof.n++; prof.t += dt; prof.cpu += e._cpuMs || 0;
-      if (prof.t < 0.5) return;
+      prof.n++; prof.t += dt;
+      if (prof.t < 0.5) return;   // the text refreshes twice a second; the ms it shows and judges is the budget's median, the one reading describe and inspect.perf give
       const s = e.terrain?.stats || {}, info = stats(e.renderer);
-      d.stats({ fps: prof.n / prof.t, cpu: prof.cpu / prof.n, calls: info.drawCalls, tris: info.triangles, visible: s.visible ?? 0, loaded: s.loaded ?? 0, instances: s.instances ?? 0, apply: s.applyMs ?? 0, queued: s.queued ?? 0 });
-      prof.n = prof.t = prof.cpu = 0;
+      d.stats({ fps: prof.n / prof.t, cpu: e.budget._frameMs()?.ms ?? 0, calls: info.drawCalls, tris: info.triangles, visible: s.visible ?? 0, loaded: s.loaded ?? 0, instances: s.instances ?? 0, apply: s.applyMs ?? 0, queued: s.queued ?? 0 });
+      prof.n = prof.t = 0;
     },
   };
 }

@@ -175,7 +175,7 @@ function partA(out, stats) {
       const known = isParams ? schemaKeys(sf, n.arguments[1]) : stringArray(sf, n.arguments[2]);
       // D
       if (/[\\/]modules[\\/]/.test(f)) for (const k of known.vals) if (KEY_OPTION.test(k)) out.push({ level: 'error', file: f, line: lineOf(n),
-        msg: `${label}: option '${k}' takes keys; modules take no keys`, fix: `declare the action (ctx.input.action) and let the game bind it: a presets.bindings map or createEngine({ bindings })` });
+        msg: `${label}: option '${k}' takes keys; modules take no keys`, fix: `declare the action (ctx.input.define) and let the game bind it: a presets.bindings map or createEngine({ bindings })` });
       const t = resolveParamType(T, label, paramIndexOf(n, isParams ? 2 : 1));
       const dts = t && T.fields(t);
       if (!dts) { stats.skipped.push(`${f}:${lineOf(n)} ${label}`); return; }

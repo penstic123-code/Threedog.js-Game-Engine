@@ -107,7 +107,8 @@ export class DebugView {
     if (VIEW_MODES.includes(name) || this._defs.has(name)) throw codedError('debug-view', `engine.debug.defineView('${name}'): this view mode already exists; pick another name`);
     if (typeof def?.apply !== 'function' || typeof def.what !== 'string') throw codedError('debug-view', `engine.debug.defineView('${name}', { what, apply }): what is a one-line explanation, apply(scene) returns its undo`, TypeError);
     this._defs.set(name, def);
-    return { remove: () => { if (this.active?.mode === name) this._off(); this._defs.delete(name); } };
+    // by identity: a stale handle (the mode was removed and defined again) must not turn off or delete the newer view of the same name
+    return { remove: () => { if (this._defs.get(name) !== def) return; if (this.active?.mode === name) this._off(); this._defs.delete(name); } };
   }
   /** Every mode a view can show now: the built-in ones and those modules added @returns {string[]} */
   modes() { return [...VIEW_MODES, ...this._defs.keys()]; }

@@ -285,7 +285,7 @@ export const specs = [
   {
     // [守] 引擎核心不带玩法按键：Shift 跑 / E 交互 / 空格跳不在核心默认表里，只有游戏（或它挑的预设）给了才有；interactions() 没有默认选法和按键
     name: 'genericity: no gameplay keys unless the game binds them (no core run / interact / jump), interactions needs a pick',
-    url: '/tests/a/',   // createPlayer({ ...presets.player.thirdPerson }) and no interactions module: run / jump come from presets.bindings.walk, interact from nobody
+    url: '/tests/a/',   // addPlayer({ ...presets.player.thirdPerson }) and no interactions module: run / jump come from presets.bindings.walk, interact from nobody
     async run({ check, ev }) {
       const r = await ev(() => {
         const inp = engine.input, keys = a => inp.actions.has(a) ? inp.keysOf(a).filter(k => !k.startsWith('Pad')).join('+') : null;

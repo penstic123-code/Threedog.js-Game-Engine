@@ -396,7 +396,8 @@ window.bundleCases = async () => {
     let built = null;
     const entry = e.stream.add({ position: [0, 0, 0], radius: 10, build: () => (built = copies(new TG.BundleGroup())) });
     e.stream.source(cam, { detail: 'full', physics: false });
-    for (let i = 0; i < 10 && !built?.parent; i++) e.step(1 / 60);
+    // a material the renderer has not drawn compiles first and attaches a task later (core/stream/prepare.js): let the compile settle between steps
+    for (let i = 0; i < 60 && !built?.parent; i++) { e.step(1 / 60); await new Promise(res => setTimeout(res, 10)); }
     e.step(1 / 60);
     out.streamLoaded = !!built?.parent; out.streamBatched = e.batching.stats.instances;
     entry.remove?.(); for (let i = 0; i < 10 && built?.parent; i++) e.step(1 / 60);
@@ -495,6 +496,80 @@ window.sweepCases = async () => {
     out.warnLeak = round(20, leak);
     out.warnLeakAgain = round(20, leak);
   } finally { console.warn = say; }
+  e.dispose();
+  return out;
+};
+
+// Streaming after start (core/stream/prepare.js) on either renderer; tests/specs/stream-prepare.mjs reads these. An entry with an unseen material and texture must be
+// uploaded and compiled before it is attached; one sharing a startup material attaches in the same step; walking away and back N times gives its memory back.
+window.streamCases = async (gpu) => {
+  const e = gpu ? await gpuEngine() : make({ batching: false });
+  if (!gpu) { await e.start(); e.haltLoop(); }
+  const r = e.renderer, S = e.stream, dt = 1 / 60, out = {}, frame = () => e.step(dt);
+  const startMat = new THREE.MeshLambertMaterial(), shared = new THREE.DataTexture(new Uint8Array(16 * 16 * 4).fill(200), 16, 16);
+  shared.needsUpdate = true;
+  let sharedDisposed = 0; shared.addEventListener('dispose', () => sharedDisposed++);   // a game-owned texture: unloading must never dispose it
+  e.scene.add(new THREE.AmbientLight(0xffffff, 1), new THREE.Mesh(new THREE.BoxGeometry(), startMat));
+  S._prep.mark(e.scene);   // what start() does after its compile; this engine started empty, so its scene is marked here
+  frame();
+  const until = async (ok, n = 300) => { for (let i = 0; i < n && !ok(); i++) { frame(); await new Promise(res => setTimeout(res, 5)); } return ok(); };
+  S.radius = 40;
+  // 1. unseen material + texture, behind the camera (WebGPU's compileAsync culls by the frustum): readied first, attached after, drawn later with no compile
+  e.camera.position.set(0, 2, 0); e.camera.lookAt(0, 2, -10); e.camera.updateMatrixWorld();
+  const programs = () => gpu ? r._pipelines.programs.vertex.size + r._pipelines.programs.fragment.size : r.info.programs.length, stalls = e.budget.cost.compiles.length;
+  let mesh = null;
+  const tex = new THREE.DataTexture(new Uint8Array(4 * 4 * 4).fill(90), 4, 4); tex.needsUpdate = true;
+  const c0 = S._prep.compiles, t0 = r.info.memory.textures, p0 = r.info.programs?.length ?? null;
+  const fresh = S.add({ position: [0, 0, 6], build: () => (mesh = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.3 }))).translateZ(6).translateY(2) });
+  e.step(dt, { render: false });
+  out.fresh = { compiled: S._prep.compiles - c0, uploadedBeforeDraw: r.info.memory.textures - t0, programsBeforeDraw: p0 == null ? null : r.info.programs.length - p0, attachedInStep: fresh.built };
+  out.fresh.attached = await until(() => fresh.built);
+  frame(); const before = programs();
+  e.camera.lookAt(0, 2, 10); e.camera.updateMatrixWorld(); frame(); frame();   // turn around: the first draw of it
+  out.fresh.programsOnTurn = programs() - before;
+  out.fresh.drawn = !gpu || [...r._objects._renderObjects].some(ro => ro.object === mesh);
+  out.fresh.stallsAfterAttach = e.budget.cost.compiles.length - stalls;   // WebGL: neither the compile's own frame nor the first draw counts as a stall
+  // 2. a material start() compiled: shown in the same step, no compile
+  const c1 = S._prep.compiles, kit = S.add({ position: [-2, 0, 0], build: () => new THREE.Mesh(new THREE.BoxGeometry(), startMat) });
+  frame();
+  out.kit = { attachedInStep: kit.built, compiled: S._prep.compiles - c1 };
+  fresh.remove(); kit.remove();
+  // 3. walk away and back: 24 entries 200 m out, each with its own geometry and material and the game's shared texture
+  const reused = new THREE.MeshLambertMaterial({ color: 0xc08060 });   // one game material every build of an entry reuses: the unload disposes it
+  S.add({ position: [210, 0, 12], build: () => new THREE.Mesh(new THREE.BoxGeometry(), reused) });
+  for (let i = 0; i < 24; i++) S.add({ position: [200 + (i % 6) * 3, 0, Math.floor(i / 6) * 3], build: () => new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1, 2, 2, 2), new THREE.MeshLambertMaterial({ map: shared, color: 0x80a0c0 })) });
+  const mem = () => { if (gpu) { e._records.sweepNow(); e._records.sweepNow(); } frame(); const m = r.info.memory; return { geometries: m.geometries, textures: m.textures, total: m.total ?? null, records: gpu ? records(e) : null }; };
+  const trip = async () => {
+    e.focus.set(205, 0, 4); const there = await until(() => S.stats.built === 25 && S.ready), knownThere = S._prep.known.get(reused) === true;
+    e.focus.set(0, 0, 0); const back = await until(() => S.stats.built === 0 && e.jobs.pending === 0);
+    return there && back && knownThere && !S._prep.known.has(reused);   // compiled each time it comes back, forgotten when disposed
+  };
+  out.trips = [];
+  for (let i = 0; i < 6; i++) out.trips.push({ ok: await trip(), ...mem() });
+  out.sharedDisposed = sharedDisposed;
+  // 4. the GPU memory metric: in the budget only where three counts bytes, reported only against the game's own limit
+  e.budget.enable({ gpuMemoryMB: 0.001 });
+  const v = e.budget.values();
+  out.metric = { value: v.gpuMemoryMB ?? null, notice: e.budget.notice() ?? '', describe: e.describe().perf.gpuMemory, perfText: e.inspect.perf().text.includes('GPU memory') };
+  e.budget.disable();
+  e.dispose();
+  return out;
+};
+
+// texture MB in inspect.perf / threedog perf (tests/specs/texture-memory.mjs): one 256x256 texture drawn must read above zero on both renderers.
+// WebGPU: the texture sits only in a TSL node (no material slot), the case the material walk missed; the reading is three's info.memory.texturesSize.
+// WebGL: three counts no bytes, so the estimate walks material slots and shadow maps
+window.textureMemoryCase = async (gpu) => {
+  const e = gpu ? await gpuEngine() : make({ batching: false });
+  if (!gpu) { await e.start(); e.haltLoop(); }
+  const tex = new THREE.DataTexture(new Uint8Array(256 * 256 * 4).fill(150), 256, 256); tex.needsUpdate = true;
+  const mat = gpu ? Object.assign(new TG.MeshBasicNodeMaterial(), { colorNode: TG.TSL.texture(tex) }) : new THREE.MeshBasicMaterial({ map: tex });
+  e.camera.position.set(0, 0, 3); e.camera.lookAt(0, 0, 0);
+  e.step(1 / 60);
+  const before = e.inspect.perf().textureMB;
+  e.scene.add(new THREE.Mesh(new THREE.PlaneGeometry(), mat));
+  e.step(1 / 60); e.step(1 / 60);
+  const p = e.inspect.perf(), out = { before, after: p.textureMB, line: p.text.split('\n')[0] };
   e.dispose();
   return out;
 };

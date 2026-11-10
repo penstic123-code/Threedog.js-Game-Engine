@@ -4,6 +4,9 @@
 // when switching to a Blender-exported glTF, change only this manifest line ('city-block': '/models/city.glb').
 import { createEngine, presets, world, calendar, sky, collision, rigid, followCamera, characters, interactions, dialogue, level, triggers, particles, timeline, settings, debug, content, flow, THREE, toast } from '../../index.js';
 import { neutralMaterial } from '../../render/neutral.js';
+import { onTierChange } from '../../core/scene/tier.js';
+import { runSections } from '../../core/base/sections.js';
+import { writeDaylight } from '../../render/daylight.js';
 import data from './content/index.js';
 
 import { buildBlock } from './block.js';
@@ -40,7 +43,7 @@ engine.particles.define('sparks', { max: 80, lifetime: [0.3, 0.7], speed: [2, 5]
 // Spawn and marker points exist only after the level loads (in start()): build the player, install content, place teleporters now
 let player = null;
 engine.events.once('level:loaded', () => {
-  player = engine.characters.createPlayer({ ...presets.player.thirdPerson, spawn: engine.level.spawn });
+  player = engine.characters.addPlayer({ ...presets.player.thirdPerson, spawn: engine.level.spawn });
   // Content: shopkeeper (schedule, dialogue), plaza trigger zone, crate-push key
   engine.content.load(data);
   // Two teleporters (level markers marker_gate_a / marker_gate_b): press E to fade out -> move -> fade in (flow.transition)
@@ -81,3 +84,4 @@ engine.onFrame(() => {
 
 engine.start();
 window.engine = engine;
+window.internals = { onTierChange, runSections, writeDaylight };   // group-q.mjs reaches these engine internals through the page

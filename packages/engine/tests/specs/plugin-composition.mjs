@@ -79,7 +79,7 @@ export const specs = [
       const r = await ev(async PIX => {
         await engine.loading.settled(); engine.haltLoop();
         const { THREE, postEffects: E, applyEffects } = threedogTest, out = {};
-        const hold = engine.freeze('pc-pixels', { ambient: true }), px = (0, eval)(PIX);   // wind, clouds, weather stand still: two reads differ only by the plugins
+        const hold = engine.freeze('pc-pixels', { still: true }), px = (0, eval)(PIX);   // wind, clouds, weather stand still: two reads differ only by the plugins
         // material + wind + cloud shadow: a crate in front of the camera with both effects
         const cam = engine.camera, ahead = cam.getWorldDirection(new THREE.Vector3()).multiplyScalar(4).add(cam.position);
         const crate = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), applyEffects(new THREE.MeshLambertMaterial({ color: 0xaa8855 }), { wind: 0.05, clouds: true, engine }));

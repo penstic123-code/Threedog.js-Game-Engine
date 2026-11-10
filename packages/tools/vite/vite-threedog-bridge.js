@@ -22,12 +22,14 @@ const TIMEOUT = 120000;   // a long step under software rendering can take tens 
 const MAX_BODY = 32 << 20;   // snap --width sends the whole PNG through here to scale it in the page, and a detailed full-HD canvas passes 4 MB
 
 export default function threedogBridge() {
+  let frozenUntil = 0;   // opt-in HMR freeze (`scenario|verify --freeze-reload`): file saves reload nothing until this time; the time limit frees a server whose caller died
   return {
     name: 'threedog-bridge',
     apply: 'serve',
     resolveId: id => id === VIRTUAL ? RESOLVED : undefined,
     load: id => id === RESOLVED ? CLIENT : undefined,
     transformIndexHtml: () => [{ tag: 'script', attrs: { type: 'module', src: '/@id/__x00__' + VIRTUAL }, injectTo: 'head' }],
+    handleHotUpdate: () => Date.now() < frozenUntil ? [] : undefined,
     configureServer(server) {
       const token = randomBytes(16).toString('hex'), file = resolve(server.config.root, '.threedog/dev.json');
       const focus = new Map();      // ws client → { path, at }
@@ -143,6 +145,8 @@ export default function threedogBridge() {
             if (cmd.op !== 'ping') lastCmd = Date.now();
             // ping: "is this the bridge, and is a page attached" without touching the page (never opens the headless browser, skips the queue)
             if (cmd.op === 'ping') return reply(200, { ok: true, value: { live: !!liveClient(cmd.page), headless: !!headless } });
+            // true, so the caller can tell this from an older server, whose unknown-op fallback reloads the page and answers null
+            if (cmd.op === 'freeze-reload') { frozenUntil = cmd.on ? Date.now() + 10 * 60000 : 0; return reply(200, { ok: true, value: true }); }
             // close-headless (play --stop on a server it did not start): close the browser this bridge opened, whoever asked for it; true if one was open
             if (cmd.op === 'close-headless') { const had = !!headless; await closeHeadless(); return reply(200, { ok: true, value: had }); }
             reply(200, { ok: true, value: await inOrder(() => exec(cmd)) ?? null });
@@ -154,6 +158,10 @@ export default function threedogBridge() {
       server.httpServer?.once('listening', () => {
         mkdirSync(dirname(file), { recursive: true });
         writeFileSync(file, JSON.stringify({ port: server.httpServer.address().port, token, pid: process.pid }));
+        // self-check: fetch the game page once, so a broken index.html or main.js shows here and not as a blank tab. The hint points at this
+        // output, not `threedog errors`: errors.log holds what the page reported, and a page that did not load reported nothing
+        const url = `http://localhost:${server.httpServer.address().port}${server.config.base}`;
+        fetch(url, { signal: AbortSignal.timeout(30000) }).then(r => { if (r.status !== 200) console.error(`[threedog] ${url} answers ${r.status}, not 200: the dev server's own error above says why (404: no index.html under that address)`); }, () => {});
       });
       // A server that play started for an agent (THREEDOG_AUTOSTOP_MIN is set by play) exits when no command came and no live page is open for that long
       const stopMin = +process.env.THREEDOG_AUTOSTOP_MIN;

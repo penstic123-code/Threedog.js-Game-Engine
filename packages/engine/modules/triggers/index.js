@@ -39,11 +39,13 @@
 //   The debug lines take their color from triggers({ debugColor, debugOpacity }); neutral gray if absent.
 //   The action triggersDebug toggles that view; it has no key of its own (presets.bindings.debug binds F4 with the debug panel's F3).
 import { engineOwned } from '../../core/scene/things.js';
+import { freeParts } from '../../core/base/freeParts.js';
 import * as THREE from 'three';
 import { readParams, keysSchema } from '../../core/base/params.js';
 import { Cells } from '../../core/stream/cells.js';
 import { codedError } from '../../core/base/errorHints.js';
 import { placeY } from '../../core/scene/ground.js';
+import { reportError } from '../../core/base/errors.js';
 
 // Zones are indexed (core/stream/cells.js, the shared xz index) by the cells their bounding box covers, so a step looks at the zones near the actor instead of every
 // zone. A zone with its own `who` (any position, unknown until it runs) or one covering more than MAX_CELLS cells goes to the always-checked `_global` list.
@@ -75,7 +77,7 @@ export class Triggers {
     this._seq = 0; this._stamp = 0;
     /** @internal the wireframe group while the debug view 'triggers' is on (null otherwise) */ this._view = null;
     engine.i18n.add(STRINGS);
-    track(engine.input.action(action, { label: 'triggers.debug', optional: true, owner: 'triggers' }));   // a dev tool: silent while unbound
+    track(engine.input.define(action, { label: 'triggers.debug', optional: true, owner: 'triggers' }));   // a dev tool: silent while unbound
     /** @internal */ this._viewDef = engine.debug.defineView('triggers', { what: 'every trigger zone drawn as a wireframe over the real picture (triggers({ debugColor }))', apply: scene => this._drawView(scene) });
   }
 
@@ -110,9 +112,11 @@ export class Triggers {
     t._gone = true;
     const i = this._list.indexOf(t); if (i >= 0) this._list.splice(i, 1);
     this._unregister(t); this._busy.delete(t);
-    if (t.inside) this._exit(t, null);
-    if (t._mesh) { t._mesh.parent?.remove(t._mesh); t._mesh.geometry.dispose(); t._mesh = null; }
+    try { if (t.inside) this._exit(t, null); }
+    finally { if (t._mesh) { t._mesh.parent?.remove(t._mesh); t._mesh.geometry.dispose(); t._mesh = null; } }   // an onExit that throws still frees the debug mesh
   }
+  /** @internal remove each zone in its own try: one onExit that throws must not leave the rest (nor their debug meshes) standing; the error is reported and the loop goes on */
+  _removeEach(zones, what) { for (const t of zones) { try { t.remove(); } catch (err) { reportError(this.engine, err, what); } } }
   _register(t) {
     if (t.who || (t.volume && !t.volume.bounds)) { this._global.push(t); return; }
     const ex = (t.shape === 'box' || t.volume ? t.hx * Math.abs(t.c) + t.hz * Math.abs(t.s) : t.radius) + PAD;
@@ -125,7 +129,7 @@ export class Triggers {
   }
   /** All trigger zones (a new array) */
   list() { return [...this._list]; }
-  clear() { for (const t of [...this._list]) this._remove(t); }
+  clear() { this._removeEach([...this._list], 'triggers.clear'); }
   byTag(tag) { return this._list.filter(t => t.tag === tag); }
 
   /**
@@ -219,9 +223,12 @@ export class Triggers {
     if (hit && !t.inside) {
       if (t._cool > 0) return;
       t.inside = true; t._id = id;
+      if (t.once) t.used = true;   // spent before any callback runs: a save made inside onEnter or a trigger:enter listener already records it
       t.onEnter?.(t, hit, id);
+      if (t._gone) return;   // onEnter removed the zone: remove() already ran its exit, so no enter event may follow it
       e.events.emit('trigger:enter', { tag: t.tag, trigger: t, who: hit, id });
-      if (t.once) { t.used = true; this._exit(t, null); }
+      if (t._gone) return;   // a trigger:enter listener removed it: its exit has run too
+      if (t.once) this._exit(t, null);
     } else if (!hit && t.inside) this._exit(t, null);
     else if (hit && t.inside) t.onStay?.(dt, t, hit, id);
   }
@@ -235,10 +242,12 @@ export class Triggers {
       if (inn.has(key)) { t.onStay?.(dt, t, o.p, o.id); if (t._gone) return; continue; }
       if (t._cool > 0 && !inn.size) return;
       inn.set(key, o); t.inside = true;
+      if (t.once) t.used = true;   // spent before any callback (see _visit)
       t.onEnter?.(t, o.p, o.id);
+      if (t._gone) return;   // as _visit: no enter event after the exit remove() ran
       e.events.emit('trigger:enter', { tag: t.tag, trigger: t, who: o.p, id: o.id });
       if (t._gone) return;
-      if (t.once) { t.used = true; this._exit(t, null); return; }
+      if (t.once) { this._exit(t, null); return; }
     }
   }
   /** @internal one actor left: the callback and the event */
@@ -257,7 +266,7 @@ export class Triggers {
     this._list.forEach((t, i) => { if (t.used || t._cool > 0) out[keys[i]] = { used: t.used, cool: t._cool }; });
     return out;
   }
-  /** @internal occupied zones exit (who is null), then used / cooldown come from the save; zones the save does not name start fresh */
+  /** @internal occupied zones exit (who is null; first: 1, after the level, so onExit and its effects run before the other parts restore and whatever they wrote is overwritten by the save), then used / cooldown come from the save; zones the save does not name start fresh */
   _load(d) {
     for (const t of [...this._list]) if (t.inside) this._exit(t, null);
     const keys = this._keys();
@@ -271,7 +280,13 @@ export class Triggers {
     // id: who was inside (remembered at enter), so an exit says who left even though the position that left is gone
     const id = t._id ?? null, all = t._in ? [...t._in.values()] : null;
     t.inside = false; t._cool = t.cooldown; t._id = null;
-    if (all) { t._in.clear(); for (const o of all) this._left(t, who, o.id); return; }   // occupancy 'each': everyone leaves
+    if (all) {   // occupancy 'each': everyone leaves, each in its own try (the first throw is raised after the last exit has run)
+      t._in.clear();
+      let first, bad = false;
+      for (const o of all) { try { this._left(t, who, o.id); } catch (err) { if (!bad) { bad = true; first = err; } } }
+      if (bad) throw first;
+      return;
+    }
     this._left(t, who, id);
   }
 
@@ -288,7 +303,7 @@ export class Triggers {
     scene.add(engineOwned('triggers', g));
     return () => {
       for (const t of this._list) t._mesh = null;
-      g.traverse(o => o.geometry?.dispose());
+      freeParts(g, x => x.isBufferGeometry);   // each debug mesh's geometry is this overlay's; the one line material goes below
       g.removeFromParent(); this._mat.dispose();
       if (this._view === g) this._view = null;
     };
@@ -319,7 +334,7 @@ const TRIGGER_PARAMS = {
  */
 function triggerContent() {
   const table = {};
-  let subs = null;
+  let subsTrack = null, fromLevel = [];
   return {
     desc: 'trigger zones (tag -> position / from level, enter/exit effects)',
     undo(d, { engine: e }) {
@@ -332,12 +347,15 @@ function triggerContent() {
     },
     commit(d, { engine: e, content, where, bind, track }) {
       Object.assign(table, d);
-      if (Object.values(d).some(t => t.fromLevel)) e.triggers.fromMarkers();
+      // one set per content commit: a second commit (the same level loaded twice) replaces its own zones, never the ones a game's own fromMarkers() made
+      e.triggers._removeEach(fromLevel, 'triggers replace');
+      fromLevel = Object.values(d).some(t => t.fromLevel) ? e.triggers.fromMarkers() : [];
       for (const [tag, t] of Object.entries(d)) if (!t.fromLevel) bind(e.triggers.add({ ...t, tag, position: where(t.position), onEnter: null, onExit: null }), t.position);
-      subs ??= [
-        track(e.events.on('trigger:enter', ({ tag, id }) => content.run(table[tag]?.onEnter, { actor: id ?? e.actor }))),
-        track(e.events.on('trigger:exit', ({ tag, id }) => content.run(table[tag]?.onExit, { actor: id ?? e.actor }))),
-      ];
+      if (subsTrack !== track) {   // a new content module has a new track: the old one's listeners were removed with it, so they are made again
+        subsTrack = track;
+        track(e.events.on('trigger:enter', ({ tag, id }) => content.run(table[tag]?.onEnter, { actor: id ?? e.actor })));
+        track(e.events.on('trigger:exit', ({ tag, id }) => content.run(table[tag]?.onExit, { actor: id ?? e.actor })));
+      }
     },
   };
 }
@@ -353,13 +371,14 @@ export function triggers(opts = {}) {
       tr = new Triggers(e, o, ctx.track);
       // audio rule condition { zone: 'cave' | ['cave', 'mine'] }: some trigger zone with that tag is occupied
       ctx.track(e.audio.condition('zone', v => [].concat(v).some(tag => tr.byTag(tag).some(t => t.inside))));
-      ctx.saves.register('triggers', { notAtomic: 'bodies crossing a zone change it in the step, and its load fires exits', save: () => tr._save(), load: d => tr._load(d) });
+      ctx.saves.define('triggers', { notAtomic: 'bodies crossing a zone change it in the step, and its load fires exits', first: 1, save: () => tr._save(), load: d => tr._load(d) });
       return tr;
     },
     fixed(dt) { tr.update(dt); },
     // the key toggles the same debug view an AI calls: no second display path to keep in step
     frame(dt, e) { if (e.input.pressed(tr.action)) e.debug.view(e.debug.viewState().mode === 'triggers' ? 'off' : 'triggers'); },
-    dispose() { tr._viewDef.remove(); },   // turns the view off when it is the triggers one, and drops the mode
+    // turns the view off when it is the triggers one, drops the mode, and removes every zone as remove() does (exits fire; a level's zones too, so its later removal of the handles is a no-op)
+    dispose() { tr._viewDef.remove(); tr._removeEach([...tr._list], 'triggers dispose'); },
     describe(e, ctx) {
       for (const t of tr._list) if (t.enabled && !t.used) ctx.near(t, { name: t.tag || t.shape, kind: 'trigger', inside: t.inside });
       return { inside: tr._list.filter(t => t.inside).map(t => t.tag || t.shape), used: tr._list.filter(t => t.used).map(t => t.tag || t.shape) };

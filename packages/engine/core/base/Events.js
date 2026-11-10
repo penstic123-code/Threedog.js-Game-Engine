@@ -10,7 +10,7 @@
 // In dev (npm run dev) event names are checked: a name never seen before that is one or two letters off a known event warns "did you mean xxx".
 /** @import { Handle } from '../../types/common' */
 /** @import { EventName, EventArgs } from '../../types/core' */
-import { checkEventName } from './validate.js';
+import { checkEventName, syncOnly } from './validate.js';
 
 // Event names the engine and modules emit (for spelling checks): generated from EventMap in packages/engine/types/core.d.ts, never a hand-written second copy
 import { ENGINE_EVENTS } from './events.generated.js';
@@ -108,7 +108,7 @@ export class Events {
    * @param {(...args: EventArgs<K & string>) => void} fn
    * @returns {Handle}
   */
-  once(name, fn) { const h = this.on(name, (...a) => { h.remove(); fn(...a); }); return h; }
+  once(name, fn) { const h = this.on(name, (...a) => { h.remove(); return fn(...a); }); return h; }   // returns fn's result: a once-listener is guarded in a load scope like any other
   /** @internal Total listeners (used by engine.counts()) */
   get size() { let n = 0; for (const s of this.map.values()) n += s.size; return n; }
   /** @internal Remove all listeners (engine.dispose calls it) */
@@ -129,7 +129,7 @@ export class Events {
     const s = this.map.get(name); if (!s) { if (this.traceSize > 0) this._note(name); return; }
     const prev = this._cur;
     if (this.traceSize > 0) this._cur = `ev:${this._note(name)}`;   // handlers run under this event: what they emit names it as parent
-    try { for (const fn of [...s]) { if (!s.has(fn)) continue; /* removed by an earlier listener of this emit */ try { fn(...args); } catch (err) { if (this._scopes.length) this._scopes.at(-1).push({ name, err }); else if (this.onError) this.onError(name, err); else console.error(`[event ${name}]`, err); } } }
+    try { for (const fn of [...s]) { if (!s.has(fn)) continue; /* removed by an earlier listener of this emit */ try { const r = fn(...args); if (this._scopes.length) syncOnly(r, `a listener of '${name}' inside a load`, true); } catch (err) { if (this._scopes.length) this._scopes.at(-1).push({ name, err }); else if (this.onError) this.onError(name, err); else console.error(`[event ${name}]`, err); } } }
     finally { this._cur = prev; }
   }
   /** @internal trace entries old -> new */

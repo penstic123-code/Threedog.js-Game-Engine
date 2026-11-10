@@ -157,7 +157,7 @@ export const specs = [
         const E = mk(createEngine, 'sp-replace'), out = { ran: {} }, slots = ['characters', 'flow', 'cameraRig'];
         E.use(world(), collision(), characters(), all.flow(), all.followCamera(), { name: 'spUser', type: 'rules', requires: slots });
         await E.start();
-        E.characters.createPlayer({ ...all.presets.player.thirdPerson, spawn: [0, 0, 0] });
+        E.characters.addPlayer({ ...all.presets.player.thirdPerson, spawn: [0, 0, 0] });
         E.step(0.1, { render: false });
         for (const slot of slots) {
           // the callers of each slot keep running on the stand-in: the steps below are the proof

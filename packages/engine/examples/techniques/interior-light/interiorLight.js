@@ -1,9 +1,8 @@
 // @ts-check
-// Interior light helpers (technique example, README.md next to this file). Imports only three and its RectAreaLight addon.
+// Interior light helpers (technique example, README.md next to this file). Imports only three.
 // Why helpers: the zone switch has to change exposure and the leaking outdoor ambient together, eased, and only when the zone changes;
-// the window light needs a one-time uniforms init. Both are easy to get half right by hand.
+// the window light is placed and aimed in one call. The engine loads the RectAreaLight tables itself when the light enters the scene.
 import * as THREE from 'three';
-import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 
 /**
  * Exposure and ambient by zone, following the camera. `isInside(cameraPosition)` decides the zone; on a change the hemisphere / environment
@@ -38,7 +37,6 @@ export function exposureZones(engine, { hemi, isInside, exposure, ambient, ease 
  * @param {{ position: number[], lookAt: number[], width: number, height: number, color?: THREE.ColorRepresentation, intensity?: number }} o
  */
 export function windowLight(engine, { position, lookAt, width, height, color = '#cfe0ff', intensity = 2 }) {
-  RectAreaLightUniformsLib.init();   // once per page is enough; calling it again is harmless
   const area = new THREE.RectAreaLight(color, intensity, width, height);
   area.position.set(position[0], position[1], position[2]);
   area.lookAt(lookAt[0], lookAt[1], lookAt[2]);

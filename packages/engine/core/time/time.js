@@ -1,7 +1,7 @@
 // engine.time: the one time source. Every other time in the engine is a read-only view of what this module counts.
 //   engine.time.tick                  fixed steps run (the gameplay timeline: commits, op history, input records); stops while frozen
 //   engine.time.now('real')           tick / 60 (+ the part of a skip shorter than one step): no scale, stops while frozen. Cooldowns that ignore bullet time
-//   engine.time.now('ambient')        wind, water, clouds (= uniforms.uTime): moves while frozen too, unless a freezer asked freeze(owner, { ambient: true })
+//   engine.time.now('ambient')        wind, water, clouds (= uniforms.uTime): moves while frozen too, unless a freezer asked freeze(owner, { still: true })
 //   engine.time.now('world' | 'player' | 'enemies' ...)   channel seconds: each step adds 1/60 x the channel's speed. Movement, AI, status effects
 //   engine.time.now('calendar')       calendar seconds = world seconds x the calendar rate (stack 'clock.rate'); engine.clock.now is the same number
 // Channel speeds change only through engine.mod (core/ops/stacks.js):
@@ -40,7 +40,7 @@ export class Time {
     this.channel('world', { parent: null });
     this.channel('player');
     this.channel('calendar', { stack: 'clock.rate' });
-    engine.saves.register('time', { notAtomic: 'time goes on through a failed op: going back would run timers twice',
+    engine.saves.define('time', { notAtomic: 'time goes on through a failed op: going back would run timers twice',
       version: 2,
       // v1 kept the calendar in its own 'clock' part ({ now, timers }); v2 has it as the 'calendar' channel of this part
       migrate: { 1: (d, save) => {

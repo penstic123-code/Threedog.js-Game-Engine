@@ -32,7 +32,7 @@ export const specs = [
         E.use(T.world(), T.collision(), T.characters({ npcs: false }), T.level({ scene }), T.rigid(), T.followCamera({ distance: 6 }), T.quests(), T.hud(), T.flow(), T.music({ tracks: { calm: '/c.ogg', fight: '/f.ogg' }, rules: [{ track: 'fight', when: { state: 'combat' } }, { track: 'calm' }] }));
         E.onReady?.(() => {});
         await E.start();
-        const P = E.characters.createPlayer({ control: 'camera', cameraFollow: true, spawn: { x: 0, z: 0 } });
+        const P = E.characters.addPlayer({ control: 'camera', cameraFollow: true, spawn: { x: 0, z: 0 } });
         const steps = n => { for (let i = 0; i < n; i++) E.step(1 / 60, { render: false, describe: false }); };
         await E.session.newGame(); steps(2);
         const fresh = JSON.parse(JSON.stringify(E.describe()));
@@ -87,7 +87,7 @@ export const specs = [
         const T = threedogThreads.all, E = threedogThreads.mk(T.createEngine, 'rule-late', {});
         await E.start();
         let s = null;
-        E.use({ name: 'ruleLate', type: 'rules', install(e, c) { c.saves.register('ruleLate', { save: () => s, load: d => { s = d; } }); }, init() { s = { hp: 10 }; } });
+        E.use({ name: 'ruleLate', type: 'rules', install(e, c) { c.saves.define('ruleLate', { save: () => s, load: d => { s = d; } }); }, init() { s = { hp: 10 }; } });
         await E.loading.settled?.(); await new Promise(res => setTimeout(res, 0));
         s.hp = 1;
         await E.session.newGame();
@@ -108,7 +108,7 @@ export const specs = [
         const E = threedogThreads.mk(T.createEngine, 'rule-transition', {});
         E.use(T.flow());
         let armed = false;
-        E.saves.register('ruleBad', { save: () => 1, load() { if (armed) { armed = false; throw new Error('a part that cannot load'); } } });
+        E.saves.define('ruleBad', { save: () => 1, load() { if (armed) { armed = false; throw new Error('a part that cannot load'); } } });
         await E.start();
         E.saves.save('s'); await E.saves.flush();
         const across = async door => {
@@ -140,7 +140,7 @@ export const specs = [
         const T = threedogThreads.all, E = threedogThreads.mk(T.createEngine, 'rule-atomic', {}), warn = console.error;
         console.error = () => {};
         let part = { hp: 2 };
-        E.saves.register('ruleHp', { atomic: true, save: () => part, load: d => { part = d; } });
+        E.saves.define('ruleHp', { atomic: true, save: () => part, load: d => { part = d; } });
         let ran = false;
         E.ops.define('rule.hurt', { atomic: true, run() { ran = true; part = { hp: 1 }; return { ok: false, code: 'no', facts: [], nextActions: [] }; } });
         await E.start();

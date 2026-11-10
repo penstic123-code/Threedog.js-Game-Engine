@@ -167,11 +167,11 @@ export const specs = [
     url: '/?cutscene=skip',
     async run({ check, ev }) {
       const r = await ev(() => {
-        engine.hud.counter('gf-score', { label: 'Score', value: 3, anchor: 'top-right' });
+        engine.hud.addCounter('gf-score', { label: 'Score', value: 3, anchor: 'top-right' });
         engine.hud.bar('gf-hp', { value: 0.5, label: 'HP', anchor: 'bottom' });
         const col = id => [...document.querySelectorAll('.threedog-hud-counter, .threedog-hud-bar')].find(el => el.textContent.includes(id))?.parentElement?.className ?? null;
         const out = { score: col('Score'), hp: col('HP') };
-        engine.hud.counter('gf-score', { anchor: 'bottom-left' }); out.moved = col('Score');
+        engine.hud.addCounter('gf-score', { anchor: 'bottom-left' }); out.moved = col('Score');
         try { engine.hud.bar('gf-x', { value: 1, anchor: 'middle' }); } catch (err) { out.bad = err.message; }
         engine.hud.remove('gf-score'); engine.hud.remove('gf-hp');
         return out;

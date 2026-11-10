@@ -7,11 +7,14 @@
 - `budget.report() → BudgetReport | null` — Budget report; null when off. In the real-time loop it returns the last second's result; in step() mode it is computed on demand
 - `budget.checkStartup(s: { totalMs, modules }) → { category, value, limit, top }[]` — (experimental) Called by the engine when startup finishes: warns if startupMs / moduleMs is exceeded and returns the offenders (empty array if none)
 - `budget.values() → Record<string, number>` — Current value per category (fps/low1/cpuMs exist only once there are frame times)
+- `budget.record() → { where, values }` — This run's numbers in the shape baseline keeps: { where, values: { drawCalls, triangles, cpuMs (live runs), modules: { name: median ms, 0 too } } }. threedog shot / verify --save-baseline write it into the game's .threedog/perf-baseline.json (this machine's, not committed)
+- `budget.notice() → string | null` — One line when something is off, null when all is fine: over a limit the game declared (only when the budget is on; the engine's own reference limits never), slower than the baseline recorded at this spot on this machine (medians, past a noise margin), a module with spikes (p95 over 3x its median and over 2 ms), or what adaptive quality lowered (resolution, effects). threedog shot, verify and describeText print it. Example: `engine.budget.notice()   // 'Perf: over budget drawCalls 312 (limit 250, +25%); slower than baseline: modules.terrain 1.4 ms (was 0.6, +133%) -> threedog inspect perf'`
 - `budget.byTag() → BudgetTagStat[]` — Estimate draw calls and triangles by userData.budgetTag (visible meshes inside the frustum; shadow casters count a second shadow draw). Returns [{ tag, drawCalls, triangles }], largest first. Called only on overrun (at most once a second) or when debugging
 - Properties:
   - `enabled: boolean` Is it on?
   - `limits: BudgetLimits` (experimental) Current limits
   - `cost: ApplyCost` Cost of applying background results, split in stages (see ApplyCost)
+  - `baseline: Record<string, any> | null` The recorded run to compare against: { [where]: { drawCalls, triangles, cpuMs?, modules: { name: ms } } } as record() makes it. threedog shot / verify load the game's .threedog/perf-baseline.json (this machine's) here when the game set none (and write it with --save-baseline). null = no comparison
 
 ## Data structures
 - **BudgetLimits** Budget limits: only the given categories are checked. fps/low1 are lower bounds (frame rate must not drop below), the rest are upper bounds
@@ -21,6 +24,7 @@
   - `cpuMs?: number` CPU milliseconds per frame
   - `triangles?: number` Triangle count
   - `textures?: number` Texture count
+  - `gpuMemoryMB?: number` GPU memory in MB as three counts it (WebGPURenderer only: an estimate, not driver VRAM)
   - `chunkApplyMs?: number` Terrain chunk upload milliseconds per frame
   - `rigidBodies?: number` Rigid body count
   - `lights?: number` Lit point + spot lights, a game's own and pooled ones (default limit 8)
@@ -34,6 +38,7 @@
   - `applyStreamMs?: number`
   - `startupMs?: number` Time from opening to playable (milliseconds); when exceeded, the slowest module is named
   - `moduleMs?: number` Single module startup (init + wait for ready, milliseconds); when exceeded, that module is named
+  - `modules?: Record<string, number>` Hook ms per frame of one module, { terrain: 1.5 } (median of engine.profile(), on in dev builds); reported as category 'modules.<name>'
 - **BudgetReport** Budget report: ok means everything is within budget
   - `ok: boolean`
   - `over: BudgetOver[]`

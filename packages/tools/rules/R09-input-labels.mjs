@@ -1,9 +1,9 @@
 // R9 display-text keys for key actions must exist in every locale table (error)
-// The label of input.action('action', { label: 'textKey' }), the 2nd argument of input.touchButton('action', 'textKey'),
+// The label of input.define('action', { label: 'textKey' }), the 2nd argument of input.touchButton('action', 'textKey'),
 // and the label in <game>/content/actions.js are the text shown on the key-rebinding page of the settings menu / on touch buttons:
 //   - written as a key name (a.b form) → both the zh-CN and the en table must have it; missing one is an error (after switching language it would show as "inventory.action")
 //   - plain text (no dot) in packages/engine/ → error (the engine hard-codes no UI text); plain text in game content is fine (the game picks its own language)
-//   - input.action in packages/engine/ without a label → warning (the action name is shown as is)
+//   - input.define in packages/engine/ without a label → warning (the action name is shown as is)
 // Where the text tables are collected from: every object literal in the whole project (engine, add-ons, examples and games, their picture/ folders included) that has both 'zh-CN' and en keys (CORE in I18n.js, each module's STRINGS,
 //   e.i18n.add({...}), createEngine({ strings })), whose values are object literals or same-file constants.
 // Limitation: text keys held in variables (such as the passthrough of a.label in content) are only checked for literals in content/actions.js; dynamically built keys are not found.
@@ -51,7 +51,7 @@ export default {
         const m = n.expression.name.text, recv = n.expression.expression.getText();
         if (!/(^|\.)input$/.test(recv)) return;
         let arg;
-        if (m === 'action') {
+        if (m === 'define' || m === 'action') {   // action: the old name of define
           const o = n.arguments[1];
           // options given as an object literal: read its label; anything else (a spread, a variable) cannot be checked here
           if (o && (!ts.isObjectLiteralExpression(o) || o.properties.some(p => ts.isSpreadAssignment(p)))) return;

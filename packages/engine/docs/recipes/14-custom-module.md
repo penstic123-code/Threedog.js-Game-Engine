@@ -1,6 +1,9 @@
 # Custom module
 
-**In this recipe**: 1. Template (example: stamina, in the game as `stamina.js`) · Type: what the module may own · 2. Hooks and order cheat sheet · 3. Extra steps when it goes into the engine · 4. Verify
+> **Covers:** a module of your own: template, what it may own, hooks and order, what it must clean up.
+> **Use when:** a mechanic with its own state, per-frame logic and saving.
+> **Shortest:** `export const stamina = () => ({ name: 'stamina', install(e, ctx) { … } })`.
+> **Sections:** 1 Template example stamina · Type what the module · 2 Hooks and order · 3 Extra steps when · 4 Verify
 
 When to write a module: a "mechanic" that has its own state, per-frame logic and saving (stamina, a heat meter, wave spawning, oxygen, a combo
 counter). The contracts every module should follow (state, game time, skip, describe, ops) and a second copyable module are in
@@ -16,7 +19,7 @@ import { readParams } from 'threedog';
 
 export function stamina(opts = {}) {
   const PARAMS = { max: { type: 'number', default: 100 }, drain: { type: 'number', default: 20 }, regen: { type: 'number', default: 10 } };
-  const { max, drain, regen } = readParams('stamina', PARAMS, opts);   // a misspelled option throws in dev with the fix (a release build warns once), a wrong type or a missing required option throws in every build; put PARAMS on the module as params to show it in engine.catalog()
+  const { max, drain, regen } = readParams('stamina', PARAMS, opts);  // a misspelled option throws in dev with the fix (a release build warns once), a wrong type or a missing required option throws in every build; put PARAMS on the module as params to show it in engine.catalog()
   let e = null, ctx = null, tired = null, shown = -1;
   const api = {
     value: max, max,
@@ -24,25 +27,25 @@ export function stamina(opts = {}) {
     restore(n) { api.value = Math.min(max, api.value + n); },
   };
   return {
-    name: 'stamina', type: 'rules', label: 'Stamina', requires: ['characters'], optional: ['hud'], stage: 'gameplay',   // once installed, engine.stamina === api
+    name: 'stamina', type: 'rules', label: 'Stamina', requires: ['characters'], optional: ['hud'], stage: 'gameplay',  // once installed, engine.stamina === api
     install(engine, c) {
-      e = engine; ctx = c;                                       // what the module adds through ctx leaves with it (uninstall, replaces, a rolled-back use)
-      e.i18n.add({ 'zh-CN': { 'stamina.label': '体力' }, en: { 'stamina.label': 'Stamina' } });   // don't hard-code UI text
-      e.saves.register('stamina', { save: () => api.value, load: v => { if (typeof v === 'number') api.value = v; } });
+      e = engine; ctx = c;  // what the module adds through ctx leaves with it (uninstall, replaces, a rolled-back use)
+      e.i18n.add({ 'zh-CN': { 'stamina.label': '体力' }, en: { 'stamina.label': 'Stamina' } });  // don't hard-code UI text
+      e.saves.define('stamina', { save: () => api.value, load: v => { if (typeof v === 'number') api.value = v; } });
       return api;
     },
-    fixed(dt) {                                                  // timing and value changes go in fixed (60 Hz, doesn't run while paused)
+    fixed(dt) {  // timing and value changes go in fixed (60 Hz, doesn't run while paused)
       const p = e.player; if (!p) return;
       api.value = p.state === 'run' ? Math.max(0, api.value - drain * dt) : Math.min(max, api.value + regen * dt);
       // no stamina: run speed = walk speed. A modifier, not a write to p.runSpeed: the base stays the game's, and haste / mud entries still combine
-      if (api.value <= 0 && !tired) tired = ctx.mod('move.runSpeed', { id: 'player', set: p.speed });   // owner: the module
+      if (api.value <= 0 && !tired) tired = ctx.mod('move.runSpeed', { id: 'player', set: p.speed });  // owner: the module
       else if (api.value > 0 && tired) { tired.remove(); tired = null; }
     },
-    frame() {                                                    // UI goes in frame; update only when the value changed (hud.bar redraws on every call)
+    frame() {  // UI goes in frame; update only when the value changed (hud.bar redraws on every call)
       const v = Math.round(api.value);
       if (v !== shown) { shown = v; e.hud?.bar('stamina', { value: v, max, label: e.t('stamina.label') }); }
     },
-    describe() { return { value: Math.round(api.value), max }; },   // this becomes describe().stamina
+    describe() { return { value: Math.round(api.value), max }; },  // this becomes describe().stamina
   };
 }
 ```
@@ -93,16 +96,16 @@ A module that does two kinds of thing is two definitions returned together (`wea
 - The `type` decides what an error does: in a `picture` or `ui` module (gameplay works without it) an error in a hook only switches that module off
   (`module:disabled`, listed in `describe().disabledModules`); in any other type it freezes the game in development/tests and is recorded in `engine.error`.
 - `requires` means the provider works, not only that it is installed: until a required provider runs, the module is `'blocked'` in `engine.explain({ module })` (no init, no hooks) and `engine.catalog(name).blockedBy` says on what. If it can live without the provider, list it in `optional` instead. A `critical` module blocked by a failure stops `start()`.
-- Whatever the module registers goes through `ctx`: `ctx.ops.define`, `ctx.saves.register`, `ctx.ui.define`, `ctx.stream.addReadyCheck`, `ctx.budget.metric`, `ctx.things.addSource` / `explainWith`,
+- Whatever the module registers goes through `ctx`: `ctx.ops.define`, `ctx.saves.define`, `ctx.ui.define`, `ctx.stream.addReadyCheck`, `ctx.budget.metric`, `ctx.things.addSource` / `explainWith`,
   `ctx.ground.provide` / `addColliders`. They take the same arguments as the engine call, and `engine.catalog(name).resources` lists them. They leave with the module, so `engine.unuse` then
   `engine.use` of the same module works; a save part's data stays in the save and goes back to the part when it registers again.
 - Listeners and timers the module adds go through `ctx.track(...)`: `ctx.track(e.events.on('item:add', fn))`, also `onFixed` / `onFrame` /
   `clock.after` / `audio.measure` / a `makeWindow` window, anything with `remove()`. They leave with the module: when its `engine.use(...)` batch
   rolls back, when its `init` fails, and on `engine.dispose()` before its `dispose` hook (the spec `threedog test "Lifecycle: every built-in"`
   checks every engine module). A class the module builds takes `ctx` as a constructor argument. DOM listeners use
-  `addEventListener(type, fn, { signal: engine.signal })`, and UI elements attach to `engine.uiRoot` (not `document.body`); scene GPU memory,
-  jobs and stream entries are collected by `engine.dispose()`. The `dispose(e)` hook only collects what the core can't, such as Workers, the
-  physics world, WASM objects and real-time timers, and is called in reverse install order.
+  `addEventListener(type, fn, { signal: engine.signal })`, and UI elements attach to `engine.uiRoot` (not `document.body`); jobs and stream
+  entries are collected by `engine.dispose()`; scene GPU memory is its creator's: `engine.dispose()` does not free the meshes, materials and textures you made, so track their removal: `ctx.track({ remove: () => engine.remove(mesh) })` (`engine.remove` disposes geometry and materials, not their textures: three's `material.dispose()` leaves its maps, so dispose a texture you made when nothing uses it). The `dispose(e)`
+  hook frees the rest (Workers, the physics world, WASM objects, real-time timers), in reverse install order.
 - Your data in a replaceable provider: `ctx.feeds('collision', () => addMyWalls())` runs before the `use()` of a new holder returns.
 - Foundation slots are the ones a running game cannot swap: `world` alone, because it owns every record. Choose your own holder before `start()`; every other slot takes `replaces` at any time.
 - A module's changes to shared values go through `ctx.mod(point, { mul: 0.8, layer: 'effect' })` (= `ctx.track(e.mod(point, { owner: ctx.name, ... }))`),
@@ -118,10 +121,10 @@ A module that does two kinds of thing is two definitions returned together (`wea
 - Saved state the module writes joins the ops guard (experimental): `e.ops.guard('stamina.set')` in each writing method (a no-op in production builds,
   no DEV check needed), `e.ops.allow(fn)` around writes that are allowed anyway (recipe 23 section 5).
 - **Per-playthrough state** is a save part: whatever changes during play and matters for what happens next (a zone's `once` / cooldown, a
-  transition's progress, a hand-picked music track, a check timer, markers an effect placed) goes in `e.saves.register(...)`. The engine calls it
+  transition's progress, a hand-picked music track, a check timer, markers an effect placed) goes in `e.saves.define(...)`. The engine calls it
   on all three paths: save, load, and new game (a new game loads the state captured when `start()` finished), so there is nothing to reset by
-  hand. What cannot be saved ends with its playthrough: a background result goes through `engine.commits` (a load or new game drops old ones;
-  keep `e.commits.epoch` on a queued request and drop it when that changed), and an effect of a running playthrough (an open dialogue, a
+  hand. What cannot be saved ends with its playthrough: a background result goes through `ctx.commits` (a load or new game drops old ones;
+  keep `ctx.commits.epoch` on a queued request and drop it when that changed), and an effect of a running playthrough (an open dialogue, a
   running cutscene, the music playing) stops on `ctx.track(e.events.on('session:end', ...))`. What is derived from save parts is rebuilt on
   `'session:start'` and `'save:loaded'`, and what a rollback took down on `'session:failed'`. A `'session:end'` listener only stops things: it starts nothing for the next state. A module's `describe()` should show such state: the session spec (`threedog test "session fresh page"`) compares `describe()` after a new game with a fresh page, and the Lifecycle spec round-trips the engine's own.
 - When you only need a per-frame callback and no module structure: `const h = engine.onFrame(dt => ...)` / `engine.onFixed`, and `h.remove()` cancels it.

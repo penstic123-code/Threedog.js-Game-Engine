@@ -67,7 +67,7 @@ export interface PixelSpriteOptions {
  * Works as a character's `model`. mesh.position stays exact; only what is drawn is rounded.
  * @example
  * const hero = pixelSprite({ grid: engine.cameraRig.pixelSnap.grid, material, width: 16, height: 24, columns: 4, rows: 3, snap: 'followed' });
- * engine.characters.createPlayer({ ...presets.player.thirdPerson, model: hero });
+ * engine.characters.addPlayer({ ...presets.player.thirdPerson, model: hero });
  */
 export function pixelSprite(options: PixelSpriteOptions): Mesh;
 

@@ -6,10 +6,12 @@
 // engine.freeze('menu') is engine.mod('freeze', { owner: 'menu' }) with the loop's side effects added (ending the last halt restarts the loop).
 // One entry per mechanism: the handle's remove() ends a halt / freeze (there is no engine.resume / engine.unfreeze).
 import { warnOnce } from '../base/validate.js';
+import { readParams, keysSchema } from '../base/params.js';
 import { coded } from '../base/errorHints.js';
 import { ownerArgs } from './sharedPoint.js';
 import { viewHold } from '../scene/view.js';
 
+const FREEZE_KEYS = keysSchema(['owner', 'kind', 'still']);   // an unknown key (the old ambient) throws in dev with a did-you-mean
 // The halt / freeze handle is { owner, remove() } only: no chaining, so each is ended in exactly one way.
 function handle(owner, remove) { return { owner, remove }; }
 
@@ -21,13 +23,22 @@ function handle(owner, remove) { return { owner, remove }; }
  * @param {any} engine
  */
 export function defineHoldStacks(engine) {
-  engine.stacks.define('freeze', { kind: 'any', save: false });   // who froze gameplay
+  engine.stacks.define('freeze', { kind: 'any', save: false, onChange: () => engine.input?._kbSync?.() });   // who froze gameplay; a freeze gives the page's key lock back (inputKeyboard.js)
   engine.stacks.define('halt', { kind: 'any', save: false, onChange: () => {   // who stopped the loop; it restarts only when empty
     if (engine.stacks.get('halt').size()) engine.halted = true;
     else if (!engine.disposed) { engine.halted = false; engine._loop(); }
     engine.page._sync();   // a page hold is about the real-time loop: there is none while the loop is stopped (core/engine/page.js)
   } });
-  engine.stacks.define('camera', { kind: 'top', save: false, onChange: () => viewHold(engine) });   // who holds the camera; the latest is in charge (cameraOverride)
+  // who holds the camera; the latest is in charge (cameraOverride). A claim that is in charge again after a newer one left gets its opts.onTop() called: it holds the camera
+  // but the newer holder moved it, so the holder puts its pose back (a named view). Claims are new objects per take, so "seen on top before" is the identity of one claim
+  const onTopBefore = new WeakSet(); let top = null;
+  engine.stacks.define('camera', { kind: 'top', save: false, onChange: () => {
+    viewHold(engine);
+    const t = engine.stacks.get('camera').value() ?? null;
+    if (t === top) return;
+    top = t;
+    if (t) { if (onTopBefore.has(t) && !engine.disposed) t.onTop?.(); onTopBefore.add(t); }   // not after dispose: a shot's async release would write a camera that is gone
+  } });
 }
 
 export const holdMethods = {
@@ -65,21 +76,22 @@ export const holdMethods = {
   // have unfrozen. step() obeys freezes as well. Same owner rules as every stack (core/ops/stacks.js).
   /**
    * Freeze gameplay for owner (default 'game'; freeze({ owner, kind }) works too). kind 'title' marks a title screen waiting for start (runState 'title-frozen').
-   * Ambient motion (uniforms.uTime: wind, water, clouds), skeletal animation and particles keep moving behind the freeze, as behind a pause menu; ambient: true stops them too
-   * (a photo, a cutscene still; the page's own hold). UI and the camera stay live.
+   * Ambient motion (uniforms.uTime: wind, water, clouds), skeletal animation and particles keep moving behind the freeze, as behind a pause menu; still: true stops them too
+   * (a photo, a cutscene still; the page's own hold).. UI and the camera stay live.
    * Returns a handle whose remove() releases this owner's freeze. Same as engine.mod('freeze', { owner }) plus the kind.
-   * @param {string | { owner?: string, kind?: 'title', ambient?: boolean }} [owner] @param {{ kind?: 'title', ambient?: boolean }} [opts]
+   * @param {string | { owner?: string, kind?: 'title', still?: boolean }} [owner] @param {{ kind?: 'title', still?: boolean }} [opts]
    * @returns {{ owner: string, remove(): void }}
    */
   freeze(owner, opts) {
     const a = ownerArgs(owner, opts);
-    const h = this.stacks.get('freeze').take({ owner: a.owner, value: { kind: a.opts.kind ?? null, ambient: !!a.opts.ambient } });
+    readParams('engine.freeze()', FREEZE_KEYS, a.opts);
+    const h = this.stacks.get('freeze').take({ owner: a.owner, value: { kind: a.opts.kind ?? null, still: !!a.opts.still } });
     return handle(a.owner, h.remove);
   },
   /** True while someone has frozen gameplay */
   get frozen() { return this.stacks.get('freeze').value(); },
-  /** True while a freeze asked for a full still (freeze(owner, { ambient: true })): code that moves things on frame dt reads this, as animation and particles do */
-  get still() { const F = this.stacks.get('freeze'); return F.size() > 0 && F.entries().some(h => h.value?.ambient); },   // read per character and animator: nothing built while no one froze
+  /** True while a freeze asked for a full still (freeze(owner, { still: true })): code that moves things on frame dt reads this, as animation and particles do */
+  get still() { const F = this.stacks.get('freeze'); return F.size() > 0 && F.entries().some(h => h.value?.still); },   // read per character and animator: nothing built while no one froze
   /**
    * The one answer to "why is the page (not) advancing"; the dev bridge and the MCP tools copy it as-is.
    * state: 'loading' | 'title-frozen' (a freeze of kind 'title' is up, waiting for start) | 'halted' (the loop is stopped: a test, the bridge, a headless page)
@@ -94,7 +106,7 @@ export const holdMethods = {
     const lv = this.loading?.view();
     const state = !this.ready || !lv?.done ? 'loading' : F.entries().some(d => d.value.kind === 'title') ? 'title-frozen'
       : this.halted ? 'halted' : F.size() ? 'frozen' : 'running';
-    const blockedBy = this.input.holders.filter(h => !h.pass).map(h => h.context);
+    const blockedBy = this.input.blockedBy();
     if (F.has('error')) blockedBy.push('error');
     if (lv?.blocked) blockedBy.push('loading');
     return { state, owners, blockedBy };
@@ -125,7 +137,7 @@ export const holdMethods = {
 const HOLD_STACKS = { halt: 'halt', freeze: 'freeze', camera: 'camera', debugView: 'debug.view' };
 /**
  * Everyone who holds something, in one place (empty parts left out): halt / freeze / camera / debugView [{ owner, at }]; input [{ context, owner,
- * pass }] (pushed input contexts); gates { action: [owners] } (input.gate). Every other shared value is in describe().shared (core/ops/stacks.js).
+ * pass }] (pushed input contexts); gates { action: [owners] } (input.gate); shadowed { action: [causes] } (input.blockedBy). Every other shared value is in describe().shared (core/ops/stacks.js).
  * Lives here, next to the hold stacks it reads, so describe() and the input-holds test use the same function (no second copy).
  * "Why can't I move / why is time slow" is answered here without knowing which module did it.
  */
@@ -136,5 +148,10 @@ export function describeHolds(e) {
   const g = e.stacks.has('input.gate') ? e.stacks.get('input.gate') : null, gates = {};
   for (const id of g?.ids() ?? []) if (g.size(id)) gates[id] = g.names(id);
   if (Object.keys(gates).length) out.gates = gates;
+  // actions whose own context is on the stack but a pass-through context above binds the same key: the one block holds.input does not already show,
+  // with every cause input.blockedBy gives
+  const shadowed = {};
+  for (const a of e.input.actions.keys()) { const why = e.input.blockedBy(a); if (why.some(w => w.startsWith('shadowed-by:'))) shadowed[a] = why; }
+  if (Object.keys(shadowed).length) out.shadowed = shadowed;
   return out;
 }

@@ -2,7 +2,7 @@
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ERROR_HINTS, hintFor } from 'threedog/error-hints';
+import { ERROR_HINTS, hintFor, parseDocRef } from 'threedog/error-hints';
 import { pickGameplay, diffDescribe, saveSnapshot, compareSnapshot, changeLine } from '../describe-snapshot.mjs';
 import { DOCS_REL, ROOT } from '../paths.mjs';
 
@@ -20,7 +20,7 @@ const SAMPLES = {
   'module-name': 'module name sky clashes with an existing engine property; pick another name [module-name]',
   'module-called': 'engine.use received the module function sky itself; call it: sky() [module-called]',
   'describe-name': "describe.add('range'): this name is already taken; pick another (existing fields, module names and previously registered names cannot be reused) [describe-name]",
-  'module-needs': 'characters.createPlayer() needs world() installed first: the player is a record in world [module-needs]',
+  'module-needs': 'characters.addPlayer() needs world() installed first: the player is a record in world [module-needs]',
   'world-plain': 'world data must be plain values (number, string, boolean, array, plain object): x is a function. Put models in world.present() [world-plain]',
   'world-id': 'world.add(): id "crate_1" already exists. Omit id to auto-number [world-id]',
   'world-record': 'world.get(): no record with id "ghost" (world.query({ kind }) lists what exists) [world-record]',
@@ -60,10 +60,12 @@ export async function run({ check }) {
     hintFor("Cannot assign to read only property 'position' of object '#<Ca>'") === null && hintFor("Cannot assign to read only property 'position' of object '#<Mesh>'") === null);
   check('every sample message lands on its own class', wrong.length === 0, wrong.join('; '));
   check('every pattern class has a sample in this test', ids.every(id => id in SAMPLES), ids.filter(id => !(id in SAMPLES)).join(', '));
-  const docs = ERROR_HINTS.flatMap(h => h.docs.map(d => [h.id, d])).filter(([, d]) => !existsSync(join(ROOT, DOCS_REL, d)));
+  const docs = ERROR_HINTS.flatMap(h => h.docs.map(d => [h.id, d])).filter(([, d]) => !existsSync(join(ROOT, DOCS_REL, parseDocRef(d)?.file ?? d)));
   check('every doc page a hint points at exists (relative to the package docs)', docs.length === 0, docs.map(x => x.join(': ')).join('; '));
 
   const d = { perf: { fps: 60 }, time: { real: 12.3, clock: '12:00' }, player: { x: 10, y: 1, z: 5, state: 'idle' }, nearby: [{ name: 'Hen', dist: 3 }, { name: 'Pig', dist: 8 }], quests: { active: [{ id: 'q1', step: 'talk' }] } };
+  const pu = pickGameplay({ ui: { windows: [], parts: { 'hud.button': 'default', 'hud.hint': 'off', toast: 'custom' } }, warnings: ['engine said'], player: { x: 1 } });
+  check('pickGameplay: ui keeps only the parts the game replaced, warnings are dropped (engine-owned data)', JSON.stringify(pu) === '{"player":{"x":1},"ui":{"parts":{"toast":"custom"},"windows":[]}}', JSON.stringify(pu));
   const p = pickGameplay(d);
   check('pickGameplay: drops perf and time.real, keeps the rest; only keeps dotted paths', !('perf' in p) && !('real' in p.time) && p.time.clock === '12:00' && JSON.stringify(Object.keys(pickGameplay(d, { only: ['player.x', 'quests'] }))) === '["player","quests"]');
   const cur = JSON.parse(JSON.stringify(d));

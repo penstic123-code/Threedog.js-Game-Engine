@@ -380,12 +380,12 @@ export const specs = [
         out.tiers = code(() => make(world(), characters({ npcs: false, npcTiers: {} })));
         const noWorld = make(characters({ npcs: false }));
         await noWorld.start();
-        out.noWorld = code(() => noWorld.characters.createPlayer({ control: 'camera' }));
+        out.noWorld = code(() => noWorld.characters.addPlayer({ control: 'camera' }));
         noWorld.dispose();
         const E = make(world(), collision(), characters({ npcs: false }));
         await E.start();
         out.npcs = E.npcs === undefined;
-        const p = E.characters.createPlayer({ control: 'camera', spawn: { x: 1, z: 2 } });
+        const p = E.characters.addPlayer({ control: 'camera', spawn: { x: 1, z: 2 } });
         const h = E.control.take('player', { owner: 's1-bare', layer: 'script', step: () => null });
         out.owner = E.control.of(p)?.owner; h.remove();
         E.characters.pathsPerStep = 0; out.perStep = E.characters.pathsPerStep;
@@ -394,7 +394,7 @@ export const specs = [
       });
       const J = JSON.stringify(r);
       check('npcTiers with npcs: false is refused', r.tiers === 'module-params', J);
-      check('createPlayer without world names the missing module', r.noWorld === 'module-needs', J);
+      check('addPlayer without world names the missing module', r.noWorld === 'module-needs', J);
       check('npcs: false: no engine.npcs, the player still resolves by id', r.npcs && r.owner === 's1-bare', J);
       check('pathsPerStep stays at least 1', r.perStep === 1, J);
     },

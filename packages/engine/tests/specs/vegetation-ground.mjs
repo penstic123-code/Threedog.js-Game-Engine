@@ -75,7 +75,7 @@ export const specs = [
         // a code-built ground replaces the level ground: everything is placed again on the new surface
         E.setGround({ height: () => 2, slope: () => 0, type: () => 'lawn' });
         await settle(0, 0);
-        const ys = []; for (const c of H.chunks.values()) for (const im of Object.values(E.vegetationDraw.meshes.get(c)?.ims ?? {})) { const a = im.instanceMatrix.array; for (let i = 0; i < im.count; i++) if (a[i * 16 + 15]) ys.push(a[i * 16 + 13]); }
+        const ys = []; for (const c of H.chunks.values()) for (const im of Object.values(E.vegetationDraw.meshes.get(c)?.ims ?? {})) { const a = im.instanceMatrix.array; for (let i = 0; i < im.count; i++) if (a[i * 16 + 5]) ys.push(a[i * 16 + 13]); }
         out.reground = { n: ys.length, at2: ys.length > 0 && ys.every(y => Math.abs(y - 2) < 1e-4), stoneSideToo: [...H.chunks.values()].some(c => c.cx >= 0 && Object.keys(c.plants).length) };
         out.stillJoined = typeof E.ground.forEachCollider === 'function';
         E.dispose();
@@ -123,6 +123,58 @@ export const specs = [
       check('settings read the vegetation chunks without terrain', !r.terrain && r.v0 === 2 && r.d0 === 1, JSON.stringify(r));
       check('density and view distance reach the vegetation chunks', r.host.density === 0.5 && r.host.view === 4, JSON.stringify(r));
       check('[guard] the shadows switch reaches near-only plants without terrain', r.shadowOn.length > 0 && r.shadowOn.every(Boolean) && r.shadowOff.length === r.shadowOn.length && !r.shadowOff.some(Boolean), JSON.stringify([r.shadowOn, r.shadowOff]));
+    },
+  },
+  {
+    // why: with frustumCulled off every shadow cascade drew every casting chunk and the nearest ring drew behind the camera (a grassy game: ~577 draws)
+    name: '[guard] vegetation culling: each chunk mesh is frustum culled by three per camera, its sphere holds every plant; behind the view and outside a shadow box draw nothing; felled slots keep it finite',
+    url: '/tests/terrain-edit/',
+    async run({ check, ev }) {
+      const r = await ev(async () => {
+        const { createEngine, vegetation, level, THREE } = threedogTerrain;
+        const E = createEngine({ canvas: document.createElement('canvas'), headless: true, ui: { loading: false }, urlState: false, saveKey: 'veg-cull' });
+        const root = new THREE.Group();
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(80, 80).rotateX(-Math.PI / 2)); m.name = 'ground'; root.add(m);
+        E.use(level({ scene: root }), vegetation({ chunkSize: 16, viewChunks: 2 }));
+        E.vegetation.define('tuft', { geometry: new THREE.ConeGeometry(0.2, 0.6, 4).translate(0, 0.3, 0), nearOnly: true, castShadow: true, rule: { perChunk: 40, sink: 0 } });
+        E.vegetation.define('shrub', { geometry: new THREE.BoxGeometry(1, 2, 1).translate(0, 1, 0), rule: { perChunk: 6, sink: 0 } });
+        await E.start();
+        E.camera.position.set(8, 2, 8); E.camera.lookAt(40, 1, 8);   // the main view looks +x: chunk -2,0 (ring 2) is behind it
+        E.focus.set(8, 0, 8); for (let i = 0; i < 20; i++) E.step(1 / 30);
+        const H = E.vegetation.host, ims = [...H.chunks.values()].map(c => E.vegetationDraw.mesh(c, 'tuft')).filter(Boolean);
+        const p = new THREE.Vector3(), q = new THREE.Vector3(), mat = new THREE.Matrix4();
+        let inside = true;
+        for (const im of ims) {
+          im.updateMatrixWorld(true);
+          const s = im.boundingSphere.clone().applyMatrix4(im.matrixWorld);
+          for (let i = 0; i < im.count; i++) { im.getMatrixAt(i, mat); p.setFromMatrixPosition(mat).applyMatrix4(im.matrixWorld); q.set(0, 0.6, 0).applyMatrix4(mat).applyMatrix4(im.matrixWorld); if (!s.containsPoint(p) || !s.containsPoint(q)) inside = false; }
+        }
+        const seen = cam => { cam.updateMatrixWorld(true); const f = new THREE.Frustum().setFromProjectionMatrix(mat.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)); return ims.filter(im => f.intersectsObject(im)).length; };
+        const view = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 200); view.position.set(8, 2, 8); view.lookAt(40, 1, 8);   // looking +x from the middle of chunk 0,0
+        const box = new THREE.OrthographicCamera(-3, 3, 3, -3, 0.1, 50); box.position.set(8, 30, 8); box.lookAt(8, 0, 8);    // a small shadow box over chunk 0,0
+        const out = { n: ims.length, culled: ims.every(im => im.frustumCulled), inside, view: seen(view), box: seen(box) };
+        // a ring-2 chunk off the main view still casts into a shadow box over it: its group is not hidden, three culls the mesh per camera
+        const far = [...H.chunks.values()].find(c => c.cx === -2 && c.cz === 0), shrub = far && E.vegetationDraw.mesh(far, 'shrub');
+        const back = new THREE.OrthographicCamera(-20, 20, 20, -20, 0.1, 80); back.position.set(-24, 40, 8); back.lookAt(-24, 0, 8);
+        out.offscreen = shrub ? { group: E.vegetationDraw.meshes.get(far).group.visible, mesh: shrub.visible, inView: far.inView,
+          shadow: (back.updateMatrixWorld(true), new THREE.Frustum().setFromProjectionMatrix(mat.multiplyMatrices(back.projectionMatrix, back.matrixWorldInverse)).intersectsObject(shrub)) } : null;
+        // felling slot 0 keeps the sphere finite (an all-zero matrix made it NaN: rays and culling missed the chunk); restoring recomputes it
+        const c0 = [...H.chunks.values()].find(c => c.cx === 0 && c.cz === 0), im0 = E.vegetationDraw.mesh(c0, 'tuft'), ids = im0.userData.plants.ids;
+        E.vegetation.removeInstance('tuft', 0, 0, ids[0]);
+        const s1 = im0.boundingSphere, hit = new THREE.Vector3();
+        im0.getMatrixAt(1, mat); hit.setFromMatrixPosition(mat).applyMatrix4(im0.matrixWorld);
+        const ray = new THREE.Raycaster(new THREE.Vector3(hit.x, hit.y + 5, hit.z), new THREE.Vector3(0, -1, 0));
+        out.felled = { finite: Number.isFinite(s1.center.x) && Number.isFinite(s1.radius), hits: ray.intersectObject(im0).filter(h => h.instanceId === 1).length };
+        E.vegetation.restoreInstance('tuft', 0, 0, ids[0]);
+        out.felled.recomputed = im0.boundingSphere !== s1 && Number.isFinite(im0.boundingSphere.radius);
+        E.dispose();
+        return out;
+      });
+      check('[guard] every vegetation chunk mesh is frustum culled (three tests it against the view and each shadow camera)', r.n >= 9 && r.culled, JSON.stringify(r));
+      check('[guard] its culling sphere holds every plant, base and top (no plant clipped at the screen edge)', r.inside, JSON.stringify(r));
+      check('a view looking one way skips the chunks behind it; a small shadow box draws only the chunk under it', r.view > 0 && r.view < r.n && r.box >= 1 && r.box < r.n, JSON.stringify(r));
+      check('[guard] a ring-2 chunk behind the view keeps its group shown and is inside a shadow box over it (its shadow is not dropped)', r.offscreen && r.offscreen.inView === false && r.offscreen.group && r.offscreen.mesh && r.offscreen.shadow, JSON.stringify(r.offscreen));
+      check('[guard] felling slot 0: the sphere stays finite and a ray still hits another plant of the chunk; restoring recomputes it', r.felled.finite && r.felled.hits > 0 && r.felled.recomputed, JSON.stringify(r.felled));
     },
   },
   {

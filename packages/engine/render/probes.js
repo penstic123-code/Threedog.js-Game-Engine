@@ -16,7 +16,8 @@ import { codedError, coded } from '../core/base/errorHints.js';
 import { warnOnce, fmt } from '../core/base/validate.js';
 import { vec3 } from '../core/base/math.js';
 import { isWebGPU, webgpuPart, freshFrame, readLayer, onRendererSwap } from './backend.js';
-import { mats, lit, noteFillLight, noteEnvironment } from './lit.js';
+import { mats, lit } from './lit.js';
+import { litTwice } from '../core/inspect/pictureChecks.js';
 
 const FORMAT = 'threedog-probes', VERSION = 2, MAX_PROBES = 4096, SH = 27;
 const CHUNK = 8;        // probes baked per turn of the event loop, so the page keeps drawing during a long bake
@@ -37,7 +38,6 @@ const STRINGS = {
   outside: '{n} lit object(s) reach outside the probe grid ({names}): the part outside gets no probe light and can go black. Widen bounds, or add light there. describe().render.probes lists them',
   filled: 'engine.bakeProbes(): {n} probe(s) saw a pixel that is not a number (a shader dividing by zero or taking pow of a negative; first at {at}) and took the light of their nearest good neighbours. Fix that material, or leave it out with include',
   noLight: 'engine.bakeProbes(): every probe saw a pixel that is not a number, so nothing usable was baked. A material in view writes NaN (a shader dividing by zero or taking pow of a negative): fix it, or leave it out with include',
-  doubled: 'probe light is added on top of {what}, which the bake already saw, so that light counts twice. Lower it where the probes take over, or bake without it',
 };
 const sets = e => (e._probeSets ??= new Set());
 
@@ -109,21 +109,17 @@ function toBase64(bytes) {
   return btoa(s);
 }
 
-/** Visible lit meshes no set fully holds, and everything else in the scene that adds light the bake already saw. Runs on describe() and when a set is added, never per frame */
+/** Visible lit meshes no set fully holds (light counted twice is a picture check: core/inspect/pictureChecks.js). Runs on describe() and when a set is added, never per frame */
 function probeChecks(e) {
-  const boxes = [...sets(e)].map(s => s.box), b = new THREE.Box3(), outside = [], doubled = [];
-  let mapped = 0;
+  const boxes = [...sets(e)].map(s => s.box), b = new THREE.Box3(), outside = [];
   e.scene.traverseVisible(o => {
-    if (noteFillLight(o, doubled) || !o.isMesh || !mats(o).some(lit)) return;
-    if (mats(o).some(m => m.lightMap)) mapped++;
+    if (!o.isMesh || !mats(o).some(lit)) return;
     const src = o.isInstancedMesh ? o : o.geometry;
     if (!src.boundingBox) src.computeBoundingBox();
     b.copy(src.boundingBox).applyMatrix4(o.matrixWorld);
     if (!boxes.some(x => x.containsBox(b))) outside.push(o.name || `${o.type} ${o.id}`);
   });
-  noteEnvironment(e.scene, doubled);
-  if (mapped) doubled.push(`material.lightMap on ${mapped} mesh(es)`);
-  return { outside, doubled };
+  return { outside };
 }
 
 /**
@@ -199,9 +195,9 @@ class ProbeSet {
   }
   /** describe().render.probes row */
   info() {
-    const { outside, doubled } = probeChecks(this._e);
+    const { outside } = probeChecks(this._e);
     return { count: this.count, counts: this.counts, step: this.step.map(s => Math.round(s * 100) / 100), source: this.source, owner: this.owner,
-      outside: { count: outside.length, names: outside.slice(0, 3) }, doubled, ...(this.bakeMs != null ? { bakeMs: Math.round(this.bakeMs) } : {}) };
+      outside: { count: outside.length, names: outside.slice(0, 3) }, ...(this.bakeMs != null ? { bakeMs: Math.round(this.bakeMs) } : {}) };
   }
   /** Take the grid out of the scene and free its texture; the data stays readable (sample, toJSON). Safe to call twice */
   remove() {
@@ -227,9 +223,9 @@ function drawProbes(e, scene) {
 }
 function addSet(e, data, o) {
   e._probeView ??= e.debug?.defineView('probes', { what: 'each light probe as a dot colored by its average light', apply: scene => drawProbes(e, scene) });
-  const set = new ProbeSet(e, data, o), { outside, doubled } = probeChecks(e);
+  const set = new ProbeSet(e, data, o), { outside } = probeChecks(e), twice = litTwice(e);
   if (outside.length) warnOnce(coded('probes-check', fmt(STRINGS.outside, { n: outside.length, names: outside.slice(0, 3).join(', ') })));
-  if (doubled.length) warnOnce(coded('probes-check', fmt(STRINGS.doubled, { what: doubled.join(', ') })));
+  if (twice) warnOnce(coded('probes-check', twice));
   return set;
 }
 

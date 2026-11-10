@@ -41,7 +41,7 @@ engine.use(openWorld({ camera: fixedCamera(), seed: SEED, terrain: { ...terrainP
 
 const picture = createPicture(engine, { env: params.env });
 engine.assets.manifest(packs);   // assets.js: the world example's trees / rocks and the test models content/templates.js uses
-engine.characters.createPlayer({ ...presets.player.thirdPerson, model: 'humanoid', spawn: { x: stage.x + 0.5, z: stage.z + 6 } });
+engine.characters.addPlayer({ ...presets.player.thirdPerson, model: 'humanoid', spawn: { x: stage.x + 0.5, z: stage.z + 6 } });
 engine.content.load(data, { places: { stage, water } });
 
 // ---------- 2. The room's lamp: on from 18:00 to 06:00 ----------

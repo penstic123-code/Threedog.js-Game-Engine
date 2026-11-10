@@ -40,34 +40,53 @@
 //                  line, or --ref). Facts and
 //                  likely causes with the parameter's current value, never target values; nothing fails, nothing is changed (picture/check.mjs)
 //   --ref image    also compare with this reference picture (picture compare) and say where it clearly differs
+//   --path-trace   (experimental) the reference picture: this view path-traced (--samples n per pixel, a whole number from 1, default 128) by the game's photo({ pathTracer }) on the
+//                  WebGPU backend or a WebGLRenderer, written as the shot; then shot the same view with --ref <it> (or picture compare) to see where the real-time picture differs
 //   --no-picture      skip the numbers and hints
 //   --json         print one JSON object (file, picture numbers, probe facts, hints, describe text) instead of text; for MCP / the dev bridge
 //   --compare before.png  after the shot, print both file names, a pixel-diff number (0 = identical) and the picture differences; take `before` with --keep
+//   --save-baseline  store this shot's draw calls, triangles and module ms in the game's .threedog/perf-baseline.json (this machine's, not committed); later shots from the same
+//                  spot say in one line when they are slower (every shot also says when it is over the game's engine.budget or the resolution was lowered)
 //   --no-build     do not rebuild, use the last tool build in .threedog/tool-build/ (saves a few seconds when code did not change)
 //   --gpu / --software  force the renderer (default: the hardware GPU when headless can reach it, else SwiftShader; also THREEDOG_RENDER=gpu|software)
 //   -w name         which workspace (engine, my-game…); default the one containing the current directory, then the engine package
 process.env.THREEDOG_TEST = '1';
 import { launchBrowser, newGamePage, buildAndPreview } from './browser.mjs';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { cli, rel } from './paths.mjs';
+import { intOption } from './lib/cli-args.mjs';
 import { waitEngine, waitLoaded, sceneCounts, refuseState } from './wait-engine.mjs';
 import { camPose, shotName, shotFile, viewSize, wrongServer } from './lib/shot-name.mjs';
 import { formatPicture, pagePicture, imagePicture, NO_PAGE } from './picture/check.mjs';
 import { PICTURE, TITLE_COVERS } from './threedog/pageFns.mjs';
 import { drawnBy, headlessUrl } from './lib/page-url.mjs';
+import { loadBaseline, perfNotice } from './lib/perf-baseline.mjs';
 
 const t0 = Date.now();
 
 // switches never take a value (so `--keep /page` keeps /page as the page); an unknown option fails naming the closest one
-let { dir, page: url, pageArg, opt } = cli(process.argv.slice(2), { page: '/', flags: ['keep', 'no-picture', 'json', 'describe-only', 'no-build', 'keep-cutscene', 'gpu', 'software', 'play'],
-  values: ['time', 'weather', 'pos', 'at', 'view', 'cam', 'wait', 'load-timeout', 'size', 'compare', 'out', 'ref', 'tier', 'image'],
+let { dir, page: url, pageArg, opt } = cli(process.argv.slice(2), { page: '/', flags: ['keep', 'no-picture', 'json', 'describe-only', 'no-build', 'keep-cutscene', 'gpu', 'software', 'play', 'save-baseline', 'path-trace'],
+  values: ['time', 'weather', 'pos', 'at', 'view', 'cam', 'wait', 'load-timeout', 'size', 'compare', 'out', 'ref', 'tier', 'image', 'samples'],
   // an option the other switches off used to be dropped without a word (--ref under --no-picture compared nothing)
   conflicts: [['ref', 'no-picture', 'the reference is compared inside the picture check'], ['cam', 'view', 'a view and a pose both place the camera'],
-    ...['ref', 'compare', 'out', 'keep'].map(k => [k, 'describe-only', 'describe-only takes no screenshot']),
-    ...['time', 'weather', 'pos', 'view', 'cam', 'wait', 'size', 'out', 'keep', 'compare', 'no-picture', 'describe-only', 'tier', 'play'].map(k => [k, 'image', '--image reads a saved picture, there is no page to set up'])] });
+    ...['ref', 'compare', 'out', 'keep', 'path-trace', 'samples'].map(k => [k, 'describe-only', 'describe-only takes no screenshot']),
+    ...['time', 'weather', 'pos', 'view', 'cam', 'wait', 'size', 'out', 'keep', 'compare', 'no-picture', 'describe-only', 'tier', 'play', 'save-baseline', 'path-trace'].map(k => [k, 'image', '--image reads a saved picture, there is no page to set up'])] });
 const json = !!opt.json;
 if (opt.image !== undefined) process.exit(await imageOnly(opt));
+let traceSamples = 0;
+try { if (opt.samples !== undefined && !opt['path-trace']) throw new Error('--samples is the --path-trace sample count: add --path-trace'); traceSamples = opt['path-trace'] ? intOption(opt, 'samples') ?? 128 : 0; } catch (e) { console.log('✗ ' + e.message); process.exit(1); }
+
+/** --path-trace: the same view through photo mode's path tracer, written as this shot's file (the picture numbers then read that file, not the live canvas) */
+async function tracedShot(page, samples, file) {
+  const r = await page.evaluate(async s => {
+    if (!engine.photo) throw new Error("--path-trace takes the picture through photo mode: add photo({ pathTracer: () => import('three-gpu-pathtracer/webgpu') }) to the game's modules");
+    const shot = await engine.photo.trace({ samples: s, seconds: 600, format: 'image/png' });   // a reference converges: samples are the limit, not time
+    return { url: shot.url, ...shot.pathTraced };
+  }, samples);
+  writeFileSync(file, Buffer.from(r.url.slice(r.url.indexOf(',') + 1), 'base64'));
+  return r;
+}
 
 /** --image: the picture check's pixel facts on a picture taken any other way (a self-written screenshot script, a browser's own capture) */
 async function imageOnly(opt) {
@@ -131,7 +150,10 @@ try {
   if (!tail.quiet) say(`  The scene was still changing ${Math.round(tail.ms / 1000)} s after start() resolved (${grew.join(', ') || 'requests still open'}); shot as it is now`);
   else if (grew.length) say(`  Waited ${(tail.ms / 1000).toFixed(1)} s for the game's code after await engine.start() (${grew.join(', ')})`);
   await ev(() => engine.ui.settled());   // the loading screen fades out on a wall-clock timer after ready; do not capture it mid-fade
+  const perfEval = (src, arg) => page.evaluate(`(${src})(${JSON.stringify(arg)})`);
+  await loadBaseline(perfEval, dir);   // before describeText, so its perf line compares against the game's perf-baseline.json too
   const text = await ev(() => { engine.step(1 / 30, { render: true }); return engine.describeText(); });
+  const perf = result.perf = await perfNotice(perfEval, dir, !!opt['save-baseline']);
   if (!opt['describe-only']) {
     // --keep: a timestamp in a generated name (an explicit --out is the name the caller chose and wants to find again, so it is used as given), so a new shot never replaces an earlier one (to compare before / after a change)
     const stamp = opt.keep && (!opt.out || opt.out === true) ? '_' + new Date().toISOString().replace(/\D/g, '').slice(4, 14) + String(Date.now() % 1000).padStart(3, '0') : '';
@@ -141,10 +163,12 @@ try {
     if (opt.compare && opt.compare !== true && resolve(opt.compare) === resolve(file)) throw new Error(`--compare ${opt.compare} is the file this shot writes: copy it first, or use --keep or --out`);
     mkdirSync(dirname(file), { recursive: true });
     const pictured = await sceneCounts(page);
-    await page.screenshot({ path: file });
+    const traced = traceSamples ? result.pathTraced = await tracedShot(page, traceSamples, file) : null;
+    if (traced) delete traced.url; else await page.screenshot({ path: file });
     const backend = drawnBy(await ev(() => engine.describe().renderer));
     Object.assign(result, { file, size: [W, H], renderer: browser.render.kind, backend, tier });
     say(`Screenshot: ${rel(file)} (${W}×${H}, ${browser.render.kind} rendering, ${tier} tier, drawn by ${backend})`);
+    if (traced) say(`  Path traced: ${traced.samples} samples per pixel in ${(traced.ms / 1000).toFixed(1)} s at ${traced.size.join('×')}${traced.untraced ? `\n  ${traced.untraced}` : ''}`);
     // the picture numbers below would measure the start screen, not the game's picture
     if (!opt.play && await ev(() => engine.ui.isOpen('title'))) say('  ' + TITLE_COVERS);
     if (opt.compare && opt.compare !== true) {   // before / after: the earlier picture against this one
@@ -165,7 +189,8 @@ Pixel diff: ${diff} (0 = identical, 1 = black vs white)`);
       }
       // noon / midnight renders only where the game moves time (calendar + sky: 'auto'), or when this shot set a time
       // Playwright evaluates a string as an expression (a function source comes back as the function itself, serialized to undefined): call it here
-      const lk = await pagePicture((src, arg) => page.evaluate(`(${src})(${JSON.stringify(arg)})`), { dir, time: opt.time ? true : 'auto', ref });
+      // a traced picture is in the file, not on the canvas: only its pixel facts
+      const lk = traced ? await imagePicture(file, { dir, ref }) : await pagePicture((src, arg) => page.evaluate(`(${src})(${JSON.stringify(arg)})`), { dir, time: opt.time ? true : 'auto', ref });
       // the picture check never fails the shot: a probe that could not read the canvas says so and the shot stands
       if (lk.error) { result.pictureError = lk.error; say(`Picture: skipped (${lk.error})`); }
       else {
@@ -183,8 +208,9 @@ Pixel diff: ${diff} (0 = identical, 1 = black vs white)`);
   }
   result.describe = text;
   // under a picture only what bears on it (the same PICTURE lines as threedog snap); --describe-only and --json keep the whole describeText
-  if (opt['describe-only']) say('\n' + text);
-  else { result.pictureLines = await ev(`(${PICTURE})(window.engine)`); say('\n' + result.pictureLines.join('\n')); }   // result.picture holds the numbers
+  if (opt['describe-only']) say('\n' + text);   // its perf line is the notice
+  else { result.pictureLines = await ev(`(${PICTURE})(window.engine)`); say('\n' + result.pictureLines.join('\n')); if (perf.notice) say(perf.notice); }   // result.picture holds the numbers
+  for (const l of perf.lines) say(l);
 } catch (e) { errors.push(String(e?.message ?? e)); }   // whole message: the wait/loading failures put the reason on the following lines
 finally { await browser.close(); await server.close(); }
 if (errors.length) say('\nPage errors:\n  ' + errors.slice(0, 5).join('\n  '));

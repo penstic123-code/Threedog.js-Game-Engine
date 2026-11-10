@@ -5,6 +5,7 @@ import { resolveClouds, cloudUniforms, CLOUD_UNIFORM_DECL } from './clouds.js';
 import { codedError } from '../../core/base/errorHints.js';
 import { SKY as K, glslFloat as f } from '../../render/fxNumbers.js';
 import { isWebGPU, webgpuPart } from '../../render/backend.js';
+import { drawOnly } from '../../core/scene/drawOnly.js';
 
 // Keyframes: [time 0-1, zenith color, horizon color (= fog color), sun color, ambient intensity]
 // Neutral fallback with no keyframes: pure gray (no hue), only brightness changes with time. Night holds from 19:12 to 04:48 (rows 0.2 / 0.8):
@@ -63,6 +64,7 @@ export function makeDome(uniforms, st, extra, engine) {
   const dome = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), nodes ? nodes.domeMaterial(uniforms, st, cl.kind, engine, { layers: extra.layers })
     : new THREE.ShaderMaterial({ vertexShader: vert, fragmentShader: domeFragment(cl, extra), uniforms, side: THREE.BackSide, depthWrite: false, depthTest: false }));
   dome.frustumCulled = false; dome.renderOrder = -1000; dome.userData.budgetTag = 'sky';
+  drawOnly('sky dome (left out: the tracer shows scene.environment and scene.background)', dome);
   dome.onBeforeRender = (r, sc, cam) => {
     dome.position.copy(cam.position); dome.scale.setScalar(/** @type {THREE.PerspectiveCamera} */ (cam).far * 0.9); dome.updateMatrixWorld();
   };
@@ -93,10 +95,9 @@ export const domeFragment = (cl, x) => `uniform vec3 uTop; uniform vec3 uHorizon
 uniform float uSunSize; uniform float uSunGlow; uniform float uSunBrightness; uniform float uMoonBrightness; uniform float uMoonSize; uniform vec3 uMoonColor; uniform float uStars; uniform float uStarCloudDim; uniform float uStarScale; uniform float uSkyCurve;
 uniform float uTime; uniform float uWeatherCloud; uniform float uCloudCover; uniform float uSkyCloudScale; uniform vec2 uSkyCloudSpeed; uniform vec3 uCloudColor; uniform vec3 uCloudShade;
 ${CLOUD_UNIFORM_DECL}
+${NOISE_GLSL}
 ${cl.decl}${x.decl ? '\n' + x.decl : ''}
 varying vec3 vDir;
-float h3(vec3 p){ p = fract(p * ${f(K.starMul)} + ${f(K.starAdd)}); p *= ${f(K.starScale)}; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
-${NOISE_GLSL}
 ${cl.glsl}
 void main(){
   vec3 d = normalize(vDir);
@@ -116,7 +117,7 @@ void main(){
   // Stars sit behind the clouds (hidden where a cloud is drawn) and dim with the weather's cloud cover (uWeatherCloud): a rainy / overcast night has
   // no clear sky between the drawn clouds either, and a picture with sparse cloud art must not show a starry sky in a storm. Relative to the
   // weather value, no extra constant: uWeatherCloud 0 = every star, 1 = none. engine.sky.dim.stars false (uStarCloudDim 0) keeps them through the cover
-  col += vec3(step(1.0 - uStars, h3(g)) * uNight * smoothstep(0.0, ${f(K.starFade)}, d.y) * (1.0 - clA) * (1.0 - clamp(uWeatherCloud, 0.0, 1.0) * uStarCloudDim));${x.body}
+  col += vec3(step(1.0 - uStars, threedogHash(vec2(g.x + g.z * ${f(K.starZ)}, g.y))) * uNight * smoothstep(0.0, ${f(K.starFade)}, d.y) * (1.0 - clA) * (1.0 - clamp(uWeatherCloud, 0.0, 1.0) * uStarCloudDim));${x.body}
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>

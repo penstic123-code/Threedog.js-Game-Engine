@@ -8,7 +8,7 @@ import { walk, read, codeOnly, P } from './_lib.mjs';
 
 // [folder, member, reason]; folder '*' = any folder
 const ALLOW = [
-  ['debug', '_cpuMs', 'the panel adds up the cost of every frame; engine.inspect.perf() walks the materials and is too heavy to call each frame'],
+  ['debug', 'budget._frameMs', 'the panel shows the budget median frame time twice a second; engine.inspect.perf() walks the materials and is too heavy for that'],
   ['*', '_poses', 'engine._poses (core/scene/stepPoses.js): the things the engine itself moves on the fixed step sign in to be drawn between steps; internal, so no public name for what only characters, rigid and the camera rig use'],
   ['world', '_things', 'adds its record store with engine._things.addSource at install: the one door core offers to record stores'],
 ];

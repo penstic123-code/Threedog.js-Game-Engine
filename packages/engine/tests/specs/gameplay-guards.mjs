@@ -241,7 +241,7 @@ export const specs = [
 
         const src = R.bodies.find(b => b.mesh?.isMesh).mesh, car = R.addWheeled(new src.constructor(src.geometry, src.material), { id: 'gr-car', wheels: [{ position: [-1, 0, 1.5], radius: 0.35, steer: true }, { position: [1, 0, 1.5], radius: 0.35, steer: true }, { position: [-1, 0, -1.5], radius: 0.35, drive: true }, { position: [1, 0, -1.5], radius: 0.35, drive: true }] });
         A(() => { e.characters.removePlayer(); W.add({ id: 'player', kind: 'player', position: at, vehicle: 'gr-car' }); });
-        const p = e.characters.createPlayer({ control: 'camera', cameraFollow: true });
+        const p = e.characters.addPlayer({ control: 'camera', cameraFollow: true });
         out.car = { seated: p.vehicle === car, keys: e.input.holders.some(h => h.context === 'vehicle'), camera: e.cameraRig?.target === car.mesh };
         A(() => { p.exit(); car.remove(); });
 

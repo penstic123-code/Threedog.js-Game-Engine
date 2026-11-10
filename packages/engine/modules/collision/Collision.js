@@ -9,7 +9,7 @@ import { xzOf, yOf } from '../../core/base/math.js';
 import { surfaceOr } from '../../core/scene/ground.js';
 
 import { readParams, keysSchema } from '../../core/base/params.js';
-import { CollisionGrid, gridBlocks, bodyHits } from './grid.js';
+import { CollisionGrid, gridBlocks, bodyHits, passesThrough, passesOf } from './grid.js';
 import { codedError } from '../../core/base/errorHints.js';
 
 /** One axis of the slab test: narrows S.t0 / S.t1 to where the ray is inside |o + d t| <= h; false when it misses */
@@ -20,7 +20,13 @@ function slab(S, o, d, h) {
   return S.t0 <= S.t1;
 }
 
-const BOX_KEYS = ['halfWidth', 'halfDepth', 'rotation', 'height', 'y', 'occluder'], CIRCLE_KEYS = ['radius', 'height', 'occluder'], SEG_KEYS = ['thickness', 'height', 'y', 'occluder'], BLOCK_KEYS = ['bounds'];
+const BOX_KEYS = ['halfWidth', 'halfDepth', 'rotation', 'height', 'y', 'occluder', 'layer'], CIRCLE_KEYS = ['radius', 'height', 'occluder', 'layer'], SEG_KEYS = ['thickness', 'height', 'y', 'occluder', 'layer'], BLOCK_KEYS = ['bounds'];
+
+/** A collider's layer option: one name, or undefined for "stops every mover" (what every collider did before layers) */
+function layerOf(where, v) {
+  if (v === undefined || (typeof v === 'string' && v)) return v;
+  throw codedError('collision-misuse', `${where}: layer is one name, e.g. { layer: 'gate' } (movers with passes: ['gate'] go through it, every other mover is stopped); got ${JSON.stringify(v)}`, TypeError);
+}
 
 export class Collision {
   /**
@@ -80,34 +86,36 @@ export class Collision {
 
   /**
    * Add a circle collider (pillar, statue, campfire): position is the centre, radius (default 0.5), height (default 6). It stands on the ground and stops walkers on every floor; a pillar upstairs is an addBox with a y.
-   * occluder: false keeps it from pulling the follow camera in (walkers are still stopped), e.g. forest trunks the camera may pass through. Returns a handle { remove() }
+   * occluder: false keeps it from pulling the follow camera in (walkers are still stopped), e.g. forest trunks the camera may pass through.
+   * layer: a name; movers whose passes list names it go through (walking, paths, navmesh), every other mover is stopped. Left out: it stops every mover. Sight lines and the camera ignore it. Returns a handle { remove() }
+   * @example engine.collision.addBox(gate, { halfWidth: 2, halfDepth: 0.3, layer: 'gate' });   // a character made with passes: ['gate'] walks through, the rest are stopped
    */
   addCircle(position, opts = {}) {
     opts = readParams('collision.addCircle()', keysSchema(CIRCLE_KEYS), opts);
-    const [x, z] = xzOf(position), c = { x, z, r: opts.radius ?? 0.5, h: opts.height ?? 6, occ: opts.occluder !== false };
+    const [x, z] = xzOf(position), c = { x, z, r: opts.radius ?? 0.5, h: opts.height ?? 6, occ: opts.occluder !== false, ly: layerOf('collision.addCircle()', opts.layer) };
     this._circles.add(c); this._grid.add(c, false); this.version++;
     return { remove: () => { if (!this._circles.delete(c)) return; this._grid.remove(c); this.version++; } };
   }
   /**
    * Add a rectangle collider (house, fence): position is the centre; halfWidth / halfDepth (default 1), rotation about the Y axis (radians),
-   * height (default 6), y is the box bottom height (omit to sit on the ground; set it for walls on platforms in levels); occluder: false as in addCircle. Returns a handle { remove() }
+   * height (default 6), y is the box bottom height (omit to sit on the ground; set it for walls on platforms in levels); occluder and layer as in addCircle. Returns a handle { remove() }
    */
   addBox(position, opts = {}) {
     opts = readParams('collision.addBox()', keysSchema(BOX_KEYS), opts);
     const [x, z] = xzOf(position), hw = opts.halfWidth ?? 1, hd = opts.halfDepth ?? 1, rot = opts.rotation ?? 0;
-    const b = { x, z, hw, hd, rot, h: opts.height ?? 6, y: opts.y, c: Math.cos(rot), s: Math.sin(rot), r: Math.hypot(hw, hd), occ: opts.occluder !== false };
+    const b = { x, z, hw, hd, rot, h: opts.height ?? 6, y: opts.y, c: Math.cos(rot), s: Math.sin(rot), r: Math.hypot(hw, hd), occ: opts.occluder !== false, ly: layerOf('collision.addBox()', opts.layer) };
     this._boxes.add(b); this._grid.add(b, true); this.version++;
     return { remove: () => { if (!this._boxes.delete(b)) return; this._grid.remove(b); this.version++; } };
   }
   /**
-   * Add a thin wall along the line a -> b (fence, wall; positions like addBox). thickness (default 0.3), height (default 6), y and occluder as in addBox.
+   * Add a thin wall along the line a -> b (fence, wall; positions like addBox). thickness (default 0.3), height (default 6), y, occluder and layer as in addBox.
    * It is a rotated box in the same grid, so a gap between two segments is a gate. Returns a handle { remove() }
    */
   addSegment(a, b, opts = {}) {
     opts = readParams('collision.addSegment()', keysSchema(SEG_KEYS), opts);
     const [ax, az] = xzOf(a), [bx, bz] = xzOf(b);
     // box-local +x is (cos r, -sin r) in world, so r = -atan2(dz, dx)
-    return this.addBox([(ax + bx) / 2, 0, (az + bz) / 2], { halfWidth: Math.hypot(bx - ax, bz - az) / 2, halfDepth: (opts.thickness ?? 0.3) / 2, rotation: -Math.atan2(bz - az, bx - ax), height: opts.height, y: opts.y, occluder: opts.occluder });
+    return this.addBox([(ax + bx) / 2, 0, (az + bz) / 2], { halfWidth: Math.hypot(bx - ax, bz - az) / 2, halfDepth: (opts.thickness ?? 0.3) / 2, rotation: -Math.atan2(bz - az, bx - ax), height: opts.height, y: opts.y, occluder: opts.occluder, layer: opts.layer });
   }
   /**
    * Mark ground as impassable where fn(x, z) is true (river, lava, cliff edge). Walkers are stopped at its edge (sliding along it) and walkable() says no.
@@ -130,12 +138,12 @@ export class Collision {
     }
     return false;
   }
-  /** Add collision from a three.js object's bounding box (common for house models), pad grows it outward (m), occluder as in addBox. Returns a handle { remove() } */
-  addObject(obj, { pad = 0, occluder = true } = {}) {
+  /** Add collision from a three.js object's bounding box (common for house models), pad grows it outward (m), occluder and layer as in addBox. Returns a handle { remove() } */
+  addObject(obj, { pad = 0, occluder = true, layer } = {}) {
     obj.updateMatrixWorld(true);
     // a THREE.LOD is measured by its full model: a low level may stick out a little, and collision must not change with which levels exist
     const box = new Box3().setFromObject(obj.isLOD ? obj.levels[0].object : obj), c = box.getCenter(new Vector3()), s = box.getSize(new Vector3());
-    return this.addBox(c, { halfWidth: s.x / 2 + pad, halfDepth: s.z / 2 + pad, height: s.y, y: box.min.y, occluder });
+    return this.addBox(c, { halfWidth: s.x / 2 + pad, halfDepth: s.z / 2 + pad, height: s.y, y: box.min.y, occluder, layer });
   }
 
   // The per-frame walkers below pass state through fields instead of building callbacks: resolve() and cameraDistance() run every step / frame.
@@ -165,9 +173,10 @@ export class Collision {
   /**
    * @internal Push a character of radius `radius` out of obstacles; edits pos.x / pos.z directly. Returns whether a collision happened.
    * A box with an explicit `y` occupies y .. y + height, and stops only a body (pos.y .. + movement.height) that overlaps that span: a wall upstairs leaves the floor below free.
-   * A box without `y` is a footprint, as is every box when pos has no y: those stop at any height. walkableAt and A* read boxes the same way (bodyHits)
+   * A box without `y` is a footprint, as is every box when pos has no y: those stop at any height. walkableAt and A* read boxes the same way (bodyHits).
+   * passes: the mover's layer list (passesOf); a collider whose layer it names does not push it
    */
-  resolve(pos, radius = this.engine.movement.radius) {
+  resolve(pos, radius = this.engine.movement.radius, passes) {
     const sPos = this._rPos, sRad = this._rRad;
     this._rPos = pos; this._rRad = radius; this._rHit = false;
     const g = this.engine.ground, y = pos.y, body = this.engine.movement.height;
@@ -176,6 +185,7 @@ export class Collision {
       const list = this._grid.query(pos.x, pos.z, radius + 2);
       for (let i = 0; i < list.length; i++) {
         const it = list[i];
+        if (passesThrough(it, passes)) continue;
         if (!it._b) this._pushCircle(pos, it.x, it.z, it.r, radius);
         else if (bodyHits(it, y, body)) this._pushBox(pos, it, radius);
       }
@@ -186,8 +196,8 @@ export class Collision {
     return hit;
   }
 
-  /** Can anyone stand here (for pathfinding): not in water, not too steep, not inside an obstacle. radius is the character radius (m, default engine.movement.radius). A position with y asks about the floor that height picks */
-  walkable(position, { radius = this.engine.movement.radius } = {}) { const [x, z] = xzOf(position); return this.walkableAt(x, z, radius, yOf(position)); }
+  /** Can anyone stand here (for pathfinding): not in water, not too steep, not inside an obstacle. radius is the character radius (m, default engine.movement.radius), passes its layer list (addBox { layer }). A position with y asks about the floor that height picks */
+  walkable(position, { radius = this.engine.movement.radius, passes } = {}) { const [x, z] = xzOf(position); return this.walkableAt(x, z, radius, yOf(position), passesOf('collision.walkable()', passes)); }
   /**
    * Line of sight with height: is the 3D segment a -> b free of colliders (boxes, circles, terrain trees)? Positions like addBox ([x, y, z] / Vector3 / Object3D).
    * Heights count: a 1 m wall does not block a sight line passing 3 m above it; a collider's `y` and `height` are honoured (no `y` = sits on the ground).
@@ -252,11 +262,12 @@ export class Collision {
   get grid() { return this._grid; }
   /**
    * Same as walkable but takes plain numbers (inner loop of A* pathfinding and spawn search, allocates nothing; like engine.surface(x, z)). radius defaults to engine.movement.radius.
-   * y picks the floor as in surface(), and only the floor it picks counts, so [x, 0, z] on raised ground asks about that ground. Left out: the top ground, and every box blocks at any height
+   * y picks the floor as in surface(), and only the floor it picks counts, so [x, 0, z] on raised ground asks about that ground. Left out: the top ground, and every box blocks at any height.
+   * passes: the mover's layer list as passesOf returns it (the inner loop of A* does not read it again)
    */
-  walkableAt(x, z, radius = this.engine.movement.radius, y) {
+  walkableAt(x, z, radius = this.engine.movement.radius, y, passes) {
     const f = y === undefined ? y : surfaceOr(this.engine, x, z, y, y);
-    return this.groundWalkable(x, z, f) && !this.blockedAt(x, z, radius) && !this._groundBlocks(x, z, radius) && !gridBlocks(this._grid, x, z, radius, f, this.engine.movement.height);
+    return this.groundWalkable(x, z, f) && !this.blockedAt(x, z, radius) && !this._groundBlocks(x, z, radius) && !gridBlocks(this._grid, x, z, radius, f, this.engine.movement.height, passes);
   }
   /** @internal Ground shape half of walkableAt (water, slope): a smooth field, so async pathfinding samples it on a raster; colliders are tested exactly there */
   groundWalkable(x, z, y) {

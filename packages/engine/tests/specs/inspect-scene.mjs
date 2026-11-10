@@ -23,7 +23,7 @@ export const specs = [
         m('opacity0-opaque', { opacity: 0 });
         m('colorwrite', { colorWrite: false });
         m('depthwrite', { depthWrite: false });
-        m('scale0').scale.set(0, 1, 1);
+        m('scale0').scale.set(0, 0, 1);   // two axes flat = a line, nothing left (one flat axis leaves a plane: inspect-group-i)
         m('scale-nan').scale.set(NaN, 1, 1);
         m('pos-nan').position.x = NaN;
         const nanGeo = box(); nanGeo.attributes.position.setX(0, NaN); m('geo-nan', {}, nanGeo);

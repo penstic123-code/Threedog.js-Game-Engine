@@ -30,10 +30,13 @@ const stalled = e => codedError('module-not-ready', `Still waiting after ${Math.
  * @internal The one wait for "ready to play": true once nothing is unsettled, checked per engine frame so step() advances it too; false as soon as valid() stops holding. It rejects (module-not-ready,
  * naming who still waits) after engine.loading.timeoutMs. start(), flow's transition, level:playable and the headless pump all read this, so the question has one answer and one limit.
  */
-export function whenSettled(e, valid = () => true) {
+export function whenSettled(e, valid = () => true, rearm = false) {
   const now = () => !valid() ? false : unsettled(e).length ? null : true;
   const first = now();
   if (first !== null) return Promise.resolve(first);
+  // rearm: a load during play (a level, a flow transition) passes it, since its start-up cost is not play either: timing is cleared again once it settles
+  // (loop.js startPlayTiming). The headless pump does not: chunks streaming in while walking are play, and their spikes must stay visible
+  if (rearm) e._playTiming = false;
   const since = performance.now();   // measure: wall clock, so a wait with no frames to run on still ends
   let h;
   const settled = new Promise((res, rej) => {

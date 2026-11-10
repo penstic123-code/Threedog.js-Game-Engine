@@ -1,6 +1,9 @@
 # Adding an NPC (schedule + dialogue)
 
-**In this recipe**: 1. Write data · 2. Add in code · NPC data and model · Custom behavior · Avoidance · A guard you build yourself · Dialogue choices · 3. Verify · Bubbles
+> **Covers:** people with schedules, dialogue, avoidance and behavior of your own.
+> **Use when:** a character the player meets or talks to.
+> **Shortest:** an entry in content data plus `characters()`, `interactions()`, `dialogue()` (§1).
+> **Sections:** 1 Write data recommended) · 2 Add in code · NPC data and model · Changing behavior / custom · Avoidance NPCs don't clump · A guard you build · Pick a dialogue choice · 3 Verify · Talking in a bubble
 
 Modules needed: `characters()` (NPCs on by default), `interactions({ ...presets.interactions.nearest })`, `dialogue()`; clock-time schedules need
 `calendar()` with a day cycle (`dayLength`, e.g. `presets.calendar.cycle`: without one the clock never moves and the NPC keeps to one stop). `openWorld()`
@@ -13,16 +16,16 @@ interactions({ ...presets.interactions.nearest }), dialogue(), content())`.
 export default {
   guard: {
     name: 'Gate guard',
-    colors: { body: 0xc89a5a, legs: 0x5b4a3a, hair: 0x3a2a1a },   // omit to use the default colors
-    start: { place: 'home', x: 6, z: -3 },                         // starting position; omitted = the first stop of the schedule
-    schedule: [                                                    // at is a clock time 'HH:MM'; at that time the NPC walks there (pathfinding is automatic)
+    colors: { body: 0xc89a5a, legs: 0x5b4a3a, hair: 0x3a2a1a },  // omit to use the default colors
+    start: { place: 'home', x: 6, z: -3 },  // starting position; omitted = the first stop of the schedule
+    schedule: [  // at is a clock time 'HH:MM'; at that time the NPC walks there (pathfinding is automatic)
       { at: '07:00', place: 'home', x: 6, z: -3 },
       { at: '13:00', place: 'tower' },
       { at: '18:30', place: 'home', x: 2, z: 4 },
     ],
-    interact: { op: 'npc.talk' },                                  // the interact key nearby talks: dialogue 'guard' (the NPC id) in dialogues.js
+    interact: { op: 'npc.talk' },  // the interact key nearby talks: dialogue 'guard' (the NPC id) in dialogues.js
   },
-  cat: { name: 'Cat', start: { place: 'home' }, behavior: 'wander', mind: { radius: 6 } },   // no schedule: write behavior + start, omit schedule
+  cat: { name: 'Cat', start: { place: 'home' }, behavior: 'wander', mind: { radius: 6 } },  // no schedule: write behavior + start, omit schedule
 };
 ```
 A content NPC takes every `npcs.add` option (`speed`, `interact`, `arriveDistance`, `pathStep`, `repath`, `model`...) written as a
@@ -37,7 +40,7 @@ export default {
     speaker: 'Gate guard',
     nodes: {
       start: {
-        text: [                                                    // several variants: the first whose condition holds is used
+        text: [  // several variants: the first whose condition holds is used
           { if: { flag: 'metGuard' }, text: 'Back again?' },
           { text: 'Halt. First time here?' },
         ],
@@ -46,7 +49,7 @@ export default {
       },
       ask: { text: 'A pass costs one coin.', choices: [
         { text: 'Buy one', next: 'buy', if: { has: { coin: 1 } } },
-        { text: 'No thanks' },                                         // a choice with no next = the dialogue ends; a plain node with no next waits for one more interact press, then ends
+        { text: 'No thanks' },  // a choice with no next = the dialogue ends; a plain node with no next waits for one more interact press, then ends
       ] },
       buy: { text: 'Move along.', do: [{ take: { coin: 1 } }, { give: { pass: 1 } }], next: 'end' },
     },
@@ -62,8 +65,8 @@ from a level marker (such as `npc_guard`). Add a new content file to `content/in
 ## 2. Add in code (temporary NPCs, dynamic schedules)
 ```js
 engine.dialogue.define('passerby', { start: { text: 'Nice day.', speaker: 'Passerby' } });
-const npc = engine.npcs.add({ id: 'passerby', name: 'Passerby', position: [10, 0, 5], schedule: [{ at: '08:00', position: [20, 0, 5] }], interact: { op: 'npc.talk' } });   // at: 'HH:MM' or 0-1; without id the name is used
-engine.npcs.remove('passerby');                   // remove by id, name or handle
+const npc = engine.npcs.add({ id: 'passerby', name: 'Passerby', position: [10, 0, 5], schedule: [{ at: '08:00', position: [20, 0, 5] }], interact: { op: 'npc.talk' } });  // at: 'HH:MM' or 0-1; without id the name is used
+engine.npcs.remove('passerby');  // remove by id, name or handle
 ```
 
 **An NPC that stands still** (a quest giver): give `start` and omit both `schedule` and `behavior`; the default `schedule` behavior with no stops
@@ -82,6 +85,7 @@ you come near; changing level only removes the model, and it is rebuilt automati
   the model is built at the computed position; nearby it paths around obstacles as usual.
 - Add things to the model (a hat, a name tag) after every model build; don't call `npc.root.add(...)` right after add (the first model is built in the
   next fixed step; for one immediately use `engine.world.refresh()`).
+- Looking at the player: `npc.character.anim.addAim({ bones: ['Neck', 'Head'], target: engine.player.root })`, added with the rest of its model ([13 §3e](13-animation.md)).
 - When two NPCs share a name, give each an `id` (without an id the name is the id, and in development a duplicate name throws). NPCs in content are
   the world's **initial data**: the save records only changes such as position and state; schedule and name follow the content.
 - Change data with `engine.world.set(npc.id, { mood: 'happy' })` (emits the world:change event); only plain values go in the data, models and
@@ -91,9 +95,9 @@ you come near; changing level only removes the model, and it is rebuilt automati
 What an NPC "does" is a swappable **behavior**: the `behavior` field in the data picks it, and the schedule (`'schedule'`, the default) is just one of
 them. Built in there is also `'wander'` (random wandering near home, using `engine.random`, same seed same result).
 ```js
-npc.setBehavior('wander', { radius: 12 });        // home = current position, wander within 12 meters (pause: [2, 6] pause seconds, home: { x, z } sets the center)
-npc.setBehavior('schedule');                       // back to the schedule
-engine.npcs.add({ id: 'dog', name: 'Dog', position: [5, 0, 5], behavior: 'wander', mind: { radius: 8 } });   // wanders from the start
+npc.setBehavior('wander', { radius: 12 });  // home = current position, wander within 12 meters (pause: [2, 6] pause seconds, home: { x, z } sets the center)
+npc.setBehavior('schedule');  // back to the schedule
+engine.npcs.add({ id: 'dog', name: 'Dog', position: [5, 0, 5], behavior: 'wander', mind: { radius: 8 } });  // wanders from the start
 ```
 The behavior name and `mind` (the behavior's parameters and memory) are in the NPC data and are saved; after changing behavior or loading, the NPC
 carries on with the new behavior. A wrong behavior name throws and lists the registered ones. NPCs in content can also write `behavior` + `mind`
@@ -112,8 +116,8 @@ or after loading.
 engine.npcs.behavior('chase', {
   near(rec, dt, npc) {
     const p = npc.position, t = engine.player.position, dx = t.x - p.x, dz = t.z - p.z, d = Math.hypot(dx, dz) || 1;
-    npc.character?.move(d > 2 ? dx / d : 0, d > 2 ? dz / d : 0, false, dt);   // no model: don't move
-    engine.world.move(rec.id, npc.position);                                 // write the position back to the data
+    npc.character?.move(d > 2 ? dx / d : 0, d > 2 ? dz / d : 0, false, dt);  // no model: don't move
+    engine.world.move(rec.id, npc.position);  // write the position back to the data
   },
 });
 npc.setBehavior('chase');
@@ -130,8 +134,8 @@ into walls. The built-in `schedule` and `wander` both avoid.
   `frameEvery` gives identical positions.
 - Tune or turn off:
 ```js
-engine.npcs.avoid.set({ radius: 0.6, strength: 2 });   // stand sparser (radius in meters), push slower (strength in meters/second)
-engine.npcs.avoid.set(false);                           // turn off (ghosts, crowds passing through); set(true) turns it on again
+engine.npcs.avoid.set({ radius: 0.6, strength: 2 });  // stand sparser (radius in meters), push slower (strength in meters/second)
+engine.npcs.avoid.set(false);  // turn off (ghosts, crowds passing through); set(true) turns it on again
 ```
 - Far away (no model) NPCs are simulated from data without per-NPC avoidance; a few steps after a model is built on approach they get pushed apart.
 - `nav({ crowd: true })` replaces this push with Recast crowd agents: they route around obstacles along the navmesh but do not guarantee identical
@@ -157,7 +161,7 @@ const guard = new Character(engine, { rig: { root: myGuardMesh } });
 engine.add(guard.root);
 guard.placeAt(post);
 const walk = guard.walkTo(player.position, { arrive: 1.5 });
-if ((await walk).status === 'noPath') guard.face(player);   // walk.remove() cancels
+if ((await walk).status === 'noPath') guard.face(player);  // walk.remove() cancels
 ```
 
 ## Pick a dialogue choice, advance, close a dialogue

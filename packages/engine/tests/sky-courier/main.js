@@ -42,7 +42,7 @@ const game = window.game = { THREE, Character, fly, ISLANDS, fall, falls: 0, wet
 engine.events.on('engine:ready', () => {
   game.waterfall = engine.addWaterBody({ query: waterfall, bounds: { min: { x: fall.x - fall.r, y: fall.bottom, z: fall.z - fall.r }, max: { x: fall.x + fall.r, y: fall.top, z: fall.z + fall.r } } });
   engine.content.load({ name: 'sky', props: ISLANDS });
-  engine.characters.createPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 0 }, fall: { belowY: -30 } });
+  engine.characters.addPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 0 }, fall: { belowY: -30 } });
   engine.events.on('character:fall', () => { game.falls++; });
   engine.events.on('character:water', ({ in: inside }) => { if (inside) game.wet++; });
   window.ready = true;

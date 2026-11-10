@@ -11,7 +11,7 @@
 //   const p = engine.cameraRig.screenToGround(engine.input.pointer.ndcX, engine.input.pointer.ndcY);
 //   engine.cameraRig.moveTo(position);   // move the view somewhere; { instant: true } skips smoothing
 import * as THREE from 'three';
-import { rigModule, defineRig, CAMERA_STRINGS, YAW_RIG, rigPlaced } from './common.js';
+import { rigModule, defineRig, CAMERA_STRINGS, YAW_RIG, rigPlaced, inRange } from './common.js';
 import { xzOf } from '../../core/base/math.js';
 import { setFov } from '../../core/scene/view.js';
 import { surfaceOr } from '../../core/scene/ground.js';
@@ -28,6 +28,7 @@ export class RtsCamera {
     bounds = null, rotate = true, rotateSpeed = 1.8, zoomStep = 0.12, smoothing = 10, fov = null,
     followLock = false, start = null } = {}) {
     Object.assign(this, { engine, height, minHeight, maxHeight, pitch, yaw, panSpeed, dragPan, edgePan, edgeSize, bounds, rotateSpeed, zoomStep, smoothing, followLock });
+    inRange(this, 'rtsCamera', 'rtsCamera()', 'height', height, ['minHeight', 'maxHeight'], true);   // a start outside the zoom range stays; the first wheel notch pulls it in
     this.target = null;
     this.following = false;
     const [sx, sz] = start ? xzOf(start) : [0, 0];
@@ -126,8 +127,8 @@ defineRig('rts', (e, opts, input) => {
   e.i18n.add(CAMERA_STRINGS);
   // declared through the camera module's ctx (gone with the module); optional: the camera pans and zooms without them
   if (opts.rotate !== false) {
-    input.action('rotateLeft', { label: 'camera.rotateLeft', optional: true });
-    input.action('rotateRight', { label: 'camera.rotateRight', optional: true });
+    input.define('rotateLeft', { label: 'camera.rotateLeft', optional: true });
+    input.define('rotateRight', { label: 'camera.rotateRight', optional: true });
   }
   return new RtsCamera(e, opts);
 }, ['height', 'minHeight', 'maxHeight', 'pitch', 'yaw', 'panSpeed', 'dragPan', 'edgePan', 'edgeSize', 'bounds', 'rotate',

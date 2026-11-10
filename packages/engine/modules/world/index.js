@@ -13,7 +13,7 @@ const PLACED = '[session] {n} world record(s) were created or removed by code be
   + 'Move them to content (content/props.js with an id and a template from content/templates.js), or create them during play inside an op';
 
 /**
- * Dev check on the new-game state (saves.register checkNewGame, run once start() finished): authored things come from content, so a new game has
+ * Dev check on the new-game state (saves.define checkNewGame, run once start() finished): authored things come from content, so a new game has
  * no runtime records but the player and removes nothing. Changed fields are not checked: simulation may already move authored records (an NPC
  * walking its schedule) while loading runs in real time. Lives here, not in core/saves/session.js: only the world knows its own save format.
  * @param {any} d the world part of the new-game state
@@ -49,7 +49,7 @@ export function world(opts = {}) {
       // after the modules, not in world's own step: physics writes the models at stage late, and a record must end the step on the solver's result, a save included
       ctx.track(e.onFixed(() => w._v.pull(), { phase: 'late' }));
       ctx.track(e.time.onMove(() => w._s.moved()));
-      ctx.saves.register('world', { atomic: true, version: 5, migrate: WORLD_MIGRATE, save: () => w.toJSON(), load: d => w.fromJSON(d), checkNewGame: codePlaced });
+      ctx.saves.define('world', { atomic: true, version: 5, migrate: WORLD_MIGRATE, save: () => w.toJSON(), load: d => w.fromJSON(d), checkNewGame: codePlaced });
       ctx.things.addSource(recordSource(w));   // engine.thing / thing.set / the shared id space reach the records through this
       ctx.things.explainWith(worldExplain);
       ctx.budget.metric('worldRecords', () => w.records.size);

@@ -1,4 +1,4 @@
-// The player: createPlayer and the parts it is made of. What the player is and how it is saved: the top of index.js.
+// The player: addPlayer and the parts it is made of. What the player is and how it is saved: the top of index.js.
 import { Character, CHARACTER_KEYS } from './Character.js';
 import { warnOnce, DEV, fmt } from '../../core/base/validate.js';
 import { engineOwned } from '../../core/scene/things.js';
@@ -10,16 +10,16 @@ import { vehicleById, seatFromRecord } from './seat.js';
 /** The player's world record: its id and its kind */
 export const PLAYER = 'player';
 
-/** Everything createPlayer refuses, before it touches the old player */
+/** Everything addPlayer refuses, before it touches the old player */
 function checkOptions(e, st, opts) {
-  readParams('characters.createPlayer()', keysSchema([...CHARACTER_KEYS, 'spawn', 'control', 'cameraFollow', 'id', 'input']), opts);
+  readParams('characters.addPlayer()', keysSchema([...CHARACTER_KEYS, 'spawn', 'control', 'cameraFollow', 'id', 'input']), opts);
   const control = opts.control;
   if (control === undefined) throw codedError('player-control', DEV_STRINGS.noControl);
   if (!validControl(control)) throw codedError('player-control', fmt(DEV_STRINGS.badControl, { got: JSON.stringify(control) ?? String(control) }));
   if (!e.world) throw codedError('module-needs', DEV_STRINGS.noWorld);
-  if (opts.input !== undefined && !e.input.seats.includes(opts.input)) throw codedError('input-seat', 'characters.createPlayer(): input is a seat from engine.input.seat({ pad, keys })');
+  if (opts.input !== undefined && !e.input.seats.includes(opts.input)) throw codedError('input-seat', 'characters.addPlayer(): input is a seat from engine.input.seat({ pad, keys })');
   const id = opts.id ?? PLAYER;
-  if (opts.input) for (const [other, q] of st.players) if (other !== id && q.input === opts.input) throw codedError('input-seat', `characters.createPlayer(): this seat already drives player '${other}'`);
+  if (opts.input) for (const [other, q] of st.players) if (other !== id && q.input === opts.input) throw codedError('input-seat', `characters.addPlayer(): this seat already drives player '${other}'`);
 }
 
 /** Place the player by the record (loading, reusing an existing record): do not write back to the record while placing, write once afterwards so record and
@@ -78,13 +78,13 @@ function watchRecord(e, W, p, id) {
 }
 
 /**
- * engine.characters.createPlayer, documented there
+ * engine.characters.addPlayer, documented there
  * @param {any} e engine
  * @param {any} api engine.characters
  * @param {any} st the module's state: the new player joins st.players
  * @param {any} opts
  */
-export function createPlayer(e, api, st, opts) {
+export function addPlayer(e, api, st, opts) {
   checkOptions(e, st, opts);
   const W = e.world, { id = PLAYER, input = e.input } = opts;
   api.removePlayer(id);   // a player of this id: dispose the old one first (else two characters respond to the same keys)
@@ -104,16 +104,17 @@ export function createPlayer(e, api, st, opts) {
   // in the map before control.take: the control lookup finds a held character by id through it
   const entry = { character: p, input, dispose: null };
   st.players.set(id, entry);
+  p._release = () => entry.dispose();   // player.dispose() from the game is the same teardown as removePlayer
   if (input !== e.input) input.actor = id;
   const held = e.control.take(p, { owner: 'player-input', layer: 'base', step: inputStep(e, api, p, opts.control, input) });
   // what the keys ask of the pedal, while the keys are in charge: the seat reads it each step, so a holder above lets go of it (seat.js)
   p._pedal = () => { if (!held.active) return null; const a = input.autopilot || input.axis; return [a.y, a.x, input.down('brake') ? 1 : 0]; };
   const watching = watchRecord(e, W, p, id);
-  // keepRecord: the module is going, not the player; its place stays in world for the next createPlayer
+  // keepRecord: the module is going, not the player; its place stays in world for the next addPlayer
   entry.dispose = (keepRecord = false) => {
     st.players.delete(id); held.remove(); jump?.remove(); for (const h of watching) h.remove();
     if (input.actor === id) input.actor = null;
-    p.recordId = null; p.dispose(); if (!keepRecord) W.remove(id);
+    p.recordId = null; p._release = null; p.dispose(); if (!keepRecord) W.remove(id);
     if (e.player === p) e.player = st.players.values().next().value?.character ?? null;   // the next player is the first now
   };
   return p;

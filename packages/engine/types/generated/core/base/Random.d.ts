@@ -17,7 +17,7 @@ export class Random {
     next(): number;
     /** A decimal between a and b @param {number} a @param {number} b @returns {number} */
     range(a: number, b: number): number;
-    /** An integer between a and b (inclusive) @param {number} a @param {number} b @returns {number} @example const dice = engine.random.int(1, 6); @experimental */
+    /** An integer between a and b (inclusive) @param {number} a @param {number} b @returns {number} @example const dice = engine.random.int(1, 6); */
     int(a: number, b: number): number;
     /**
      * Pick one element of the array at random (undefined for an empty array).

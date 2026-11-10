@@ -1,17 +1,19 @@
 // engine.catalog(): what this game can do, read from the registrations that already exist (module definitions, ops.define,
-// saves.register, describe.add, module hooks, params schemas). Why a reader and not a registry: a second list would drift from the code;
+// saves.define, describe.add, module hooks, params schemas). Why a reader and not a registry: a second list would drift from the code;
 // this file runs no gameplay and stores only who registered what (so an op or save part can be traced back to its module).
 //   engine.catalog()            -> short list, one line of data per module (+ 'core' and 'game' for what no module registered)
 //   engine.catalog('shop')      -> one module expanded: dependencies, ops with args / defaults / failure codes, saved parts, time model
 //   engine.catalog('shop.buy')  -> one op expanded (args schema, reasons, its last attempt)
 //   engine.catalog({ find: 'buy' }) -> the short list filtered by id, label, op or save name
 //   engine.catalog('post')      -> a capability that is no module (post chain, shadows): its entry names and what it holds now
+//   engine.catalog('picture')   -> the picture menu: every picture capability, on or not, can it run here, cost, one way on, limits (pictureMenu.js)
 // Ownership: engine.use / module init take a snapshot of the op, save and describe names before and after (catalogSnap / catalogClaim);
 // what existed before the first engine.use is 'core', what appeared outside any module is 'game'. An op named '<module>.verb' or a save
 // part keyed by the module name belongs to that module even when registered later (from game code calling into the module).
 import { parseSchema, schemaInfo } from '../base/params.js';
 import { ENGINE_PARAMS } from '../engine/Engine.js';
 import { SKIP_KINDS, TIME_HOOKS } from '../engine/moduleTypes.js';
+import { pictureMenu } from './pictureMenu.js';
 
 const MAX_API = 200;   // the dev bridge narrows this to what the api page lists (tools/threedog/catalog.mjs)
 
@@ -67,7 +69,7 @@ function opInfo(e, name, full) {
 }
 function saveInfo(e, key) {
   const p = e.saves.providers.get(key);
-  return { key, version: p.version, ...(p.first ? { first: true } : {}), ...(Object.keys(p.migrate || {}).length ? { migrates: Object.keys(p.migrate).map(Number) } : {}) };
+  return { key, version: p.version, ...(p.first !== undefined && p.first !== false ? { first: p.first } : {}), ...(Object.keys(p.migrate || {}).length ? { migrates: Object.keys(p.migrate).map(Number) } : {}) };
 }
 
 /** Public methods and properties of a module's api object (own and inherited, no _private ones) */
@@ -139,6 +141,19 @@ const CAPABILITIES = {
     effects: e.post._list.map(h => ({ name: h.name, slot: h.slot, order: h.order, enabled: h.enabled, params: Object.fromEntries(Object.entries(h.params).map(([k, v]) => [k, toData(v)])) })) } }),
   shadows: e => ({ describe: 'describe().picture', facts: { enabled: e.shadows.enabled, cascades: !!e.shadows.csm } }),
 };
+/**
+ * One lookup scheme for every name: 'module:<id>', 'op:<name>', 'capability:<id>' always mean that kind; a bare name tries the engine's few
+ * capability names first (fixed and documented, where a game's module names are not), then modules, ops, 'core' / 'game'.
+ */
+const KINDS = ['module', 'op', 'capability'];
+const isCapability = (e, n) => n === 'picture' || (Object.hasOwn(CAPABILITIES, n) && !!e[n]);
+function lookup(e, kind, n, o) {
+  if ((!kind || kind === 'capability') && isCapability(e, n)) return n === 'picture' ? pictureMenu(e, o) : capabilityEntry(e, n);
+  if ((!kind || kind === 'module') && e.modules.has(n)) return moduleEntry(e, e.modules.get(n));
+  if ((!kind || kind === 'op') && e.ops.defs.has(n)) return opInfo(e, n, true);
+  if (!kind && (n === 'core' || n === 'game')) return looseEntry(e, n);
+  return null;
+}
 function capabilityEntry(e, id) {
   const { describe, facts } = CAPABILITIES[id](e);
   return { id, kind: 'capability', ops: [], saves: [], queries: { describe, extra: [], api: apiNames(e[id]) }, facts, problems: [] };
@@ -169,22 +184,26 @@ function entries(e) {
  * No argument: a short list (id, state, stage, op and save names, time model, problem count). A module id: that module expanded
  * (requires / optional, params with defaults and the values in use, ops with args schema and failure codes, saved parts and versions,
  * time hooks and skip kind, describe fields and api names, problems such as "no skipKind"). An op name: that op expanded, with its last attempt.
+ * Names: 'module:<id>', 'op:<name>', 'capability:<id>' pick the kind; a bare name tries the capabilities ('picture', 'post', 'shadows') first, then
+ * modules, ops, 'core' / 'game' (a capability sharing its name with a module says sameNameModule: 'module:<id>').
  * 'post' or 'shadows': that capability's entry names and what it holds now (effects in the chain, cascades on or off).
+ * 'picture': the picture menu (three's features and post effects, one row each: on, runs here, cost class, one way on, recipe, main limit) and the
+ * combination checks; o.offered: effect factories not in the chain yet (the dev bridge passes @threedog/post-effects).
  * The dev bridge `threedog catalog [id]` prints the same data and adds the doc, recipe and source files.
- * @param {string | { find?: string }} [id]
+ * @param {string | { find?: string }} [id] @param {{ offered?: any[] }} [o]
  * @returns {any}
  * @example engine.catalog();               // [{ id: 'calendar', kind: 'module', state: 'running', stage: 'environment', ops: [], saves: ['calendar'], time: 'fixed+skip' }, ...]
  * engine.catalog('shop').ops[0];           // { name: 'shop.buy', args: { n: { type: 'int', optional: true, default: 1 } }, failures: ['soldOut', 'noMoney'] }
  * engine.catalog('shop.buy').last;         // { tick: 812, ok: false, code: 'noMoney', ... }
  * engine.catalog({ find: 'throw' });       // only entries whose id, label, op or save mentions "throw"
  */
-export function catalog(e, id) {
+export function catalog(e, id, o) {
   if (typeof id === 'string') {
-    if (e.modules.has(id)) return moduleEntry(e, e.modules.get(id));
-    if (e.ops.defs.has(id)) return opInfo(e, id, true);
-    if (id === 'core' || id === 'game') return looseEntry(e, id);
-    if (Object.hasOwn(CAPABILITIES, id) && e[id]) return capabilityEntry(e, id);
-    return null;
+    const i = id.indexOf(':'), kind = KINDS.includes(id.slice(0, i)) ? id.slice(0, i) : null, name = kind ? id.slice(i + 1) : id;
+    const x = lookup(e, kind, name, o);
+    // a capability name the game also gave a module (the game template's 'picture' module): the bare name stays the capability, the module is a prefix away
+    if (x && !kind && x.kind !== 'module' && e.modules.has(name)) x.sameNameModule = `module:${name}`;
+    return x;
   }
   const list = entries(e).map(summary);
   const q = id?.find?.toLowerCase();

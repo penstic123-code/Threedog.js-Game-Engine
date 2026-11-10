@@ -21,7 +21,8 @@
 // and clocks stay as they were, background results still land, no 'session:start' or title follows, 'session:failed' { kind, slot? } fires instead (flow goes back to the state it left).
 // What session:end already ended stays ended (the music stopped, a running cutscene was skipped to its end).
 import { codedError } from '../base/errorHints.js';
-import { DEV as IS_DEV, fmt, warnOnce } from '../base/validate.js';
+import { removeEach, reportError } from '../base/errors.js';
+import { DEV as IS_DEV, fmt } from '../base/validate.js';
 import { applySave, partData } from './saveApply.js';
 import { readSave } from './saveVersions.js';
 
@@ -100,7 +101,7 @@ export class Session {
     delete base.parts[key]; delete base.versions[key];
     this._lateParts.add(key);
     // its save() cannot run yet, or has nothing to save (like collectParts): newGame leaves this part as it is. Data a save cannot hold is said now: it would refuse every save too
-    try { const d = partData(key, p); if (d != null) { base.parts[key] = d; base.versions[key] = p.version; } } catch (err) { if (err?.code === 'save-part-threw') warnOnce(err.message); }
+    try { const d = partData(key, p); if (d != null) { base.parts[key] = d; base.versions[key] = p.version; } } catch (err) { if (err?.code === 'save-part-threw') reportError(this.engine, err, `new-game baseline of save part '${key}'`); }
     this._base = JSON.stringify(base);
   }
 
@@ -136,12 +137,13 @@ export class Session {
   /**
    * Start a new playthrough from the state the game had right after start(). Returns Promise<boolean> (false only if a save part failed to load: the
    * old playthrough then goes on, with its data, listeners and timers, and 'session:failed' fires instead of 'session:start').
+   * @param {{ turn?: object }} [o]  turn: the running request's own (what a save part's load(), an afterLoad or a module's applyState was given): the call then runs inside that request instead of waiting behind it for itself, as level.load({ turn }) does
    * @returns {Promise<boolean>}
    * @example
    * // a "Restart" button in a game-over screen
    * restartBtn.onclick = () => engine.session.newGame();
    */
-  newGame() { return this._turn('new', () => this._begin('newGame', () => this._applyBase(), { kind: 'new' })); }
+  newGame({ turn } = {}) { return this._turn('new', () => this._begin('newGame', () => this._applyBase(), { kind: 'new' }), turn); }
 
   /**
    * Continue from a save (or retry from a checkpoint) with nothing of the current playthrough left over: the new-game state with the save on top,
@@ -164,23 +166,25 @@ export class Session {
   /**
    * End the playthrough and show the title screen (the title part when the game turned it on; flow returns to its start state).
    * The state behind the title is the new-game state, so nothing from the old playthrough runs while the title is up.
+   * @param {{ turn?: object }} [o]  turn: the running request's own (what a save part's load(), an afterLoad or a module's applyState was given): the call then runs inside that request instead of waiting behind it for itself, as level.load({ turn }) does
    * @returns {Promise<boolean>}
    * @example settingsBackToTitle.onclick = () => engine.session.quit();
    */
-  quit() {
+  quit({ turn } = {}) {
     return this._turn('quit', async () => {
       const ok = await this._reset('quit', () => this._applyBase());
       if (ok) this._over = !this.engine.ui.open('title');   // ui.open answers false with no title part
       else this.engine.events.emit('session:failed', { kind: 'quit' });   // rolled back: the old playthrough goes on, so no title over it
       return ok;
-    });
+    }, turn);
   }
 
   /**
    * @internal A session replacement takes its turn with every other one (stateReplace.js). The same request joins the last in line (a double-clicked
    * Restart); another one waits: joined, a load asked during ?play's new game answered true and never loaded.
+   * turn: the running request's own, when it asks (applyState): then it runs inside that request, as level.load({ turn }) does.
    */
-  _turn(what, run) { return this.engine.saves._replace.run(what, run); }
+  _turn(what, run, turn) { return this.engine.saves._replace.run(what, run, { turn }); }
 
   /** @internal the new-game state as save data (_reset already refused a call before start() finished) */
   _baseData() { return JSON.parse(this._base); }
@@ -218,7 +222,8 @@ export class Session {
       if (!ok) return false;   // rolled back: the old playthrough's tracked handles and timers stay, so it goes on as it was (review 0.4 core B3)
       // shortcut: tracked handles stay registered while apply runs, so one may hear the load's own events (world:load); removing them first
       // would make a failed load unrecoverable. Upgrade if a game needs it: suspend tracked handles during apply instead
-      for (const h of oldHandles) { h.remove(); this._tracked.delete(h); }
+      // one remove() that throws is reported and the switch goes on: stopping here would leave the new data in with no session id, timers or rebase (review l2 #11)
+      removeEach(e, oldHandles, 'remove() of a handle session.track held', h => this._tracked.delete(h));
       this.id++;
       e.time._restoreFn(this._timers, oldTimers);   // event timers came back with the save; function timers are the boot-time ones, each with its original delay, and those apply set up
       e.commits.rebase();   // requests that outlived the load (a nextFixed, terrain colliders) were due on the old tick count, minutes away now that tick restarted

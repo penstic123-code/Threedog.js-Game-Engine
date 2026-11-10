@@ -1,17 +1,24 @@
 # Capability catalog: ask what the game can do before reading docs
 
+> **Covers:** the capability catalog and the picture menu: what this game can do, asked at run time.
+> **Use when:** before reading docs, to see what is installed.
+> **Shortest:** `engine.catalog()` / `threedog catalog`.
+> **Sections:** 1 Ask · 2 Declare args once · 3 Declare module options · 4 Debugging with it · 5 "How do I
+
 `engine.catalog()` answers "which modules are here, what can they do, what do they save, how do they keep time" from the registrations
-that already exist: module definitions (`requires`, `optional`, `stage`, hooks), `engine.ops.define`, `engine.saves.register`,
+that already exist: module definitions (`requires`, `optional`, `stage`, hooks), `engine.ops.define`, `engine.saves.define`,
 `engine.describe.add` and params schemas. There is no second list to keep in sync: a removed op is gone from the catalog at once.
 
 ## 1. Ask
 ```js
-engine.catalog();                  // short list: [{ id: 'sky', kind: 'module', state: 'running', stage: 'environment', ops: [], saves: ['sky'], time: 'fixed+skip' }, ...]
-engine.catalog('shop');            // one module expanded (below)
-engine.catalog('shop.buy');        // one op: args schema, reasons, can / offers / undo / net, its last attempt
+engine.catalog();  // short list: [{ id: 'sky', kind: 'module', state: 'running', stage: 'environment', ops: [], saves: ['sky'], time: 'fixed+skip' }, ...]
+engine.catalog('shop');  // one module expanded (below)
+engine.catalog('shop.buy');  // one op: args schema, reasons, can / offers / undo / net, its last attempt
 engine.catalog({ find: 'throw' }); // the short list filtered by id, label, op or save name
-engine.catalog('core');            // what the engine registered itself (time.skip, clock, random...); 'game': what game code registered outside modules
+engine.catalog('core');  // what the engine registered itself (time.skip, clock, random...); 'game': what game code registered outside modules
+engine.catalog('picture');  // the picture menu: what the picture could turn on (below)
 ```
+**The picture menu** (`engine.catalog('picture')`, `threedog catalog picture`): one row per picture capability, three's own (fog, environment map, tone curve, shadows…) and each post effect, added or offered by `@threedog/post-effects`: on now, can it run on this machine and renderer, a rough cost class, one way to turn it on, the recipe section, its main limit; then the combination checks (effects that clash or do the same job twice). Capabilities only: no row says how strong or which color. A game module with a capability's name (the template's `picture` module) is a prefix away: `catalog('module:picture')`.
 From the dev bridge: `threedog catalog`, `threedog catalog shop`, `threedog catalog --find buy` (`--json` for the data). The bridge prints the
 same data and adds the files: `source` (where `name: 'shop'` or `define('shop.buy'` is written), `api` (the generated api page), `recipes` and
 `examples` that use `engine.shop`. The MCP server has one `catalog` tool with the same arguments.
@@ -39,9 +46,9 @@ engine.ops.define('shop.buy', {
     e.inventory.remove('gold', n * PRICE[item]);
     return e.inventory.add(item, n).added === n ? n : { ok: false, code: 'bagFull' };
   },
-  reasons: { noMoney: 'Not enough gold', bagFull: 'No room in the bag' },   // the failure codes the catalog lists
+  reasons: { noMoney: 'Not enough gold', bagFull: 'No room in the bag' },  // the failure codes the catalog lists
 });
-engine.ops.run('shop.buy', { item: 'bread' });   // n: 1; with n: 0, dev throws "n must be >= 1" and release returns { ok: false, code: 'badArgs' } (run never starts)
+engine.ops.run('shop.buy', { item: 'bread' });  // n: 1; with n: 0, dev throws "n must be >= 1" and release returns { ok: false, code: 'badArgs' } (run never starts)
 ```
 
 ## 3. Declare module options once (`readParams`)
@@ -49,7 +56,7 @@ engine.ops.run('shop.buy', { item: 'bread' });   // n: 1; with n: 0, dev throws 
 import { readParams } from 'threedog';
 const PARAMS = { radius: { type: 'number', default: 2, min: 0, desc: 'pickup reach in m' }, sound: 'string?' };
 export const magnet = (opts) => {
-  const o = readParams('magnet', PARAMS, opts);   // wrong type / out of range throws [module-params] with the fix; an unknown key throws in dev and warns once in a release build
+  const o = readParams('magnet', PARAMS, opts);  // wrong type / out of range throws [module-params] with the fix; an unknown key throws in dev and warns once in a release build
   return { name: 'magnet', type: 'rules', params: PARAMS, options: o, stage: 'gameplay', install(e) { return { radius: o.radius }; } };
 };
 ```

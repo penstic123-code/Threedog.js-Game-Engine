@@ -79,7 +79,7 @@ const RULE_STRINGS = {
         id: { type: 'string', optional: true, desc: 'stable id (needed when entries are later inserted in the middle)' },
         model: { type: 'any', desc: "model name, or [name, ...args] for a generated model" }, ...at, ...pose, ...copied,
         ground: { type: 'bool', optional: true, desc: 'false = do not snap to the ground: y is the height in the world' },
-        collide: { label: 'Collision', rare: true, type: 'any', optional: true, desc: "collision: 'box', 'circle', { circle: radius, occluder?: false }, or false = none" },
+        collide: { label: 'Collision', rare: true, type: 'any', optional: true, desc: "collision: 'box', 'circle', { circle?: radius, occluder?: false, layer?: 'gate' } (layer: characters with passes: ['gate'] walk through), or false = none" },
         occluder: { label: 'Blocks camera', rare: true, type: 'bool', optional: true, desc: 'false = a solid prop the follow camera may pass through (walkers are still stopped)' },
         static: { label: 'Never moves', rare: true, type: 'bool', optional: true, desc: 'never moves (may be merged into one draw call)' },
         batch: { label: 'Merge copies', rare: true, type: 'bool', optional: true, desc: 'false = never batch this copy' },
@@ -137,10 +137,16 @@ export const PLACEMENT_FIELDS = RULE_STRINGS.fields;
 /** Why a prop's or template's `collide` is wrong, or null. One rule for the load and content-check: a mistyped object must not quietly become a box */
 export function collideProblem(v) {
   if (v === undefined || v === false || v === 'box' || v === 'circle') return null;
-  const form = isObject(v) && Object.keys(v).every(k => k === 'circle' || k === 'occluder');
-  if (form && Number.isFinite(v.circle) && v.circle > 0 && (v.occluder === undefined || typeof v.occluder === 'boolean')) return null;
-  return `must be one of false, "box", "circle" or { circle: radius in meters above 0, occluder?: false }, got ${JSON.stringify(v)}`;
+  const keys = isObject(v) ? Object.keys(v) : [];
+  const form = keys.length > 0 && keys.every(k => k === 'circle' || k === 'occluder' || k === 'layer');
+  if (form && (v.circle === undefined || Number.isFinite(v.circle) && v.circle > 0) && (v.occluder === undefined || typeof v.occluder === 'boolean')
+    && (v.layer === undefined || typeof v.layer === 'string' && v.layer)) return null;
+  return `must be one of false, "box", "circle" or { circle?: radius in meters above 0 (a box without it), occluder?: false, layer?: 'gate' }, got ${JSON.stringify(v)}`;
 }
+/** A prop turned about X or Z (not only faced about Y): the three-axis provider holds it. One reading for the load and content-check */
+export const isTilted = rec => Array.isArray(rec?.rot) && !!(rec.rot[0] || rec.rot[2]);
+/** Why a layer is ignored, or null: collide.layer on a tilted prop (collider3d has no layers, so it stops every mover). The load warns with it, content-check reports it */
+export const layerIgnored = (rec, collide) => isTilted(rec) && isObject(collide) && collide.layer ? 'collide.layer needs an upright model; this tilted one stops every mover' : null;
 /** Why a place cannot load, or null: a turned place moves everything standing on it, so a bad rot stops at the load and in content-check alike */
 export const placeProblem = p => p?.rot !== undefined && !Number.isFinite(p.rot) ? `rot must be a number of radians about Y, got ${JSON.stringify(p.rot)}` : null;
 /** Clock time notation 'HH:MM' (24-hour) */
@@ -168,7 +174,7 @@ export const unknownContent = (name, game) => `unknown content "${name}". Known:
   + `For the game's own data, register it in content/rules.js: export default { kinds: { ${name}: { desc: '…', load: (e, data) => { … } } } }, and list \`rules\` in content/index.js too: the loader only knows what it is handed`;
 /** Error text for an effects key in a game's content/rules.js */
 export const NO_GAME_EFFECTS = "content/rules.js: effects is not a key here. Register the action as an op (engine.ops.define('noun.verb', { can, run }) in main.js) "
-  + "and call it from content with { op: ['noun.verb', { args }] }; see recipes/23-ops.md";
+  + "and call it from content with { op: ['noun.verb', { args }] }; see recipes/23-ops.md §2";
 
 const say = (vocab, x) => Object.entries(x).map(([k, v]) => vocab[k]?.describe?.(v) ?? `${k} ${JSON.stringify(v)}`);
 

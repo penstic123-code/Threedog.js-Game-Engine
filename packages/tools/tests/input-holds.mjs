@@ -19,13 +19,13 @@ const { describeHolds: holds } = await imp('core/ops/holds.js');   // the functi
 export const name = 'input holds: push({ owner }), input.gate, describe().holds lists every holder';
 
 function fake() {
-  const e = Object.defineProperties({ halted: false, disposed: false, ready: true, _loop() {}, saves: { register() {} }, clock: { rate: 1, _advance() {} },
+  const e = Object.defineProperties({ halted: false, disposed: false, ready: true, _loop() {}, saves: { define() {} }, clock: { rate: 1, _advance() {} },
     events: { emit() {}, on: () => ({ remove() {} }) } }, Object.getOwnPropertyDescriptors(holdMethods));
   e.stacks = new Stacks(e); e.mod = (n, o) => e.stacks.mod(n, o); e.time = new Time(e); defineHoldStacks(e);
   e.stacks.define('input.gate', { kind: 'any', per: true });   // as services.js does
   // the real Input methods without its DOM listeners: one action 'jump' on Space, held this frame
   const inp = Object.create(Input.prototype);
-  Object.assign(inp, { engine: e, actions: new Map(), _touchKeys: new Map(), keys: new Set(['Space', 'KeyJ']), _accP: new Set(), _accR: new Set(), _inFixed: false });
+  Object.assign(inp, { engine: e, actions: new Map(), _touchKeys: new Map(), keys: new Set(['Space', 'KeyJ']), _accP: new Set(), _accR: new Set(), _inFixed: false, seats: [] });
   inp._keys = e.stacks.define('input.keys', { kind: 'value', per: true, save: false, settingsSet: true });   // as Input's constructor does
   inp.bind({ jump: ['Space'], attack: ['KeyJ'] });
   inp._live = { keys: inp.keys, pressed: new Set(['Space', 'KeyJ']), released: new Set() };

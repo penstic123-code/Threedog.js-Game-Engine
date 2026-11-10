@@ -31,7 +31,7 @@ function boxPart(e, st) {
       /** @type {any} */ (mesh.material).color?.copy(v.ok ? ok : bad);   // telling can from cannot is the preview's job, on any material that has a color
     },
     hide() { mesh.visible = false; },
-    dispose() { e.remove(mesh); mesh.geometry.dispose(); own.dispose(); },   // a material the game set stays the game's
+    dispose() { mesh.material = own; e.remove(mesh); },   // the one free is e.remove (design 6.2): the part's own box and material go with it; a material the game set is taken off first, so it stays the game's
   };
 }
 
@@ -53,7 +53,7 @@ export function makePreview(e, grids, opts) {
   const g = grids._must(grid), rule = grids._rule(item);
   // declared by the preview, owned by the grid module and taken away with the preview (or the module), so nothing outlives it; the game binds
   // the key (presets.bindings.gridRotate) like every module action
-  const decl = rotate ? e.input.action(rotate, { label: 'grid.rotate', owner: 'grids', optional: true }) : null;
+  const decl = rotate ? e.input.define(rotate, { label: 'grid.rotate', owner: 'grids', optional: true }) : null;
   if (rotate && !e.input.keysOf(rotate).length) warnOnce(fmt(NO_KEY, { a: rotate }));
   const part = draw === false ? null : typeof draw === 'function' ? draw(e) : boxPart(e, grids);
   const h = {

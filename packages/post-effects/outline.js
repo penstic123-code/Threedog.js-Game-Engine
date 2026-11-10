@@ -5,20 +5,21 @@ import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { RESERVED_LAYERS } from 'threedog/layers';
 import { codedError } from 'threedog/error-hints';
 import { FULLSCREEN_VERT, DEPTH_GLSL, depthUniforms, writeDepthUniforms, depthNodes } from './depth.js';
+import { declared } from './about.js';
 /** @import { PostEffect } from 'threedog' */
 
 /** Layer number to put on objects that should get no outline: mesh.layers.enable(OUTLINE_OFF_LAYER), with outline({ offLayer: OUTLINE_OFF_LAYER }) */
 export const OUTLINE_OFF_LAYER = RESERVED_LAYERS.outlineOff;
 const MODES = { depth: 0, normal: 1, both: 2 };
 // linear (0.5, 0.5, 1): an empty pixel reads as a normal facing the camera, and for the mask its red 0.5 stays below the > 0.5 test
-const EMPTY = new THREE.Color().setRGB(0.5, 0.5, 1, THREE.LinearSRGBColorSpace), _clear = new THREE.Color();
+const EMPTY = new THREE.Color().setRGB(0.5, 0.5, 1, THREE.LinearSRGBColorSpace);
 const badMode = mode => codedError('post-effect', `outline: unknown mode '${mode}', use 'depth' | 'normal' | 'both'`);
 
 class OutlinePass extends Pass {
-  /** @param {any} scene @param {any} camera @param {Record<string, any>} p */
-  constructor(scene, camera, p) {
+  /** @param {any} scene @param {any} camera @param {Record<string, any>} p @param {(renderer: any, draw: () => void, opts?: object) => void} borrow ctx.borrowRenderer, the engine's renderer borrow */
+  constructor(scene, camera, p, borrow) {
     super();
-    this.scene = scene; this.camera = camera; this.p = p; this.time = 0;
+    this.scene = scene; this.camera = camera; this.p = p; this.time = 0; this.borrow = borrow;
     this.normalMat = new THREE.MeshNormalMaterial();
     this.maskMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
     this.normalRT = null; this.maskRT = null;
@@ -62,14 +63,14 @@ class OutlinePass extends Pass {
   }
   // Render the scene once with an override material into a target the size of the input
   _pass(renderer, rt, mat, layer) {
-    const { scene, camera } = this, bg = scene.background, fog = scene.fog, over = scene.overrideMaterial, mask = camera.layers.mask, alpha = renderer.getClearAlpha();
-    renderer.getClearColor(_clear);
-    scene.overrideMaterial = mat; scene.background = null; scene.fog = null;
-    if (layer != null) camera.layers.set(layer);
-    renderer.setClearColor(EMPTY, 1);
-    // what was there goes back, even when the render throws: an override may be a debug view's, and it must outlive this pass
-    try { renderer.setRenderTarget(rt); renderer.clear(); renderer.render(scene, camera); }
-    finally { scene.overrideMaterial = over; scene.background = bg; scene.fog = fog; camera.layers.mask = mask; renderer.setClearColor(_clear, alpha); }
+    const { scene, camera } = this;
+    // what was there goes back, even when the render throws (the engine's one borrow): an override may be a debug view's, and it must outlive this pass
+    this.borrow(renderer, () => {
+      scene.overrideMaterial = mat; scene.background = null; scene.fog = null;
+      if (layer != null) camera.layers.set(layer);
+      renderer.setClearColor(EMPTY, 1);
+      renderer.setRenderTarget(rt); renderer.clear(); renderer.render(scene, camera);
+    }, { scene, camera });
   }
   _target(rt, w, h, depth) {
     if (rt && (rt.width !== w || rt.height !== h)) { rt.setSize(w, h); return rt; }
@@ -116,8 +117,8 @@ function apply(pass, p) {
  * @returns {PostEffect}
  */
 export function outline({ color = 0x222222, thickness = 1, strength = 0.8, mode = 'depth', fadeWithDistance = true, wobble = 0, offLayer = null, enabled, order = 10 } = {}) {
-  return { name: 'outline', slot: 'hdr', order, enabled, needsDepth: true, params: { color, thickness, strength, mode, fadeWithDistance, wobble, offLayer },
-    create: ({ scene, camera, params }) => { const pass = new OutlinePass(scene, camera, params); apply(pass, params); return pass; },
+  return { ...declared(outline), name: 'outline', slot: 'hdr', order, enabled, needsDepth: true, params: { color, thickness, strength, mode, fadeWithDistance, wobble, offLayer },
+    create: ({ scene, camera, params, borrowRenderer }) => { const pass = new OutlinePass(scene, camera, params, borrowRenderer); apply(pass, params); return pass; },
     update: apply, node: outlineNode };
 }
 
@@ -127,7 +128,7 @@ export function outline({ color = 0x222222, thickness = 1, strength = 0.8, mode 
  * imports three/webgpu. Number / boolean params are live uniforms (ctx.p); mode and offLayer on / off rebuild the node, as any non-number param does.
  * @param {any} input @param {any} ctx
  */
-function outlineNode(input, { tsl: T, fx, display, scenePass, scene, camera, params, p }) {
+function outlineNode(input, { tsl: T, fx, display, scenePass, scene, camera, params, p, borrowRenderer }) {
   const mode = MODES[params.mode];
   if (mode === undefined) throw badMode(params.mode);
   const { far, lin } = depthNodes(T, camera);
@@ -153,15 +154,16 @@ function outlineNode(input, { tsl: T, fx, display, scenePass, scene, camera, par
   const view = (mat, layer) => {
     const v = display.pass(scene, camera);
     v.overrideMaterial = mat;
-    const L = layer && new THREE.Layers(), run = v.updateBefore.bind(v), free = v.dispose.bind(v), clear = new THREE.Color(), was = new THREE.Color();
+    const L = layer && new THREE.Layers(), run = v.updateBefore.bind(v), free = v.dispose.bind(v), clear = new THREE.Color();
     if (L) v.setLayers(L);
     v.updateBefore = frame => {
-      const r = frame.renderer, bg = scene.background, bgNode = scene.backgroundNode, fog = scene.fog, a = r.getClearAlpha();
       if (L) L.set(params.offLayer);
-      r.getClearColor(was);
-      r.setClearColor(clear.setRGB(0.5, 0.5, 1, THREE.SRGBColorSpace), 1);
-      scene.background = scene.backgroundNode = null; scene.fog = null;   // three prefers backgroundNode over background, so both go
-      try { run(frame); } finally { scene.background = bg; scene.backgroundNode = bgNode; scene.fog = fog; r.setClearColor(was, a); }
+      // the engine's one borrow gives the clear and the scene's background / fog back, also when the pass throws
+      borrowRenderer(frame.renderer, () => {
+        frame.renderer.setClearColor(clear.setRGB(0.5, 0.5, 1, THREE.SRGBColorSpace), 1);
+        scene.background = scene.backgroundNode = null; scene.fog = null;   // three prefers backgroundNode over background, so both go
+        run(frame);
+      }, { scene });
     };
     v.dispose = () => { free(); mat.dispose(); };
     return v;
@@ -180,3 +182,6 @@ function outlineNode(input, { tsl: T, fx, display, scenePass, scene, camera, par
   }
   return T.vec4(T.mix(input.rgb, col, edge.mul(p.strength)), input.a);
 }
+
+// the picture menu facts of each effect (about.js says why they sit on the factory)
+outline.about = { cost: 'medium', on: 'engine.post.add(outline())', recipe: 'recipes/52-around-the-picture.md "Post effect chain"', limits: "one color for every edge; mode 'depth' misses edges between surfaces at one depth" };

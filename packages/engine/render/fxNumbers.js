@@ -6,18 +6,24 @@
 
 /** threedogWind: sway = sin(t * (speed + gust * uWind) + origin . phase) * weight + sin(t * speed2 + origin . phase2) * weight2; lean along x, side share on z */
 export const WIND = Object.freeze({ speed: 1.2, gust: 0.6, phase: [0.31, 0.23], weight: 0.6, speed2: 2.9, phase2: [0.77, -0.4], weight2: 0.4, lean: 0.4, side: 0.6 });
-/** threedogHash: fract(sin(dot(p, dir)) * scale) */
-export const HASH = Object.freeze({ dir: [127.1, 311.7], scale: 43758.5453 });
+/** threedogHash: the x of pcg2d (Jarzynski & Olano 2020, "Hash Functions for GPU Rendering") on p's float bits (public) or the cell floor(p) (engine noise), as uints:
+ * v = v * mul + add; v.x += v.y * mul; v.y += v.x * mul; v ^= v >> 16; v.x += v.y * mul; x ^= x >> 16; value = (x >> 8) / 2^24, so 0 <= value < 1.
+ * Why integers and not the usual sin hash: sin of large arguments differs between GPUs and between GLSL and WGSL, so WebGL and WebGPU drew different
+ * patterns; uint multiply / xor / shift wrap the same way everywhere, and a 24-bit uint turns into a float exactly. */
+export const HASH = Object.freeze({ mul: 1664525, add: 1013904223 });
+/** A whole-cell offset as the uint it adds to a cell's first pcg2d step (n * mul, wrapped to 32 bits): what the dabs add per salt @param {number} n */
+export const hashOffset = n => Math.imul(n, HASH.mul) >>> 0;
 /** threedogCloudShadow: two noise octaves (weight, then weight2 at octave x the scale), cover edge width */
 export const CLOUD = Object.freeze({ weight: 0.65, octave: 2.3, weight2: 0.35, edge: 0.25 });
 
 /** threedogDetailNoise (render/detail.js): fbm octave step (p = p * lacunarity + offset), paper = fbm * paper[0] + stretched noise * paper[1]
  * at (x * paperStretch[0], y * paperStretch[1]); stroke = smoothstep(stroke[0], stroke[1], fbm(x, y * strokeStretch)); dabs: first weight, then * dabFall per octave */
 export const DETAIL = Object.freeze({ lacunarity: 2.03, offset: 17, paper: [0.65, 0.35], paperStretch: [7, 0.9], stroke: [0.15, 0.85], strokeStretch: 1.7, dabWeight: 0.85, dabFall: 0.6 });
-/** The sky dome (modules/sky/shader.js, clouds.js): star hash h3 = fract(p * mul + add) * scale; sun glow power; sun-below-horizon cut-off;
+/** The sky dome (modules/sky/shader.js, clouds.js): stars = threedogHash of the star cell g as (g.x + g.z * starZ, g.y) (no two cells of a
+ * star grid up to starZ / 2 per side share a value); sun glow power; sun-below-horizon cut-off;
  * stars fade in over dir.y 0..starFade; clouds dim to nightDim at night; plane tone smoothstep(tone); cumulus fbm step / normalizer,
  * sun-ward probe step, cover share, core width, shading (rim boost, core darkening) */
-export const SKY = Object.freeze({ starMul: 0.3183099, starAdd: 0.1, starScale: 17, glowPower: 12, sunCut: 0.05, starFade: 0.25, nightDim: 0.35,
+export const SKY = Object.freeze({ starZ: 4096, glowPower: 12, sunCut: 0.05, starFade: 0.25, nightDim: 0.35,
   planeTone: [0.3, 0.8], lacunarity: 2.03, offset: 3.7, norm: 0.9375, toSun: 0.12, cover: 0.9, core: 0.35, rim: 0.5, coreDark: 0.45 });
 
 /** Luminance weights: Rec. 709 for light (render/lighting.js, the sky's own light), Rec. 601 for a detail texture's alpha. Two sets on purpose: moving either shifts pictures */

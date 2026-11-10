@@ -63,7 +63,7 @@ export const specs = [
         const gate = new Promise(res => { open = res; });
         const hold = { name: 'ctHold', type: 'rules', skipKind: 'none', content: { ctHeld: { prepare: () => gate, commit() { log.push('A'); } }, ctNext: { commit() { log.push('B'); } } } };
         const { E, end } = await window.__ct('ct-turn', T => [T.world(), T.content(), hold]);
-        const part = E.saves.register('ct-keep', { save: () => ({ n: 1 }), load(d, turn) { kept = turn; } });
+        const part = E.saves.define('ct-keep', { save: () => ({ n: 1 }), load(d, turn) { kept = turn; } });
         await E.saves.apply(E.saves.collect());
         const a = E.content.load({ ctHeld: 1 });
         const b = E.content.load({ ctNext: 1 }, { turn: kept });

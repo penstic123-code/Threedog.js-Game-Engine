@@ -27,6 +27,7 @@ import { sectionsOf } from '../../core/base/sections.js';
 import { addProps, needWorld } from './props.js';
 import { templateOf, spawnTemplate, placeTemplate, defineTemplates } from './templates.js';
 import { refit } from './models.js';
+import { holdProtos } from '../../core/assets/namedModel.js';
 import { packsOf } from './packs.js';
 import { IdCheck } from './ids.js';
 import { fieldsOf } from './fields.js';
@@ -221,8 +222,9 @@ export function content() {
     install(engine, ctx) { engine.i18n.add({ 'zh-CN': { 'module.content': '内容' }, en: { 'module.content': 'content' } });
       const e = st.e = engine;
       st.track = ctx.track;   // templates.js subscribes on content.load: those listeners belong to the module too
+      ctx.track(holdProtos(e, api));   // the model prototypes its props and templates clone (namedModel.js): unloading content gives them back
       ctx.things.explainWith(contentExplain);
-      ctx.saves.register('content', { ...marksPart(api, st), atomic: true });
+      ctx.saves.define('content', { ...marksPart(api, st), atomic: true });
       for (const holder of ['collision', 'collider3d']) ctx.feeds(holder, () => refit(e));
       ctx.track(e.events.on('engine:ready', () => { checkOps(e, st); checkRefs(st); }));
       ctx.track(e.events.on('module:restored', ({ modules }) => api._replay(modules)));

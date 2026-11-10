@@ -47,7 +47,7 @@ window.grids = grids;   // installed at runtime by tests/specs/grid.mjs (the tes
 window.content = content; window.THREE = THREE;   // tests/specs/single-source.mjs: content at runtime, level-node scenes built in the page
 engine.events.on('level:loaded', () => {
   const s = engine.level.spawn;
-  engine.characters.createPlayer({ ...presets.player.thirdPerson, spawn: { x: s.x, z: s.z } });
+  engine.characters.addPlayer({ ...presets.player.thirdPerson, spawn: { x: s.x, z: s.z } });
   engine.triggers.fromMarkers({ onEnter: t => window.log.enter.push(t.tag), onExit: t => window.log.exit.push(t.tag) });
 });
 engine.start();

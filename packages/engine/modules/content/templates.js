@@ -25,9 +25,9 @@
 //   and its whole state (turn, speed, asleep) with it in the save part 'rigid'. A copy nothing moved stays out of the save.
 // Ids: an instance with state (state / container / interact / body) should have a written id (ids.js); without one dev warns.
 import { checkOptions, freezeDef, missingText, fmt, DEV } from '../../core/base/validate.js';
-import { xzOf } from '../../core/base/math.js';
+import { xzOf, scaleOf } from '../../core/base/math.js';
 import { placeY } from '../../core/scene/ground.js';
-import { buildModel, settle, fits, fitsShape, unbuildModel, scaleOf } from './models.js';
+import { buildModel, settle, fits, fitsShape, unbuildModel } from './models.js';
 import { srcOf, stateful, templateId } from './ids.js';
 import { PLACEMENT_FIELDS, collideProblem } from './rules.js';
 import { fieldsShape } from './fields.js';
@@ -219,7 +219,7 @@ const SETTLE = 0.05;   // meters: a body that only settled (contact with uneven 
  * - A copy moved with no state (rebuilt by a new holder, a save without it, or a record moved after that state: rigid drops it): it starts awake at the record, so one left in the air comes down.
  */
 function addBody(e, rec, o, d) {
-  const { shape, ...opts } = d.body, s = o.userData.proto.size, ud = o.userData, p = rec.position;
+  const { shape, ...opts } = d.body, s = o.userData.measure.size, ud = o.userData, p = rec.position;
   ud.batch = false; ud.bodyFrom = d.body; ud.holder = bodyHolder(e);
   const half = s.y * scaleOf(rec)[1] / 2, floor = e.surface(p.x, p.z, rec.floor) + half;
   // a state from the save decides this copy's place, even when the record reads as unmoved (put back by an undo): resting it would rewrite the baseline to a place it is not at

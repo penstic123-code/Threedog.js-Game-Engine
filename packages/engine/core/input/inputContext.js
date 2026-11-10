@@ -29,24 +29,36 @@ export function pushContext(input, name, { pass = false, owner = name } = {}) {
   };
 }
 
-/** Which actions can currently be read: walk the stack from the top down to the action's own context @internal */
-export function readableMap(input) {
-  if (input._readable) return input._readable;
+/** context name -> the keys its actions bind */
+function keyIndex(input) {
   const keysOf = new Map();
   for (const [n, a] of input.actions) { const c = a.context || BASE_CONTEXT; let s = keysOf.get(c); if (!s) keysOf.set(c, s = new Set()); for (const k of input.keysOf(n)) s.add(k); }
-  const m = new Map(), stack = input._stack;
-  for (const [name, a] of input.actions) {
-    const ctx = a.context || BASE_CONTEXT;
-    let ok = false;
-    for (let i = stack.length - 1; i >= 0; i--) {
-      const c = stack[i];
-      if (c.name === ctx) { ok = true; break; }
-      if (!c.pass) break;
-      const shadow = keysOf.get(c.name);
-      if (shadow && input.keysOf(name).some(k => shadow.has(k))) break;
-    }
-    m.set(name, ok);
+  return keysOf;
+}
+/**
+ * Every reason an action cannot be read on this stack, walked from the top down to the action's own context: an opaque context above it (its name),
+ * a pass-through context above it that binds one of its keys ('shadowed-by:<context>'); or, alone, its own context not on the stack ('context-off:<context>').
+ * [] = readable. The one walk behind readableMap, input.blockedBy and describe().holds, so "can it be read" and "why not" never disagree @internal
+ */
+export function blockers(input, name, stack = input._stack, keysOf = keyIndex(input)) {
+  const ctx = input.actions.get(name)?.context || BASE_CONTEXT, keys = input.keysOf(name), out = [];
+  let at = stack.length - 1;
+  while (at >= 0 && stack[at].name !== ctx) at--;
+  // its context is off: nothing is "above" it, and pushing it would put it on top, so that is the one cause (a closed menu's action under a walk key)
+  if (at < 0) return [`context-off:${ctx}`];
+  for (let i = stack.length - 1; i > at; i--) {
+    const c = stack[i], shadow = keysOf.get(c.name);
+    if (!c.pass) out.push(c.name);
+    else if (shadow && keys.some(k => shadow.has(k))) out.push(`shadowed-by:${c.name}`);
   }
+  return out;
+}
+
+/** Which actions can currently be read (no blocker on the applied stack); cached until a switch / define / rebind @internal */
+export function readableMap(input) {
+  if (input._readable) return input._readable;
+  const m = new Map(), keysOf = keyIndex(input);
+  for (const name of input.actions.keys()) m.set(name, !blockers(input, name, input._stack, keysOf).length);
   return input._readable = m;
 }
 
@@ -73,7 +85,7 @@ export function applyContexts(input) {
   const after = readableMap(input);
   for (const [name, was] of before) {
     if (!was || after.get(name)) continue;
-    for (const k of input.keysOf(name)) {
+    for (const k of input._sourcesOf(name)) {
       if (!input.keys.has(k)) continue;   // even if another action on this key becomes readable: it needs a fresh press (F that boards must not also exit)
       input.keys.delete(k); input._accP.delete(k); input._accR.delete(k); input._muted.add(k);
     }

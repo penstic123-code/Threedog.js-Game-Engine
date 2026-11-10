@@ -1,6 +1,6 @@
 // The life of one engine.assets entry, split from Assets.js (which keeps the public API and the manifest):
 //   load: fetchEntry runs the load as a task in engine.loading and, for a registered non-critical file that fails, falls back (gray placeholder / silence / the entry's fallback)
-//   free: freeEntry gives the GPU memory back, deferred while model copies are still in the scene; shareModel marks what copies share so engine.remove does not dispose it
+//   free: freeEntry gives the GPU memory back, deferred while model copies are still in the scene; share marks what a load owns so engine.remove and engine.dispose never dispose it
 //   sounds: freeing one needs no count. A playing voice holds its own buffer, so it plays on and the memory goes when it ends; the next play loads the file again
 // Plain functions that take the Assets instance, so they stay out of the class's public surface.
 //
@@ -32,6 +32,9 @@ import { codedError, coded } from '../base/errorHints.js';
 import { loadGltf, loadTexture, loadFont, loadAudio, generated, placeholder } from './assetLoad.js';
 import { failureText } from '../engine/Loading.js';
 import { paramValues } from './assetManifest.js';
+import { loadPart } from './assetPart.js';
+import { needsProblems, needsText } from './modelNeeds.js';
+import { freeParts } from '../base/freeParts.js';
 
 const STRINGS = {
   failed: 'Asset failed to load: {what}',
@@ -51,10 +54,17 @@ export const longSound = e => e.type === 'sound' && e.value?.duration >= LONG_SO
 /** What a caller holds once the engine is gone: never settles, so nothing runs against a disposed engine (the rule is at the top of this file) */
 const NEVER = new Promise(() => {});
 
-/** Mark a model template's geometry and materials as shared (copies share them; engine.remove must not dispose them) */
-function shareModel(a, g) {
-  g.scene.traverse(o => { if (o.geometry) a.shared.add(o.geometry); for (const m of [].concat(o.material || [])) a.shared.add(m); });
-  return g;
+/**
+ * Mark what a load owns as shared: a model template's geometry, materials and their textures (copies share them), or a loaded texture. engine.remove and
+ * engine.dispose never dispose a shared part; freeValue frees it, once (design.md 6.2: an asset load owns what it loaded)
+ */
+function share(a, v) {
+  if (v?.isTexture) a.shared.add(v);
+  else v?.scene?.traverse(o => {
+    if (o.geometry) a.shared.add(o.geometry);
+    for (const m of [].concat(o.material || [])) { a.shared.add(m); for (const k in m) if (m[k]?.isTexture) a.shared.add(m[k]); }
+  });
+  return v;
 }
 
 /**
@@ -72,6 +82,14 @@ export function shadowDefaults(root, { castShadow, receiveShadow } = {}) {
   return root;
 }
 
+/** A model entry's declared nodes and clips (manifest `needs`) against what loaded: one warning naming each missing one. A warning, not a throw, like a missing reference: the model still shows; `threedog assets check` is the gate that fails a build */
+function checkNeeds(name, e, g) {
+  const nodes = [];
+  g.scene.traverse(o => { if (o !== g.scene && o.name) nodes.push(o.name); });
+  const miss = needsProblems(e.opts.needs, { nodes, clips: (g.animations ?? []).map(c => c.name) });
+  if (miss.length) warnOnce(coded('asset-needs', needsText(name, e.url, miss)));
+}
+
 /** Load an entry as a task in engine.loading; a registered, non-critical file that fails resolves to its fallback */
 export function fetchEntry(a, e) {
   if (a._disposed) return NEVER;
@@ -80,13 +98,13 @@ export function fetchEntry(a, e) {
   e.palette = a._paletteKey;
   const L = a.engine.loading, name = e.variantOf ?? e.name ?? e.url;
   const t = L._begin(name, e.type, { critical: e.opts.critical === true, url: e.opts.build || e.opts.texture ? null : e.url, manifest: e.manifest ?? null });
-  const load = e.load = { owner: e, type: e.type, gameOwned: !!e.opts.texture, task: t, stop: new AbortController(), value: null, users: 0, settled: false, pinned: false, waits: 1, left: false, stuck: false, whole: false };
+  const load = e.load = { owner: e, of: assetOf(e.name ?? e.url), type: e.type, gameOwned: !!e.opts.texture, task: t, stop: new AbortController(), value: null, users: 0, settled: false, pinned: false, waits: 1, left: false, stuck: false, whole: false };
   t.signal = load.stop.signal;   // the loaders read it between phases, and a download passes it to fetch
   let work;
   if (e.type === 'model') {
-    const got = e.opts.build ? (t.phase('build'), new Promise(res => res(generated(a, e.url, e.opts.build, e.schema ? paramValues(e) : e.opts.params, t))))   /* a sync throw takes the failure path below */ : loadGltf(a, e.url, t);
-    work = got.then(g => shareModel(a, g));
-  } else if (e.type === 'texture') work = loadTexture(a, e, t);
+    const got = e.opts.build ? (t.phase('build'), new Promise(res => res(generated(a, e.url, e.opts.build, e.schema ? paramValues(e) : e.opts.params, t))))   /* a sync throw takes the failure path below */ : e.opts.node ? loadPart(a, e, t) : loadGltf(a, e.url, t);
+    work = got.then(g => share(a, g));
+  } else if (e.type === 'texture') work = loadTexture(a, e, t).then(v => share(a, v));
   else if (e.type === 'font') work = loadFont(a, e, t);
   else if (e.type === 'sound' && e.opts.build) work = Promise.resolve(e.opts.build);   // a synth function: nothing to download
   else if (e.type === 'sound') work = loadAudio(a, e, t);
@@ -97,6 +115,7 @@ export function fetchEntry(a, e) {
     L._done(t);
     const what = `${e.type} "${name}" <- ${e.url}`;
     if (t.missing.length) warnOnce(coded('asset-missing-ref', fmt(STRINGS.missingRefs, { what, list: t.missing.join(', ') })));
+    if (e.type === 'model' && e.opts.needs) checkNeeds(name, e, v);
     load.settled = true;
     load.value = e.value = v;
     if (e.type === 'sound') capSounds(a, e);
@@ -175,7 +194,7 @@ function failedEntry(a, e, load, err) {
   if (!load.whole) warnOnce(coded('asset-load', msg + fmt(STRINGS.fellBack, { fallback: e.opts.fallback ? `"${fb}"` : fb })));
   if (e.opts.fallback) return (e.promise = borrow(a, e, load, a._resolve(e.opts.fallback, e.type)));
   load.settled = true;
-  load.value = e.value = e.type === 'model' ? shareModel(a, placeholder('model')) : placeholder(e.type);
+  load.value = e.value = share(a, placeholder(e.type));
   return (e.promise = Promise.resolve(e.value));
 }
 
@@ -210,13 +229,9 @@ function freeValue(load, v) {
   if (!v) return;
   if (load.type === 'texture' && !load.gameOwned) v.dispose();   // a Texture the game registered is the game's: never disposed here
   if (load.type === 'font') document.fonts.delete(v);   // a released font stops matching its family
-  if (load.type === 'model') {   // always { scene, ... }: generated() wraps a bare geometry too
-    v.scene.traverse(o => {
-      if (!o.geometry) return;
-      o.geometry.dispose();
-      [].concat(o.material).forEach(m => { for (const k in m) if (m[k]?.isTexture) m[k].dispose(); m.dispose(); });
-    });
-  }
+  if (v.fileLease) { v.fileLease.remove(); return; }   // one node of a file (assetPart.js): its data is the file's, which goes when nothing holds it
+  // always { scene, ... }: generated() wraps a bare geometry too. Everything in it is this load's, each part freed once (two meshes of a file often share a material)
+  if (load.type === 'model') freeParts(v.scene, () => true, { textures: true });
 }
 
 /** Free an entry's GPU memory; while model copies are still in use it waits (releasePending) and the last engine.remove frees it. A load in flight ends here */
@@ -246,26 +261,64 @@ export function retireEntry(a, e) {
   else if (load.type === 'model') freeValue(load, load.value);
 }
 
+/** A retired load that the caller has seen nothing draws any more is freed now instead of waiting for engine.dispose (a hot swap's old generated builds, which stay pinned) */
+export function freeRetired(a, load) { if (a._retired.delete(load)) freeValue(load, load.value); }
+
 /**
  * The one count of who holds an entry's data: a model copy holds a lease (Assets._copy, ended by engine.remove), and assets.lease hands one to a module (content models). Why one count and not
  * a lease table beside the copies: release, trim and a retired build would then have two answers to "is anybody using this". The handle is idempotent, so a module may
  * end it itself and still have it tracked.
+ * load: the load the holder's data came from (a copy cloned from a prototype holds the prototype's load, not whatever the name reads by the time it asks)
  * @returns {{ name: string, remove(): void }}
  */
-export function takeLease(a, e, name = e.name) {
-  const load = e.load, owner = load.owner;
+export function takeLease(a, e, name = e.name, load = e.load, by = 'unnamed') {
+  const owner = load.owner, who = load.holders ||= new Map();
+  who.set(by, (who.get(by) ?? 0) + 1);   // by: a label set once here (a module, 'content:<id>', 'model copy'); explain({ asset }) reads it, so "why is this still in memory" needs no stack
   load.users++; e.users = (e.users || 0) + 1;
   if (owner !== e) owner.users = (owner.users || 0) + 1;
   e.releasePending = owner.releasePending = false;
   let held = true;
-  return { name, remove() {
+  return { name, by, remove() {
     if (!held) return;
     held = false;
+    if (who.get(by) > 1) who.set(by, who.get(by) - 1); else who.delete(by);
     load.users--; e.users--;
     if (owner !== e) owner.users--;
     if (load.users <= 0 && !load.pinned && a._retired.delete(load)) freeValue(load, load.value);
     if (owner.users <= 0 && owner.releasePending) freeEntry(a, owner);
   } };
+}
+
+const HOLDERS_SHOWN = 10;
+/** The asset name behind a table key: a generated build is keyed 'cached:<name>:<params>:...' and its entry goes when the name is rebuilt, but its retired load still belongs to <name> */
+const assetOf = k => typeof k === 'string' && k.startsWith('cached:') ? k.slice(7, k.indexOf(':', 7)) : k;
+const holderText = who => {
+  const all = [...(who ?? [])].map(([k, n]) => n > 1 ? `${k} x${n}` : k);
+  return all.slice(0, HOLDERS_SHOWN).concat(all.length > HOLDERS_SHOWN ? [`+${all.length - HOLDERS_SHOWN} more (detail.holders)`] : []);
+};
+/**
+ * engine.explain({ asset: name }): who holds an entry's data and why it is still in memory. Reads the lease labels (takeLease) of the current build and of
+ * retired builds, and says in one line why a pinned or retired build stays. text is short; detail has every label.
+ */
+export function explainAsset(a, name) {
+  const e = a.entries.get(name), of = assetOf(name);
+  const retired = [...a._retired].filter(l => l.of === of);   // by the name it was made for: its entry may be gone (rebuilt generated model)
+  if (!e && !retired.length) return { ok: false, text: `asset '${name}': nothing is registered under that name. Names: ${[...a.entries.keys()].slice(0, 8).join(', ') || '(none)'}`, detail: null };
+  const cur = e?.load;
+  const lines = [];
+  const build = (l, head) => {
+    lines.push(`${head}: ${l.users} holder${l.users === 1 ? '' : 's'}${l.users ? '' : ', nothing holds it'}`);
+    for (const t of holderText(l.holders)) lines.push(`  ${t}`);
+    if (l.pinned) lines.push('  pinned: generated model prototypes and handed-out geometry stay until engine.dispose (nobody counts who draws them)');
+  };
+  if (!e) lines.push(`${name}: no entry under this key any more`);
+  else if (!cur) lines.push(`${name}: not loaded`);
+  else build(cur, `${name} (${cur.settled ? 'loaded' : 'loading'}${cur.owner !== e ? `, data owned by '${cur.owner.name}'` : ''})`);
+  for (const l of retired) { build(l, 'retired build'); lines.push(l.pinned ? '  retired: replaced (hot swap, palette write) but pinned: stays until engine.dispose' : '  retired: replaced (hot swap, palette write, release); freed when its last holder lets go'); }
+  if (e?.releasePending) lines.push('release() was asked: the data is freed when the last holder lets go');
+  else if (cur?.value && !cur.users && !cur.pinned) lines.push('nothing holds it: assets.release(name) or trim() frees it');
+  const tell = l => ({ users: l.users, holders: Object.fromEntries(l.holders ?? []), pinned: !!l.pinned });
+  return { ok: true, text: lines.join('\n'), detail: { name, current: cur ? tell(cur) : null, retired: retired.map(tell), releasePending: !!e?.releasePending } };
 }
 
 /** e just loaded: while long sounds are over the budget, the one asked for longest ago goes (never e itself) */

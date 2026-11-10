@@ -74,10 +74,10 @@ export const specs = [
         const R = mk(createEngine, 'sw-gap');
         const st = { v: 'start', none: false, thrower: 'start', throwing: false, empty: null };
         R.use({ name: 'gap', type: 'rules', install(e, ctx) {
-          ctx.saves.register('gap', { save: () => st.none ? null : { v: st.v }, load: d => { st.v = d.v; } });
-          ctx.saves.register('thrower', { save: () => { if (st.throwing) throw new Error('save boom'); return { v: st.thrower }; }, load: d => { st.thrower = d.v; } });
-          ctx.saves.register('empty', { save: () => st.empty == null ? null : { v: st.empty }, load: d => { st.empty = d.v; } });
-          ctx.saves.register('zboom', { save: () => ({ n: 1 }), load: d => { if (d.bad) throw new Error('load boom'); } });
+          ctx.saves.define('gap', { save: () => st.none ? null : { v: st.v }, load: d => { st.v = d.v; } });
+          ctx.saves.define('thrower', { save: () => { if (st.throwing) throw new Error('save boom'); return { v: st.thrower }; }, load: d => { st.thrower = d.v; } });
+          ctx.saves.define('empty', { save: () => st.empty == null ? null : { v: st.empty }, load: d => { st.empty = d.v; } });
+          ctx.saves.define('zboom', { save: () => ({ n: 1 }), load: d => { if (d.bad) throw new Error('load boom'); } });
         } });
         await R.start();
         const said = [];
@@ -92,7 +92,7 @@ export const specs = [
         const T = mk(createEngine, 'sw-over');
         const t = { v: 0, loaded: [] };
         T.use({ name: 'over', type: 'rules', afterLoad() {}, install(e, ctx) {
-          ctx.saves.register('over', { save: () => ({ v: t.v }), load: d => { t.v = d.v; } });
+          ctx.saves.define('over', { save: () => ({ v: t.v }), load: d => { t.v = d.v; } });
         } });
         await T.start();
         T.events.on('sw:boom', () => { throw new Error('listener boom'); });
@@ -115,7 +115,7 @@ export const specs = [
         // a late swap to a part of a lower version: the new-game state must stay readable
         const V = mk(createEngine, 'sw-ver');
         const giver = (name, version, migrate) => ({ name, type: 'rules', provides: ['vslot'], install(e, ctx) {
-          ctx.saves.register('vpart', { version, migrate, save: () => ({ by: name }), load() {} });
+          ctx.saves.define('vpart', { version, migrate, save: () => ({ by: name }), load() {} });
         } });
         V.use(giver('old', 3, { 1: d => d, 2: d => d }));
         await V.start();

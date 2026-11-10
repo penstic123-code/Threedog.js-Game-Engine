@@ -2,6 +2,8 @@
 // three will give them, normal maps, clips, node count, template / id nodes, col_ colliders), so the file and the loaded model can be compared.
 // A glb cannot carry a color-space flag: the slot decides (baseColor / emissive = srgb, the rest = linear data), which is what GLTFLoader applies.
 
+import { hintLine } from './names.mjs';
+
 /** @param {any} doc glTF Transform Document @param {any} manifest levelManifest(doc, file) */
 export function fileReport(doc, manifest) {
   const root = doc.getRoot(), tex = new Map();
@@ -14,7 +16,7 @@ export function fileReport(doc, manifest) {
   const textures = [...tex.values()].map(t => ({ ...t, colorSpace: t.slots.every(s => s === 'baseColor' || s === 'emissive') ? 'srgb' : t.slots.some(s => s === 'baseColor' || s === 'emissive') ? 'mixed' : 'linear' }));
   const clips = root.listAnimations().map(a => ({ name: a.getName(), channels: a.listChannels().length }));
   return {
-    nodes: root.listNodes().length, materials, textures, normalMaps: materials.filter(m => m.normalMap).length, clips,
+    nodes: root.listNodes().length, hidden: root.listNodes().filter(n => n.getExtension('KHR_node_visibility')?.getVisible() === false).map(n => n.getName() || '(unnamed)'), materials, textures, normalMaps: materials.filter(m => m.normalMap).length, clips,
     colliders: manifest.colliders.map(c => c.name), templates: manifest.records.map(r => ({ node: r.node, template: r.template })),
     bounds: sceneBounds(doc),
   };
@@ -41,8 +43,9 @@ function sceneBounds(doc) {
 }
 
 /** Lines for the console */
-export function reportLines(r, indent = '  ') {
+export function reportLines(r, full = false, indent = '  ') {
   const L = [`${indent}nodes       ${r.nodes} · normal maps ${r.normalMaps} · col_ ${r.colliders.length} · template/id nodes ${r.templates.length}`];
+  if (r.hidden?.length) L.push(hintLine('nodes hidden by KHR_node_visibility (loaded with visible = false, children too)', r.hidden, full, indent));
   for (const m of r.materials) L.push(`${indent}material    ${m.name}: ${m.textures.join(', ') || 'no textures'}${m.alphaMode !== 'OPAQUE' ? ` (${m.alphaMode})` : ''}`);
   for (const t of r.textures) L.push(`${indent}texture     ${t.name}: ${t.colorSpace} (${t.slots.join(', ')})`);
   if (r.clips.length) L.push(`${indent}clips       ${r.clips.map(c => c.name || '(unnamed)').join(', ')}`);

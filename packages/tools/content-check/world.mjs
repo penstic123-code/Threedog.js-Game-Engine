@@ -1,16 +1,18 @@
 // Part of content validation (called by content-check.mjs): containers, vegetation, templates, props, renames. ctx holds the helper functions of the main file.
 import { pathToFileURL } from 'node:url';
-import { abs, CONTENT_IDS_REL, CONTENT_STAGES_REL, CONTENT_RULES_REL } from '../paths.mjs';
+import { abs, CONTENT_IDS_REL, CONTENT_STAGES_REL, CONTENT_RULES_REL, VEGETATION_REL } from '../paths.mjs';
 
 // the engine's id formulas (index ids of pickups / template instances), so the ids checked here are the ids a load produces
 const { pickupId, templateId } = await import(pathToFileURL(abs(CONTENT_IDS_REL)).href);
 // the engine's stages rules: a stages list the engine would throw on is an error here, before the game runs
 const { stagesProblems } = await import(pathToFileURL(abs(CONTENT_STAGES_REL)).href);
 // the engine's collide rule: a value the load would refuse is an error here
-const { collideProblem, placeProblem } = await import(pathToFileURL(abs(CONTENT_RULES_REL)).href);
+const { collideProblem, placeProblem, layerIgnored } = await import(pathToFileURL(abs(CONTENT_RULES_REL)).href);
+// the engine's grass-shadow predicate: the hint here and define()'s dev warning are one rule
+const { grassShadowHint } = await import(pathToFileURL(abs(VEGETATION_REL)).href);
 
-/** ctx: { c, items, err, checkModel, checkPos, isObj, known } */
-export function checkWorldData({ c, items, err, checkModel, checkPos, isObj, known }) {
+/** ctx: { c, items, err, warn, checkModel, checkPos, isObj, known } */
+export function checkWorldData({ c, items, err, warn, checkModel, checkPos, isObj, known }) {
   // Containers: the items in the initial cargo must exist, counts must be positive
   for (const [id, d] of Object.entries(c.containers || {})) {
     const where = `container ${id}`;
@@ -28,6 +30,8 @@ export function checkWorldData({ c, items, err, checkModel, checkPos, isObj, kno
       if (!v?.model) err('vegetation', `vegetation ${name} has no model (the model name)`);
       if (!isObj(v?.rule)) err('vegetation', `vegetation ${name} has no rule (the growth rule)`);
       else if (Object.values(v.rule).some(x => typeof x === 'function')) err('vegetation', `rule of vegetation ${name} cannot contain functions`);
+      const grass = grassShadowHint(name, v);   // a hint, not an error
+      if (grass) warn('vegetation', grass);
     }
   }
 
@@ -72,6 +76,8 @@ export function checkWorldData({ c, items, err, checkModel, checkPos, isObj, kno
   else props.forEach((p, i) => {
     const where = `prop #${i + 1}`, m = [p?.model].flat()[0], collide = collideProblem(p?.collide);
     if (collide) err('props', `${where}: collide ${collide}`);
+    const lost = layerIgnored(p, p?.template ? templates[p.template]?.collide : p?.collide);   // the same predicate the load warns with (content-layer-ignored)
+    if (lost) warn('props', `${where}: ${lost}`);
     if (p?.template) { if (!templates[p.template]) err('props', `${where} uses template ${p.template}, which templates.js does not define (existing: ${known(templates)})`); }
     else if (!m) err('props', `${where} has no model (the model name), or a template`);
     else checkModel('props', where, m);

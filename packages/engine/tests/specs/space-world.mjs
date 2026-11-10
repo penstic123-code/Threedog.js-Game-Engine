@@ -66,7 +66,7 @@ export const specs = [
         const E = mk(T.createEngine, 'world-stream');
         E.use(T.terrain({ height: (x, z) => 3 * Math.sin(x * 0.05), viewChunks: 2 }), T.world(), T.collision(), T.characters({ npcs: false }), T.rigid());
         await E.start(); E.haltLoop();
-        const P = E.characters.createPlayer({ control: 'camera', mover: 'rapier', spawn: { x: 0, z: 0 } });
+        const P = E.characters.addPlayer({ control: 'camera', mover: 'rapier', spawn: { x: 0, z: 0 } });
         const tick = async n => { for (let i = 0; i < n; i++) { E.step(1 / 30, { render: false, describe: false }); await new Promise(res => setTimeout(res, 0)); } };
         await tick(10);
         const dest = [900, 0, 900]; let finish = null, wall = null;
@@ -104,7 +104,7 @@ export const specs = [
         E.use(T.world(), T.collision(), T.characters({ npcs: false }));
         await E.start(); E.haltLoop();
         const step = n => { for (let i = 0; i < n; i++) E.step(1 / 60, { render: false, describe: false }); };
-        const P = E.characters.createPlayer({ control: 'camera', spawn: { x: 0, z: 0 }, fall: { belowY: -5 } });
+        const P = E.characters.addPlayer({ control: 'camera', spawn: { x: 0, z: 0 }, fall: { belowY: -5 } });
         // a walk under a higher holder: nothing moves it, then it goes on
         let res = null; const w = P.walkTo([20, 0, 0]); w.then(v => { res = v; });
         step(30);
@@ -156,7 +156,7 @@ export const specs = [
           const E = mk(T.createEngine, 'world-commit' + threads + pause, { threads });
           E.use(T.terrain({ height: (x, z) => 3 * Math.sin(x * 0.05), viewChunks: 2 }), T.world(), T.collision(), T.characters({ npcs: false }));
           await E.start(); E.haltLoop();
-          const P = E.characters.createPlayer({ control: 'camera', spawn: { x: 0, z: 0 } }), h = E.control.take(P, { owner: 't', layer: 'script' }), log = [];
+          const P = E.characters.addPlayer({ control: 'camera', spawn: { x: 0, z: 0 } }), h = E.control.take(P, { owner: 't', layer: 'script' }), log = [];
           for (let i = 0; i < 360; i++) {
             h.move(1, 0, true, 1 / 60); E.step(1 / 60, { render: false, describe: false });
             if (pause && i % 7 === 0) await new Promise(res => setTimeout(res, pause));

@@ -1,12 +1,17 @@
 # Particles: dust, smoke, sparks, splashes
 
+> **Covers:** particles: dust, smoke, sparks, splashes; values over life, emitters, soft edges.
+> **Use when:** short-lived effects in numbers.
+> **Shortest:** `engine.use(particles({ effects: { dust: { … } } }))`, then `engine.particles.emit('dust', p)`.
+> **Sections:** Where a value comes · Values over life · Fast emitters · Soft edges · The material · Weather
+
 ```js fragment
 import { particles } from 'threedog';
 engine.use(particles({
-  default: { color: 0xc8b89a },                                     // what every effect starts from
-  effects: { dust: { max: 300, lifetime: [0.6, 1.2], size: [0.3, 0.8], opacity: [0.6, 0] } },   // the effects, by name
+  default: { color: 0xc8b89a },  // what every effect starts from
+  effects: { dust: { max: 300, lifetime: [0.6, 1.2], size: [0.3, 0.8], opacity: [0.6, 0] } },  // the effects, by name
 }));
-engine.particles.emit('dust', player.position, { count: 20 });      // a name in effects needs no define()
+engine.particles.emit('dust', player.position, { count: 20 });  // a name in effects needs no define()
 engine.particles.define('smoke', { gravity: 0.4, size: [0.5, 2] });
 const chimneySmoke = engine.particles.attach('smoke', chimney, { rate: 8, offset: [0, 2, 0] });
 chimneySmoke.remove();
@@ -21,8 +26,8 @@ Lowest to highest: the neutral fallback, `particles({ default })`, `particles({ 
 ## Values over life
 `size`, `color` and `opacity` take one value, `[birth, death]`, or more stops: evenly spaced, or timed from 0 (birth) to 1 (death).
 ```js
-engine.particles.define('flash', { size: [0.2, 1.5, 0.4] });                          // evenly spaced
-engine.particles.define('puff', { opacity: [[0, 0], [0.1, 0.7], [1, 0]] });           // fades in, then out
+engine.particles.define('flash', { size: [0.2, 1.5, 0.4] });  // evenly spaced
+engine.particles.define('puff', { opacity: [[0, 0], [0.1, 0.7], [1, 0]] });  // fades in, then out
 engine.particles.define('ember', { color: [[0, 0xffffff], [0.3, 0xffaa33], [1, 0x331100]] });
 ```
 Before the first time and after the last, the end stop holds. A stop list in `overrides` belongs to that batch.
@@ -32,7 +37,7 @@ Before the first time and after the last, the end stop holds. A stop list in `ov
 ```js fragment
 engine.particles.define('trail', { rate: 0, ratePerMeter: 6, lifetime: [0.4, 0.6], max: 200 });
 const trail = engine.particles.attach('trail', rocket);
-trail.ratePerMeter = 12;   // live; attach(name, object, { ratePerMeter }) sets it too
+trail.ratePerMeter = 12;  // live; attach(name, object, { ratePerMeter }) sets it too
 ```
 Set `max` to what the trail needs: a step that earns more keeps the newest. A teleport counts as moving: set `active = false` for a frame around it. While frozen nothing is born.
 
@@ -50,9 +55,9 @@ particles draw hard and the console says so. `soft` applies to the engine's mate
 ## The material
 ```js
 const sparks = engine.particles.define('sparks', { blending: 'additive' });
-sparks.material = new THREE.PointsMaterial({ size: 0.2, color: 0xffaa33 });   // WebGLRenderer: drawn as given
-sparks.material = null;                                                       // the engine's back
-sparks.uniforms.uMaxPx.value = 64;                                            // live
+sparks.material = new THREE.PointsMaterial({ size: 0.2, color: 0xffaa33 });  // WebGLRenderer: drawn as given
+sparks.material = null;  // the engine's back
+sparks.uniforms.uMaxPx.value = 64;  // live
 ```
 `.material` is the effect's plain three.js material, `.points` what draws it. Particle age reaches the picture through the geometry attributes `aSize`,
 `aAlpha`, `aColor`, `aAngle`: a material that ignores them shows every particle alike, and one that wants the fade reads them, as
@@ -63,7 +68,7 @@ buffer with `aAlpha` 0, so give them size 0 as the engine's shader does.
 // TSL (WebGPURenderer, a new game's route): import { PointsNodeMaterial } from 'three/webgpu'; import { attribute, color, mix, vec4 } from 'three/tsl';
 const m = new PointsNodeMaterial({ transparent: true, depthWrite: false, sizeAttenuation: false });
 m.colorNode = vec4(mix(color(0x00ff00), color(0xff0000), attribute('aLife', 'float')), attribute('aAlpha', 'float'));
-sparks.material = m;   // placed and sized by the engine's nodes, unless m sets positionNode / sizeNode (the particle's place is attribute('aPos', 'vec3'))
+sparks.material = m;  // placed and sized by the engine's nodes, unless m sets positionNode / sizeNode (the particle's place is attribute('aPos', 'vec3'))
 ```
 A flipbook is the same material with a texture. Each route has its own y: `uv()` runs up, `gl_PointCoord` runs down.
 ```js fragment

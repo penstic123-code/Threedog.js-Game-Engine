@@ -7,6 +7,10 @@ export class Budget {
     limits: BudgetLimits;
     /** Cost of applying background results, split in stages (see ApplyCost) */
     cost: ApplyCost;
+    /** The recorded run to compare against: { [where]: { drawCalls, triangles, cpuMs?, modules: { name: ms } } } as record() makes it. threedog shot / verify
+     * load the game's .threedog/perf-baseline.json (this machine's) here when the game set none (and write it with --save-baseline). null = no comparison
+     * @type {Record<string, any> | null} */
+    baseline: Record<string, any> | null;
     /**
      * Turn on and set limits (only categories given are checked)
      * @param {BudgetLimits} [limits]
@@ -53,6 +57,28 @@ export class Budget {
     }[];
     /** Current value per category (fps/low1/cpuMs exist only once there are frame times) @returns {Record<string, number>} */
     values(): Record<string, number>;
+    /**
+     * This run's numbers in the shape baseline keeps: { where, values: { drawCalls, triangles, cpuMs (live runs), modules: { name: median ms, 0 too } } }.
+     * threedog shot / verify --save-baseline write it into the game's .threedog/perf-baseline.json (this machine's, not committed)
+     * @returns {{ where: string, values: { drawCalls: number, triangles: number, cpuMs?: number, modules: Record<string, number> } }}
+     */
+    record(): {
+        where: string;
+        values: {
+            drawCalls: number;
+            triangles: number;
+            cpuMs?: number;
+            modules: Record<string, number>;
+        };
+    };
+    /**
+     * One line when something is off, null when all is fine: over a limit the game declared (only when the budget is on; the engine's own reference
+     * limits never), slower than the baseline recorded at this spot on this machine (medians, past a noise margin), a module with spikes (p95 over 3x
+     * its median and over 2 ms), or what adaptive quality lowered (resolution, effects). threedog shot, verify and describeText print it
+     * @returns {string | null}
+     * @example engine.budget.notice()   // 'Perf: over budget drawCalls 312 (limit 250, +25%); slower than baseline: modules.terrain 1.4 ms (was 0.6, +133%) -> threedog inspect perf'
+     */
+    notice(): string | null;
     /**
      * Estimate draw calls and triangles by userData.budgetTag (visible meshes inside the frustum; shadow casters count a second shadow draw).
      * Returns [{ tag, drawCalls, triangles }], largest first. Called only on overrun (at most once a second) or when debugging

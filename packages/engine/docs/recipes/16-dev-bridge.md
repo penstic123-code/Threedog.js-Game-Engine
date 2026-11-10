@@ -1,12 +1,11 @@
 # Dev bridge: operate the running game from the terminal (threedog describe / step / press / op...)
 
-**In this recipe**: 1. Usage · 2. Notes · 2b. A scripted playthrough, and three kinds of check · 3. Windows / PowerShell notes ·
-3b. Speed, a session, and checks in one call · 4. Let describe see the game's own state · 5. Safety · 6. Reuse in scenario tests ·
-7. Describe snapshots instead of screenshots · 8. Errors carry a code, a fix and a doc page · 9. Reusable scenarios · 10. MCP server ·
-11. When something happens: which tool
+> **Covers:** driving the running game from the terminal: describe, step, press, state, scenarios, snapshots, MCP.
+> **Use when:** checking a change without a screenshot or a browser script.
+> **Shortest:** `threedog describe -w my-game`.
+> **Sections:** 1 Usage · 2 Notes · 2b A scripted playthrough · 3 Windows / PowerShell · 3b Speed, a session · 4 Let describe see · 5 Safety · 6 Reuse in scenario · 7 Describe snapshots instead · 8 Errors carry a · 9 Reusable scenarios · 10 MCP server Claude · 11 When something happens
 
-Purpose: after changing code, don't write a playwright script or take a screenshot; just ask "what does the game look like now", advance time, press
-keys, change state. Output is English, three lines or fewer, to save tokens.
+After changing code, ask the running game instead of writing a playwright script or taking a screenshot: look, advance time, press keys, change state. Output is a few English lines.
 
 What the bridge changes lives in this session only: `op`, `step`, `state` and `js` alter the running game and its saves, never the level. To change
 the level, edit `content/*.js` (templates, props, npcs…) or the level model and reload the page.
@@ -38,9 +37,8 @@ Every command and its options are in `../COMMANDS.md`. What each does to the gam
 - **Smallest scenario** (`tests/scenarios/coins.json` <!-- r18-ignore-line -->, then `threedog verify coins` or `scenario coins`; `verify` with no file says "Have: none"):
   `{ "name": "coins", "url": "/", "state": { "pos": "6,4" }, "steps": [ { "step": 1 }, { "expect": { "inventory.items.coin": 1 } } ] }`
 - **Position formats**: `pos=x,z` (state, shot, `applyState`) is two numbers on the ground plane, and the height is looked up; an op argument such as `position=3,0,-2` is `x,y,z`. Both are meters, north is -z. `describe` reports the player as `{ x, y, z }` (`describe player.position`).
-- **Teleport the player**: `threedog state "pos=40,-20"` on the bridge, `await engine.applyState({ pos: '40,-20' })` in a test or `js` (both wait for the
-  ground there to load). A bare `player.placeAt` from the bridge or a test is a gameplay write outside an op and prints the ops-guard warning; in the
-  game itself it belongs in an op (a teleporter pad). `step 1` after it collects `auto` pickups: the pickup check runs in the fixed step after any move.
+- **Teleport the player**: `threedog state "pos=40,-20"`, or `await engine.applyState({ pos: '40,-20' })` in a test or `js` (both wait for the ground to load). A bare
+  `player.placeAt` outside an op prints the ops-guard warning. `step 1` after it collects `auto` pickups.
 - **Ops with a reach** (`interaction.use`, `pickup.take`) check the player's distance as a key press would, also from the bridge: put the player next
   to the thing first (`threedog state "pos=x,z"`), then `threedog op interaction.use id=gate`. A `tooFar` result carries `facts: { distance, radius, at }`.
 - **`shot` always starts a fresh game** (`?save=slot1` loads one); after playing use `snap name`. Every shot prints the picture numbers and hints (recipes/35 "Picture check after every shot").
@@ -51,15 +49,11 @@ Every command and its options are in `../COMMANDS.md`. What each does to the gam
   (`ui.windows`, dialogue).
 - **Keys go through `engine.input` like a real keyboard**: action names are translated to keyboard keys (gamepad buttons are ignored); when a window
   locks input, menu-type actions (`pressedRaw`) are still received.
-- **In your own page scripts and tests do the same with `engine.input.simulate(action, down = true)`** (it goes through the same path as `press`, and
-  works with `engine.step`): `engine.input.simulate('jump'); engine.step(1 / 60); engine.input.simulate('jump', false)`. Never call `_keyDown` /
-  `_keyUp` (internal).
+- **In your own page scripts and tests use `engine.input.simulate(action, down = true)`** (the same path as `press`): `engine.input.simulate('jump'); engine.step(1 / 60); engine.input.simulate('jump', false)`.
 - `describe` by default gives only the 3 nearest things and the first quest; for detail use a path (`quests.active`, `nearby`, `world`) or `--full`.
 - Several pages: `--page /<page>.html` picks the path; `-w name` picks the workspace.
-- To change the port: `npm run dev -- my-game --port 5000`; the CLI finds the port from `.threedog/dev.json`, so you don't need to specify it again.
-- If a command never becomes ready: most likely `main.js` doesn't set `window.engine = engine;` (it must come before `await engine.start()`). Under
-  the dev server `engine.start()` attaches it automatically, but the bundled build used by npm test does not; the timeout error says whether the page
-  has `window.engine`, `engine.ready`, and the latest page errors.
+- Another port (`npm run dev -- my-game --port 5000`) is found through `.threedog/dev.json`.
+- Never ready: the dev server attaches `window.engine` itself, but a bundled build (npm test) needs `window.engine = engine;` before `await engine.start()`; the timeout error says which is missing.
 
 ## 2b. A scripted playthrough, and three kinds of check
 ```
@@ -76,7 +70,7 @@ The same steps as a file: `tests/scenarios/<name>.json` with `{ "press": … }`,
 - **Simulated-input checks** (`press`, `hold`, `engine.input.simulate`): bridge key events through the game's input path, never a physical keyboard/mouse. `verify` prints which layer each check ran on, what it did **not** prove (pointer lock and mouse look, real GPU/visuals, real FPS) and coverage (ops run vs defined; modules tested, indirect or untested; uses `engine.catalog()`); `scenario` prints the same coverage, and `--json` has the full lists.
 - **Visual checks** (`snap`, `shot`): the only ones that see the picture (exposure, color, UI overlap). Slowest; take them last.
 
-**Script the failures, not only the win.** A run that only wins says nothing about the routes a player takes after a mistake. Every end state gets a scenario: lose, die and respawn, retry, reload mid-run (`threedog reload` between bridge commands; a scenario file has no reload step). After each run, read `ops never run` in the `verify` report: each op there is a rule no script reached. Then check what the player stands in after the failure: a respawn point the level has since closed off, a hit that lands the step after a blow that should have ended the contact, a timer or lock left over from the last attempt.
+**Script the failures, not only the win.** Every end state gets a scenario: lose, die and respawn, retry, reload mid-run (`threedog reload` between bridge commands; a scenario file has no reload step). Read `ops never run` in the `verify` report (rules no script reached), then check what the player stands in after the failure: a closed-off respawn point, a hit landing after the blow that should end contact, a timer or lock left from the last attempt.
 
 Playing a game through from a script, the five things that cost the most time:
 - **Start clean.** Enter on a title picks Continue when a save exists, so a rerun by keys plays the last autosave. `state fresh=1` deletes the saves and
@@ -93,15 +87,14 @@ Playing a game through from a script, the five things that cost the most time:
   reports an error and shows this tip when pos is not two numbers).
 - Wrap the whole `js` expression in **double quotes** and use single quotes for strings inside: `threedog js "engine.vars.counter('score')"`.
   PowerShell expands `$variables` inside double quotes; to pass `$` literally wrap the whole thing in single quotes.
-- **Write a command on a single line**: a multi-line here-string passed to a native command often silently returns nothing in PowerShell. Put several
-  statements on one line separated by semicolons, or write them to a file and use `threedog js --file script.js` (no quoting or newline worries).
+- **Write a command on a single line** (a multi-line here-string to a native command often returns nothing): separate statements with semicolons, or use `threedog js --file script.js`.
 - Some terminal sandboxes (Bash) block commands containing the word `eval`: use `js`, not `eval`.
 
 ## 3b. Speed, a session, and checks in one call
 
 The bin called directly is the fastest route (COMMANDS.md, first lines); `threedog session` saves a little more per command. Commands behave identically with or without it.
 
-- `threedog js --file steps.js`: put the whole test in one file and run it once. Inside: `assert(cond, msg)`, `expect(v).toBe(x)` (also `toEqual`, `toBeCloseTo(x, tol)`, `toBeGreaterThan`), `step(seconds)`, `log(...)`, and `engine`. The output is only the failures and one summary line, exit code 1 on failure, so ten steps cost one round trip and a few tokens:
+- `threedog js --file steps.js`: the whole test in one file, one round trip. Inside: `assert(cond, msg)`, `expect(v).toBe(x)` (also `toEqual`, `toBeCloseTo(x, tol)`, `toBeGreaterThan`), `step(seconds)`, `log(...)`, and `engine`. It prints the failures and one summary line, exit code 1 on failure:
 
 ```js fragment
 step(2);
@@ -113,12 +106,10 @@ expect(engine.time.tick).toBeGreaterThan(before, 'time advanced');
 ## 4. Let describe see the game's own state
 A game's own state (score, number of targets, crops) is not in `describe` by default. **Small games use this**: register it in one line, no module needed:
 ```js
-engine.describe.add('range', () => ({ score, targets: targets.length }));   // the returned handle's .remove() cancels it
+engine.describe.add('range', () => ({ score, targets: targets.length }));  // the returned handle's .remove() cancels it
 ```
-After that `threedog describe range` shows it, and `describeText()` includes it too (listed before the module lines, so the 30-line cut never drops it). The name must not collide with a core field (player, time...)
-or a module name; if the callback throws, only this item shows `{ error }` and the rest are unaffected.
-**Large games write their systems as modules** (see 14-custom-module.md) and use the module's `describe(e, ctx)` hook: the return value likewise goes
-into `describe().<module name>`, and `ctx.near()` can report "things nearby".
+After that `threedog describe range` shows it, and `describeText()` lists it before the module lines. The name must not collide with a core field or a module name;
+a callback that throws shows `{ error }` for this item only. **Large games use modules** (14-custom-module.md): the module's `describe(e, ctx)` hook goes into `describe().<module name>`.
 
 ## 5. Safety
 The bridge exists only in the dev server (`apply: 'serve'`); built and preview output contains no bridge code. The command entry point `POST /__threedog/cmd` accepts only local connections, requires the random token in `.threedog/dev.json`, the Host must
@@ -142,11 +133,10 @@ Options: `--only a,b.c` (compare just these fields; dotted paths allowed), `--ig
 
 In a test, one line (the page must already be in the state to freeze; use `engine.haltLoop()` and `engine.step()` first):
 ```
-import { expectDescribe } from '@threedog/tools/describe-snapshot';   // in the engine's own specs: '../../../tools/describe-snapshot.mjs'
+import { expectDescribe } from '@threedog/tools/describe-snapshot';  // in the engine's own specs: '../../../tools/describe-snapshot.mjs'
 await expectDescribe({ check, ev }, 'market-noon', { only: ['player', 'quests', 'nearby'], tolerance: { default: 0.5, player: 1 } });
 ```
-Update after an intended change: `threedog test <name> --update-snapshots` (writes instead of comparing) or `threedog snap-describe save <name>`.
-Review the JSON diff in git before committing. Take a screenshot only when the picture changed.
+Update after an intended change: `threedog test <name> --update-snapshots` or `threedog snap-describe save <name>`, and review the JSON diff before committing.
 
 ## 8. Errors carry a code, a fix and a doc page
 Every error and warning the engine raises carries a stable **code**: `err.code`, `err.fix` (what to do) and `err.docs` (pages to read), and its message
@@ -174,7 +164,7 @@ Cursor, `.cursor/mcp.json` in the game folder: <!-- r18-ignore-line -->
 ```
 { "mcpServers": { "threedog": { "command": "node", "args": ["node_modules/@threedog/tools/bin/threedog.mjs", "mcp"] } } }
 ```
-Plain node is the same on every OS (no `cmd /c` on Windows). The server starts once per session. `npm run new-game` writes a `.mcp.json` like this into the new game, so opening the game folder in Claude Code picks it up.
+Plain node is the same on every OS. `npm run new-game` writes a `.mcp.json` like this into the new game, so Claude Code picks it up.
 
 The `js` tool (arbitrary code in the page) is off by default; `threedog mcp --allow-js` enables it, for development only. Other options: `-w name`
 (workspace), `--page /<page>.html` (page path).

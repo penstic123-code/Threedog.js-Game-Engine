@@ -1,5 +1,10 @@
 # Action game wiring: hp, attacks, guns, enemy AI, drops, death, win and lose without engine combat rules
 
+> **Covers:** an action game's own rules: health, attacks, guns, enemy AI, drops, win and lose.
+> **Use when:** combat on top of the engine's systems.
+> **Shortest:** the working example `examples/action/` (§1 says what goes where).
+> **Sections:** 1 What goes where · 2 Rules that keep · 2b Guns hitscan shots · 3 Mouse attack and · 4 Movement jumps, speed
+
 The engine has no health, damage, hit detection or death. An action game writes those as its own rules on top of systems that already exist. The
 working example is `examples/action/` (page `/action.html`, the rules in `main.js`, the room in `content/`).
 
@@ -7,7 +12,7 @@ working example is `examples/action/` (page `/action.html`, the rules in `main.j
 | Piece | Built on | In the example |
 |---|---|---|
 | The room, the enemy and its stats (hp, damage, drop) | content `templates` + `props` with ids (recipe 30) | `content/templates.js` `slime: { model, static: false, state: { hp, maxHp, damage, cooldown, drop } }` |
-| Player hp, attack cooldown, game over | plain object + `engine.describe.add` + `engine.saves.register` | `const game = fresh()` |
+| Player hp, attack cooldown, game over | plain object + `engine.describe.add` + `engine.saves.define` | `const game = fresh()` |
 | Attack, damage, enemy hit, death | ops with `can` / `run` (recipe 23), so keys, the dev bridge, MCP, tests and the AI run one rule | `player.attack`, `enemy.damage`, `enemy.attack`, `player.die` |
 | Enemy AI (chase, face, strike) | `engine.world.simulate(kind, { near, channel? })` (channel: bullet time reaches it, section 4), a fixed step per near record; it strikes with `ops.run(..., { actor: rec.id })` | `world.simulate('slime', ...)` |
 | Gameplay keys | content `actions` (`attack: { keys: ['Mouse0', 'KeyF'] }`), read with `input.pressed` in `onFixed` | `onFixed` runs `player.attack` |
@@ -24,7 +29,7 @@ working example is `examples/action/` (page `/action.html`, the rules in `main.j
 - `player.die` decides what death does. The example offers `respawn` (`player.placeAt(spawn)`, full hp), `restart` and `gameover` (both end in
   `engine.session.newGame()`, which is async flow and so runs from the frame hook, not inside the op).
 - What a fight sets up, falling undoes. `respawn` leaves the world as it was, so a closed arena gate, a blocked area, a locked camera or a boss phase is still there when the player returns, and a spawn point can end up inside ground that is no longer walkable. Keep one function that undoes the fight and call it from `player.die`; a win calls it too.
-- A blow that ends a contact ends it for both sides: a stomp, a dash through or a parry needs a short window in which that enemy cannot hurt the player, or its touch damage lands the step after. Each of these gets a scenario that loses as well as one that wins (recipe 16 section 2b).
+- A blow that ends a contact ends it for both sides: a stomp, a dash through or a parry needs a short window in which that enemy cannot hurt the player, or its touch damage lands the step after. Each of these gets a scenario that loses and one that wins (recipe 16 section 2b).
 - Win and lose are the game's rule too: one state field, judged last in the fixed step so it sees this step's hits. The end screen is a `makeWindow`
   with `closable: false` (recipe 26).
 
@@ -45,15 +50,15 @@ looks, so a swing goes where you aim. The rules do not need the picture: `?pictu
 
 ## 4. Movement: jumps, speed effects, bullet time, platforms, falling
 ```js fragment
-engine.characters.createPlayer({ ...presets.player.thirdPerson, maxJumps: 2 });     // double jump: the same jump key twice
-engine.player.launch(16, { owner: 'pad' });                                          // a jump pad / spring
-engine.mod('move.speed', { owner: 'haste', id: 'player', mul: 1.2, for: 5 });       // haste for 5 s; no id = every character (mud, wind)
-engine.time.channel('enemies');                                                     // once, before anything uses it: a channel of your own
-engine.mod('time.enemies', { owner: 'bullet-time', mul: 0.35, for: 2 });            // bullet time: enemies on channel 'enemies' at 35%
-engine.world.simulate('slime', { near: chase, channel: 'enemies' });                 // world records (the enemy AI above) get the slowed dt
-engine.onFixed(dt => moveShots(dt), { channel: 'enemies' });                        // your own enemy logic on the same slowed dt
-engine.characters.support(liftMesh);                                                 // a moving platform: move liftMesh any way, riders follow
-engine.player.mover = 'manual'; /* a cutscene, your own physics */ engine.player.mover = 'simple';   // take over, give back
+engine.characters.addPlayer({ ...presets.player.thirdPerson, maxJumps: 2 });  // double jump: the same jump key twice
+engine.player.launch(16, { owner: 'pad' });  // a jump pad / spring
+engine.mod('move.speed', { owner: 'haste', id: 'player', mul: 1.2, for: 5 });  // haste for 5 s; no id = every character (mud, wind)
+engine.time.channel('enemies');  // once, before anything uses it: a channel of your own
+engine.mod('time.enemies', { owner: 'bullet-time', mul: 0.35, for: 2 });  // bullet time: enemies on channel 'enemies' at 35%
+engine.world.simulate('slime', { near: chase, channel: 'enemies' });  // world records (the enemy AI above) get the slowed dt
+engine.onFixed(dt => moveShots(dt), { channel: 'enemies' });  // your own enemy logic on the same slowed dt
+engine.characters.support(liftMesh);  // a moving platform: move liftMesh any way, riders follow
+engine.player.mover = 'manual'; /* a cutscene, your own physics */ engine.player.mover = 'simple';  // take over, give back
 ```
 - **Jumps** (all public, no private fields): `jump()` is buffered for `jumpBuffer` s (default 0.12) and uses coyote time (`coyoteTime`); in the air it is an
   air jump while `maxJumps` allows, at `airJumpSpeed` (default `jumpSpeed`). `jump({ air: false })` = ground only. `addJumps(n)` / `resetJumps()` for
@@ -79,11 +84,11 @@ engine.player.mover = 'manual'; /* a cutscene, your own physics */ engine.player
   ```js fragment
   const raft = new THREE.Group(), deck = new THREE.Mesh(new THREE.BoxGeometry(3, 0.2, 2), wood);
   raft.add(deck, mast); engine.scene.add(raft);
-  engine.characters.support(deck, { id: 'raft' });                       // the deck, not the raft with its mast
-  engine.onFixed(dt => { raft.position.x += 1.5 * dt; });                 // the player on it is carried
+  engine.characters.support(deck, { id: 'raft' });  // the deck, not the raft with its mast
+  engine.onFixed(dt => { raft.position.x += 1.5 * dt; });  // the player on it is carried
   ```
   A ride the player does not steer is `engine.control` instead (recipe 57, Moved by script).
-- **Falling out**: `createPlayer({ ..., fall: { belowY: -20 } })` fires `character:fall { character, safe }` once. Take hp in the listener. The rule `fall` decides what happens, and the engine alone decides nothing: `engine.mod('fall', { owner: 'game', set: 'rescue' })` (or `characters({ fall: 'rescue' })`; `openWorld` and the new-game templates choose it) puts the player back on `player.safeGround`, the last spot it stood still on safe, unmoving ground (saved); `set: false` handles it yourself, a function `(facts, engine) => 'rescue' | false` decides per fall (`facts.kind` is `'character'` or `'body'`), and without `id` it covers everything that falls, rigid bodies below y = -200 too.
+- **Falling out**: `addPlayer({ ..., fall: { belowY: -20 } })` fires `character:fall { character, safe }` once. Take hp in the listener. The rule `fall` decides what happens, and the engine alone decides nothing: `engine.mod('fall', { owner: 'game', set: 'rescue' })` (or `characters({ fall: 'rescue' })`; `openWorld` and the new-game templates choose it) puts the player back on `player.safeGround`, the last spot it stood still on safe, unmoving ground (saved); `set: false` handles it yourself, a function `(facts, engine) => 'rescue' | false` decides per fall (`facts.kind` is `'character'` or `'body'`), and without `id` it covers everything that falls, rigid bodies below y = -200 too.
 - **Your own controller**: `mover: 'manual'` = you write the position; `move()` then only updates `grounded`, `support` (platforms still carry),
   `safeGround` and the fall check. Switch at any time (`player.mover = 'manual'` / `'simple'`): a cutscene, a grapple, a ladder.
 - **Knockback / dashes**: `player.push(vx, vz, seconds)`. Writing `player.velocity` or `player.vy` is an impulse: the mover keeps integrating from

@@ -5,10 +5,11 @@
 // (no sway, no season tint, flat water) shows even when the mean stays close. Plus fallback: 'webgl' must start and draw with all of it rebuilt.
 import * as THREE from 'three';
 import 'threedog/tsl';
-import { MeshStandardNodeMaterial } from 'three/webgpu';
+import { MeshStandardNodeMaterial, MeshToonNodeMaterial } from 'three/webgpu';
+import { color as tslColor } from 'three/tsl';
 import { createEngine, terrain, vegetation, water, sky, particles, weather, mergeColored, applyEffects } from '../../index.js';
 import { bloom } from '@threedog/post-effects';
-import { materialPatches, patchMaterial } from '../../render/patches.js';
+import { materialPatches, patchMaterial, cloneMaterial } from '../../render/patches.js';
 
 const W = 160, H = 120;
 
@@ -205,7 +206,7 @@ window.pluginOrderRoutes = async () => {
   const gpu = await make({ renderer: 'webgpu', saveKey: 'test-engine-webgpu-plugins' }, { parts: false });
   const fx = (name, glsl, tsl) => ({ name, slot: 'ldr', fuse: { glsl, tsl: (c, uv, { tsl: T }) => T.vec4(tsl(c.rgb), c.a) } });
   const run = e => {
-    const amp = e.uniforms.uWindAmp, hold = e.freeze('plugin-order', { ambient: true });
+    const amp = e.uniforms.uWindAmp, hold = e.freeze('plugin-order', { still: true });
     e.post.get('bloom').enabled = false;   // the two plugins' order is what is compared here
     amp.value = 0;
     e.plugins.add({ './plugins/60-half.js': { default: fx('half', 'color.rgb *= 0.5;', c => c.mul(0.5)) },
@@ -451,5 +452,42 @@ window.plainClouds = async () => {
   };
   const out = { gl: run(gl), gpu: run(gpu) };
   gpu.dispose();
+  return out;
+};
+
+// Vegetation draws a model with the material the game made (tests/specs/engine-webgpu.mjs). Its copy of each mesh's material once kept only what
+// three's copy() knows: a NodeMaterial's own setupLightingModel (the cel.tsl.js route), a field its class never declares and a classic material's
+// own onBeforeCompile were dropped, so every tree drew with three's plain lighting. Also: the game's onModel runs on a model named in define
+window.vegetationGameMaterial = async () => {
+  const canvas = Object.assign(document.createElement('canvas'), { width: W, height: H });
+  const e = createEngine({ canvas, pixelRatio: 1, ui: { loading: false }, urlState: false, saveKey: 'test-vegetation-game-material' });
+  e.use(vegetation({ area: { min: [-10, -10], max: [10, 10] } }));
+  const lighting = () => ({ game: 'soft', start() {}, direct() {} });   // the game's own lighting model, as celLighting is
+  const paint = tslColor(0xff00ff), hook = () => {};
+  const leaf = new MeshToonNodeMaterial(); leaf.colorNode = paint; leaf.setupLightingModel = lighting; leaf.look = { rim: 0.2 };
+  // bark: the game's hook on a material the game already gave the engine's effects (its onBeforeCompile is then the engine's wrapper)
+  const bark = new THREE.MeshLambertMaterial(); bark.onBeforeCompile = hook; applyEffects(bark, { engine: e });
+  const tree = new THREE.Group(); tree.add(new THREE.Mesh(new THREE.BoxGeometry(), bark), new THREE.Mesh(new THREE.ConeGeometry(), leaf));
+  e.vegetation.define('own', { model: tree, wind: 0.05, positions: [[0, 0]] });
+  const [b, l] = e.vegetationDraw.kind('own').material;
+  // a model named in define: the game's onModel swaps its material before vegetation copies the meshes
+  const swapped = new MeshToonNodeMaterial(); swapped.setupLightingModel = lighting;
+  e.assets.onModel(m => m.traverse(o => { if (o.isMesh) o.material = swapped; }));
+  e.assets.manifest({ models: { bushy: () => { const g = new THREE.Group(); g.add(new THREE.Mesh(new THREE.ConeGeometry(), new THREE.MeshLambertMaterial())); return g; } } });
+  await e.vegetation.define('named', { model: 'bushy', positions: [[2, 2]] });
+  const n = e.vegetationDraw.kind('named').material[0];
+  // colors on one mesh only: the merged species geometry drops them, and says so
+  const painted = new THREE.BoxGeometry();
+  painted.setAttribute('color', new THREE.Float32BufferAttribute(new Array(painted.attributes.position.count * 3).fill(1), 3));
+  const mixed = new THREE.Group(); mixed.add(new THREE.Mesh(painted, new THREE.MeshLambertMaterial({ vertexColors: true })), new THREE.Mesh(new THREE.ConeGeometry(), new THREE.MeshLambertMaterial()));
+  const quiet = !e.describe().warnings.list.some(w => w.code === 'vegetation-ignored');
+  e.vegetation.define('mixed', { model: mixed, positions: [[4, 4]] });
+  const out = { notice: quiet && e.describe().warnings.list.some(w => w.code === 'vegetation-ignored' && /mixed.*color/.test(w.text)), copied: l !== leaf && b !== bark, colorNode: l.colorNode === paint, lighting: l.setupLightingModel({})?.game === 'soft', look: l.look?.rim === 0.2,
+    patches: materialPatches(l).join(','), hook: b.onBeforeCompile[Symbol.for('threedog.patchWrapper')]?.() === hook,
+    named: !!n.isMeshToonNodeMaterial && n.setupLightingModel({})?.game === 'soft' };
+  // a copy of a copy: the engine's wrappers are unwrapped to the game's part each time, so nothing nests and every patch is there once
+  const wrapped = Symbol.for('threedog.patchWrapper'), inner = f => f?.[wrapped] ? f[wrapped]() : f, l2 = cloneMaterial(l), b2 = cloneMaterial(b);
+  out.twice = inner(l2.setupLightingModel) === lighting && materialPatches(l2).join(',') === out.patches && inner(b2.onBeforeCompile) === hook && materialPatches(b2).join(',') === materialPatches(b).join(',');
+  e.dispose();
   return out;
 };

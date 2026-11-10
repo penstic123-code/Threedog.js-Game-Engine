@@ -120,7 +120,7 @@ export const specs = [
       const { Clock } = await import('../../core/time/Clock.js');
       const { Stacks } = await import('../../core/ops/stacks.js');
       const { Time } = await import('../../core/time/time.js');
-      const log = [], e = { saves: { register() {} }, events: { emit: n => log.push(n), on() {} } };
+      const log = [], e = { saves: { define() {} }, events: { emit: n => log.push(n), on() {} } };
       e.stacks = new Stacks(e);
       const c = e.clock = new Clock(e); e.time = new Time(e);   // the clock is the calendar view of time's one queue
       const advance = s => e.time._skip(s, s);

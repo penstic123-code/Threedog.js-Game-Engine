@@ -27,7 +27,7 @@ First run `threedog doctor --fix`, then `npm run check`: a removed name shows up
 | `preventDefault is not a function` in a `character:fall` listener | Falling is one rule, `fall`, for characters and rigid bodies | Remove the call. `engine.mod('fall', { owner: 'game', id: 'player', set: false })` leaves the fall to the game; a function `(facts, engine) => 'rescue' \| false` decides per fall |
 | `nothing explains 'picture' (did you mean 'value'?)` | `explain({ picture })` is now `explain({ value })`, which also gives the short history | Rename the key. On the command line: `threedog explain value fog.far` |
 | `explain is not a function` on a thing | `engine.explain` is the one way to ask why | `engine.thing(id).explain()` becomes `engine.explain({ thing: id }).detail`, and `threedog thing <id>` becomes `threedog explain thing <id> --full` (MCP: `explain` with `about: 'thing'`) |
-| `[save-key-taken]` from `saves.register` | A second register on a held key used to take the part from its owner with nothing said, and that owner stopped being saved | Use another key, or `remove()` the first handle before registering again |
+| `[save-key-taken]` from `saves.define` | A second register on a held key used to take the part from its owner with nothing said, and that owner stopped being saved | Use another key, or `remove()` the first handle before registering again |
 | `[skip-busy]` from `engine.skip` | A second skip during a first one's fade used to resolve and unfreeze the game mid-fade. The doc always said it rejects | Await the first skip, then skip again |
 | `[save-busy]` from `saves.collect` | A load is running. `saves.save` waits for it, `collect` cannot | Collect after the load. Do not await `saves.apply` or `saves.load` inside a part's `load()` or an `afterLoad`: dev warns `save-nested`, because it would wait forever |
 | `setViewChunks is not a function` or `setDensity is not a function` | One entry each: `terrain.viewChunks` and `terrain.density` take effect when written | `terrain.setViewChunks(n)` becomes `terrain.viewChunks = n`; `terrain.setDensity(d)` becomes `terrain.density = d`. Plants that block stand at every density |
@@ -44,7 +44,7 @@ First run `threedog doctor --fix`, then `npm run check`: a removed name shows up
 | `[module-params] triggers.add({ radius })` | A NaN or negative radius used to sit in the zone list and never match | Pass a finite number >= 0 |
 | `[grids-misuse] grids.add` | A cell, origin or size that is no valid number is refused | Cell > 0, a finite origin, size whole numbers > 0 or left out |
 | `[quest-step] ... next` | A step's `next` must be a step of that quest or a function | Fix the id the message quotes |
-| `[save-version]` at `saves.register` | A `migrate` key must be a whole version below the current one | Rename the key |
+| `[save-version]` at `saves.define` | A `migrate` key must be a whole version below the current one | Rename the key |
 | `saves.save` answers false with `[save-part-threw]` | A part's `save()` returned a function, a symbol, NaN or an infinity, which a save cannot hold | Return plain data, or null for nothing |
 | `[save-write]` from `saves.putAttachment` | Only a Blob is stored | Pass a Blob |
 | `[terrain-option]` from a terrain edit | An edit that would touch more than about four million points is refused | Use a smaller radius or several edits |

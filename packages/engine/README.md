@@ -20,7 +20,7 @@ import { terrainPreset } from '@threedog/terrain-noise';   // optional terrain g
 
 const engine = createEngine({ canvas: document.getElementById('view'), renderer: 'webgpu' });   // no picture code yet: gray placeholders
 engine.use(openWorld({ camera: 'follow', seed: 7, terrain: terrainPreset() }));
-engine.characters.createPlayer({ ...presets.player.thirdPerson });
+engine.characters.addPlayer({ ...presets.player.thirdPerson });
 engine.start();
 ```
 The picture is the game's own: plain three.js in its `picture/` folder (what `threedog new-game` generates), reading signals from `engine.uniforms`. A new game runs on WebGPU with TSL shaders, or on WebGL with GLSL shaders through `--webgl`. A browser without WebGPU still runs the WebGPU form, on three's WebGL2 backend, slower; `describe().renderer` says why.

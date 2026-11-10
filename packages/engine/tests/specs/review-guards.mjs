@@ -168,6 +168,21 @@ export const specs = [
         const A = mk(createEngine, 'rg-assets');
         A.assets.manifest({ name: 'packA', models: { tree: '/a/tree.glb' } }); A.assets.manifest({ name: 'packB', models: { tree: '/b/tree.glb' } });
         console.warn = w0; out.replaced = warns.some(m => m.includes('packA') && m.includes('packB') && m.includes('tree'));
+        // `threedog assets optimize` writes a JSON pack named 'optimized': it swaps the file, the game's other options (needs, prepare) stay
+        const prepare = () => {};
+        A.assets.manifest({ name: 'game', models: { hero: { url: '/models/hero.glb', needs: { nodes: ['Hand'] }, prepare } } });
+        A.assets.manifest({ name: 'optimized', models: { hero: { url: '/optimized/hero.glb', lods: ['/optimized/hero_1.glb'] } } });
+        const he = A.assets.entries.get('hero');
+        out.optimized = { url: he.url, lods: he.opts.lods?.length, needs: !!he.opts.needs, prepare: he.opts.prepare === prepare };
+        // a generator the optimized pack later points at a file: the file wins (build is checked before url)
+        A.assets.manifest({ name: 'game2', models: { tree: () => new threedogThreads.THREE.Group() } });
+        A.assets.manifest({ name: 'optimized', models: { tree: { url: '/optimized/tree.glb' } } });
+        out.treeBuild = !!A.assets.entries.get('tree').opts.build;
+        // the load path of needs: one node and one clip the model lacks give exactly one asset-needs warning naming both
+        const seen = [], w1 = console.warn; console.warn = (...a) => { seen.push(a.join(' ')); };
+        A.assets.manifest({ name: 'contract', models: { hero: { needs: { nodes: ['Hand_L', 'Hand_R'], clips: ['Idle', 'Run'] }, build() { const g = new threedogThreads.THREE.Group(), h = new threedogThreads.THREE.Group(); h.name = 'Hand_L'; g.add(h); g.animations = [new threedogThreads.THREE.AnimationClip('Idle', 1, [])]; return g; } } } });
+        await A.assets.model('hero'); await A.assets.model('hero');
+        console.warn = w1; out.needs = seen.filter(m => m.includes('asset-needs'));
         A.use(T.world(), T.inventory(), T.content()); await A.start();
         A.content.load([{ name: 'base', items: { gold: { name: 'Gold' } }, startItems: { gold: 5 } }, { name: 'dlc', startItems: { gold: 3 } }]);
         out.gold = A.inventory.count('gold');
@@ -176,6 +191,9 @@ export const specs = [
       });
       check('[guard] width: 100%; height: auto is not treated as unsized (no window size forced)', r.auto === false && r.w === 500 && Math.abs(r.h - 250) <= 1, JSON.stringify(r));
       check('a later manifest replacing a same-named asset warns naming both manifests', r.replaced, JSON.stringify(r));
+      check('[guard] the optimized pack replaces the file and lods and keeps the entry\'s needs and prepare', /optimized\/hero\.glb$/.test(r.optimized.url) && r.optimized.lods === 1 && r.optimized.needs && r.optimized.prepare, JSON.stringify(r.optimized));
+      check('[guard] an optimized file replaces a generator: the old build goes with the old file', r.treeBuild === false, JSON.stringify(r));
+      check('[guard] a model missing a needed node and clip warns once at load, naming both (fails if checkNeeds is not called)', r.needs.length === 1 && /Hand_R/.test(r.needs[0]) && /"Run"/.test(r.needs[0]) && !/Hand_L|Idle/.test(r.needs[0].replace(/\(closest[^)]*\)/g, '')), JSON.stringify(r.needs));
       check('startItems from two packs add up instead of clashing', r.gold === 8, JSON.stringify(r));
     },
   },
@@ -238,7 +256,7 @@ export const specs = [
         T.mergeColored([[flatIn, 0xffffff]]);
         out.input = Array.from(flatIn.attributes.normal.array).every((v, i) => v === same[i]) && before.length > 0;
         // hud leaves the screen with its module; settings no longer answers the back key
-        E.hud.counter('c', { value: 1 }); E.hud.marker({ x: 0, z: 0 });
+        E.hud.addCounter('c', { value: 1 }); E.hud.marker({ x: 0, z: 0 });
         out.hudThere = !!E.uiRoot.querySelector('.threedog-hud');
         E._unuse('hud'); out.hudGone = !E.uiRoot.querySelector('.threedog-hud');
         const m0 = (E.use(T.music({ tracks: { a: '/none.ogg' } })), E.music); m0.play('a');

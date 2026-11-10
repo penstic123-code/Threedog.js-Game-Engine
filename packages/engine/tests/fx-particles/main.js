@@ -12,6 +12,8 @@ import { bindUniforms } from '../../render/engineUniforms.js';
 import { swapWebGPUPart } from '../../render/backend.js';
 import { Particles } from '../../modules/particles/Particles.js';
 import { makeSystem, updateSystem, RAIN, SNOW } from '../../modules/weather/particles.js';
+import { pointVert } from '../../modules/weather/shaders.js';
+import { WeatherDraw } from '../../modules/weather/weatherDraw.js';
 
 const W = 200, H = 150;
 const engine = window.engine = createEngine({ canvas: document.getElementById('view'), lights: false, pixelRatio: 1, adaptiveResolution: false,
@@ -365,4 +367,61 @@ window.fxSoft = async ({ real = false } = {}) => {
     const P = new Particles(HGL);
     return { routes: out, cost, engine: eng, refused: refuse(() => P.define('x', { soft: -1 })), errors: [...new Set(errors)].slice(0, 8), warned: [...new Set(warned)] };
   } finally { console.error = keep; console.warn = keepWarn; }
+};
+
+/** Group E (docs/plans/2026-11-09-group-e.md): WebGPU particles keep their size under an orthographic camera, weather is not fogged, the "no texture" stand-in is freed */
+window.fxGroupE = async () => {
+  const out = {};
+  // two equal particles at depth 20 and 30 under an orthographic camera: the same number of lit pixels (WebGL does not shrink them either)
+  const ortho = new THREE.OrthographicCamera(-5, 5, 3.75, -3.75, 0.1, 100); ortho.position.set(0, 0, 20); ortho.updateMatrixWorld(); ortho.updateProjectionMatrix();
+  const P = new Particles(HGPU), keepCam = HGPU.camera;
+  HGPU.camera = ortho;
+  P.define('dot', { max: 4, lifetime: [20, 20], speed: 0, spread: 0, gravity: 0, drag: 0, size: 1, color: 0xffffff, opacity: 1 });
+  P.emit('dot', [-2, 0, 0], { count: 1 }); P.emit('dot', [2, 0, -10], { count: 1 }); P.update(0.01);
+  gpu.setRenderTarget(gpuRT); gpu.setClearColor(0, 1); gpu.render(HGPU.scene, ortho);
+  const b = new Uint8Array(await gpu.readRenderTargetPixelsAsync(gpuRT, 0, 0, W, H)); gpu.setRenderTarget(null);
+  const lit = [0, 0]; for (let i = 0; i < W * H; i++) if (b[i * 4] > 40) lit[(i % W) < W / 2 ? 0 : 1]++;
+  out.ortho = lit; P.clear('dot'); HGPU.camera = keepCam;
+  // weather is fogged on both backends: the flags, and the same picture in a fogged scene (rain fades into fog, WebGL as WebGPU)
+  out.weatherFog = {};
+  for (const [field, base] of [['rain', RAIN], ['snow', SNOW]]) {
+    const [sa, sb] = [HGL, HGPU].map(h => seeded(11, () => makeSystem(h, field, {}, { area: 14, count: 600, base })));
+    for (const s of [sa, sb]) updateSystem(s, 1, cam, 3.2, 0.6);
+    const clear = stats(await shot(HGL)).mean;
+    for (const h of [HGL, HGPU]) h.scene.fog = new THREE.Fog(0x2040ff, 2, 14);
+    const a = await shot(HGL), b = await shot(HGPU);
+    for (const h of [HGL, HGPU]) h.scene.fog = null;
+    out.weatherFog[field] = { flags: [sa.object.material.fog, sb.object.material.fog], clear, fogged: stats(a).mean, ...compare(a, b) };
+    for (const [h, s] of [[HGL, sa], [HGPU, sb]]) h.remove(s.object);
+  }
+  // the white stand-in is disposed when a real texture takes its place and with the material; the game's own texture is not touched
+  const stand = fx => fx.uniforms.uMap.value;
+  const fx = P.define('tex', { max: 2 }), white1 = stand(fx); let freed = 0; white1.addEventListener('dispose', () => freed++);
+  const real = new THREE.DataTexture(new Uint8Array([255, 0, 0, 255]), 1, 1); let realFreed = 0; real.addEventListener('dispose', () => realFreed++);
+  fx.uniforms.uMap.value = real; out.swapped = freed;
+  fx.uniforms.uMap.value = null; const white2 = stand(fx); let freed2 = 0; white2.addEventListener('dispose', () => freed2++);
+  fx.material.dispose(); out.disposed = [freed2, realFreed, freed];
+  // weather rebuilt on a tier change (modules/weather/weatherDraw.js _rebuild): the old snow's white stand-in is freed with its material, so the
+  // new system must draw a stand-in of its own, not take the old one for the game's texture; a texture the game gave is carried
+  {
+    // the drawing half only (no weather table): what _rebuild reads, over the stand-in engine
+    const W8 = Object.assign(Object.create(WeatherDraw.prototype), { engine: HGPU, area: 14, particles: 600, systems: new Map() });
+    const white = W8._build('snow', {}, SNOW).uniforms.uMap.value;
+    W8._rebuild();
+    const snow = W8.systems.get('snow');
+    out.rebuild = { own: snow.uniforms.uMap.own, carried: snow.uniforms.uMap.value === white };
+    const tex = new THREE.DataTexture(new Uint8Array([255, 0, 0, 255]), 1, 1); snow.uniforms.uMap.value = tex;
+    W8._rebuild(); out.rebuild.given = W8.systems.get('snow').uniforms.uMap.value === tex;
+    for (const s of W8.systems.values()) HGPU.remove(s.object);
+  }
+  // a game vertex shader without the fog chunks, scene fog on: still compiles and draws (the material just is not fogged)
+  const errs = [], keep = console.error; console.error = (...a) => { errs.push(String(a[0]).slice(0, 200)); };
+  try {
+    const vertex = pointVert.split('\n').filter(l => !l.includes('#include <fog_')).join('\n');
+    const s = seeded(11, () => makeSystem(HGL, "snow", { glsl: { vertex } }, { area: 14, count: 600, base: SNOW })); updateSystem(s, 1, cam, 3.2, 0.6);
+    HGL.scene.fog = new THREE.Fog(0x2040ff, 2, 14);
+    const px = await shot(HGL); HGL.scene.fog = null; HGL.remove(s.object);
+    out.customVertex = { fog: s.object.material.fog, lit: stats(px).lit, errs };
+  } finally { console.error = keep; }
+  return out;
 };

@@ -116,7 +116,7 @@ function loadSteps(e, api, c, st) {
   // game kinds stay registered across loads, so a later content.load({ recipes }) without rules still finds them
   if (c.rules) steps.push({ commit() { each(c.rules.conditions, (name, d) => api.condition(name, d)); Object.assign(st.kinds, c.rules.kinds); } });
   // a pack's actions are the game's own (owner 'game'): loading the pack again replaces them, it is not a second binder
-  if (c.actions) steps.push({ undo: () => e.input.keepActions(Object.keys(c.actions)), commit: () => each(c.actions, (name, a) => e.input.action(name, { label: a.label, keys: a.keys, ...(a.context ? { context: a.context } : {}) })) });
+  if (c.actions) steps.push({ undo: () => e.input.keepActions(Object.keys(c.actions)), commit: () => each(c.actions, (name, a) => e.input.define(name, { label: a.label, keys: a.keys, ...(a.context ? { context: a.context } : {}) })) });
   // audio: sounds / footsteps by name into engine.audio.config, rules to ambience() / music() (core/audio/audioRules.js). A pack loaded again
   // replaces its own rules (hot reload): a named pack by its name, an unnamed one by the data object itself, so loading the same object
   // twice never stacks its rules (a fresh key per load did); two different unnamed objects both keep theirs

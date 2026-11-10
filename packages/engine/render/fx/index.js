@@ -16,8 +16,11 @@ import './sky.tsl.js';
 import '../cascades.tsl.js';
 // Registers kept shadows (engine.shadows.cache) the same way
 import '../shadowCache.tsl.js';
-import { WebGPURenderer, PMREMGenerator, MeshBasicNodeMaterial } from 'three/webgpu';
+// Registers impostor baking and cards for far plants (vegetation.define({ impostor }), modules/vegetation/draw.js looks it up)
+import '../impostor.tsl.js';
+import { WebGPURenderer, PMREMGenerator, MeshBasicNodeMaterial, RectAreaLightNode } from 'three/webgpu';
 import { LightProbeGrid } from 'three/addons/lighting/LightProbeGrid.js';
 import { registerWebGPUPart } from '../backend.js';
 // createEngine({ renderer: 'webgpu' }) builds from these, so the engine core never imports three/webgpu itself (WebGL bundles stay as they are)
-registerWebGPUPart('classes', Object.freeze({ WebGPURenderer, PMREMGenerator, MeshBasicNodeMaterial, LightProbeGrid }));
+// RectAreaLightNode: core/scene/gameLights.js hands it three's area-light tables when the first RectAreaLight enters a scene
+registerWebGPUPart('classes', Object.freeze({ WebGPURenderer, PMREMGenerator, MeshBasicNodeMaterial, LightProbeGrid, RectAreaLightNode }));

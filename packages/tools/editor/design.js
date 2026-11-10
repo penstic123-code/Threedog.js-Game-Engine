@@ -1,4 +1,4 @@
-// The editor's one door to the design data (plan docs/plans/2026-11-05-editor.md, "窄层"). Everything that knows what a content entry looks like in this
+// The editor's one door to the design data (plan docs/plans/done/2026-11-05-editor.md, "窄层"). Everything that knows what a content entry looks like in this
 // page is here: the field names, what a place does to an offset, what each kind of entry can do. The editor's screen gets a neutral entry and calls these
 // functions, so a different content format changes this file and content-write.mjs, not the screen (rule R54 keeps it so).
 //

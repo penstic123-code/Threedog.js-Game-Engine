@@ -113,7 +113,7 @@ export function installThings(e) {
    * @example engine.explainWith((e, t, out) => { const r = e.myRecords.get(t.id); if (r) out.state = { ...r }; });
    */
   e.explainWith = fn => { T.explainers.push(fn); return { remove: () => { T.explainers = T.explainers.filter(x => x !== fn); } }; };
-  e.saves.register('scene', { atomic: true, save: () => T.save(), load: d => T.load(d) });
+  e.saves.define('scene', { atomic: true, save: () => T.save(), load: d => T.load(d) });
   const kindOf = id => T.source(id) ? 'record' : T.live(id) ? T.tier(T.byObj.get(T.live(id))) : null;
   const reasons = {
     noThing: 'no world record or engine.add object has this id (engine.thing(id) suggests the closest one)',

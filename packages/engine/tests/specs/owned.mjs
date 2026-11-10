@@ -18,6 +18,10 @@ const CASES = `({
     drive: () => engine._oFov.drive(61.5), teardown: () => engine._oFov.drive(window.__fov0) },
   'view.aspect': { poke: () => (engine.camera.aspect = 2.5), get: () => engine.camera.aspect, drive: () => engine._oAspect.drive(1.5) },
   'sky.sunDir': { poke: () => (engine.sky.sunDir.set(1, 0, 0), 1), get: () => engine.sky.sunDir.x, drive: () => engine.step(0.05) },
+  // the environment map: only built on the game's call, written into the into it hands over; a game's own map there is the game's (the sky yields), a manual() or a new explicit call hands it back
+  'sky.environment': { setup: () => { window.__env = engine.sky.environment({ into: engine.scene, interval: 0.01 }); }, poke: () => (engine.scene.environment = window.__envOwn ??= new __threedogThree.Texture()), get: () => engine.scene.environment,
+    drive: () => engine.step(0.1, { render: true }), manual: on => engine.sky._oEnv.manual(on !== false), handBack: () => engine.sky._oEnv.manual(false),
+    teardown: () => { window.__env.remove(); engine.scene.environment = null; } },
   'view.far': { poke: () => (engine.camera.far = 4321), get: () => engine.camera.far, drive: () => engine.viewFar(engine.camera.far + 100) },
   'view.pixelRatio': { poke: () => { engine.renderer.setPixelRatio(0.77); return 0.77; }, get: () => engine.renderer.getPixelRatio(),
     drive: () => { const a = engine.adaptive, was = { on: a.on, min: a.min }; Object.assign(a, { on: true, cooldown: 0, t: 0, age: 10, min: 0.3 }); engine._adapt(1, 1000, false, true); Object.assign(a, was); } },   // one heavy 1 s window past the startup grace

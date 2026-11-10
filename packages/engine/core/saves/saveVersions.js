@@ -1,6 +1,6 @@
 // Save format and per-part versions. A save is the envelope { format, savedAt, versions: { part: n }, parts: { part: data } }:
 //   format is the version of the envelope itself (FORMAT); a save from a newer format is refused as a whole, one without format is format 1.
-//   Each saves.register part carries its own version and migrate steps, so one module changing its format never touches the others; a part missing from versions is version 1.
+//   Each saves.define part carries its own version and migrate steps, so one module changing its format never touches the others; a part missing from versions is version 1.
 // Everything here runs before a load touches the game, and on a copy: a refused load leaves the game and the stored save as they were.
 import { codedError } from '../base/errorHints.js';
 import { fmt } from '../base/validate.js';
@@ -9,15 +9,17 @@ import { fmt } from '../base/validate.js';
 export const FORMAT = 1;
 
 const DEV = {
-  badVersion: "saves.register('{k}'): version must be a whole number >= 1 (raise it by 1 whenever this part's saved data changes shape), got {v}",
-  badMigrate: "saves.register('{k}'): migrate is { fromVersion: data => newData }, e.g. migrate: { 1: d => ({ ...d, gold: 0 }) }; key {m} is not a version below {v}",
+  badVersion: "saves.define('{k}'): version must be a whole number >= 1 (raise it by 1 whenever this part's saved data changes shape), got {v}",
+  badMigrate: "saves.define('{k}'): migrate is { fromVersion: data => newData }, e.g. migrate: { 1: d => ({ ...d, gold: 0 }) }; key {m} is not a version below {v}",
   tooNew: "[saves] not loaded: {list}. The save comes from a newer build of the game, which this build cannot read; nothing was changed and the save is kept. " +
     'To read it, run the newer build, or raise this part\'s version (with migrate steps) to match.',
   format: 'the save envelope is format {f}, this build reads up to format {max}',
   corrupt: "[saves] not loaded: slot '{slot}' is not a readable save ({why}). Nothing was changed and the stored save is kept as it was.",
-  noStep: "save part '{k}' is version {from} but this build is version {to}, and migrate has no step {from}: add migrate: { {from}: data => newData } to saves.register('{k}')",
+  noStep: "save part '{k}' is version {from} but this build is version {to}, and migrate has no step {from}: add migrate: { {from}: data => newData } to saves.define('{k}')",
 };
 
+// first: true loads before the rest (rank 0); a number ranks it (lower earlier: the level 0, the zones that need the level 1); no first = after them all
+const firstRank = p => p.first === true ? 0 : Number.isFinite(p.first) ? p.first : Infinity;
 /**
  * Validate a part's version and migrate steps at register time (a typo shows up at once, not when an old save happens to be read).
  * @param {string} key
@@ -105,7 +107,7 @@ export function readSave(json, providers, slot) {
   if (!versions || typeof versions !== 'object' || Array.isArray(versions)) return { reason: 'corrupt', dev: fmt(DEV.corrupt, { slot, why: `versions ${JSON.stringify(versions)}` }) };
   const odd = Object.keys(versions).filter(k => !Number.isInteger(versions[k]) || versions[k] < 1);
   if (odd.length) return { reason: 'corrupt', dev: fmt(DEV.corrupt, { slot, why: `version of ${odd.map(k => `'${k}'`).join(', ')}` }) };
-  const list = [...providers].filter(([k]) => Object.hasOwn(data.parts, k)).sort((a, b) => (b[1].first ? 1 : 0) - (a[1].first ? 1 : 0));
+  const list = [...providers].filter(([k]) => Object.hasOwn(data.parts, k)).sort((a, b) => { const x = firstRank(a[1]), y = firstRank(b[1]); return x < y ? -1 : x > y ? 1 : 0; });   // stable: equal ranks keep install order
   const newer = list.filter(([k, p]) => partVersion(versions, k) > p.version).map(([k, p]) => `part '${k}' is version ${versions[k]}, this build reads up to ${p.version}`);
   if (newer.length) return { reason: 'tooNew', dev: fmt(DEV.tooNew, { list: newer.join('; ') }) };
   // whole: the save as read, for migrate steps that need another part (upgradePart); kept on foreign so a part registered later (adoptPart) sees it too

@@ -73,7 +73,7 @@ window.cascadesWebGPU = async () => {
   engine.shadows.mapSize(sun, 1024); await shot();
   out.mapSize = { cascades: engine.shadows.csm.lights.map(l => l.shadow.mapSize.x), sun: sun.shadow.mapSize.x, drawn: engine.shadows.csm.lights.map(l => l.shadow.map?.width ?? null) };
   engine.shadows.mapSize(sun, size0); await shot();
-  out.mapSize.back = engine.shadows.csm.lights.map(l => l.shadow.mapSize.x);
+  out.mapSize.back = engine.shadows.csm.lights.map(l => l.shadow.mapSize.x); out.mapSize.size0 = size0;   // the sun's own size follows the tier (low device: 1024), so "back" is whatever it was
   out.ratio = { std: +(out.three.std / out.one.std - 1).toFixed(4), node: +(out.three.node / out.one.node - 1).toFixed(4) };
   sun.shadow.intensity = 0.3;
   engine.step(1 / 30, { describe: false });

@@ -7,7 +7,7 @@ import { buildTestBlock, buildHeavy } from '../fixtures/block.js';
 
 const engine = createEngine({ bindings: { ...presets.bindings.walk }, canvas: document.getElementById('view'), ui: { loading: false }, saveKey: 'test-a' });
 engine.use(world(), level({ scene: buildTestBlock() }), collision(), characters());
-engine.createdPlayer = engine.characters.createPlayer({ ...presets.player.thirdPerson, spawn: engine.level.spawn });
+engine.createdPlayer = engine.characters.addPlayer({ ...presets.player.thirdPerson, spawn: engine.level.spawn });
 engine.defineState('corner', { pos: '30,30' });
 
 // 启动前登记 400 个按需生成的小方块（20×20 网格，间距 10 米）；范围 40 米内的要在 ready 前做完

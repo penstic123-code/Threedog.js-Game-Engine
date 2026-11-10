@@ -160,7 +160,7 @@ export const specs = [
             { text: '再见', next: 'end' },
           ] } } } },
         });
-        engine.onFrame(() => engine.hud.counter('gold', { icon: '🪙', label: '金币', value: engine.inventory.count('gold') }));
+        engine.onFrame(() => engine.hud.addCounter('gold', { icon: '🪙', label: '金币', value: engine.inventory.count('gold') }));
       };
       const r = await ev(async s => {
         const I = engine.inventory, S = new Function('return ' + s)();

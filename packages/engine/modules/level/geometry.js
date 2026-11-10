@@ -1,6 +1,8 @@
 // Geometry the level module derives from its meshes: world-space triangles of the walkable meshes (for the physics module's static colliders) and the
 // best-fit rotated boxes of the collision meshes. Pure functions: no engine, no state.
 import * as THREE from 'three';
+import { warnOnce } from '../../core/base/validate.js';
+import { coded } from '../../core/base/errorHints.js';
 
 /** World-space triangles of meshes: [{ positions: Float32Array, indices: Uint32Array }] */
 export function worldTrimeshes(meshes) {
@@ -20,9 +22,9 @@ export function worldTrimeshes(meshes) {
 /**
  * Best-fit box of each collision mesh by the mesh's world orientation, as collision.addBox arguments: [{ at: { x, z }, opts }]
  * @param {any[]} meshes
- * @param {{ colliderHeight: number, colliderPad: number }} cfg
+ * @param {{ colliderHeight: number, colliderPad: number, layerOf?: (m: any) => any }} cfg layerOf: the custom property `layer` of a mesh (load.js reads it up the parent chain)
  */
-export function colliderBoxes(meshes, { colliderHeight, colliderPad }) {
+export function colliderBoxes(meshes, { colliderHeight, colliderPad, layerOf = m => m.userData?.layer }) {
   const corner = new THREE.Vector3(), xAxis = new THREE.Vector3(), out = [];
   for (const m of meshes) {
     const g = m.geometry; if (!g) continue;
@@ -40,7 +42,10 @@ export function colliderBoxes(meshes, { colliderHeight, colliderPad }) {
     const lcx = (x0 + x1) / 2, lcz = (z0 + z1) / 2;
     const wx = lcx * c + lcz * s, wz = -lcx * s + lcz * c;                        // rotate the center back to world space
     const h = Math.max(colliderHeight, y1 - y0);
-    out.push({ at: { x: wx, z: wz }, opts: { halfWidth: (x1 - x0) / 2 + colliderPad, halfDepth: (z1 - z0) / 2 + colliderPad, rotation: yaw, height: h, y: y0 } });
+    // custom property `layer` (userData.layer): characters with passes: ['name'] walk through this wall (collision/grid.js passesThrough)
+    const ly = layerOf(m), layer = typeof ly === 'string' && ly ? ly : undefined;
+    if (ly !== undefined && layer === undefined) warnOnce(coded('level-layer-ignored', `level: collider "${m.name}" has layer ${JSON.stringify(ly)}; a layer is one non-empty text, so this wall stops every mover`), m.name);
+    out.push({ at: { x: wx, z: wz }, opts: { halfWidth: (x1 - x0) / 2 + colliderPad, halfDepth: (z1 - z0) / 2 + colliderPad, rotation: yaw, height: h, y: y0, layer } });
   }
   return out;
 }

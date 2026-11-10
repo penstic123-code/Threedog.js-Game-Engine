@@ -29,6 +29,7 @@ import { registerWebGPUPart } from '../backend.js';
 import { engineUniformName } from '../engineUniforms.js';
 import { SLOTS, LIGHT_HOOKS as HOOKS } from '../slots.js';
 import { notePatch } from '../../core/scene/threePatches.js';
+const WRAPPED = Symbol.for('threedog.patchWrapper');   // the same key as render/patches.js WRAPPED (a registry symbol, so this WebGL-free file need not import it)
 import { nameNodeBuild, lostStatements } from './nodeErrors.tsl.js';
 
 const { Fn, positionLocal, modelViewProjection, materialColor, materialRoughness, materialEmissive, materialNormal, diffuseColor, vec3 } = TSL;
@@ -69,7 +70,10 @@ const PROPS = Object.fromEntries(Object.entries(SLOTS).filter(([, s]) => s.node?
   return [n, [s.node.prop, DEFAULTS[s.node.prop]]];
 }));
 // position chains, by their stand-in node: what setupPosition runs before three's morph / skinning / instancing steps
-const PRE = new WeakMap();
+// The registry lives on the shared wrapper below (a second copy of this module, hot reload or another URL, finds the first copy's wrapper and must fill the same map)
+const setupPosition = NodeMaterial.prototype.setupPosition;
+/** @type {WeakMap<object, any>} */
+const PRE = /** @type {any} */ (setupPosition)._threedogPre ?? new WeakMap();
 /**
  * The stand-in for a position chain: evaluates to the game's own value (or positionLocal, i.e. leaves three's result as it is) where three
  * applies positionNode, while the chain itself runs at the start of setupPosition. Its cache key is the chain's, so a different chain is a
@@ -83,13 +87,12 @@ function preMarker(chain, base) {
 }
 // Why the prototype and not each material: three's shadow pass draws with its own NodeMaterial, handed our positionNode / castShadowPositionNode
 // (Renderer._getShadowNodes), and the shadow must sway exactly like the surface. Only materials carrying one of our stand-ins are affected.
-const setupPosition = NodeMaterial.prototype.setupPosition;
-if (!(/** @type {{ _threedogPre?: boolean }} */ (/** @type {unknown} */ (setupPosition)))._threedogPre) {   // already wrapped (module loaded twice)
+if (!(/** @type {any} */ (setupPosition))._threedogPre) {   // already wrapped (module loaded twice)
   NodeMaterial.prototype.setupPosition = Object.assign(function (builder) {
     const chain = PRE.get(this.positionNode);
     if (chain) positionLocal.assign(TSL.subBuild(chain, 'POSITION', 'vec3'));
     return setupPosition.call(this, builder);
-  }, { _threedogPre: true });
+  }, { _threedogPre: PRE });
   notePatch('node-setup-position', 'NodeMaterial.prototype.setupPosition: runs the vertex-moving patch chain before three builds the position (WebGPU wind and its shadow)',
     () => { NodeMaterial.prototype.setupPosition = setupPosition; }, { lost: 'on WebGPURenderer, wind and other vertex-moving patches no longer move vertices or their shadow' });
 }
@@ -181,14 +184,16 @@ function accessors(target, st, enumerable) {
   }
 }
 
+/** fn, marked as the engine's wrapper of inner (the game's own method or three's): cloneMaterial carries inner, never fn, which runs this material's st */
+const wrapper = (fn, inner) => Object.assign(fn, { [WRAPPED]: () => inner });
 /** Wrap three's setup methods of the NodeMaterial m (a patched one, or a classic material's node twin) to run st's color / normal / output / lighting code */
 function wrapSetup(m, st, src) {
   const ctx = extra => ({ fx: FX, tsl: TSL, material: src, ...extra });
   const diffuse = m.setupDiffuseColor, normal = m.setupNormal, output = m.setupOutput, model = m.setupLightingModel;
-  m.setupDiffuseColor = function (builder) { const r = diffuse.call(this, builder); if (st.color) diffuseColor.assign(st.color); return r; };
-  m.setupNormal = function (builder) { return chain(st.list, 'normal', normal.call(this, builder), ctx({ builder })); };
-  m.setupOutput = function (builder, node) { return output.call(this, builder, chain(st.list, 'output', node, ctx({ builder }))); };
-  m.setupLightingModel = function (builder) {
+  m.setupDiffuseColor = wrapper(function (builder) { const r = diffuse.call(this, builder); if (st.color) diffuseColor.assign(st.color); return r; }, diffuse);
+  m.setupNormal = wrapper(function (builder) { return chain(st.list, 'normal', normal.call(this, builder), ctx({ builder })); }, normal);
+  m.setupOutput = wrapper(function (builder, node) { return output.call(this, builder, chain(st.list, 'output', node, ctx({ builder }))); }, output);
+  m.setupLightingModel = wrapper(function (builder) {
     const lm = model.call(this, builder);
     const hooks = st.list.filter(p => codeOf(p, 'lighting')).map(p => [p, hooksOf(codeOf(p, 'lighting'))]);
     if (!lm || !hooks.length) return lm;
@@ -232,7 +237,7 @@ function wrapSetup(m, st, src) {
       return r;
     };
     return lm;
-  };
+  }, model);
 }
 
 /** Install the accessors and method wrappers once on a NodeMaterial patched directly */
@@ -244,14 +249,14 @@ function install(m) {
   // clone() carries no patches (as on the GLSL side, where Material.copy skips onBeforeCompile): the copy gets the game's own values, not the
   // chains, so a clone without copyPatches is the plain material and one with copyPatches has each effect once
   const clone = m.clone, key = m.customProgramCacheKey;
-  m.clone = function () {
+  m.clone = wrapper(function () {
     const c = clone.call(this);
     for (const [prop] of Object.values(PROPS)) if (c[prop] === st.out[prop]) c[prop] = st.own[prop];
     return c;
-  };
+  }, clone);
   // three keys NodeMaterial programs by their node properties only; code added inside the setup methods is not one, so two materials
   // differing only in a color / normal / output / lighting patch would share a program. st.key is built from those patches' node graphs
-  m.customProgramCacheKey = function () { return key.call(this) + (st.key ? '|threedog:' + st.key : ''); };
+  m.customProgramCacheKey = wrapper(function () { return key.call(this) + (st.key ? '|threedog:' + st.key : ''); }, key);
   return st;
 }
 

@@ -9,6 +9,8 @@
 //   data-locale="en"                      switch language
 
 import { setFov, lensFov } from '../../core/scene/view.js';
+import { roleEffects } from './apply.js';
+import { someLight } from '../../core/inspect/pictureMenu.js';
 
 const pct = v => Math.round(v * 100) + '%';
 /** Value shown beside a slider */
@@ -55,10 +57,10 @@ export const BUILTIN_SECTIONS = {
       const add = (key, label, ctl) => { if (!s._omit.has(key)) h += row(label, ctl, esc); };   // a row the game left out: settings({ sections: [{ id: 'graphics', omit }] })
       add('quality', t('settings.quality'), segmented('quality', v.quality, opts, tools, ['custom']));
       add('pixelRatio', t('settings.pixelRatio'), range('pixelRatio', v.pixelRatio, 0.5, 2, 0.05, tools));
-      add('shadows', t('settings.shadows'), toggle('shadows', v.shadows, tools));
+      if (someLight(e.scene, l => l.castShadow)) add('shadows', t('settings.shadows'), toggle('shadows', v.shadows, tools));   // like bloom and ao: no row for an effect nothing uses
       add('antialias', t('settings.antialias'), toggle('antialias', v.antialias, tools));
-      if (e.post.get('bloom')) add('bloom', t('settings.bloom'), toggle('bloom', v.bloom, tools));
-      if (e.post.get('ao')) add('ao', t('settings.ao'), toggle('ao', v.ao, tools));
+      if (roleEffects(e, 'bloom').length) add('bloom', t('settings.bloom'), toggle('bloom', v.bloom, tools));
+      if (roleEffects(e, 'ao').length) add('ao', t('settings.ao'), toggle('ao', v.ao, tools));
       add('adaptive', t('settings.adaptive'), toggle('adaptive', v.adaptive, tools));
       // the ground's own rows: the slider reaches at least as far as the game's value and the share Low gave it
       const view = s.custom.get('viewChunks');

@@ -10,7 +10,7 @@ export const specs = [
         out.missing = await E.applyState({ save: 'no-such-slot', pos: '3,4' });
         out.placedTo = E.player ? Math.round(E.player.position.x) : 3;
         const quiet = console.error; console.error = () => {};
-        const part = E.saves.register('ao-bad', { save: () => ({ n: 1 }), load() { throw new Error('part broke'); } });
+        const part = E.saves.define('ao-bad', { save: () => ({ n: 1 }), load() { throw new Error('part broke'); } });
         await E.saves.save('ao-slot');
         out.threw = await E.applyState({ save: 'ao-slot' });
         part.remove({ keep: false }); console.error = quiet;

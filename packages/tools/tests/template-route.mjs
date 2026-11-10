@@ -53,7 +53,10 @@ export async function run({ check }) {
       check(`pixel ${webgl ? '--webgl' : 'default'}: the notes say it is a pixel start`, /--pixel/.test(readFileSync(join(dir, 'CLAUDE.md'), 'utf8')));
     }
     const tpl = f => readFileSync(join(TOOLS, 'templates/game', f), 'utf8');
+    // [guard] a project-local install (the README's) puts no threedog on the PATH: every command the entry names runs as npx threedog, one form
+    const bare = [...tpl('CLAUDE.md').matchAll(/`(?!npx )(threedog [a-z]|npm run )[^`]*`/g)].map(m => m[0]);
+    check('[guard] the entry names every command as npx threedog (none bare, no npm run)', !bare.length, bare.join(' '));
     check('[guard] the game\'s own notes name threedog play, and STATUS.md does not contradict "build it, no confirmation round"',
-      tpl('CLAUDE.md').includes('`threedog play`') && !/three minimal versions/i.test(tpl('STATUS.md')) && /build it, no confirmation round/.test(tpl('CLAUDE.md')));
+      tpl('CLAUDE.md').includes('`npx threedog play`') && !/three minimal versions/i.test(tpl('STATUS.md')) && /build it, no confirmation round/.test(tpl('CLAUDE.md')));
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 }

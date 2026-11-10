@@ -20,12 +20,12 @@ export const name = 'content sections: the loader names no provider, a replaced 
 function stand(...mods) {
   const e = {
     modules: new Map(), i18n: { add() {} }, events: { on: () => ({ remove() {} }), emit() {} }, ops: { allow: f => f(), actor: null, defs: new Map() },
-    input: { action() {} }, ready: false, world: null, level: null,
+    input: { action() {} }, ready: false, world: null, level: null, assets: {},   // assets: content holds the model prototypes it clones (holdProtos, core/assets/namedModel.js)
   };
   const c = content();
   for (const m of [c, ...mods]) e.modules.set(m.name, m);
   e.saves = { _replace: { read: f => f(), restoring() {} } };
-  e.content = c.install(e, { track: h => h, feeds() {}, things: { explainWith() {} }, saves: { register() {} } });
+  e.content = c.install(e, { track: h => h, feeds() {}, things: { explainWith() {} }, saves: { define() {} } });
   return e;
 }
 const refused = f => { try { f(); return null; } catch (err) { return err; } };

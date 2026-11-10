@@ -6,6 +6,7 @@ import { createEngine, presets, world, sky, collision, rigid, followCamera, char
 import { level } from '../../modules/level/index.js';
 import { interactions } from '../../modules/gameplay/Interactions.js';
 
+window.THREE = THREE; window.rigidModule = rigid;   // the group C spec builds a car under a moved parent and installs rigid at run time
 const grey = c => new THREE.MeshLambertMaterial({ color: c });
 const root = new THREE.Group(); root.name = 'vehicleLevel';
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(80, 80).rotateX(-Math.PI / 2), grey(0x8a8a8a)); floor.name = 'floor'; root.add(floor);
@@ -45,7 +46,7 @@ window.makeRig = () => {
 };
 
 engine.events.on('engine:ready', () => {
-  engine.characters.createPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 0 }, mover });
+  engine.characters.addPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 0 }, mover });
   const { car, wheels } = makeCar();
   window.car = engine.rigid.addWheeled(car, { wheels, mass: 600, engineForce: 1200, camera: { distance: 16, height: 2 } });
 });

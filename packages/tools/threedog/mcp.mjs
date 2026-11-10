@@ -13,7 +13,7 @@ import { command, ENGINE } from '../paths.mjs';
 import { pagePath as pageArg } from '../lib/cli-args.mjs';
 import { join } from 'node:path';
 import { execute } from './dispatch.mjs';
-import { EXTRA_TOOLS, STATIC_TOOLS, label, RESULT_SHAPE, OUTPUT_SCHEMA, situationGuide, shortData, pairs } from './mcp-extra.mjs';
+import { EXTRA_TOOLS, STATIC_TOOLS, label, RESULT_SHAPE, OUTPUT_SCHEMA, situationGuide, shortData, pairs, FREEZE, freezeArg } from './mcp-extra.mjs';
 import { NONE } from './runtime.mjs';
 
 // stdout carries protocol messages only: anything else that prints goes to stderr
@@ -49,7 +49,7 @@ const TOOLS = {
     args: a => [String(a.seconds ?? 1)],
   },
   press: {
-    description: 'Press an input action or key once, like a real keyboard (about 0.117 game s: 0.1 s held + one frame). Pauses a real page.',
+    description: 'Simulate an action or key press through engine.input (about 0.117 game s: 0.1 s held + one frame). Pauses a real page. Does not verify physical browser input.',
     schema: obj({ key: str('Action name ("interact", "jump", "menu") or key code ("KeyE", "Space", "Escape", "e")'), for: num('Hold time in seconds (default 0.1, minimum one frame)') }, ['key']),
     args: a => [a.key, ...opt('--for', a.for)],
   },
@@ -78,9 +78,9 @@ const TOOLS = {
     args: () => [],
   },
   catalog: {
-    description: 'What the game can do, read from its registrations: no id = one line per module; an id = that module or op in detail. Ask before reading API docs.',
-    schema: obj({ id: str('Optional: a module id ("sky"; its params, ops, saved parts, time hooks, problems, source / doc files), an op name ("shop.buy": args, failure codes, last attempt), "core" (engine-provided parts) or "game" (this game\'s own)'), find: str('Optional: filter the list by a word') }),
-    args: a => [...(a.id ? [a.id] : []), ...opt('--find', a.find)],
+    description: 'What the game can do, read from its registrations: no id = a line per module with ops or problems, the rest named on one line (full: a line each); an id = that module or op in detail. Ask before reading API docs.',
+    schema: obj({ id: str('Optional: a module id ("sky"; its params, ops, saved parts, time hooks, problems, source / doc files), an op name ("shop.buy": args, failure codes, last attempt), "core" (engine-provided parts), "game" (this game\'s own) or "picture" (each picture capability: on, runs here, cost, how, limits; then the combination checks)'), find: str('Optional: filter the list by a word'), full: { type: 'boolean', description: 'One line for every module' } }),
+    args: a => [...(a.id ? [a.id] : []), ...opt('--find', a.find), ...(a.full ? ['--full'] : [])],
   },
   op: {
     description: 'Run a game op (e.g. shop.buy) as source bridge, no time passes: the way to change game state. Result: value and bag, or the failure reason. ops lists them.',
@@ -148,8 +148,8 @@ const TOOLS = {
   },
   scenario: {
     description: 'Run one scenario file on the running page; returns failed checks or a pass count. Leaves the page halted. verify adds what it never touched.',
-    schema: obj({ name: str('Scenario file name without .json (tests/scenarios/<name>.json)') }, ['name']),
-    args: a => [a.name],
+    schema: obj({ name: str('Scenario file name without .json (tests/scenarios/<name>.json)'), freezeReload: FREEZE }, ['name']),
+    args: a => [a.name, ...freezeArg(a)],
   },
   reload: {
     description: 'Reload the game page (back to its initial state).',

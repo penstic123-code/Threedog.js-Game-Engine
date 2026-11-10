@@ -9,7 +9,7 @@ import { isObject } from '../core/base/util.js';
 // the WebGPU route only needed the node column and no patch changed; the anchor strings appear once here, not scattered across effects each writing their own.
 // Raw anchors (`glsl: { vertex|fragment: { <chunk>: code } }`) stay as the expert exit: plain three.js knowledge, WebGL only.
 /** @typedef {{ stage: 'vertex' | 'fragment', anchor: string, at: 'after' | 'before' | 'replace', shadowOnly?: boolean, scope: string, meaning: string,
- *   node: { prop?: string, setup?: string } | null, nodeMeaning?: string }} Slot */
+ *   node: { prop?: string, setup?: string } | null, nodeMeaning?: string, closes?: string, exclusive?: boolean }} Slot */
 
 /** @type {Record<string, Slot>} */
 export const SLOTS = {
@@ -60,10 +60,12 @@ export const SLOTS = {
     nodeMeaning: 'fog on WebGPU is scene.fogNode, set by the game',
     scope: 'declarations; fogColor and fogNear / fogFar or fogDensity are already declared (inside #ifdef USE_FOG)',
     meaning: 'fog functions that read three\'s fog uniforms (wrap them in #ifdef USE_FOG)' },
-  fog:            { stage: 'fragment', anchor: 'fog_fragment', at: 'replace', node: null,
+  // the engine mixes fog in linear space first thing in tonemapping_fragment (render/postWebGL.js), so this slot sits right before it and closes
+  // with THREEDOG_FOG_DONE: the patch IS the one fog mix, the engine's is skipped (a second mix on a tone-mapped colour was the bug)
+  fog:            { stage: 'fragment', anchor: 'tonemapping_fragment', at: 'before', closes: '#define THREEDOG_FOG_DONE', exclusive: true, node: null,
     nodeMeaning: 'fog on WebGPU is scene.fogNode, set by the game',
-    scope: 'gl_FragColor (write, tone mapped already), fogColor, vFogDepth, fogNear / fogFar or fogDensity (inside #ifdef USE_FOG)',
-    meaning: 'replace how fog mixes into the final color (one patch per material may take it)' },
+    scope: 'gl_FragColor (write; linear, before tone mapping), vFogDepth, threedogFogColor() (fog colour, linear), threedogFogFactor() (0..1, the same curve three uses), fogColor (as three has it) and fogNear / fogFar or fogDensity (all inside #ifdef USE_FOG)',
+    meaning: 'replace how fog mixes into the final color: the only fog mix, in linear space before tone mapping and the output encoding (one patch per material may take it)' },
 };
 export const SLOT_NAMES = Object.keys(SLOTS);
 /** The lighting slot's hook names on the TSL side (render/fx/patchNodes.tsl.js) */
@@ -118,7 +120,8 @@ export function toAnchors(p) {
     const s = SLOTS[name];
     if (!s) throw codedError('shader-patch', `[threedog] patch '${p.name}': unknown slot '${name}'; use ${SLOT_NAMES.join(' | ')}, ${EXIT}`);
     if (typeof code !== 'string') throw codedError('shader-patch', `[threedog] patch '${p.name}' slot '${name}' must be GLSL code as a string; got ${typeof code}`);
-    const marked = mark(p.name, name, code);
+    const marked = mark(p.name, name, s.closes ? `${code}
+${s.closes}` : code);   // closes: a line the engine adds after the code (fog: THREEDOG_FOG_DONE)
     if (s.shadowOnly) { shadow[s.anchor] = marked; used.add('vertex'); continue; }
     glsl[s.stage][s.anchor] = s.at === 'after' ? marked : { [s.at]: marked };
     used.add(s.stage);

@@ -4,6 +4,20 @@
 // both and they still agree. GLSL text on WebGPU and a missing threedog/tsl fail by code, never silently. Software rendering like every pixel test.
 export const specs = [
   {
+    name: '[guard] WebGPU particles and weather match WebGL: orthographic size does not shrink with depth, weather is fogged on both, the "no texture" stand-in is freed',
+    url: '/tests/fx-particles/index.html',
+    software: true,
+    async run({ check, ev }) {
+      const r = await ev(() => window.fxGroupE());
+      check('orthographic camera: two equal particles at depth 20 and 30 draw the same size', r.ortho[0] > 50 && Math.abs(r.ortho[0] - r.ortho[1]) / r.ortho[0] < 0.1, JSON.stringify(r.ortho));
+      for (const [f, w] of Object.entries(r.weatherFog)) check(`${f}: fogged on both backends, and the fogged picture matches (WebGL ${w.fogged.toFixed(1)} vs clear ${w.clear.toFixed(1)}, mean diff ${w.meanDiff}%)`,
+        w.flags[0] === true && w.flags[1] === true && Math.abs(w.fogged - w.clear) > 0.05 * w.clear && w.meanDiff < 5, JSON.stringify(w));
+      check('a game vertex shader without fog chunks plus scene fog: the weather is unfogged, compiles (no shader error) and draws', r.customVertex.fog === false && r.customVertex.lit > 0 && r.customVertex.errs.length === 0, JSON.stringify(r.customVertex));
+      check('the stand-in texture is disposed when a real one replaces it, and with the material; the real one is not', r.swapped === 1 && r.disposed[0] === 1 && r.disposed[1] === 0 && r.disposed[2] === 1, JSON.stringify(r));
+      check("weather rebuilt (tier change): the new snow draws its own stand-in, not the old one freed with the old material; a game's texture is carried", r.rebuild.own === true && !r.rebuild.carried && r.rebuild.given, JSON.stringify(r.rebuild));
+    },
+  },
+  {
     name: '[guard] particles over life: aLife in a game material, stops, the two-point form, bad values refused, on both routes',
     url: '/tests/fx-particles/index.html',
     software: true,

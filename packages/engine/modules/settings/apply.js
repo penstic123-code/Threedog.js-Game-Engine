@@ -4,7 +4,11 @@ import { codedError } from '../../core/base/errorHints.js';
 // the game (define). `s` is the Settings instance.
 
 /** The shared values each built-in row limits. A game's own row names its values with define(key, def, { limits }); both go through limit() */
-const BUILTIN_LIMITS = { shadows: ['shadows.enabled'], bloom: ['post.bloom.enabled'], ao: ['post.ao.enabled'] };
+// The bloom and ao rows follow effects by the role they declare (about.acts, @threedog/post-effects), never by name: a game's 'glow' is a bloom. Every effect of the role follows the row
+export const ROLE_ROWS = { bloom: 'glow', ao: 'ao' };
+/** The effects a built-in post row follows now @param {any} e @param {string} key 'bloom' | 'ao' */
+export const roleEffects = (e, key) => e.post.byRole(ROLE_ROWS[key], key);
+const builtinLimits = e => ({ shadows: ['shadows.enabled'], ...Object.fromEntries(Object.keys(ROLE_ROWS).map(k => [k, roleEffects(e, k).map(h => `post.${h.name}.enabled`)])) });
 
 /**
  * The settings layer only restricts (core/ops/sharedPoint.js). A row's value on one shared point: true (or 1) drops the settings entry, so the scene's
@@ -21,12 +25,22 @@ function limit(e, name, val) {
   if (allow) p.release('settings');
   else p.take({ owner: 'settings', layer: 'settings', ...(p.kind === 'number' ? { mul: val === false ? 0 : val } : { set: val }) });
 }
-/** @internal a row leaves: no control is left to lift its limits, so it gives its shared values back @param {any} e @param {string[]} names */
-export function releaseRow(e, names) { for (const n of names) if (e.stacks.has(n)) e.stacks.get(n).release('settings'); }
-/** @internal the module leaves: so does every row */
-export function releaseLimits(s) {
-  for (const names of [...Object.values(BUILTIN_LIMITS), ['tier'], ...[...s.custom.values()].map(c => c.limits ?? [])]) releaseRow(s.engine, names);
+const lift = (e, n) => { if (e.stacks.has(n)) e.stacks.get(n).release('settings'); };
+/**
+ * A row's value on its points, then what it holds afterwards. A row gives back the points it holds (s._held), never a fresh query: the bloom row follows
+ * effects by role, and the effects of a role change while the row is off (a legacy 'bloom' stops being one once a 'glow' declares acts: 'glow'), so a
+ * query made at release time misses the point the row holds and leaves it off for good. A held point the row no longer covers is let go here.
+ */
+function limitRow(s, key, names, val) {
+  const e = s.engine;
+  for (const n of s._held.get(key) ?? []) if (!names.includes(n)) lift(e, n);
+  for (const n of names) limit(e, n, val);
+  s._held.set(key, names.filter(n => !allowed(e, n)));
 }
+/** @internal a row leaves: no control is left to lift its limits, so it gives back every shared value it holds @param {any} s @param {string} key */
+export function releaseRow(s, key) { for (const n of s._held.get(key) ?? []) lift(s.engine, n); s._held.delete(key); }
+/** @internal the module leaves: so does every row, and the tier it chose */
+export function releaseLimits(s) { for (const key of [...s._held.keys()]) releaseRow(s, key); lift(s.engine, 'tier'); }
 /** @internal the row's value fits the points it limits: a switch row (boolean) limits switches or numbers, a number row (a factor) only numbers */
 export function checkLimits(s, key, def, names) {
   const e = s.engine;
@@ -36,7 +50,7 @@ export function checkLimits(s, key, def, names) {
     const kind = e.stacks.get(n).kind;
     const ok = typeof def === 'boolean' ? kind === 'number' || kind === 'value' : typeof def === 'number' && kind === 'number';
     if (!ok) throw codedError('shared-settings', `settings.define('${key}', ${JSON.stringify(def)}, { limits: '${n}' }): '${n}' holds ${kind === 'number' ? 'a number' : 'a value'}; a row limits it with ${kind === 'number' ? 'a switch (false = 0) or a factor from 0 to 1' : 'a switch: true allows what the scene chose, false turns it off'}`);
-    for (const [other, c] of [...Object.entries(BUILTIN_LIMITS).map(([k, l]) => [k, { limits: l }]), ...s.custom])
+    for (const [other, c] of [...Object.entries(builtinLimits(e)).map(([k, l]) => [k, { limits: l }]), ...s.custom])
       if (other !== key && c.limits?.includes(n)) throw codedError('shared-settings', `settings.define('${key}', { limits: '${n}' }): the row '${other}' already limits it; one row per value (the player would not know which one wins)`);
   }
 }
@@ -47,8 +61,8 @@ export function applySetting(s, key, val) {
   const e = s.engine;
   try {
     // shadows, bloom, ao and a game row's { limits }: off restricts, on allows what the game chose
-    const limits = BUILTIN_LIMITS[key] ?? s.custom.get(key)?.limits;
-    if (limits) for (const n of limits) limit(e, n, typeof val === 'number' ? val : !!val);
+    const limits = builtinLimits(e)[key] ?? s.custom.get(key)?.limits;
+    if (limits) limitRow(s, key, limits, typeof val === 'number' ? val : !!val);
     switch (key) {
       case 'pixelRatio': e.setPixelRatio(val); break;
       case 'antialias': e.post.nextAntialias(val); break;

@@ -5,7 +5,7 @@
 // Known limits: a game's own parts are not asked (atomic stays their opt-in, recipe 23). The answer's truth is a promise read in review.
 import { ts, parse, visit, lineOf, engineFiles } from './_lib.mjs';
 
-/** Module ctx.saves.register passes a part it did not write on, so the part is judged at its own call */
+/** Module ctx.saves.define passes a part it did not write on, so the part is judged at its own call */
 const FORWARD = /(^|\/)core\/engine\/modules\.js$/;
 
 /** @param {any} n a property @returns {string | null} its plain name */
@@ -25,7 +25,7 @@ function problem(o) {
 export function unanswered(source) {
   const out = [];
   visit(source, n => {
-    if (!ts.isCallExpression(n) || !ts.isPropertyAccessExpression(n.expression) || n.expression.name.text !== 'register' || !/\bsaves$/.test(n.expression.expression.getText())) return;
+    if (!ts.isCallExpression(n) || !ts.isPropertyAccessExpression(n.expression) || n.expression.name.text !== 'define' || !/\bsaves$/.test(n.expression.expression.getText())) return;
     const why = problem(n.arguments[1]);
     if (why) out.push({ line: lineOf(n), key: n.arguments[0]?.getText() ?? '?', why });
   });

@@ -13,6 +13,7 @@
 // ones (bloom, ao, dof, outline mode normal/both) stay the game's call on weak devices: read engine.tier and leave them out.
 import * as THREE from 'three';
 import { codedError } from 'threedog/error-hints';
+import { declared } from './about.js';
 export { dof } from './dof.js';
 export { bloom, ao } from './hdr.js';
 export { outline, OUTLINE_OFF_LAYER } from './outline.js';
@@ -38,8 +39,8 @@ identity.format = THREE.RGBAFormat; identity.minFilter = identity.magFilter = TH
  *   temperature: -1 cool .. 1 warm
  * @returns {PostEffect}
  */
-export function lut({ lut = null, amount = 1, contrast = 1, saturation = 1, temperature = 0, enabled, order = 10 } = {}) {
-  return { name: 'lut', slot: 'ldr', order, enabled, params: { lut, amount, contrast, saturation, temperature },
+export function lut({ lut: table = null, amount = 1, contrast = 1, saturation = 1, temperature = 0, enabled, order = 10 } = {}) {   // the texture is bound as table: named lut it would hide this function, which declared(lut) reads
+  return { ...declared(lut), name: 'lut', slot: 'ldr', order, enabled, params: { lut: table, amount, contrast, saturation, temperature },
     fuse: {
       uniforms: { uLutTex: 'sampler3D', uLutSize: 'float', uLutAmount: 'float', uLutContrast: 'float', uLutSaturation: 'float', uLutTemp: 'float' },
       values: p => ({ uLutTex: p.lut ?? identity, uLutSize: (p.lut ?? identity).image.width, uLutAmount: p.lut ? p.amount : 0,
@@ -89,16 +90,16 @@ export function paletteLut(colors, size = 32) {
  * @returns {PostEffect}
  */
 export function grain({ amount = 0.06, size = 1, animated = true, enabled, order = 30 } = {}) {
-  return { name: 'grain', slot: 'ldr', order, enabled, params: { amount, size, animated },
+  return { ...declared(grain), name: 'grain', slot: 'ldr', order, enabled, params: { amount, size, animated },
     fuse: {
       uniforms: { uGrainAmount: 'float', uGrainSize: 'float', uGrainAnimated: 'float' },
       values: p => ({ uGrainAmount: p.amount, uGrainSize: Math.max(1, p.size), uGrainAnimated: p.animated ? 1 : 0 }),
-      glsl: `float n = fxHash(floor(vUv * uResolution / uGrainSize) + (uGrainAnimated > 0.5 ? floor(uTime * 24.0) * 17.0 : 0.0)) - 0.5;
+      glsl: `float n = threedogHash(floor(vUv * uResolution / uGrainSize) + (uGrainAnimated > 0.5 ? floor(uTime * 24.0) * 17.0 : 0.0)) - 0.5;
     color.rgb += n * uGrainAmount * (1.0 - 0.5 * dot(color.rgb, vec3(${LUMA_601.join(', ')})));`,
-      // same shape; three's hash() stands in for fxHash, so the noise pattern differs from WebGL's (its strength does not)
-      tsl: (color, uv, { tsl: T, p, time, resolution }) => {
+      // the same cells through the same hash (fx.hash = threedogHash), so both renderers draw the same grain
+      tsl: (color, uv, { tsl: T, fx, p, time, resolution }) => {
         const q = T.floor(uv.mul(resolution).div(T.max(p.size, 1))), frame = T.floor(time.mul(24)).mul(17).mul(p.animated);
-        const n = T.hash(q.x.add(q.y.mul(1103)).add(frame)).sub(0.5);
+        const n = fx.hash(q.add(frame)).sub(0.5);
         return T.vec4(color.rgb.add(n.mul(p.amount).mul(T.float(1).sub(T.dot(color.rgb, T.vec3(...LUMA_601)).mul(0.5)))), color.a);
       } } };
 }
@@ -111,7 +112,7 @@ export function grain({ amount = 0.06, size = 1, animated = true, enabled, order
  * @returns {PostEffect}
  */
 export function vignette({ strength = 0.35, start = 0.45, enabled, order = 20 } = {}) {
-  return { name: 'vignette', slot: 'ldr', order, enabled, params: { strength, start },
+  return { ...declared(vignette), name: 'vignette', slot: 'ldr', order, enabled, params: { strength, start },
     fuse: {
       uniforms: { uVigStrength: 'float', uVigStart: 'float' },
       values: p => ({ uVigStrength: p.strength, uVigStart: p.start }),
@@ -127,7 +128,7 @@ export function vignette({ strength = 0.35, start = 0.45, enabled, order = 20 } 
  * @returns {PostEffect}
  */
 export function chromatic({ amount = 0.004, enabled, order = 5 } = {}) {
-  return { name: 'chromatic', slot: 'ldr', order, enabled, params: { amount },
+  return { ...declared(chromatic), name: 'chromatic', slot: 'ldr', order, enabled, params: { amount },
     fuse: {
       reads: true,
       uniforms: { uChromaAmount: 'float' },
@@ -140,3 +141,9 @@ export function chromatic({ amount = 0.004, enabled, order = 5 } = {}) {
         return T.vec4(input.sample(uv.add(off)).r, color.g, input.sample(uv.sub(off)).b, color.a);
       } } };
 }
+
+// the picture menu facts of each effect (about.js says why they sit on the factory)
+lut.about = { cost: 'low', on: 'engine.post.add(lut({ lut: texture3D }))', recipe: 'recipes/52-around-the-picture.md "Post effect chain"', limits: 'grades the finished display image (after tone mapping), not linear light' };
+grain.about = { cost: 'low', on: 'engine.post.add(grain())', recipe: 'recipes/52-around-the-picture.md "Post effect chain"', limits: 'noise on the screen, not on surfaces: it does not move with the world' };
+vignette.about = { cost: 'low', on: 'engine.post.add(vignette())', recipe: 'recipes/52-around-the-picture.md "Post effect chain"', limits: 'darkens toward the corners of the screen only, no lens shape' };
+chromatic.about = { cost: 'low', on: 'engine.post.add(chromatic())', recipe: 'recipes/52-around-the-picture.md "Post effect chain"', limits: 'the color split grows from the screen center only' };

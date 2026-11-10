@@ -7,7 +7,7 @@
 // Same numbers as GLSL: the modules keep their { value } uniform objects (game and engine code writes .value on either renderer) and the nodes read them
 // back each render; sizes are device pixels like gl_PointSize (sizeNode is in CSS pixels, so it is divided by the pixel ratio), sprite uv is
 // flipped to gl_PointCoord's y-down so textures and rotation land the same way.
-// Fog: the node material's own fog (mixed before the output transform). The GLSL mixes fog after its tone-mapping / color-space chunks, which
+// Fog: particles and weather use the node material's own fog (the weather GLSL has the same fog chunks: rain and snow fade into fog on both backends). It is mixed before the output transform. The GLSL mixes fog after its tone-mapping / color-space chunks, which
 // only matters straight on the canvas: in a linear target (every frame with post on) those chunks do nothing and both match (fog parity in
 // tests/specs/fx-particles.mjs, mean within 0.01%). On the canvas WebGPU differs anyway for every material: it blends and fogs in its linear
 // frame buffer, WebGL on the encoded canvas (9-15% on the test puff, as much without fog), and three's own WebGL materials fog in that same
@@ -18,7 +18,7 @@ import { Sprite, PointsNodeMaterial, LineBasicNodeMaterial, InstancedBufferAttri
 import { valueNode } from './uniforms.tsl.js';
 import { registerWebGPUPart } from '../backend.js';
 
-const { Fn, texture, instancedDynamicBufferAttribute, attribute, varying, positionGeometry, modelViewMatrix, screenDPR, uv, viewportLinearDepth, cameraNear, cameraFar,
+const { Fn, texture, cameraProjectionMatrix, instancedDynamicBufferAttribute, attribute, varying, positionGeometry, modelViewMatrix, screenDPR, uv, viewportLinearDepth, cameraNear, cameraFar,
   float, vec2, vec3, vec4, select, min, max, cos, sin, mod, smoothstep, step, dot, length, If, Discard } = TSL;
 
 /** @template {string} T @typedef {import('three/webgpu').Node<T>} N */
@@ -49,10 +49,25 @@ function nodesOf(u) {
 // sRGB like the textures games load, so swapping in a real one does not change the colour conversion the node was built with
 const white = () => { const t = new DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1); t.colorSpace = SRGBColorSpace; t.needsUpdate = true; return t; };
 
-/** uniforms.uMap as a texture node: writing .value swaps the texture and rebuilds the material (the GLSL side just swaps the sampler) */
+/**
+ * uniforms.uMap as a texture node: writing .value swaps the texture and rebuilds the material (the GLSL side just swaps the sampler).
+ * The white stand-in for "no texture" is the slot's own (made here, so freed here): disposed when a real texture replaces it and with the material.
+ * A texture the game passes in stays the game's. `.own` is true while the stand-in is drawn: a copy of these values (weather's rebuild) skips it,
+ * since the stand-in is freed with this material and a new slot would take it for the game's
+ */
 function mapSlot(u, mat) {
-  const node = texture(u.uMap?.value || white());
-  u.uMap = { get value() { return node.value; }, set value(t) { node.value = t || white(); mat.needsUpdate = true; } };
+  let own = null;
+  const blank = () => (own ??= white());
+  const node = texture(u.uMap?.value || blank());
+  u.uMap = { get own() { return !!own && node.value === own; }, get value() { return node.value; }, set value(t) {
+    const old = own;
+    if (t) own = null;
+    node.value = t || blank();
+    if (old && old !== node.value) old.dispose();
+    mat.needsUpdate = true;
+  } };
+  // own stays named after the dispose: a copy made after the old system is dropped (weather's rebuild) still sees it is not the game's
+  mat.addEventListener('dispose', () => own?.dispose());
   return node;
 }
 
@@ -77,8 +92,10 @@ function particles({ attrs, count, fog, additive, maxPixels, soft }) {
   const pos = at(attrs.aPos, 'vec3'), size = at(attrs.aSize, 'float'), alpha = at(attrs.aAlpha, 'float');
   m.positionNode = pos;
   const z = modelViewMatrix.mul(vec4(pos, 1)).z;
+  // an orthographic camera (projection [2][3] is 0, -1 for perspective; the test the GLSL isOrthographic makes) has no shrink with distance: uScale is pixels per meter
+  const dist = select(/** @type {any} */ (cameraProjectionMatrix).element(2).element(3).lessThan(-0.5), max(0.1, z.negate()), float(1));
   m.sizeNode = Fn(() => {
-    return select(alpha.lessThanEqual(0), float(0), min(size.mul(U.uScale).div(max(0.1, z.negate())), U.uMaxPx)).div(screenDPR);
+    return select(alpha.lessThanEqual(0), float(0), min(size.mul(U.uScale).div(dist), U.uMaxPx)).div(screenDPR);
   })();
   // meters between the particle and what is drawn behind it; viewportLinearDepth is three's one copy of the depth buffer per render, shared by every effect that reads it
   const gap = soft ? viewportLinearDepth.mul(cameraFar.sub(cameraNear)).add(cameraNear).add(varying(z)) : null;

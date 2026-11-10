@@ -150,6 +150,37 @@ export const specs = [
     },
   },
   {
+    // 不许绕开：hlod 收下的网格，batching 之后再也不能把它合进批里（等凑够份数的那种也不行），否则远处同时画替身和批里那一份
+    name: '[guard] conflicts: a mesh hlod takes while batching waits for more copies never joins a batch later, and joins once hlod lets go',
+    url: '/tests/perf/index.html?mode=city',
+    async run({ check, ev }) {
+      const r = await ev(async () => {
+        const B = engine.batching, was = B.enabled;
+        B.enabled = true;
+        const src = engine.level.root.getObjectByName('b_3_3'), Mesh = src.constructor, Group = engine.level.root.constructor;   // the page has no THREE global
+        const geo = src.geometry.clone(), mat = src.material.clone();
+        const root = n => { const g = new Group(), m = new Mesh(geo, mat); m.position.set(300 + n * 2, 0, 300); g.add(m); g.userData.batch = true; engine.scene.add(g); return g; };
+        const first = root(0);
+        engine.step(1 / 30);
+        const waiting = !!B._entryOf(first.children[0]) && !first.children[0].userData.batched;
+        const h = engine.hlod.add(first);
+        const rest = []; for (let i = 1; i < 40; i++) rest.push(root(i));
+        engine.step(1 / 15);
+        const out = { waiting, firstBatched: !!first.children[0].userData.batched, restBatched: rest.filter(g => g.children[0].userData.batched).length };
+        h.remove(); engine.step(1 / 15);   // hlod lets go: batching is told, as add() tells it, and takes the copy into the batch beside it
+        out.afterRemove = !!first.children[0].userData.batched;
+        for (const g of [first, ...rest]) g.removeFromParent();
+        engine.step(1 / 30);
+        B.enabled = was;
+        return out;
+      });
+      const J = JSON.stringify(r);
+      check('batching was holding the first copy, waiting for more', r.waiting, J);
+      check('after hlod.add it stays out of the batch the later copies make; the others batch', !r.firstBatched && r.restBatched > 0, J);
+      check('after hlod remove() batching takes it again', r.afterRemove, J);
+    },
+  },
+  {
     name: '[guard] conflicts little use: the unused names stay gone',
     url: '/tests/settings/index.html',
     async run({ check, ev }) {

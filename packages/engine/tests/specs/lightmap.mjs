@@ -14,9 +14,10 @@ export const specs = [
         // the same layout `threedog bake light` writes: head, table, padding, half-float map, then per mesh source vertices, index, uv1
         const size = 4, tex = new Uint16Array(size * size * 4).fill(H(4));
         const entry = (m, extra) => { const g = m.geometry, n = g.attributes.position.count; return { o: { name: m.name, vertices: n, count: n, indices: g.index.count, matrix: Array.from(m.matrixWorld.elements), ...extra }, list: [Uint32Array.from({ length: n }, (_, i) => i), Uint32Array.from(g.index.array), new Float32Array(n * 2).fill(0.5)] }; };
+        // an entry's own at wins over the running offset: the bad-offset case below writes one
         const make = (meshes, skipped = []) => {
           let at = 0; const parts = [];
-          const table = meshes.map(e => { const o = { ...e.o, at }; for (const p of e.list) { parts.push(p); at += p.byteLength; } return o; });
+          const table = meshes.map(e => { const o = { at, ...e.o }; for (const p of e.list) { parts.push(p); at += p.byteLength; } return o; });
           const head = new TextEncoder().encode(JSON.stringify({ format: 'threedog-lightmap', version: 1, size, backend: 'webgpu', meshes: table, skipped }));
           const base = (8 + head.length + 7) & ~7, buf = new ArrayBuffer(base + tex.byteLength + at), v = new DataView(buf);
           v.setUint32(0, 0x4d4c4454, true); v.setUint32(4, head.length, true); new Uint8Array(buf).set(head, 8); new Uint8Array(buf).set(new Uint8Array(tex.buffer), base);
@@ -30,8 +31,8 @@ export const specs = [
         out.before = shot();
         const positions = floor.geometry.attributes.position.count, shape = Array.from(floor.geometry.attributes.position.array), oldGeo = floor.geometry;
         let oldFreed = false; oldGeo.addEventListener('dispose', () => { oldFreed = true; });
-        // the wall comes in with the wrong vertex count, so it is another mesh now
-        const map = await engine.loadLightmap(make([entry(floor), entry(wall, { vertices: 3 })], [{ name: 'row', why: 'instanced' }]));
+        // the wall comes in with the wrong vertex count, so it is another mesh now (more than it has: the file's own list stays inside its count)
+        const map = await engine.loadLightmap(make([entry(floor), entry(wall, { vertices: wall.geometry.attributes.position.count + 1 })], [{ name: 'row', why: 'instanced' }]));
         out.lit = shot();
         out.uv1 = floor.geometry.attributes.uv1?.count === positions && floor.geometry !== oldGeo;
         out.oldFreed = oldFreed;
@@ -39,7 +40,7 @@ export const specs = [
         out.plain = floor.material.lightMap === map.texture && map.texture.channel === 1 && map.texture.type === THREE.HalfFloatType;
         out.wallOld = !wall.material.lightMap;
         let d = engine.describe().render.lightmap;
-        Object.assign(out, { missing: d.missing, skipped: d.skipped, doubled: d.doubled, bakedOn: d.bakedOn, meshes: d.meshes });
+        Object.assign(out, { missing: d.missing, skipped: d.skipped, doubled: engine.describe().render.checks.find(c => c.id === 'lit-twice')?.text ?? '', bakedOn: d.bakedOn, meshes: d.meshes });
         // a baked mesh that moved, and an unbaked mesh on the baked material
         floor.position.x += 2; crate.material = floor.material;
         d = engine.describe().render;
@@ -50,6 +51,11 @@ export const specs = [
         out.badBytes = await bad(new ArrayBuffer(64)); out.badType = await bad(12); out.badPath = await bad('/no-such-file.lightmap');
         const cut = make([entry(floor)]).slice(0, 200); out.cut = await bad(cut);
         out.cutEnd = await bad(make([entry(floor)]).slice(0, -8));   // only the last mesh list is short: the check must count the map in front of it
+        // a file whose first entry is good and the second is not: refused before anything changes, the loaded map stays (GPT review l2-render 1)
+        const geo0 = floor.geometry, wallGeo = wall.geometry, kept = engine._lightmap;
+        const lateBad = async edit => { const e2 = entry(wall); edit(e2); const c = await bad(make([entry(floor), e2])); return c === 'lightmap-data' && floor.geometry === geo0 && wall.geometry === wallGeo && engine._lightmap === kept && floor.material.lightMap === map.texture && !wall.material.lightMap; };
+        out.lateBad = { misaligned: await lateBad(e2 => { e2.o.at = 2; }), index: await lateBad(e2 => { e2.list[1] = e2.list[1].map(() => 9999); }),
+          from: await lateBad(e2 => { e2.list[0] = e2.list[0].map(() => 9999); }), negative: await lateBad(e2 => { e2.o.count = -1; }) };
         out.same = engine.describe().render.lightmap.meshes === 1;
         // off: the map leaves the material
         const tex0 = map.texture; map.remove(); map.remove();
@@ -65,7 +71,9 @@ export const specs = [
       check('[guard] a mesh that is not the one baked is left alone and listed as missing', r.wallOld && r.missing.includes('wall') && r.meshes === 1, J);
       check('[guard] an instanced mesh the bake skipped is reported', r.skipped[0]?.name === 'row', J);
       check('[guard] a baked mesh that moved is reported; so is an unbaked mesh on a baked material', r.moved.includes('floor') && r.shared.includes('crate') && r.text, J);
-      check('[guard] light counted twice is reported (hemisphere)', r.doubled.some(x => /skyFill/.test(x)), J);
+      check('[guard] light counted twice is reported (hemisphere)', /^lightmap light .*skyFill/.test(r.doubled), J);
+      check('[guard] a file whose later entry is malformed (offset not a multiple of 4, index or source vertex past its list, negative count) is refused before the first mesh is swapped, the loaded map stays',
+        Object.values(r.lateBad).every(Boolean), JSON.stringify(r.lateBad));
       check('a wrong, cut or missing file is refused (lightmap-data) and changes nothing', [r.badBytes, r.badType, r.badPath, r.cut, r.cutEnd].every(c => c === 'lightmap-data') && r.same, J);
     },
   },

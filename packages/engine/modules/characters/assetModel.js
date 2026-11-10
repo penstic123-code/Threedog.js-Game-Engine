@@ -13,17 +13,21 @@ import { builderArgs } from '../../core/assets/namedModel.js';
 import { list as nameAndArgs } from '../../core/base/util.js';
 
 /**
- * Build a procedural model asset now (synchronously) when `name` is a registered builder; null when it is a file model, unknown, or the
- * builder is async (those load through loadAssetModel). The builder gets this = { palette: engine.assets.palette, engine } like any generator in the manifest.
+ * Build a procedural model asset now (synchronously) when `name` is a registered builder; null when it is a file model or unknown. A builder that answers with a
+ * promise (async) is not run again by loadAssetModel: its promise is handed back (of the made model), and loadAssetModel waits on that one job.
+ * The builder gets this = { palette: engine.assets.palette, engine } like any generator in the manifest.
  */
 export function buildNow(engine, model) {
   const [name] = nameAndArgs(model), build = engine.assets.builder(name);
   if (!build) return null;
   const v = build.call({ palette: engine.assets.palette, engine }, ...builderArgs(engine, model));
-  if (!v || typeof v.then === 'function') return null;
-  if (v.isBufferGeometry) return new THREE.Mesh(v, neutralMaterial('character', { vertexColors: !!v.attributes.color }));
-  if (!v.name) v.name = name;
-  return v;
+  const made = r => {
+    if (r.isBufferGeometry) return engine.assets.handOut(new THREE.Mesh(r, neutralMaterial('character', { vertexColors: !!r.attributes.color })), name);
+    if (!r.name) r.name = name;
+    return engine.assets.handOut(r, name);
+  };
+  if (typeof v?.then === 'function') return v.then(made);
+  return v ? made(v) : null;
 }
 
 const STRINGS = {
@@ -37,8 +41,9 @@ const STRINGS = {
  * @param {import('./Character.js').Character} ch
  * @param {string | any[]} model a name, or [name, ...args]
  * @param {(model: any) => void} use builds the model and Animator on ch
+ * @param {Promise<any>} [job] the promise buildNow got from an async builder: the one run of it, so the generator is not called a second time
  */
-export function loadAssetModel(ch, model, use) {
+export function loadAssetModel(ch, model, use, job) {
   const e = ch.engine, A = e.assets, [name, ...args] = nameAndArgs(model);
   const names = [...A.entries].filter(([, x]) => x.type === 'model' && x.named).map(([n]) => n);
   const list = names.join(', ') || 'none; register them with engine.assets.manifest({ models })';
@@ -59,8 +64,8 @@ export function loadAssetModel(ch, model, use) {
     e.events.emit('character:model', { character: ch, model: m });
   };
   // already loaded (another NPC uses it, or this one was built before): swap now, so a character rebuilt far -> near never shows the placeholder
-  const now = A.entries.get(name)?.value ? A.modelNow(name) : null;   // only when loaded: modelNow hints in dev when nothing loads it
+  const now = !job && A.entries.get(name)?.value ? A.modelNow(name) : null;   // only when loaded: modelNow hints in dev when nothing loads it
   if (now) { swap(now); return Promise.resolve(); }
   ch.ready = false;
-  return A.model(name).then(swap).catch(err => { if (!ch.disposed) fail(err.message); }).finally(() => { ch.ready = true; });
+  return (job ?? A.model(name)).then(swap).catch(err => { if (!ch.disposed) fail(err.message); }).finally(() => { ch.ready = true; });
 }

@@ -25,7 +25,7 @@ Settings menu (settings() module)
   - `values: Record<string, any>` All current setting values, read only (set() changes one). pixelRatio is the renderer's real ratio
   - `presets: Record<string, QualityPreset>` Graphics presets
   - `sections: Map<string, any>` (experimental) Tabs
-  - `isOpen: boolean` (experimental) Whether the menu is open
+  - `isOpen: boolean` Whether the menu is open
 
 ## Data structures
 - **SettingsSection** One settings tab

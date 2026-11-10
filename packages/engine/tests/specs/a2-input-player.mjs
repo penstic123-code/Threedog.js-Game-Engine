@@ -147,22 +147,22 @@ export const specs = [
     },
   },
   {
-    name: 'character create and replace: a refused createPlayer keeps the old player; a new one takes over the record, the control slot and the frame hook; the old one answers nothing; a record loaded first places the player (open world)',
+    name: 'character create and replace: a refused addPlayer keeps the old player; a new one takes over the record, the control slot and the frame hook; the old one answers nothing; a record loaded first places the player (open world)',
     url: '/?cutscene=skip',
     async run({ check, ev }) {
       const r = await ev(async () => {
         engine.haltLoop();
         const C = engine.characters, W = engine.world, old = engine.player, out = {}, step = s => engine.step(s, { describe: false });
         const code = f => { try { f(); return 'no error'; } catch (x) { return x.code; } };
-        out.noControl = code(() => C.createPlayer({}));
-        out.badControl = code(() => C.createPlayer({ control: 'manual' }));
-        out.badKey = code(() => C.createPlayer({ control: 'camera', contrl: 1 }));
+        out.noControl = code(() => C.addPlayer({}));
+        out.badControl = code(() => C.addPlayer({ control: 'manual' }));
+        out.badKey = code(() => C.addPlayer({ control: 'camera', contrl: 1 }));
         out.keptOld = engine.player === old && !!old.root.parent;
         const x = old.position.x + 3, z = old.position.z;
         old.placeAt({ x, z });
         let oldLoads = 0, oldFrames = 0, steps = 0, frames = 0;
         old.loadMotion = () => { oldLoads++; }; old.animate = () => { oldFrames++; };
-        const p = C.createPlayer({ control: (who, input, dt) => { steps++; out.args = who === engine.player && input === engine.input && dt > 0; return null; } });
+        const p = C.addPlayer({ control: (who, input, dt) => { steps++; out.args = who === engine.player && input === engine.input && dt > 0; return null; } });
         p.animate = () => { frames++; };
         out.swapped = engine.player === p && p !== old && !old.root.parent && !!p.root.parent;
         const open = C.findSpawn();
@@ -170,7 +170,7 @@ export const specs = [
         out.owner = engine.control.of(p)?.owner; out.oldHolder = engine.control.of(old) ?? null;
         step(0.1);
         out.steps = steps; out.frames = frames; out.oldFrames = oldFrames;
-        const q = C.createPlayer({ control: 'camera', spawn: { x: x + 3, z } });
+        const q = C.addPlayer({ control: 'camera', spawn: { x: x + 3, z } });
         out.spawned = Math.hypot(q.position.x - x - 3, q.position.z - z) < 0.01 && Math.abs(W.get('player').position.x - q.position.x) < 0.01;
         const before = steps; step(0.1); out.replacedStepRan = steps !== before;
         await engine.saves.save('char-replace');
@@ -179,13 +179,13 @@ export const specs = [
         out.loaded = Math.abs(q.position.x - x - 3) < 0.05; out.oldLoads = oldLoads;
         C.removePlayer();
         await engine.saves.load('char-replace');
-        const late = C.createPlayer({ control: 'camera' });
+        const late = C.addPlayer({ control: 'camera' });
         out.continued = Math.abs(late.position.x - x - 3) < 0.05 && Math.abs(late.position.z - z) < 0.05;
         return out;
       });
       const J = JSON.stringify(r);
       check('no control, a bad control and a misspelt key are refused by name', r.noControl === 'player-control' && r.badControl === 'player-control' && r.badKey !== 'no error', J);
-      check('a refused createPlayer leaves the old player in place', r.keptOld, J);
+      check('a refused addPlayer leaves the old player in place', r.keptOld, J);
       check('replacing: engine.player is the new one, the old model left the scene', r.swapped, J);
       check('replacing without spawn looks for a spawn; with spawn it stands there and the record follows', r.respawned && r.spawned, J);
       check('a record loaded before the player is created places it', r.continued, J);
@@ -212,7 +212,7 @@ export const specs = [
         await engine.saves.save('char-none');
         await engine.saves.load('char-none');
         out.noRecordYet = !W.get('player');
-        const q = C.createPlayer({ control: 'camera', spawn: { x: 4, z: 4 } });
+        const q = C.addPlayer({ control: 'camera', spawn: { x: 4, z: 4 } });
         out.fresh = W.get('player')?.kind === 'player';
         await engine.saves.load('char-none');
         const rec = W.get('player');
@@ -224,7 +224,7 @@ export const specs = [
       check('nothing holds the removed player and its frame hook stopped', r.holder === null && r.frames === 0, J);
       check('a second removePlayer and later steps are safe; describe reports no player', r.describe === null, J);
       check('a removed player is not brought back by a load', r.noRecordYet, J);
-      check('createPlayer after removePlayer makes a new record', r.fresh, J);
+      check('addPlayer after removePlayer makes a new record', r.fresh, J);
       check('a save from before the player: the record is rebuilt from the player', r.rebuilt, J);
     },
   },

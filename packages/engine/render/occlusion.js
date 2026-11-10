@@ -26,7 +26,7 @@ notePatch('occlusion-layers-test', "layers.test on the Layers of a mesh occlusio
 const { occlusionHidden: HIDDEN_LAYER, occlusionBox: BOX_LAYER } = RESERVED_LAYERS;
 const HIDE_AFTER = 2;
 const DELAY = 3;                  // frames between a box being drawn and its result being read, at worst
-const LIGHT_WALK = 60;            // frames between looks for new shadow lights
+const LIGHT_WALK = 60;            // frames between looks for a game's new shadow lights; the engine's own say so (shadowLightsAdded)
 
 /** The mask bit of the batch layer, where a far original waits (hlod, assets.lod); three keeps layer masks unsigned */
 export const FAR_BIT = (1 << RESERVED_LAYERS.batched) >>> 0;
@@ -71,6 +71,7 @@ export class Occlusion {
     /** @internal */ this._root = null;
     /** @internal */ this._hook = null;
     /** @internal the layer bits this added to each shadow camera, taken back when culling goes off */ this._shadowBits = new Map();
+    /** @internal walk the shadow lights in frames up to this one (shadowLightsAdded) */ this._walkUntil = 0;
     const test = THREE.Layers.prototype.test;
     /** @internal layers.test of a hidden mesh; `this` is its Layers @this {THREE.Layers} @param {THREE.Layers} layers */ this._unseen = function (layers) { return layers !== engine.camera.layers && test.call(this, layers); };
     // a restored context holds none of the old queries: one still pending would never answer and its item would stay hidden. Each item starts over and shows until new answers say otherwise
@@ -118,6 +119,12 @@ export class Occlusion {
     if (this._on) this._box(it);
     return { remove: () => { this._unbox(it); this._items.delete(it); } };
   }
+  /**
+   * The engine made shadow lights (cascades built or rebuilt on a settings or tier change): look at the shadow cameras in the next two frames, not at the next timed walk.
+   * Why: a fresh light's camera lacks the hidden layer, so what culling hides vanished from its shadow for up to LIGHT_WALK frames (~1 s). Two frames: WebGPU's cascade
+   * node makes its lights in its first render, after this frame's look. A game's own lights stay on the timed walk (a scene walk each frame would cost every game) @internal
+   */
+  shadowLightsAdded() { this._walkUntil = this._frameNo + 2; }
   /** The item's box mesh, its query hooks on the renderer in use */
   _box(it) {
     if (!it.read) it.box ??= it.meshes.reduce((b, m) => b.expandByObject(m), new THREE.Box3());
@@ -212,19 +219,22 @@ export class Occlusion {
       it.box.getCenter(center); it.box.getSize(size);
       const pad = Math.max(size.length() * 0.02, Number.isFinite(moved) ? moved * DELAY : 0);
       grown.copy(it.box).expandByScalar(pad);
-      const inside = grown.distanceToPoint(here) <= cam.near * 2;
+      // standing on its ground (the camera over its x/z footprint, a batch's 256 m cell, an hlod cell): what is around the camera is drawn whatever stands in front, so its
+      // box costs a draw call (filling the screen from inside) and a query that never hides it. Not tested at all: no box, no query, shown. Skipping a test only culls less
+      const inside = grown.distanceToPoint(here) <= cam.near * 2 || (here.x >= grown.min.x && here.x <= grown.max.x && here.z >= grown.min.z && here.z <= grown.max.z);
+      if (inside) { this._show(it); it.proxy.visible = false; it.runs = 0; it.pad = pad; continue; }
       const seenLast = n - it.drawn <= 1;
       // an answer covers a camera move as far as the growth its box had when asked; a cut beyond that is a different view, however big the item is
       if (moved * DELAY > it.pad) it.wait = n + DELAY;
       it.pad = pad;
       if (n <= it.wait || !seenLast) it.runs = 0;
-      const hide = seenLast && !inside && it.runs >= HIDE_AFTER;
+      const hide = seenLast && it.runs >= HIDE_AFTER;
       if (hide && !it.hidden) { this._hide(it); hidNow = true; } else if (!hide) this._show(it);
       grown.getSize(size);
       it.proxy.matrix.makeScale(size.x, size.y, size.z).setPosition(center);
       it.proxy.matrixWorldNeedsUpdate = true;
     }
-    if (hidNow || n % LIGHT_WALK === 0) this._shadowCameras(cam);
+    if (hidNow || n <= this._walkUntil || n % LIGHT_WALK === 0) this._shadowCameras(cam);
   }
   /** @internal */
   dispose() { this.enabled = false; this._swap.remove(); this._restored.remove(); this._items.clear(); this._material?.dispose(); }

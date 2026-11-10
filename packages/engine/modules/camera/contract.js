@@ -1,6 +1,6 @@
 // What any camera module must provide (fields: see gameplay/inventory.contract.js; shared check: @threedog/tools/contract). It installs as engine.cameraRig.
 // Exactly what other code reads from engine.cameraRig: forward() / right() (control: 'camera', faceMode 'camera', targeting), follow(object, opts?)
-// (createPlayer, entering / leaving a vehicle), focusPoint() (photo, where the world loads), screenToGround(ndcX, ndcY) (click-to-move, placing
+// (addPlayer, entering / leaving a vehicle), focusPoint() (photo, where the world loads), screenToGround(ndcX, ndcY) (click-to-move, placing
 // things); sensitivity / invertY are optional fields the settings menu writes when present. A camera that places engine.camera itself during a
 // cutscene takeover leaves it alone while engine.cameraOverride is set (common.js).
 export default {

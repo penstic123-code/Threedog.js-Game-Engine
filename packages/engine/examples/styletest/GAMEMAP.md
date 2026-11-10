@@ -23,7 +23,7 @@ None yet, write them in `DESIGN.md` (why it is designed this way, what not to ch
 
 ## Read for this game (per installed module: recipe · api page; core API: `node_modules/threedog/docs/api/engine.md`)
 
-- world: `node_modules/threedog/docs/recipes/66-common-tasks.md` · `node_modules/threedog/docs/api/world.md`
+- world: `node_modules/threedog/docs/recipes/18-world.md` · `node_modules/threedog/docs/api/world.md`
 - terrain: `node_modules/threedog/docs/recipes/28-terrain.md` · `node_modules/threedog/docs/api/terrain.md`
 - vegetation: `node_modules/threedog/docs/recipes/36-ground-plants.md` · `node_modules/threedog/docs/api/vegetation.md`
 - calendar: `node_modules/threedog/docs/recipes/06-clock-events.md` · `node_modules/threedog/docs/api/calendar.md`
@@ -37,7 +37,7 @@ None yet, write them in `DESIGN.md` (why it is designed this way, what not to ch
 
 Not used yet (check these before writing the system yourself):
 
-- saves: save your own state: `engine.saves.register(key, { version, save, load })` (node_modules/threedog/docs/recipes/20-content-actions-save.md)
+- saves: save your own state: `engine.saves.define(key, { version, save, load })` (node_modules/threedog/docs/recipes/20-content-actions-save.md)
 - quests: goals with steps, conditions and rewards: `quests()` + key map presets.bindings.quests, content/quests.js (node_modules/threedog/docs/recipes/04-quests.md)
 - swarm: many same-kind moving things (shots, crowds, flocks, debris) in typed arrays, drawn as one mesh: `swarm()` (node_modules/threedog/docs/recipes/65-swarm.md)
 - grids: cell placement for farming and building: `grids()` (node_modules/threedog/docs/recipes/29-grid.md)

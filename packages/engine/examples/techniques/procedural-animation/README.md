@@ -49,7 +49,7 @@ do ears and tail settle without jitter? Values are a starting point to tune by e
 is the sub-stepped spring (a long frame stays stable). `creature.js` (`buildCreature`, imports `three`) is a neutral box quadruped that exists
 only so there is something to move; `main.js` wires it to a player.
 1. Build the body with a pivot (a `Group`) at every joint. Names do not matter to the animator, only the `parts` object you pass.
-2. Give it to a character as a ready rig: `createPlayer({ ..., rig: { root, body: parts.body, limbs: [] } })` (`npcs.add` takes the same
+2. Give it to a character as a ready rig: `addPlayer({ ..., rig: { root, body: parts.body, limbs: [] } })` (`npcs.add` takes the same
    `rig`). `limbs: []` means the engine swings nothing itself (recipe 13 section 3b describes its own limb swing, for comparison).
 3. Drive the animator from `character.onPose((ch, dt) => animator.update(dt, { speed: ch.moveAmount, state: ch.state, grounded: ch.grounded, vy: ch.vy }))`.
    For a prop or a creature that is not a character, call `update` from `engine.onFrame` with your own speed and state.

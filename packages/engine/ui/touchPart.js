@@ -12,6 +12,8 @@ export function touchPart(engine) {
   injectUICSS();
   let pad = null, bar = null, labels = '';
   /** @type {TouchView} */ let cur;
+  const held = new Set();   // actions a finger is on now: a button that goes away mid-press never sees its pointerup, so this view lets go for it
+  const letGo = () => { for (const a of held) cur.release(a); held.clear(); };
   const makeStick = () => {
     pad = document.createElement('div'); const knob = document.createElement('div');
     pad.className = 'threedog-stick'; knob.className = 'threedog-stick-knob';
@@ -30,8 +32,8 @@ export function touchPart(engine) {
   };
   const button = b => {
     const el = document.createElement('button'); el.type = 'button'; el.className = 'threedog-touch-btn'; el.textContent = b.label;
-    el.addEventListener('pointerdown', ev => { ev.preventDefault(); cur.press(b.action); });
-    const up = () => cur.release(b.action);
+    el.addEventListener('pointerdown', ev => { ev.preventDefault(); held.add(b.action); cur.press(b.action); });
+    const up = () => { held.delete(b.action); cur.release(b.action); };
     el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); el.addEventListener('pointerleave', up);
     return el;
   };
@@ -42,8 +44,9 @@ export function touchPart(engine) {
     const key = v.buttons.map(b => b.action + ':' + b.label).join('|');
     if (key === labels) return;   // rebuild the buttons only when the set or a label changed
     labels = key;
+    letGo();
     if (!bar) { bar = document.createElement('div'); bar.className = 'threedog-touch-bar'; engine.uiRoot.appendChild(bar); }
     bar.replaceChildren(...v.buttons.map(button));
   };
-  return { show: draw, update: draw, dispose() { pad?.remove(); bar?.remove(); pad = bar = null; } };
+  return { show: draw, update: draw, dispose() { if (cur) { letGo(); cur.move(0, 0); } pad?.remove(); bar?.remove(); pad = bar = null; } };
 }

@@ -86,7 +86,8 @@ export const specs = [
         const glsl = 'vec4 threedogSkyLayer(vec3 d, float time, vec3 sunDir, float night){ return vec4(uBand, smoothstep(0.2, 0.4, d.y) * uK); }';
         const two = make({ sky: { layers: [
           { glsl, uniforms: { uBand: [1, 0, 0], uK: 0.8 }, order: 2 },
-          { glsl: 'vec4 threedogSkyLayer(vec3 d, float time, vec3 sunDir, float night){ return vec4(0.0, 0.3, 0.0, 1.0); }', blend: 'add', order: 1 } ] } }).e;
+          // calls the noise helpers recipe 08 promises in a layer's scope (the dome once declared them after the layers, so this failed to compile)
+          { glsl: 'vec4 threedogSkyLayer(vec3 d, float time, vec3 sunDir, float night){ return vec4(0.0, 0.3 * threedogNoise(d.xz * 4.0) + 0.1 * threedogHash(d.xz), 0.0, 1.0); }', blend: 'add', order: 1 } ] } }).e;
         two.sky.fixedTime = 0.5; two.sky.update(two.focus);
         const fs = two.sky.dome.material.fragmentShader;
         out.renamed = /threedogSkyLayer0\(/.test(fs) && /threedogSkyLayer1\(/.test(fs) && !/threedogSkyLayer\(/.test(fs);

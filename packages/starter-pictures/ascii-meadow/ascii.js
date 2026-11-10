@@ -62,8 +62,9 @@ function effect(cellPx) {
     /** @param {any} input the finished picture, display color @param {any} ctx */
     node(input, ctx) {
       const px = ctx.params.cellPx;
-      atlas?.map.dispose();
-      atlas = makeAtlas(px);
+      // the post stage disposes what ctx.display.own() holds when this node graph is torn down; a dispose() on the effect definition is never called
+      const mine = atlas = makeAtlas(px);
+      ctx.display.own({ dispose() { mine.map.dispose(); if (atlas === mine) atlas = null; } });
       const frame = ctx.display.texture(input), inkAt = uniformArray(atlas.ink, 'float'), n = atlas.count;
 
       const cellPos = screenCoordinate.xy.div(px), cell = floor(cellPos), inCell = fract(cellPos);
@@ -90,7 +91,6 @@ function effect(cellPx) {
       const glyph = col.mul(cover.oneMinus().mul(strength).add(1)), behind = col.mul(cover.mul(strength).oneMinus());
       return vec4(mix(behind, mix(glyph, vec3(dot(glyph, LUMA)), ASCII.inkPale), ink), 1);
     },
-    dispose() { atlas?.map.dispose(); atlas = null; },
     facts: () => atlas && { glyphs: atlas.order },
   };
 }

@@ -122,7 +122,8 @@ export function goTo(e, W, rec, ch, goal, dt) {
   const nav = rec.nav, p = ch.root.position;
   const dGoal = goal ? Math.hypot(goal.x - p.x, goal.z - p.z) : 0;
   if (rec.busy || !goal || (dGoal < rec.arriveDistance && sameLevel(e, p, goal) && !linkAhead(nav.path) && !ch._linkNext)) ch.move(0, 0, false, dt);
-  else if (e.nav?.crowd) crowdMove(e, rec, ch, goal, dt);
+  // a Detour crowd lives on the agent's one mesh and knows no 'characters.path' source: an NPC with passes or its own source takes the path entry below, like every other walker
+  else if (e.nav?.crowd && e.characters._crowdFits(rec.id, ch.passes)) crowdMove(e, rec, ch, goal, dt);
   else {
     nav.repath -= dt;
     // goal changed while waiting, or the answer never came (engine.commits.invalidate dropped it: a partial saves.apply, a level change): ask again
@@ -134,7 +135,7 @@ export function goTo(e, W, rec, ch, goal, dt) {
         if (ch._pathReq !== req) return;
         // no way there: it stands and asks again at the next repath, a failed search is no licence to press on along the line. A far leg is only a heading, not a place it must reach
         ch._pathReq = null; nav.path = path ?? (far ? [{ x: tx, y: p.y, z: tz }] : null);
-      }, { radius: ch.radius, step: rec.pathStep, id: rec.id });
+      }, { radius: ch.radius, passes: ch.passes, step: rec.pathStep, id: rec.id });
       req.goal = goal; req.at = e.time.tick;
       nav.repath = rec.repath;
     }

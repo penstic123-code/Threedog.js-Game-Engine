@@ -1,9 +1,26 @@
 // Grid index of colliders: register each by bounding circle in the cells it covers; queries look at a few nearby cells instead of scanning all colliders.
 // Results are ordered circles first, then boxes, each in insertion order, exactly the callback order of a linear scan (resolve edits the position in turn, so a different order changes the result).
-// Worker-safe (no imports): the path worker (characters/pathJob.js) rebuilds the same grid from the colliders it mirrors.
+// Worker-safe (no three.js, no engine objects): the path worker (characters/pathJob.js) rebuilds the same grid from the colliders it mirrors.
+// Collider layers live here too (passesOf, passesThrough): every reader of colliders, the worker and nav included, asks the same two functions.
+import { codedError } from '../../core/base/errorHints.js';
 const CELL = 8, MAX_CELLS = 64, KEY = 1048576;   // colliders too large (covering > 64 cells) skip the grid and are scanned linearly, so registration cost does not blow up
 /** Does a body with its feet at y reach this box? A box without a y of its own is a footprint, and a body without y is anywhere: both hit. Written so an undefined on either side falls through to true */
 export const bodyHits = (it, y, body) => !(y >= it.y + it.h || y + body <= it.y);
+/**
+ * A mover's passes option (character option; findPath, findPathAsync and walkable option): the collider layers it goes through. Read here for every entry,
+ * sorted and without repeats so one set is one navmesh, never two. Left out or empty: undefined, which every reader takes as "stopped by everything", as before
+ */
+export function passesOf(where, v) {
+  if (v === undefined || v === null) return undefined;
+  if (!Array.isArray(v) || !v.every(n => typeof n === 'string' && n)) throw codedError('collision-misuse', `${where}: passes is a list of collider layer names, e.g. passes: ['gate']; got ${JSON.stringify(v)}`, TypeError);
+  return v.length ? Object.freeze([...new Set(v)].sort()) : undefined;
+}
+/**
+ * Does a mover go through this collider: it has a layer (addBox / addCircle { layer }) and the mover's passes list names it. The one test every reader
+ * of colliders makes (resolve, walkableAt, A* here and in the worker, the navmesh cut per passes list, the rapier mover), so they cannot disagree.
+ * A collider without a layer, or a mover without passes, answers false on the first comparison: what existed before costs one undefined check.
+ */
+export const passesThrough = (it, passes) => it.ly !== undefined && passes !== undefined && passes.includes(it.ly);
 
 const byOrder = (a, b) => a._b - b._b || a._o - b._o;
 
@@ -56,11 +73,12 @@ export class CollisionGrid {
 
 /**
  * Does a collider in the grid block a character of `radius` standing at (x, z)? The obstacle half of Collision.walkableAt,
- * shared with the pathfinding worker (it rebuilds a grid from the same colliders), so both answer identically. Worker-safe: no imports.
- * y, body: the feet and height of the character; a box on another floor does not block it. Left out, every box blocks.
+ * shared with the pathfinding worker (it rebuilds a grid from the same colliders), so both answer identically. Worker-safe.
+ * y, body: the feet and height of the character; a box on another floor does not block it. Left out, every box blocks. passes: the mover's layer list (passesThrough).
  */
-export function gridBlocks(grid, x, z, radius, y, body) {
+export function gridBlocks(grid, x, z, radius, y, body, passes) {
   for (const it of grid.query(x, z, radius + 1)) {
+    if (passesThrough(it, passes)) continue;
     if (!it._b) { if (Math.hypot(x - it.x, z - it.z) < radius + it.r) return true; continue; }
     if (!bodyHits(it, y, body)) continue;
     const dx = x - it.x, dz = z - it.z, lx = dx * it.c - dz * it.s, lz = dx * it.s + dz * it.c;

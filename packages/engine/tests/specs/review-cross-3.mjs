@@ -51,7 +51,7 @@ export const specs = [
         const E = mk(createEngine, 'rv-ng');
         E.use(world(), collision(), characters(), level({ scene: rvFlat(THREE) }));
         await E.start();
-        const p = E.characters.createPlayer({ control: 'camera' });
+        const p = E.characters.addPlayer({ control: 'camera' });
         const step = n => { for (let i = 0; i < n; i++) E.step(1 / 60); };
         const out = {}; let end = null;
         const w = p.walkTo({ x: 20, z: 0 }); w.then(v => { end = v.status; });

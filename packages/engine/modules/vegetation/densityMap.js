@@ -40,14 +40,8 @@ function roll(id, salt) {
   return (h >>> 0) / 4294967296;
 }
 
-/** Placement result r of chunk origin (ox, oz) with only the instances whose roll is under the density at their spot (same shape as r) */
-export function thin(r, ox, oz, at, salt) {
-  if (!r.n) return r;
-  const keep = [];
-  for (let i = 0; i < r.n; i++) {
-    const d = at(ox + r.m[i * 16 + 12], oz + r.m[i * 16 + 14]);
-    if (d > 0 && roll(r.ids[i], salt) < d) keep.push(i);
-  }
+/** Placement result r with only the instances at the indices `keep` (same shape as r; r itself when all stay) */
+export function select(r, keep) {
   if (keep.length === r.n) return r;
   const n = keep.length, m = new Float32Array(n * 16), c = new Float32Array(n * 3), ids = new Uint32Array(n), hasK = r.k && r.k.length;
   const k = new Float32Array(hasK ? n * 3 : 0);
@@ -56,4 +50,15 @@ export function thin(r, ox, oz, at, salt) {
     if (hasK) k.set(r.k.subarray(i * 3, i * 3 + 3), j * 3);
   });
   return { ...r, m, c, k, ids, n };
+}
+
+/** Placement result r of chunk origin (ox, oz) with only the instances whose roll is under the density at their spot (same shape as r) */
+export function thin(r, ox, oz, at, salt) {
+  if (!r.n) return r;
+  const keep = [];
+  for (let i = 0; i < r.n; i++) {
+    const d = at(ox + r.m[i * 16 + 12], oz + r.m[i * 16 + 14]);
+    if (d > 0 && roll(r.ids[i], salt) < d) keep.push(i);
+  }
+  return select(r, keep);
 }

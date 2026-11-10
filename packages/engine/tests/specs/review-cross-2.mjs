@@ -46,7 +46,7 @@ export const specs = [
         const E = mk(createEngine, 'rv-ride');
         E.use(world(), collision(), characters(), level({ scene: s }), T.rigid());
         await E.start();
-        const p = E.characters.createPlayer({ control: 'camera' });
+        const p = E.characters.addPlayer({ control: 'camera' });
         const wheels = [[-1, 0, 1.5], [1, 0, 1.5], [-1, 0, -1.5], [1, 0, -1.5]].map(position => ({ position, radius: 0.35 }));
         const mesh = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 4), new THREE.MeshBasicMaterial()); mesh.position.set(3, 1, 3); E.scene.add(mesh);
         const out = {};
@@ -84,7 +84,7 @@ export const specs = [
         E.use(world(), collision(), characters(), level({ scene: flat(60) }), nav({ agentRadius: 0.4 }));
         await E.start();
         for (let i = 0; i < 20 && !E.nav.ready; i++) { await new Promise(s => setTimeout(s, 30)); E.step(1 / 60); }
-        const p = E.characters.createPlayer({ control: 'camera' });
+        const p = E.characters.addPlayer({ control: 'camera' });
         const step = n => { for (let i = 0; i < n; i++) E.step(1 / 60); };
         const out = {};
         let end = null;

@@ -1,14 +1,17 @@
 # Writing shader patches and surfaces
 
-**In this recipe**: Your own material · Patch a slot · Engine GLSL functions · Ready-made effects
+> **Covers:** GLSL shader patches and surfaces on WebGL (WebGPU: recipe 56).
+> **Use when:** a WebGL game needs its own shading on a material.
+> **Shortest:** a `ShaderMaterial` that includes `threedog_lighting`.
+> **Sections:** Your own material · Patch a slot your · Ready-made effects detail, light
 
 A new game draws on WebGPU, where shaders are TSL: start with [recipe 56](56-webgpu-tsl.md), whose node materials and `tsl:` patch fields do these same jobs. This page is the GLSL route, for a game made with `threedog new-game --webgl`: **write your own material or `ShaderMaterial`**, or **patch a slot** of any material with your own GLSL. The picture is the
 game's own; this page gives building blocks, not finished pictures. There is one entry for shader code: `applyEffects`.
 
 ```js fragment
-const fragmentShader = '#include <threedog_lighting>\n' + myFragmentBody;                                       // 3. engine GLSL, called inside 1 or 2
-const mat = new THREE.ShaderMaterial({ uniforms: { ...engine.uniforms }, vertexShader, fragmentShader });                    // 1. your own shader
-applyEffects(mat2, { patches: [{ name: 'tint', slot: 'color', glsl: 'diffuseColor.rgb *= 0.9;' }] });                         // 2. patch a slot
+const fragmentShader = '#include <threedog_lighting>\n' + myFragmentBody;  // 3. engine GLSL, called inside 1 or 2
+const mat = new THREE.ShaderMaterial({ uniforms: { ...engine.uniforms }, vertexShader, fragmentShader });  // 1. your own shader
+applyEffects(mat2, { patches: [{ name: 'tint', slot: 'color', glsl: 'diffuseColor.rgb *= 0.9;' }] });  // 2. patch a slot
 ```
 
 A patch is a named piece of GLSL at a named place on any material, built-in or yours. The engine GLSL functions are tools you call inside your shader or a patch; none of them is a picture. A picture is what your
@@ -24,19 +27,19 @@ engine.water.material = applyEffects(new THREE.MeshPhongMaterial({ color: 0x3070
 ## Patch a slot: your own GLSL
 Write a **named patch** that names a **slot** (where the code goes) and add it with `applyEffects(material, { patches: [...] })`:
 ```js fragment
-{ name: 'tint', slot: 'color', glsl: 'diffuseColor.rgb *= 0.9;' },                                  // one slot
+{ name: 'tint', slot: 'color', glsl: 'diffuseColor.rgb *= 0.9;' },  // one slot
 { name: 'sway', slot: 'position', shadow: true, glsl: 'transformed.x += sin(position.y) * 0.1;' }, // moves vertices: the shadow follows
 { name: 'glow', pars: 'uniform float uGlow;', uniforms: { uGlow: { value: 0.5 } },
-  glsl: { color: 'diffuseColor.rgb *= 0.95;', output: 'outgoingLight += uGlow * 0.1;' } }          // several slots; pars = declarations
+  glsl: { color: 'diffuseColor.rgb *= 0.95;', output: 'outgoingLight += uGlow * 0.1;' } }  // several slots; pars = declarations
 ```
 The full form, with every field:
 ```js fragment
-{ name: 'fuzz',                          // one name per effect; the same name again replaces it
+{ name: 'fuzz',  // one name per effect; the same name again replaces it
   slot: 'color',
   glsl: 'diffuseColor.rgb *= 1.0 - uFuzz * 0.5;',
-  pars: 'uniform float uFuzz;',          // declarations at the top of every stage the patch touches (or { vertex, fragment })
+  pars: 'uniform float uFuzz;',  // declarations at the top of every stage the patch touches (or { vertex, fragment })
   cacheKey: 'v1',
-  uniforms: { uFuzz: { value: 0.3 } },   // numbers live here, so materials with different values share a program
+  uniforms: { uFuzz: { value: 0.3 } },  // numbers live here, so materials with different values share a program
   needs: { patches: ['world'], data: ['vertexColors'] },
   conflicts: ['wind'],
   shadow: false }
@@ -60,7 +63,7 @@ the same names map to node properties through a patch's `tsl` field, recipe 56).
 | `lighting` | after `lights_fragment_end` | inside `setupLightingModel` | reflectedLight.directDiffuse / directSpecular / indirectDiffuse (write), normal, diffuseColor, vViewPosition | after lights are summed: wrap, shadow tint, rim; WebGPU: hooks { start, light, direct, after }: light(light, ctx) returns a new color for one light before three lights the surface with it (what GLSL does by wrapping three's light info in lightsPars), direct(light, ctx) sees each light in three's loop and adds to its own sums, which join the summed light at the patch's place in the list, then its after() runs: the same order as WebGL |
 | `output` | before `opaque_fragment` | inside `setupOutput` | outgoingLight (vec3, write), diffuseColor.a | the final lit color, before fog and tone mapping |
 | `fogPars` | after `fog_pars_fragment` | WebGL only | declarations; fogColor and fogNear / fogFar or fogDensity are already declared (inside #ifdef USE_FOG) | fog functions that read three's fog uniforms (wrap them in #ifdef USE_FOG); WebGPU: fog on WebGPU is scene.fogNode, set by the game |
-| `fog` | replace `fog_fragment` | WebGL only | gl_FragColor (write, tone mapped already), fogColor, vFogDepth, fogNear / fogFar or fogDensity (inside #ifdef USE_FOG) | replace how fog mixes into the final color (one patch per material may take it); WebGPU: fog on WebGPU is scene.fogNode, set by the game |
+| `fog` | before `tonemapping_fragment` | WebGL only | gl_FragColor (write; linear, before tone mapping), vFogDepth, threedogFogColor() (fog colour, linear), threedogFogFactor() (0..1, the same curve three uses), fogColor (as three has it) and fogNear / fogFar or fogDensity (all inside #ifdef USE_FOG) | replace how fog mixes into the final color: the only fog mix, in linear space before tone mapping and the output encoding (one patch per material may take it); WebGPU: fog on WebGPU is scene.fogNode, set by the game |
 <!-- slots:end -->
 
 Several patches in one slot run in the order added. A compile error names the patch and slot:
@@ -92,7 +95,7 @@ Patches on one material must agree. Each patch declares what it relies on, and a
 | `cacheKey` | Changes whenever the GLSL text changes (defines, branches), never for uniform values; the program key joins every patch's `name=cacheKey` in order | same name + cacheKey with different code throws. On WebGPU the program also follows the identity of each `tsl` function, so make it once and reuse it: one written fresh per material costs a program per material |
 ```js fragment
 applyEffects(mat, { wind: 0.03, season: 'foliage', patches: [{ name: 'ripple', needs: { patches: ['world'] }, conflicts: ['wind'],
-  slot: 'color', glsl: 'diffuseColor.rgb *= 0.9 + 0.1 * sin(vThreedogWorld.x);' }] });   // throws: 'wind' and 'ripple' cannot be combined
+  slot: 'color', glsl: 'diffuseColor.rgb *= 0.9 + 0.1 * sin(vThreedogWorld.x);' }] });  // throws: 'wind' and 'ripple' cannot be combined
 ```
 
 **Exit: raw three.js anchors** (WebGL only). Where no slot fits, `glsl: { vertex|fragment: { <chunk>: code } }` puts code after `#include <chunk>` (a value may be `{ before, after, replace }`; the key `pars` is
@@ -150,7 +153,7 @@ The ground takes the same object as `terrain({ detail })`, its live numbers are 
 **Light shaping** is a patch in the `lighting` slot, after the lights are summed. three has no "shadow color": a shadow only removes the sun's light. The ready-made form:
 ```js fragment
 applyEffects(mat, { lighting: { wrap: 0.4, shadowTint: { color: 0x4060a0, strength: 0.6, soft: 0.3 }, rim: { color: 0xffe0b0, strength: 0.4, power: 3, shadowSide: 0 } } });
-applyEffects(mat, { lighting: { glsl: 'void threedogLighting(inout ReflectedLight light, vec3 normal, vec3 viewDir, vec3 sunDir, float sunShadow, vec3 albedo){ ... }' } });   // your own function
+applyEffects(mat, { lighting: { glsl: 'void threedogLighting(inout ReflectedLight light, vec3 normal, vec3 viewDir, vec3 sunDir, float sunShadow, vec3 albedo){ ... }' } });  // your own function
 ```
 All numbers are uniforms, and materials with the same options share one program. Written by hand, the first directional
 light is the sun (three sorts shadow casters first), so a patch reads it there and calls `threedogRim`, `threedogWrapDiffuse` or `threedogShadowTint`:

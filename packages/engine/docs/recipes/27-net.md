@@ -1,5 +1,10 @@
 # Co-op multiplayer: net() (host authority + state sync)
 
+> **Covers:** co-op over the network: host authority, actors, what is synced, security.
+> **Use when:** two or more players in one game.
+> **Shortest:** `engine.use(net({ role: 'host', transport: webSocket(room, { host: true }) }))`.
+> **Sections:** 1 Install · 2 Mark the ops · 3 Who is who · 4 What is synced · 5 Write the UI · 6 Security notes
+
 **What it is**: co-op, host-authoritative, not for competitive play. An optional module for slow, cooperative games (a shared base, a co-op
 puzzle, a turn-based board, trading). One player's browser is the **host** and
 owns the game state; friends are **clients** that mirror it and ask for changes through ops. Not installed = no cost.
@@ -21,7 +26,7 @@ and a reconnect key.
 For tests and offline demos use the in-process network instead (latency, jitter and loss adjustable; `manual: true` delivers only on `advance(ms)`):
 ```js
 import { createEngine, fakeNetwork, net } from 'threedog';
-const [host, guest] = [1, 2].map(() => createEngine({ canvas: document.createElement('canvas') }));   // two games on one page
+const [host, guest] = [1, 2].map(() => createEngine({ canvas: document.createElement('canvas') }));  // two games on one page
 const wire = fakeNetwork({ latency: 80, jitter: 30, loss: 0.05 });
 host.use(net({ role: 'host', transport: wire.host() }));
 guest.use(net({ role: 'client', transport: wire.connect() }));
@@ -36,17 +41,17 @@ Default deny: a client may only request ops defined with `net: 'peer'`. Everythi
 again on the host.
 ```js
 engine.ops.define('chest.take', {
-  net: 'peer',                                         // friends may ask for this
-  args: { chest: 'id', item: 'string', n: 'int?' },    // the host always checks peers' args against this shape ('badArgs')
+  net: 'peer',  // friends may ask for this
+  args: { chest: 'id', item: 'string', n: 'int?' },  // the host always checks peers' args against this shape ('badArgs')
   can: (e, { chest, item, n = 1 }) => e.inventory.container(chest).has(item, n) || 'empty',
   run: (e, { chest, item, n = 1 }, ctx) => e.inventory.transfer(chest, ctx.actor, item, n),
 });
 engine.ops.define('plot.water', {
   net: 'peer', args: { id: 'id' },
-  owner: a => a.id,                                    // the record a.id must have owner === the requesting actor, else 'notOwner'
+  owner: a => a.id,  // the record a.id must have owner === the requesting actor, else 'notOwner'
   run: (e, { id }) => e.world.set(id, { water: (e.world.get(id)?.water ?? 0) + 1 }),
 });
-engine.ops.define('cheat.gold', { args: { n: 'int' }, run: (e, { n }, ctx) => e.inventory.container(ctx.actor).add('gold', n) });   // host only
+engine.ops.define('cheat.gold', { args: { n: 'int' }, run: (e, { n }, ctx) => e.inventory.container(ctx.actor).add('gold', n) });  // host only
 ```
 | Mark | Who can run it | Use for |
 |---|---|---|
@@ -80,8 +85,8 @@ A character another machine drives is held by net for good: a local `walkTo`, cu
 On a client `engine.ops.run` returns `{ ok: true, pending: true, seq }` after the local `can` passed (so a "no money" refusal is still instant). The
 real result comes later:
 ```js
-engine.events.on('net:sync', () => redrawBag());                         // state changed (snapshot or diff)
-engine.events.on('net:result', r => { if (!r.ok) hint(engine.t('op.' + r.name + '.' + r.code)); });   // after the state it caused
+engine.events.on('net:sync', () => redrawBag());  // state changed (snapshot or diff)
+engine.events.on('net:result', r => { if (!r.ok) hint(engine.t('op.' + r.name + '.' + r.code)); });  // after the state it caused
 ```
 Single-player gets the same events from your own domain events, so writing "react to state" now means nothing changes when net() is added. Other
 events: `net:join` / `net:leave` (host), `net:open` / `net:close` (client). `engine.net.reconnect(webSocket(url, { key }))` reconnects with the same

@@ -167,7 +167,7 @@ export const specs = [
         const { mk, createEngine, all: T } = threedogThreads, q = vQuiet(), E = mk(createEngine, 'v-happy');
         vFiles(E);
         E.use(T.world(), T.collision(), T.characters(), T.level({ url: 'vTown' }), T.flow(), T.rigid());
-        E.characters.createPlayer({ control: 'camera', spawn: { x: 1, z: 1 } });
+        E.characters.addPlayer({ control: 'camera', spawn: { x: 1, z: 1 } });
         await E.start();
         for (let i = 0; i < 3; i++) E.step(1 / 60);
         await E.loading.settled();
@@ -262,7 +262,7 @@ export const specs = [
           vFiles(E);
           E.use(world(), level(opts));
           let bad = false;
-          E.saves.register('vLate', { save: () => 1, load: () => { if (bad) throw new Error('v boom'); } });
+          E.saves.define('vLate', { save: () => 1, load: () => { if (bad) throw new Error('v boom'); } });
           await E.start();
           const snap = E.saves.collect(); snap.parts.level = 'vCave';
           bad = true;
@@ -293,7 +293,7 @@ export const specs = [
         E.use(T.world(), T.collision(), T.characters(), T.level({ url: 'vTown' }), T.flow());
         await E.start();
         await E.session.newGame();
-        E.characters.createPlayer({ control: 'camera', spawn: { x: 1, z: 1 } });
+        E.characters.addPlayer({ control: 'camera', spawn: { x: 1, z: 1 } });
         const written = []; E.events.on('save:written', () => written.push({ level: E.saves.collect().parts.level, x: Math.round(E.player.position.x) }));
         const pump = vPump(E);
         E.saves.autosave(0.0005);   // every 0.03 s of play, so the slow destination below is sure to meet it, as a three-minute timer may
@@ -449,7 +449,7 @@ export const specs = [
         await E.start();
         const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial()); mesh.position.set(50, 0.5, 0); E.add(mesh);
         const crate = E.rigid.addBox(mesh, { mass: 5 });
-        E.characters.createPlayer({ control: 'camera', spawn: { x: 0, z: 0 } });
+        E.characters.addPlayer({ control: 'camera', spawn: { x: 0, z: 0 } });
         for (let i = 0; i < 40; i++) E.step(1 / 60);
         const rest = crate.body.translation().x;
         E.player.placeAt([49.8, 0, 0]);   // the capsule lands touching the crate: a door or a checkpoint set down in a room
@@ -475,7 +475,7 @@ export const specs = [
         await E.start();
         const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial()); mesh.position.set(50, 0.5, 0); E.add(mesh);
         const crate = E.rigid.addBox(mesh, { mass: 5, id: 'v-crate' });
-        E.characters.createPlayer({ control: 'camera', spawn: { x: 49.3, z: 0 } });
+        E.characters.addPlayer({ control: 'camera', spawn: { x: 49.3, z: 0 } });
         for (let i = 0; i < 60; i++) E.step(1 / 60);
         const before = { x: crate.body.translation().x, p: E.player.position.x };
         const snap = E.saves.collect();

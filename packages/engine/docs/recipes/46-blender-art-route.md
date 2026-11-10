@@ -1,5 +1,10 @@
 # Blender to game (GLB) route
 
+> **Covers:** from Blender to a GLB in the game: export, check, compress, use, troubleshoot.
+> **Use when:** art made in Blender.
+> **Shortest:** `threedog assets check art/models/town.glb`.
+> **Sections:** 1 In Blender · 2 Export glTF / · 3 Check, then compress · 4 Use it · 5 The GLB's own · 6 Smallest copyable flow · 7 Troubleshooting
+
 Code-built geometry (`models.js`, recipe 05) is good for blockout, props and variations, but it cannot reach the finish of hand-made art: painted
 textures, baked shadows, sculpted edges. That finish comes from Blender. This page is the whole path, in order. The level naming rules live in
 `10-blender-level.md`; they are not repeated here.
@@ -60,7 +65,7 @@ Views can also be content: `content/views.js` = `{ gate: { position: [10, 4, 12]
 `engine.debug.view('albedo')` shows only the base color and texture (unlit), `'lighting'` plain white clay under the scene lights, `'shadow'` the same with
 ambient and hemisphere light hidden so shadows read black, `'normals'` the normals as color (a normal map shows here); `'off'` restores everything.
 A view is temporary and owner-scoped (`{ owner }`; another owner needs `force: true` to clear it), never saved, and `describe().render` / `describe render`
-start with a DEBUG VIEW line while one is on, so a screenshot of clay is not taken for the real picture. Meshes added after the call are not covered: call it again.
+start with a DEBUG VIEW line while one is on, so a screenshot of clay is not taken for the real picture. Meshes added after the call are not covered: call it again. One model or material alone, per channel: recipe 05 "Look-dev".
 
 ## 4. Use it
 Register the compressed file in the asset pack and refer to it by name everywhere else:

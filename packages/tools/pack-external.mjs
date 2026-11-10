@@ -35,7 +35,7 @@ import { createEngine, openWorld, presets, THREE } from 'threedog';
 const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('view'));
 const engine = createEngine({ canvas });
 engine.use(openWorld({ camera: 'follow', seed: 7 }));
-engine.characters.createPlayer({ ...presets.player.thirdPerson });
+engine.characters.addPlayer({ ...presets.player.thirdPerson });
 const up = new THREE.Vector3(0, 1, 0).normalize();
 engine.camera.lookAt(up);
 /** @type {any} */ (window).engine = engine;
@@ -151,9 +151,12 @@ export async function packExternal({ check, browser, keep = false }) {
       dependencies: { ...deps, '@threedog/post-effects': `file:../${postPkg.filename}` } }, null, 2));
     copyTemplate(app);   // index.html, main.js, content/, vite.config.js and the docs of a new game
     usePost(app);   // plugins/10-bloom.js: export default bloom(), as the docs show it, so types, build and the preview page need the post-effects package added above
-    writeFileSync(join(app, 'bad.js'), BAD);
+    // the type-error fixture lives in tests/, which every game check leaves out (template tsconfig exclude, threedog check / types since 1.1.0 read every
+    // other .js of a game): at the project root it would be a game source, and check / types below would rightly fail on it
+    mkdirSync(join(app, 'tests'), { recursive: true });
+    writeFileSync(join(app, 'tests', 'bad.js'), BAD);
     writeFileSync(join(app, 'tsconfig.strict.json'), JSON.stringify(TSCONFIG, null, 2));
-    writeFileSync(join(app, 'tsconfig.bad.json'), JSON.stringify({ extends: './tsconfig.strict.json', include: ['bad.js'] }));
+    writeFileSync(join(app, 'tsconfig.bad.json'), JSON.stringify({ extends: './tsconfig.strict.json', include: ['tests/bad.js'] }));
     const inst = npm(['install', '--no-audit', '--no-fund', '--loglevel=error'], app);
     check('npm install of the tarballs succeeds', inst.status === 0, (inst.stderr || String(inst.error)).slice(0, 300));
     if (inst.status !== 0) return;
@@ -164,7 +167,7 @@ export async function packExternal({ check, browser, keep = false }) {
     const good = tsc(app, 'tsconfig.strict.json');
     check('types: correct main.js has 0 tsc errors', good.length === 0, good.slice(0, 3).join(' | '));
     const bad = tsc(app, 'tsconfig.bad.json');
-    const at = n => bad.some(l => l.startsWith(`bad.js(${n},`));
+    const at = n => bad.some(l => l.startsWith(`tests/bad.js(${n},`));
     check('types: three.js method typo (v.normalise) is an error', at(5) && bad.some(l => /normalise/.test(l)), bad.join(' | '));
     check('types: wrong vector argument type (v.set(\'1\', …)) is an error', at(6), bad.join(' | '));
     check('types: engine option typo (styel) is an error', at(7) && bad.some(l => /styel/.test(l)), bad.join(' | '));
@@ -191,7 +194,8 @@ export async function packExternal({ check, browser, keep = false }) {
     check('cli: threedog how answers from the installed docs', how.code === 0 && /inventory/.test(how.out) && !/packages\//.test(how.out), how.out.slice(0, 300));
     const list = await cli(app, 'how', '--browse'), inv = await cli(app, 'how', '--card', 'inventory'), miss = await cli(app, 'how', 'qqzzxx');
     check('cli: threedog how --browse and --card work from the installed package', list.code === 0 && /^items: /m.test(list.out) && inv.code === 0 && /engine\.use\(inventory\(\)\)/.test(inv.out) && /recipes\/66-common-tasks\.md/.test(inv.out), list.out.slice(0, 300) + inv.out.slice(0, 300));
-    check('cli: a miss names browse and the installed AI.md, in one line', !miss.out.includes('\n') && /how --browse/.test(miss.out) && /node_modules\/threedog\/docs\/AI\.md/.test(miss.out), miss.out);
+    const missLine = miss.out.trim().split('\n')[0];   // the first line carries the pointers; the domains list may follow it (tests/how.mjs)
+    check('cli: a miss names browse and the installed AI.md, in its first line', /how --browse/.test(missLine) && /node_modules\/threedog\/docs\/AI\.md/.test(missLine), miss.out);
     const ty = await cli(app, 'types');
     check('cli: threedog types passes with the template tsconfig.json (game sources, lib ESNext, skipLibCheck)', ty.code === 0, ty.out.split('\n').filter(l => /✗|error/i.test(l)).slice(0, 4).join(' | ') || ty.out.slice(-300));
     // examples ship in the engine tarball and pull from node_modules/threedog into the game (examples.mjs, game mode of paths.mjs)

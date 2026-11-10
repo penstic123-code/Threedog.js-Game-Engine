@@ -9,17 +9,21 @@
 //   - Events, onFixed / onFrame, clock timers, jobs, stream, ray registrations: core clears them all here. A module registers its own through
 //     ctx.track (modules.js), so they also leave when its install rolls back or its init fails, and go before its dispose hook runs.
 //   - Things core does not know about (Worker, physics world, Audio nodes, real-time timers): clean up in the module's dispose(e) hook, called in reverse install order.
-//   - GPU memory: every geometry, material and texture in the scene, the assets cache, the post composer, then renderer.dispose().
+//   - GPU memory (design.md 6.2, whoever made it frees it): the scene walk gives back model copies' leases and frees only what the engine made (engineParts below);
+//     then the assets cache frees what its loads made, the post composer, then renderer.dispose(). A material or texture the game made stays the game's.
 // Waits across dispose, one rule: a wait in game code (model(), jobs.add, nextFixed, a cutscene, an await of what those feed) stays pending for good, because the code after it
 // belongs to a dead engine (assetEntry.js says why not reject). Two waits have to answer instead: start(), for whoever booted the engine (startup.js), and a stream source's whenReady,
 // which rejects stream-removed: dispose removes every source, and a source made afterwards is born removed.
 // Level changes do not come through here: things inside a level register with level.track(handle), and the level removes them itself on change.
 
 import { coded, codedError } from '../base/errorHints.js';
-import { fmt } from '../base/validate.js';
+import { fmt, syncOnly } from '../base/validate.js';
 import { dropOwned } from '../ops/owned.js';
 import { reportError } from '../base/errors.js';
 import { releaseContext, memory } from '../../render/backend.js';
+import { freeParts, partsOf, copyOwns, kept } from '../base/freeParts.js';
+import { moduleOwnerOf } from '../scene/things.js';
+import { isEngineMade } from '../../render/patches.js';
 
 /** The per-step / per-frame callback lists (onFixed, onFrame, animators, onRender, module hooks), empty: the constructor's starting state and what dispose leaves */
 export function clearHooks(e) {
@@ -35,15 +39,24 @@ const released = new WeakSet();
 /** createEngine calls it before building its renderer on a canvas */
 export function checkCanvasUsable(canvas) { if (canvas && released.has(canvas)) throw codedError('canvas-released', STRINGS.released); }
 
-/** Dispose the GPU data of one scene object: geometry, materials and their textures, instance buffers, shadow map, bone texture */
-function disposeObject(o, tidy) {
-  tidy(() => o.geometry?.dispose());
-  tidy(() => { if (o.isInstancedMesh || o.isBatchedMesh || o.isLight) o.dispose(); });   // instance buffers, batch textures, a light's shadow map
-  tidy(() => o.skeleton?.dispose());   // the bone texture
-  for (const m of [].concat(o.material || [])) {
-    for (const k in m) if (m[k]?.isTexture) tidy(() => m[k].dispose());
-    tidy(() => m.dispose());
-  }
+/**
+ * engine.dispose's owner test (design.md 6.2): the parts the engine made, never the game's or an asset load's. Engine nodes are objects a module put in
+ * the scene (engineOwned, or registered under 'engine:<module>') and everything under them. A material or texture is the engine's only when its maker marked
+ * it engine-made (markEngineMade): never inferred from the material a texture sits on, since a game texture may sit on an engine material and on a game one
+ * at once. A geometry only when no game node draws it (a batch draws the game's own geometry). Asset parts and kept parts (keepPart) never: their owner frees them.
+ */
+function engineParts(e) {
+  const shared = e.assets.shared, T = e._things, nodes = new Set(), gameUsed = new Set();
+  const walk = (o, eng) => {
+    eng ||= !!moduleOwnerOf(o) || !!T?.byObj.get(o)?.owner?.startsWith('engine:');
+    if (eng) nodes.add(o); else for (const x of partsOf(o)) gameUsed.add(x);
+    for (const c of o.children) walk(c, eng);
+  };
+  walk(e.scene, false);
+  return {
+    mine: x => !shared.has(x) && !kept(x) && (x.isMaterial || x.isTexture ? isEngineMade(x) : !gameUsed.has(x)),
+    own: o => nodes.has(o) || copyOwns(shared, o),
+  };
 }
 
 export const lifecycleMethods = {
@@ -67,20 +80,23 @@ export const lifecycleMethods = {
       this._modState.set(m.name, 'disposed');
       this._dropTracked(m.name);   // its listeners / timers go first, so nothing calls into the module while its dispose tears it down
       if (!m.dispose) continue;
-      try { m.dispose(this); } catch (err) { reportError(this, err, coded('module-dispose', fmt(STRINGS.failed, { name: m.name })), { soft: true }); }
+      try { syncOnly(m.dispose(this), `dispose() of module ${m.name}`, true); } catch (err) { reportError(this, err, coded('module-dispose', fmt(STRINGS.failed, { name: m.name })), { soft: true }); }
     }
     this._abort.abort();
     tidy(() => this._untrackValidate());
     tidy(() => this._wraps?.dispose());   // engine.wrap: every wrapped method back on its object (a game object or api may outlive the engine)
+    tidy(() => this._adoptAdds?.remove());   // plain scene.add on a scene that outlives the engine must not call into a dead registry
+    tidy(() => this._gameLights?.dispose());
     tidy(() => this._picture?.dispose());   // dev tool: its scene watchers go with the engine
     tidy(() => this.debug.dispose());   // before the scene is disposed: undoes every diagnostic override and view (puts swapped materials back)
     for (const part of [this.saves, this.audio, this.time, this.commits, this.jobs, this.threads, this.stream, this.batching, this.rays, this.events]) tidy(() => part.dispose());
     clearHooks(this); this._afterTick = null;
-    this.scene.traverse(o => disposeObject(o, tidy));
-    // scene.environment is never disposed here: the engine's own maps (sky PMREM targets, the baseline room map) were freed above by their
-    // owners, and anything else is the game's texture (a direct scene.environment write), which stays the game's to free
+    tidy(() => this.assets.forget(this.scene));   // references and leases first: each model copy gives its lease back, its animator stops
+    tidy(() => { const { mine, own } = engineParts(this); freeParts(this.scene, mine, { textures: true, own, tidy }); });
+    // scene.environment and a background texture are let go, never disposed here: the engine's own maps (sky PMREM targets, the baseline room map) were
+    // freed above by their owners, a skybox file is the asset cache's, and anything else is the game's texture (a direct write), which stays the game's to free
     this.scene.environment = null;
-    tidy(() => { if (this.scene.background?.isTexture) this.scene.background.dispose(); });
+    if (this.scene.background?.isTexture) this.scene.background = null;
     for (const part of [this.assets, this.occlusion, this.post]) tidy(() => part.dispose());
     tidy(() => this._webglOnlyView?.remove()); this._webglOnlyView = null;
     tidy(() => this._gpu?.dispose());

@@ -6,7 +6,7 @@
 // engine.use(collision(), rigid(), followCamera(), characters(), level({ url: '/models/town.glb' }), triggers());
 // engine.events.on('level:loaded', ({ markers }) => {
 //   const s = engine.level.spawn;                                   // spawn point { x, y, z }
-//   engine.characters.createPlayer({ spawn: { x: s.x, z: s.z } });
+//   engine.characters.addPlayer({ spawn: { x: s.x, z: s.z } });
 //   engine.triggers.fromMarkers({ onEnter: t => console.log('entered', t.tag) });
 // });
 // engine.start();
@@ -60,6 +60,7 @@
 // Events: level:loading { source }, then level:failed { source, error } or level:loaded { root, markers, spawn } (state committed), then level:playable { root }.
 // level:unloaded { source } says a level left: on unload(), and on a switch just before the new one commits. What was built from the level goes on it
 // Picture: the level module draws nothing itself, the scene looks entirely like your model, so it does not read the style.
+import { reportError } from '../../core/base/errors.js';
 import * as THREE from 'three';
 import { readParams, keysSchema } from '../../core/base/params.js';
 import { levelNodes } from './nodes.js';
@@ -97,11 +98,13 @@ function levelApi(st) {
     /** Unload the level: remove from scene, delete colliders, ground reverts to the outside height */
     unload() {
       const source = api.root ? st.current : undefined;   // undefined: no level stood here, nobody needs telling
-      for (const h of [...st.removers.splice(0), ...st.walls.splice(0)]) h.remove();
+      // each handle in its own try: one that throws (a trigger's onExit) must not leave the rest, nor the level root, standing; the unload finishes, the error is reported (engine.error in dev, console in release), and the unload goes on
+      for (const h of [...st.removers.splice(0), ...st.walls.splice(0)]) { try { h.remove(); } catch (err) { reportError(st.e, err, 'level unload'); } }
       if (api.root && st.o.addToScene) st.e.remove(api.root);   // full removal (geometries and materials shared by assets are not disposed)
-      st.walkMeshes.length = 0; st.hf = api.heightfield = null; st.colliders = null; st.wallsIn.reset(); st.trimeshCache = null; api.markers = {}; api.root = null; st.current = null; st.version++; dropAsks(st); st.playable = false;
+      st.walkMeshes.length = 0; st.hf = api.heightfield = null; st.colliders = null; st.wallsIn.reset(); st.trimeshCache = null; api.markers = {}; api.root = null; st.current = null; st.version++; dropAsks(st);
       st.done = true; st.playable = false;   // nothing is loading now: a file still on its way is dropped, and no finishLoad would ever come for it (load sets it back)
       if (source !== undefined) {
+        st.unloaded = true;   // a level stood and left: only then is "no level" a fact worth saving (a session that never had one saves nothing, so its new-game state keeps a level loaded later)
         // a level that left takes its zone and spawn with it: the next scene's nodes must not be placed in a zone that is gone
         api.spawn = new THREE.Vector3();
         if (st.e.world) st.e.world.zone = null;
@@ -114,6 +117,7 @@ function levelApi(st) {
   return api;
 }
 
+const NONE = { none: true };   // saved when no level stands: null means "nothing to save" to the save system, and a load without the part keeps the level that stands
 const OPENING = '(opening scene)';   // no file or asset can be named this
 
 /** What the save holds for a level built in code. Weak: a token in a stored save must not keep every level this page ever built in memory */
@@ -169,14 +173,15 @@ export function level(opts = {}) {
       // load returns a Promise: the save system waits for the new level (old level's trigger zones are already removed by unload) before reading player
       // position etc.
       // a save that names this level, or none, stays here: a load on its way would land on top of what the save put back
-      // The level a holder stood on comes back through the same part when a module takes over the key (Saves.register): a swap keeps the game where it was, and a pack's older
+      // The level a holder stood on comes back through the same part when a module takes over the key (Saves.define): a swap keeps the game where it was, and a pack's older
       // level must not take it back (the section's once). A newcomer that says where to open keeps that promise; the same definition put back after a failed swap has none to make
       // the opening scene has no name either, so it saves as OPENING: a new game goes back to it, and a save from before this mark takes it from the new-game state
       const opens = !st.installed && (scene || url);
       let installing = st.installed = true;
       st.kept = false;
-      ctx.saves.register('level', { notAtomic: 'its load fetches and builds a level: not plain data, and not something a failed op can wait for', first: true, save: () => st.current ?? (!api.root ? null : api.root === scene ? OPENING : sceneToken(st, api.root)), load: (d, turn) => {
+      ctx.saves.define('level', { notAtomic: 'its load fetches and builds a level: not plain data, and not something a failed op can wait for', first: true, save: () => st.current ?? (!api.root ? (st.unloaded ? NONE : null) : api.root === scene ? OPENING : sceneToken(st, api.root)), load: (d, turn) => {
         if (installing) { if (opens || typeof d !== 'string' || d === OPENING) return; st.kept = true; }
+        else if (d?.none) return api.root ? api.unload() : dropLoad(st);   // saved with no level standing: that is what the save says, so the level now standing goes
         else if (d === OPENING) return api.root === scene ? dropLoad(st) : api.load(scene, { turn });
         else if (d?.scene != null) { const root = st.scenes[d.scene]?.deref(); return !root || root === api.root ? dropLoad(st) : api.load(root, { turn }); }
         else if (typeof d !== 'string' || d === st.current) return dropLoad(st);

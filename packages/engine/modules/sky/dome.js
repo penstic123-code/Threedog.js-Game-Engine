@@ -9,6 +9,7 @@ import { domeFragment, loadSkybox, skyNodes } from './shader.js';
 import { DOME_FOG } from './fog.js';
 import { codedError } from '../../core/base/errorHints.js';
 import { isWebGPU } from '../../render/backend.js';
+import { fogLook } from '../../render/fogLook.js';
 
 const isColorLike = v => typeof v === 'number' || typeof v === 'string' || !!v?.isColor;
 
@@ -17,7 +18,7 @@ export function prepareDome(sky, st) {
   sky._backdrop = resolveBackdrop(st);
   const f = DOME_FOG;
   // the fog object belongs to the game and may be replaced: read its color at draw time (fog.js fogBand turns the band on)
-  const uniforms = { uFogBand: { value: 0 }, uFogColor: { get value() { return sky.engine.scene.fog?.color ?? sky.uniforms.uHorizon.value; } } };
+  const uniforms = { uFogBand: { value: 0 }, uFogColor: { get value() { return fogLook(sky.engine.scene, sky.engine.renderer)?.color ?? sky.uniforms.uHorizon.value; } } };
   return { uniforms, decl: f.decl, body: f.body, layers: [] };
 }
 
@@ -36,7 +37,16 @@ function resolveBackdrop(st) {
  */
 export function domeEntries(sky, st) {
   const e = sky.engine, scene = e.scene, U = sky.uniforms;
-  let cloudsHook = null, added = null, addedHere = false;
+  // clone: the panorama copy replace() makes of a game's plain Texture; the sky made it, so the sky frees it on the next replace and on dispose (the game's texture stays)
+  let cloudsHook = null, added = null, addedHere = false, clone = null;
+  // detached before it is freed: a skybox asset still loading leaves the background as it was until it arrives, and a frame drawn meanwhile would upload
+  // the freed copy again, which nobody frees afterwards. The base background shows during that wait
+  const dropClone = () => {
+    if (!clone) return;
+    if (scene.background === clone) scene.background = e.baseBackground;
+    if (sky.skybox === clone) sky.skybox = null;
+    clone.dispose(); clone = null;
+  };
   const layers = new Map();
   // a skybox dims with the hour through scene.backgroundIntensity: it comes off with the skybox, or whatever shows next stays dimmed
   const undim = () => { if (sky.skybox && scene.background === sky.skybox) scene.backgroundIntensity = 1; };
@@ -88,13 +98,14 @@ export function domeEntries(sky, st) {
       if (added) { if (addedHere) scene.remove(added); added = null; addedHere = false; }
       undim();
       sky._ownSky = null; sky._noSky = impl === false; sky._panorama = null;
+      dropClone();   // every branch below replaces the background the copy was on
       // false: no drawn sky. The signals keep running and the scene shows its base background (a game's palette color lives there)
       if (impl === false) { sky.skybox = null; sky._backdrop = null; sky.dome.visible = false; scene.background = e.baseBackground; sky._oBg.manual(false); sky._oBg.mark(); return; }
       if (impl == null) { sky.skybox = null; scene.background = sky._backdrop?.color ?? null; sky.dome.visible = !sky._backdrop; sky._oBg.manual(false); sky._oBg.mark(); return; }
       sky.dome.visible = false; sky._backdrop = null;   // a backdrop left on would be written over this sky every frame
       if (typeof impl === 'string') loadSkybox(sky, impl);
       else if (impl.isTexture) {
-        const tex = impl.isCubeTexture || impl.mapping !== THREE.UVMapping ? impl : Object.assign(impl.clone(), { mapping: THREE.EquirectangularReflectionMapping });
+        const tex = impl.isCubeTexture || impl.mapping !== THREE.UVMapping ? impl : (clone = Object.assign(impl.clone(), { mapping: THREE.EquirectangularReflectionMapping }));
         scene.background = tex; sky.skybox = tex;
       } else if (impl.isObject3D) {
         addedHere = !impl.parent; if (addedHere) scene.add(engineOwned('sky', impl));
@@ -108,6 +119,7 @@ export function domeEntries(sky, st) {
       if (added && addedHere) scene.remove(added);
       undim();
       if (scene.background && (scene.background === sky.skybox || scene.background === sky._backdrop?.color)) scene.background = e.baseBackground;
+      dropClone();
     },
   };
 }

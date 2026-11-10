@@ -4,6 +4,31 @@
 // Why a guard: the engine's materials once drew on WebGPU without any of their patches and nothing said so.
 export const specs = [
   {
+    // 不许绕开: every engine copy of a material goes through cloneMaterial (render/patches.js); a bare clone() + copyPatches dropped the game's own lighting
+    name: "[guard] vegetation model copy keeps the game's material: own setupLightingModel, colorNode, own fields, onBeforeCompile; onModel runs on a named model",
+    url: '/tests/engine-webgpu/index.html',
+    async run({ check, ev }) {
+      const r = await ev(() => window.vegetationGameMaterial());
+      check('vegetation draws its own copies (wind is per species)', r.copied, JSON.stringify(r));
+      check("the copy keeps the game's colorNode", r.colorNode, JSON.stringify(r));
+      check("the copy lights with the game's own setupLightingModel, not three's toon light", r.lighting, JSON.stringify(r));
+      check('a field the class never declares (look) is carried', r.look, JSON.stringify(r));
+      check('the engine adds only its effects on top (wind among them)', r.patches.includes('wind'), r.patches);
+      check("a classic material's own onBeforeCompile still runs under the engine patches", r.hook, JSON.stringify(r));
+      check('a copy of a copy carries the game part once (no wrapper nests, patches once)', r.twice, JSON.stringify(r));
+      check("a model named in define went through the game's onModel before it was copied", r.named, JSON.stringify(r));
+      check('an attribute on only some meshes is dropped with a vegetation-ignored notice in describe().warnings (none for the matching models)', r.notice, JSON.stringify(r));
+      const { readFileSync, readdirSync } = await import('node:fs');
+      const files = [];
+      const walk = d => { for (const f of readdirSync(new URL(`../../${d}`, import.meta.url), { withFileTypes: true })) f.isDirectory() ? walk(`${d}/${f.name}`) : f.name.endsWith('.js') && files.push(`${d}/${f.name}`); };
+      walk('modules'); walk('core'); walk('render');
+      // any second route counts, not only copyPatches(x, x.clone()): a copyPatches call outside patches.js, or a bare material.clone() (comments stripped)
+      const code = f => readFileSync(new URL(`../../${f}`, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+      const bare = files.filter(f => f !== 'render/patches.js' && /\bcopyPatches\b|\bmaterial\.clone\(\)/.test(code(f)));
+      check('no engine file copies a material past cloneMaterial (copyPatches outside render/patches.js, material.clone()): cloneMaterial carries what three drops', !bare.length, JSON.stringify(bare));
+    },
+  },
+  {
     name: '[guard] engine content on WebGPU looks like WebGL: terrain / vegetation / water / sky / particles / post, effects move; fallback webgl rebuilds post, sky, fog, cascades, particles, weather',
     url: '/tests/engine-webgpu/index.html',
     software: true,

@@ -16,8 +16,15 @@ const require = createRequire(import.meta.url);
 /** How a lock line says "may still change" (a trailing word: the file merges by line, so only the marked lines move) */
 export const EXPERIMENTAL = '@experimental';
 
-/** All public items: { group, name, decl, kind } (decl: repo-relative file of the declaration) */
-function collect() {
+/**
+ * All public items: { group, name, decl, kind, handle } (decl: repo-relative file of the declaration; handle: for a function, whether what it returns has remove(),
+ * null when it is not callable; rules/R69 reads it). Built once per process: the API lock (R55) and the verb rule (R69) read the same checker pass.
+ */
+let collected = null;
+// copies: callers mark items (used, games), and the next caller must see the clean pass
+function collect() { return (collected ??= collectNow()).map(i => ({ ...i })); }
+export const publicItems = collect;
+function collectNow() {
   const ts = require('typescript');
   const entries = [join(ENGINE, 'index.d.ts'), join(ENGINE, 'types/tsl.d.ts'), join(addonDir('post-effects'), 'index.d.ts'), join(addonDir('post-effects'), 'tsl.d.ts')].filter(existsSync);
   const program = ts.createProgram(entries, { noEmit: true, skipLibCheck: true, target: ts.ScriptTarget.ES2022, moduleResolution: ts.ModuleResolutionKind.Bundler, module: ts.ModuleKind.ESNext });
@@ -32,8 +39,15 @@ function collect() {
   const sigOf = s => { const d = s?.declarations?.[0]; if (!d) return ''; try { return (s.flags & ts.SymbolFlags.Optional ? '?' : '') + portable(ch.typeToString(ch.getTypeOfSymbolAtLocation(s, d), d, ts.TypeFormatFlags.NoTruncation | ts.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope).replace(/\s+/g, ' ')); } catch { return ''; } };
   // experimental: the name carries @experimental, or its parent does (a module, an engine member); one tag covers what hangs off it
   const tagged = s => !!s?.getJsDocTags?.(ch).some(t => t.name === 'experimental');
-  const add = (group, name, s, kind, parent = false) => items.push({ group, name, decl: declOf(s), kind, what: what(s), sig: sigOf(s), experimental: parent || tagged(s) });
-  const propsOf = t => t ? ch.getPropertiesOfType(ch.getNonNullableType(t)).filter(p => !p.name.startsWith('_') && !p.name.startsWith('#') && !p.name.startsWith('__@')) : [];
+  // handle: in every call signature, every non-null part of the awaited return type has a remove() callable with no arguments (a union with a plain
+  // value fails: a caller cannot always undo it; an overload that returns something else fails too)
+  // not getNonNullableType here: a remove that may be undefined (remove?: or | null) is not a handle a caller can always call
+  const callableBare = (p, at) => { const t = ch.getTypeOfSymbolAtLocation(p, at); return !(t.flags & ts.TypeFlags.Union && t.types.some(u => u.flags & (ts.TypeFlags.Undefined | ts.TypeFlags.Null))) && t.getCallSignatures().some(c => c.parameters.every(q => q.valueDeclaration?.questionToken || q.valueDeclaration?.initializer || q.valueDeclaration?.dotDotDotToken)); };
+  const handleOf = s => { const d = s?.declarations?.[0], cs = d ? ch.getNonNullableType(ch.getTypeOfSymbolAtLocation(s, d)).getCallSignatures() : []; if (!cs.length) return null;
+    return cs.every(c => { const r = ch.getNonNullableType(ch.getAwaitedType(c.getReturnType()) ?? c.getReturnType());
+      return (r.isUnion() ? r.types : [r]).every(t => { const p = ch.getPropertyOfType(t, 'remove'); return !!p && !(p.flags & ts.SymbolFlags.Optional) && callableBare(p, d); }); }); };
+  const add = (group, name, s, kind, parent = false) => items.push({ group, name, decl: declOf(s), kind, what: what(s), sig: sigOf(s), experimental: parent || tagged(s), handle: handleOf(s) });
+  const propsOf = t => t ? ch.getPropertiesOfType(ch.getNonNullableType(t)).filter(p => !p.name.startsWith('_') && !p.name.startsWith('#') && !p.name.startsWith('__@') && !p.getJsDocTags(ch).some(t => t.name === 'internal')) : [];
   const typeOf = (s, at) => ch.getTypeOfSymbolAtLocation(s, at);
   const isCallable = t => ch.getNonNullableType(t).getCallSignatures().length > 0;
   const isObj = t => { const n = ch.getNonNullableType(t); return !!(n.flags & ts.TypeFlags.Object) && !isCallable(n) && propsOf(n).length > 0 && !ch.isArrayType(n); };
@@ -107,8 +121,14 @@ async function cliItems() {
 
 /** The API lock: one sorted line per public name, `group | name | signature`, with EXPERIMENTAL after the signature of a name that may still change. The committed snapshot is docs/api-surface.txt (rules/R55-api-lock.mjs compares it) */
 export async function surfaceLines() {
-  const items = [...collect(), ...await cliItems(), ...await errorItems()];
+  const items = [...collect(), ...await cliItems(), ...await errorItems(), ...await eventItems()];
   return [...new Set(items.map(i => `${i.group} | ${i.name} | ${[i.sig, i.experimental && EXPERIMENTAL].filter(Boolean).join(' ')}`.trimEnd()))].sort();
+}
+
+/** Event names (core/base/events.generated.js, from EventMap): a game listens to them by name, so a rename is a break the lock guards. Not counted in the surface totals (names, not callable API) */
+async function eventItems() {
+  const { ENGINE_EVENTS } = await import(pathToFileURL(join(ENGINE, 'core/base/events.generated.js')).href);
+  return ENGINE_EVENTS.map(n => ({ group: 'events', name: n, decl: 'packages/engine/types/core.d.ts', kind: 'event' }));
 }
 
 async function errorItems() {

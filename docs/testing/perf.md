@@ -3,7 +3,7 @@
 > Sections 1-5 come from a cloud environment without a GPU (Chromium + SwiftShader software rendering, 1280x720, pixel ratio 1; section 6 is a real GPU). Use them only for
 **relative comparison**; they do not represent real-device frame rates.
 > Reproduce: `node packages/tools/perf.mjs [frames]` (default 60 frames; it builds first, then opens
-> `packages/engine/tests/perf/index.html` in a headless browser; both are in the engine repository, not the npm package).
+> `packages/engine/tests/perf/index.html` in a headless browser; both are in the engine repository, not the npm package). Resolution: `--size WxH` (same form as `shot` / `capture`; default 1280x720), e.g. `node packages/tools/perf.mjs --size 1920x1080`.
 > Startup time is also printed in the "startup time" item of `npm test` (reported only, no threshold).
 > **Latest run (2026-10-30, wrap-up)**: cloud container with a 2-core CPU and 7 GB memory, no GPU; `npm run perf` (60 frames) run alone (not at the
 same time as `npm test`).
@@ -234,6 +234,44 @@ sampling the ground raster (water / slope, cached 5 s) and the batches that came
 fewer are late.
 threads 0 costs a little more than the sync loop (batch building plus the raster), so `findPath` stays the call for one-off paths.
 
+## 5c. Vegetation culled per camera, 2026-11-09
+
+World example (`/`), WebGL, AMD Radeon 780M headless, 1280x720, in play standing still, 300 frames. Draw calls and triangles from `engine.inspect.perf()`
+(shadow passes included), shadow draws by wrapping `renderer.shadowMap.render`, vegetation draws from `engine.budget.byTag()`. Before: chunk meshes had
+`frustumCulled = false`; after: three culls each chunk's mesh per camera (`modules/vegetation/draw.js`, `cullSphere`).
+
+| Case | Draw calls | Triangles | Shadow draws per pass (vegetation) | Vegetation draws |
+|---|---|---|---|---|
+| default follow camera | 213 -> 190 | 111k -> 99k | 60 (22) -> 60 (22) | 93 -> 57 |
+| wide view (45 m out, 40 m up) | 235 -> 224 | 116k -> 115k | 60 (22) -> 60 (22) | 103 -> 89 |
+| 3 cascades (`maxFar` 150) | 329 -> 297 | 128k -> 114k | 176 (66) -> 167 (57) | 137 -> 75 |
+| 3 cascades + grass and flowers casting | 377 -> 334 | 212k -> 191k | 224 (114) -> 205 (94) | 185 -> 96 |
+
+JS ms per frame 3.6-4.7 in both (noise); frames are vsync bound (median 16.6 ms, p95 about 19 ms both); `engine.profile()` vegetation and vegetationDraw 0 ms
+median (their hooks are not where the cost is; it is draw submission). The single shadow box (extent 70 m) covers all of ring 1, so it culls nothing; the
+gain there is the main view skipping ring-1 chunks behind the camera. Per chunk a culling sphere is at least half a chunk diagonal (23 m at 32 m chunks),
+which limits what a near cascade can skip. Screenshots before / after differ by 0.12% of pixels (WebGL) and 0.14% (WebGPU), the same as two runs of one
+build (0.14%); `threedog picture compare`: no difference above its thresholds. Then the vegetation group hide for chunks off the main view was removed (it dropped
+those chunks' shadows): same numbers, wide view 224 -> 226.
+
+## 5d. Walking a big world: readying streamed content, memory after round trips, 2026-11-09
+
+World example (`/`, and `/?renderer=webgpu`), AMD Radeon 780M headless, 1280x720, real-time loop: the player is placed 400 m east at 25 m/s and back,
+three round trips (about 5750 frames). Before = the prepare step switched off in the page (`engine.stream._prep.run = () => null`), after = on. Apply ms =
+the per-frame sum of the `build`, `collider`, `upload`, `stream` stages (`transit` left out: an async wait), over the 110 frames that applied anything.
+
+| Route | worst frame JS ms | p95 frame JS ms | apply p95 / worst ms | compile stall frames | prepare compiles | geometries / textures / GPU MB after trips 1, 2, 3 |
+|---|---|---|---|---|---|---|
+| WebGL before -> after | 21.0 -> 24.4 (20.7 rerun) | 5.1 -> 5.9 (5.0) | 2.3 / 3.5 -> 2.7 / 6.3 (2.6 / 3.1) | 0 -> 0 | 0 -> 3 (1.1-1.8 ms each) | 84 / 15 flat both |
+| WebGPU before -> after | 36.9 -> 33.0 | 8.8 -> 8.1 | 2.9 / 4.5 -> 2.9 / 4.1 | not counted (no program list) | 0 -> 3 | 84 / 18 / 63.5 -> 63.6 flat both |
+
+This example streams no material the startup compile missed (0 stall frames before too). The three compiles were fresh `world.present` material
+instances (by identity, programs already cached); that route was taken out again (it made `world.view(id)` arrive frames late and broke 5 world tests), so
+the final code does not prepare them. Frame differences are run-to-run noise (the rerun row). Memory is flat over
+round trips on both. Where the step matters, and the leak it first caused: `tests/specs/stream-prepare.mjs` (a stream entry with an unseen material and
+texture: compiled and uploaded before it is attached, 0 stall frames after; 24 entries out and back six times). Two `compileAsync` calls in flight at
+once on WebGPURenderer left `_callDepth` one high and grew 4 render records and 784 bytes per trip; the step now runs one at a time (flat).
+
 ## 6. Load budget (`threedog stress`), 2026-11-02
 
 **Machine: `ANGLE (AMD, AMD Radeon 780M Graphics (0x00001900) Direct3D11 vs_5_0 ps_5_0, D3D11)`** (AMD Ryzen 7 integrated GPU, headless Chromium on
@@ -259,6 +297,19 @@ CPU + waiting for the GPU to finish, no overlap: an upper bound of the real fram
 Reading it: on this iGPU draw calls and skinned characters are CPU-bound (main thread), everything else is GPU-bound; ao (GTAO) is the costliest
 single post effect (+5 ms GPU, it redraws the scene for normals). Real scenes combine axes, so take a game's limit well below one axis' crossing.
 
+## 6b. Reflections (`reflections()`, three's SSRNode), 2026-11-09
+
+Real WebGPU in system Chrome (`node packages/tools/real-webgpu.mjs --urls=/tests/light-webgpu/index.html?demo=mirror --eval=...`), adapter AMD RDNA 3
+(the Radeon 780M of section 6), worst case: a polished metal floor fills most of the screen. Median ms from submit to the GPU finishing one frame, 60 frames:
+
+| Size | off | on (scale 1) | on (`resolutionScale: 0.5`, the default since) |
+|---|---|---|---|
+| 1280x720 | 4.1 | 8.8-10.7 (+5-6.6) | 5.2 (+1.1) |
+| 1920x1080 | 4.1 | 16.6-16.8 (+12.5) | 7.0 (+2.9) |
+
+"off" also drops the metalRough buffer (nothing else asked for it). The 2026-11-04 spike's +2.0 / +1.2 ms was another scene with one global roughness; take these as the screen-filling bound.
+The cost scales with the reflecting pixels: metalness 0 is skipped before any ray.
+
 ## Limitations
 
 - SwiftShader does the GPU's work on the CPU, but WebGL commands are submitted asynchronously: "render ms" in the tables is mostly the time three.js
@@ -272,5 +323,6 @@ single post effect (+5 ms GPU, it redraws the scene for normals). Real scenes co
 
 ## Per-module timing
 
-The core ships `engine.profile(true)` to turn it on and `engine.profile()` to read `{ moduleName: average milliseconds per rendered frame }` and
-reset; the test page uses it instead of wrapping hooks itself.
+The core times module hooks (on by default in dev builds; `engine.profile(true)` starts afresh) and `engine.profile()` reads `{ moduleName: { ms, mean, p95 } }`
+over the last 300 frame-hook cycles (ms is the median). The test pages read `mean` (the run's average) instead of wrapping hooks themselves, and put
+timing back as they found it.

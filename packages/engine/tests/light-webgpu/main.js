@@ -8,7 +8,8 @@ import { createEngine } from '../../index.js';
 import { backendName } from '../../render/backend.js';
 import { PostFX } from '../../render/PostFX.js';
 import { RESERVED_LAYERS } from '../../render/layers.js';
-import { voxelGI, temporalAA, sunShafts, lightVolumes } from '@threedog/post-effects/tsl';
+import { voxelGI, temporalAA, sunShafts, lightVolumes, reflections, autoExposure } from '@threedog/post-effects/tsl';
+import { bloom } from '@threedog/post-effects';
 
 const W = 320, H = 240;
 const renderer = new TG.WebGPURenderer({ canvas: document.getElementById('view'), antialias: false, forceWebGL: true });
@@ -99,10 +100,11 @@ window.lightGI = async () => {
   gi.remove(); taa.remove();
   return out;
 };
-// Why an effect is held, with no GPU behind it: a fake effect that declares everything, against each kind of renderer. What the real effects do on a WebGLRenderer the game chose is real below
+// Why an effect is held, with no GPU behind it: a fake effect that declares everything, against each kind of renderer (the swap is read where
+// runsHere reads it, engine.post._fellBack). What the real effects do on a WebGLRenderer the game chose is real below
 window.lightHeld = async () => {
   const fake = { name: 'fake', node: i => i, backend: 'webgpu', skipOnLowTier: true };
-  const held = (renderer, { tier = 'high', fellBack = false, on = true } = {}) => PostFX.prototype._held.call({ engine: { renderer, tier }, _fellBack: fellBack }, { name: 'fake', _def: fake, _on: () => on });
+  const held = (renderer, { tier = 'high', fellBack = false, on = true } = {}) => PostFX.prototype._held.call({ engine: { renderer, tier, post: { _fellBack: fellBack } } }, { name: 'fake', _def: fake, _on: () => on });
   const gpu = { isWebGPURenderer: true, backend: { isWebGPUBackend: true } }, gl2 = { isWebGPURenderer: true, backend: {} }, forced = { isWebGPURenderer: true, backend: { parameters: { ['force' + 'WebGL']: true } } }, webgl = {};   // spelled in two: real-webgpu.mjs rewrites the plain text
   const warn = console.warn, notes = [];
   console.warn = (...a) => { notes.push(a.join(' ')); };
@@ -112,9 +114,19 @@ window.lightHeld = async () => {
   const c = Object.assign(document.createElement('canvas'), { width: W, height: H }); document.body.appendChild(c);
   const e = createEngine({ canvas: c, lights: false, pixelRatio: 1, adaptiveResolution: false, ui: { loading: false }, saveKey: 'test-light-held', urlState: false });
   await e.start(); e.haltLoop();
-  const errors = [fake, voxelGI(), temporalAA(), sunShafts({ light: sun }), lightVolumes({ bounds: new THREE.Box3() })].map(fx => { try { e.post.add(fx); return null; } catch (err) { return err.message; } });
+  const errors = [fake, voxelGI(), temporalAA(), sunShafts({ light: sun }), lightVolumes({ bounds: new THREE.Box3() }), reflections(), autoExposure()].map(fx => { try { e.post.add(fx); return null; } catch (err) { return err.message; } });
   e.dispose();
   return { cases, lowNotes: notes.filter(n => /fake' held off: engine.tier/.test(n)).length, errors };
+};
+// More scene targets than the device takes: a named throw and nothing added, never three's validation error. Only the WebGL2 backend's count can be faked; real WebGPU's limits are read-only
+window.lightRoom = async () => {
+  const c = Object.assign(document.createElement('canvas'), { width: W, height: H }); document.body.appendChild(c);
+  const e = createEngine({ renderer: new TG.WebGPURenderer({ canvas: c, forceWebGL: true }), lights: false, pixelRatio: 1, ui: { loading: false }, saveKey: 'test-light-room', urlState: false });
+  await e.start(); e.haltLoop(); const gl = e.renderer.backend.gl, get = gl?.getParameter.bind(gl);
+  if (gl) gl.getParameter = k => (k === gl.MAX_DRAW_BUFFERS ? 3 : get(k));
+  const msg = (() => { try { e.post.add({ name: 'many', node: i => i, needsBuffers: ['normal', 'diffuse', 'metalRough'] }); return null; } catch (err) { return err.message; } })(), kept = !!e.post.get('many');
+  e.dispose();
+  return { backend: backendName(e.renderer), msg, kept };
 };
 // The two effects that need something the game may not have say so by name
 window.lightMissing = async () => {
@@ -200,6 +212,72 @@ window.lightCones = async () => {
   red.material.color.set(0xff0000); white.material.color.set(0xffffff);
   return out;
 };
+// A mirror: a polished metal floor under a bright box, the walls hidden. Without an environment map the metal is dark, so whatever lights it under the box is the reflection
+function mirror(metalness = 1) {
+  const g = new THREE.Group();
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.MeshStandardMaterial({ color: 0xffffff, metalness, roughness: 0.05 }));
+  plane.rotation.x = -Math.PI / 2;
+  const box = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffffff, emissiveIntensity: 3 }));
+  box.position.set(-1, 1.2, -1);
+  g.add(plane, box);
+  for (const m of [red, white, floor]) m.visible = false;
+  engine.scene.add(g);
+  cam.lookAt(-1, 0, -1); cam.updateMatrixWorld();   // down at the floor (the corner view barely shows it); lightMirror puts it back
+  // where the box's mirror image lands on screen: its center mirrored under the floor, projected
+  const at = new THREE.Vector3(-1, -1.2, -1).project(cam);
+  const x = (at.x + 1) / 2, y = (at.y + 1) / 2;
+  // the rows of a read come bottom first on one backend and top first on the other: the larger of the two places is the image (the box does not move with the effect)
+  const win = (on, off, v) => delta(on, off, x - 0.04, x + 0.04, v - 0.04, v + 0.04);
+  return { g, plane, under: (on, off) => Math.max(win(on, off, y), win(on, off, 1 - y)) };
+}
+const textures = () => renderer.info.memory.textures;
+window.lightMirror = async () => {
+  const backend = backendName(renderer), m = mirror();
+  engine.tier = 'high';   // the page's own setting, again: the engine's first-seconds frame check reads the headless GPU as low by now
+  await bright(); const tex0 = textures();
+  // add, draw, remove, draw: what it made (its targets, the merged buffers) goes with it; alone, and with bloom and temporalAA. setup's resolutionScale holds
+  const once = engine.post.add(reflections({ setup: s => { s.resolutionScale = 1; } })); await bright(); const made = textures() - tex0, full = engine.describe().render.post.find(x => x.name === 'reflections').facts;
+  once.remove(); await bright(); const leak = { made, left: textures() - tex0, full: full?.target };
+  const trio = [reflections(), bloom({ strength: 0.3 }), temporalAA()].map(e => engine.post.add(e)); await bright();
+  // temporalAA after another effect once left two textures per rebuild (traa's own copy of its input)
+  for (const h of trio) h.remove(); await bright(); leak.trio = textures() - tex0;
+  const fx = engine.post.add(reflections());
+  fx.enabled = false;
+  const off = await bright();
+  fx.enabled = true;
+  const on = await bright();
+  const row = () => engine.describe().render.post.find(x => x.name === 'reflections');
+  const out = { backend, leak, under: m.under(on, off), buffers: Object.keys(passOf().scenePass.getMRT()?.outputNodes ?? {}), facts: row().facts };
+  // a number changes in place (no rebuild: the same pipeline output node), and it really reaches the shader
+  const built = passOf().output;
+  fx.set({ intensity: 0 });
+  out.live = { same: passOf().output === built, under: m.under(await bright(), off) };
+  fx.set({ intensity: 1, binaryRefine: true });   // built into the shader: rebuilds
+  out.refine = { rebuilt: passOf().output !== built, under: m.under(await bright(), off) };
+  // order with the rest of the chain: before bloom and temporalAA
+  const glow = engine.post.add(bloom({ strength: 0.3 })), taa = engine.post.add(temporalAA());
+  await bright();
+  out.order = passOf().order.filter(n => ['reflections', 'bloom', 'temporalAA'].includes(n));
+  glow.remove();
+  // voxelGI + reflections + temporalAA, as recipe 34 suggests: metalRough rides in velocity's target, four targets in all (32 bytes, WebGPU's default)
+  const gi = engine.post.add(voxelGI({ resolution: 32, bounds: new THREE.Box3(new THREE.Vector3(-6, -1, -6), new THREE.Vector3(6, 7, 6)) }));
+  out.combo = { under: m.under(await bright(), off), buffers: Object.keys(passOf().scenePass.getMRT()?.outputNodes ?? {}), gi: !engine.describe().render.post.find(x => x.name === 'voxelGI').held };
+  gi.remove(); taa.remove();
+  out.ms = { on: await cost() };
+  fx.enabled = false; out.ms.off = await cost(); fx.enabled = true;
+  // a surface reflects in proportion to its metalness: none at 0, some at 0.3
+  const at = async metalness => { m.plane.material.metalness = metalness; const a = await bright(); fx.enabled = false; const b = await bright(); fx.enabled = true; return m.under(a, b); };
+  out.stone = await at(0); out.partial = await at(0.3);
+  engine.tier = 'low'; engine.post._sync();
+  out.lowTier = { order: passOf().order.includes('reflections'), held: row().held };
+  engine.tier = 'high';
+  fx.remove();
+  out.after = { mrt: !!passOf().scenePass.getMRT() };
+  m.g.removeFromParent();
+  for (const o of [red, white, floor]) o.visible = true;
+  cam.lookAt(-2, 2.5, -4); cam.updateMatrixWorld();
+  return out;
+};
 // ?demo=shafts or ?demo=cones leaves the effect on and the loop running, to look at it (real-webgpu.mjs --urls ... --shots=dir)
 if (demo === 'shafts') { room(); engine.post.add(sunShafts({ light: sun })); }
 if (demo === 'cones') {
@@ -209,4 +287,5 @@ if (demo === 'cones') {
   engine.scene.add(spot, spot.target);
   engine.post.add(lightVolumes({ bounds: new THREE.Box3(new THREE.Vector3(-6, 0, -6), new THREE.Vector3(6, 7, 6)) }));
 }
+if (demo === 'mirror') { mirror(); engine.post.add(reflections()); }
 window.ready = true;

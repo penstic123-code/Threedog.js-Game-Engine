@@ -52,7 +52,7 @@ async function boot({ on }) {
   e.use(world(), terrain({ ...terrainPreset(), seed: 7, part: true }), level({ scene: street, part: true }),
     compositeGround({ parts: [{ of: 'level', region: (x, z) => Math.abs(x) <= 160 && Math.abs(z) <= 160, priority: 1 }, { of: 'terrain' }] }),
     collision(), followCamera(), characters({ npcs: false }), ...(on ? [hlod()] : []), content());
-  e.characters.createPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 70 } });
+  e.characters.addPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 70 } });
   const sun = new THREE.DirectionalLight('#ffffff', 3);
   sun.position.set(-60, 120, 80); sun.castShadow = true; sun.shadow.mapSize.setScalar(1024);
   Object.assign(sun.shadow.camera, { left: -170, right: 170, top: 170, bottom: -170, near: 1, far: 400 });

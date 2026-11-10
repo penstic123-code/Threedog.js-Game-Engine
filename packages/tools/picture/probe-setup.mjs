@@ -52,5 +52,6 @@ export function probeSettings(c) {
   };
   for (const k in params) if (!params[k]) delete params[k];
   Object.assign(c, { pic, key, sun, hemi, params, mine: new Set([sun, hemi].filter(Boolean)) });
-  c.out = { params, isDay: desc?.time?.isDay ?? null, shadows: null, time: null, lights: [] };
+  // the engine's combination checks (core/inspect/pictureChecks.js), read here so shot prints the same sentences describe does
+  c.out = { params, isDay: desc?.time?.isDay ?? null, shadows: null, time: null, lights: [], checks: desc?.render?.checks ?? [] };
 }

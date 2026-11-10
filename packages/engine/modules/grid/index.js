@@ -273,7 +273,7 @@ export function grids(opts = {}) {
     install(e, ctx) {
       G = new Grids(e, o);
       e.i18n.add(TEXT);   // grid.<code> player text for every built-in failure code, and the rotate action's label
-      ctx.saves.register('grids', { atomic: true, version: 2, migrate: GRIDS_MIGRATE, save: () => G.toJSON(), load: d => G.fromJSON(d) });
+      ctx.saves.define('grids', { atomic: true, version: 2, migrate: GRIDS_MIGRATE, save: () => G.toJSON(), load: d => G.fromJSON(d) });
       defineGridOps(ctx, G);
       ctx.track(e.events.on('world:add', ({ id }) => G._reindex(id)));
       ctx.track(e.events.on('world:remove', ({ id }) => G._unindex(id)));

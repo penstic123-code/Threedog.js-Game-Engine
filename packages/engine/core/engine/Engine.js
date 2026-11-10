@@ -23,7 +23,7 @@ import { startupMethods } from './startup.js';
 import { groundMethods, flatGround } from '../scene/ground.js';
 import { actorMethods } from '../ops/actor.js';
 import { forcedTier, storedMsaa } from '../scene/tier.js';
-import { tier as detectTier, tierBeforeRenderer, ownMsaa, timerContext, isWebGPU, webgpuPart, watchNodePrograms } from '../../render/backend.js';
+import { tier as detectTier, tierBeforeRenderer, ownMsaa, timerContext, isWebGPU, webgpuPart, watchNodePrograms, mathClasses } from '../../render/backend.js';
 import { recordSweep } from '../../render/recordSweep.js';
 import { dressNodeTwins } from '../../render/patches.js';
 import { lifecycleMethods, clearHooks, checkCanvasUsable } from './lifecycle.js';
@@ -49,6 +49,8 @@ import { probeMethods } from '../../render/probes.js';
 import { lightmapMethods } from '../../render/lightmap.js';
 import { headlessSettled } from './headlessLoad.js';
 import { coded, codedError } from '../base/errorHints.js';
+// render/backend.js may not import three (threedog/tsl reaches it): its renderer borrow gets the two math classes from here
+mathClasses(THREE);
 const FALLBACKS = ['webgl2', 'webgl', 'error'];
 // createEngine() options: the one table for the unknown-key and type check (dev throws with did-you-mean, release warns once), the plain
 // defaults and engine.catalog('core').params; R6 checks EngineOptions (types/core.d.ts) has exactly these keys. A key with several shapes
@@ -60,7 +62,7 @@ export const ENGINE_PARAMS = {
   pixelRatio: 'number?', pixelSize: { type: 'int', optional: true, min: 1, desc: 'real screen pixels per art pixel' }, adaptiveResolution: { type: 'bool', default: true }, targetFps: { type: 'number', default: 55, min: 1 },
   ui: 'object?', audio: 'object?', fov: { type: 'number', default: 55, min: 1, max: 179 }, near: { type: 'number', default: 0.3, min: 0 },
   locale: { type: 'string', default: 'auto' }, strings: 'object?', bindings: 'object?', saveKey: { type: 'string', default: 'game' },
-  joystick: { type: 'string|bool', default: 'auto' }, headless: 'bool?', validate: { type: 'bool', default: true }, decoders: 'string?',
+  joystick: { type: 'string|bool', default: 'auto' }, blockBrowserKeys: { type: 'bool', default: true, desc: 'while playing, keys the game binds (Ctrl+S, F1, Backspace...) do not reach the browser' }, headless: 'bool?', validate: { type: 'bool', default: true }, decoders: 'string?',
   budget: 'object?', urlState: 'bool?', seed: 'number?', movement: 'object?', threads: { type: 'string|number|bool', default: 'auto' },
   pauseOnBlur: { type: 'bool', default: true }, batching: 'bool|object?', lights: { type: 'bool', default: true },
 };
@@ -117,7 +119,7 @@ export class Engine {
     const o = readParams('createEngine()', ENGINE_PARAMS, opts);
     /** @internal createEngine options as read (engine.catalog('core').params shows them with the schema) */ this._createParams = o;
     const { canvas: canvasIn, renderer: rendererName, antialias, pixelRatio, pixelSize, adaptiveResolution, targetFps, ui = {}, audio = {},
-      fov, near, locale, strings = {}, bindings = {}, saveKey, joystick,
+      fov, near, locale, strings = {}, bindings = {}, saveKey, joystick, blockBrowserKeys,
       headless = new URLSearchParams(location.search).has('threedog-headless'), validate,
       decoders = null, budget = null, urlState = DEV, seed, movement, threads, pauseOnBlur, batching = {}, lights, fallback } = o;
     if (pixelSize != null) checkPixelSizeOptions(pixelSize, pixelRatio, opts.adaptiveResolution);
@@ -144,6 +146,8 @@ export class Engine {
     const r = this.renderer = gpuWanted ? newWebGPURenderer(canvas, aa) : rendererIn ?? new THREE.WebGLRenderer({ canvas, antialias: aa, powerPreference: 'high-performance' });
     /** @internal what the game asked for and what to do without WebGPU; start() fills describe().renderer from it */
     this._backendWant = rendererWant(r, rendererIn, fallback);
+    // the engine made this device's renderer, so its limits are the engine's to ask for (start() fills them from the adapter); a game's own renderer keeps the game's
+    if (gpuWanted) this._backendWant.limits = r.backend?.parameters?.requiredLimits;
     watchNodePrograms(r);                      // WebGPU: generated code per material, for debug.view('shaderCost') (render/backend.js)
     this._records = recordSweep(r);            // WebGPU: meshes that left the scene free their records (render/recordSweep.js)
     if (isWebGPU(r)) dressNodeTwins(r);        // WebGPU: classic materials get their patches as nodes (render/patches.js)
@@ -227,11 +231,13 @@ export class Engine {
     defineTerms(this);                          // engine.shaderTerms: the game's own cloud shadow or season tint in place of the engine's (render/terms.js)
     this._materials = registerEngine(this);    // applyEffects without an engine option uses the first live engine
 
-    createServices(this, { canvas: r.domElement, validate, locale, strings, saveKey, joystick, bindings, audio, decoders, budget, seed, headless, urlState, threads, batching });
+    createServices(this, { canvas: r.domElement, validate, locale, strings, saveKey, joystick, blockBrowserKeys, bindings, audio, decoders, budget, seed, headless, urlState, threads, batching });
     this.startup = null;                       // startup timing report (set once start() finishes)
     this._readyAt = null;                      // set at ready until the first frame is drawn (loop.js firstFrame)
     this._whileCompiling = [];                 // @internal one-time warm-ups a module queues during loading; start() runs them while the GPU compiles
-    this._prof = null;                         // module hook timing (profile(true) turns it on)
+    this._playTiming = false;                  // set at the first settled frame after ready, when timing is cleared of start-up (loop.js startPlayTiming)
+    this._prof = null;                         // module hook timing: on in dev builds (a few performance.now() per hook), profile(true) turns it on in production
+    if (DEV) this.profile(true);
     this._afterTick = null;                    // at startup, checked once at the end of each frame for readiness
     // a game's own renderer keeps its own MSAA choice by default (used as is, like its pixel ratio)
     this.post = new PostFX(this, { antialias: aa ?? ownMsaa(r), authored: authoredAA ?? ownMsaa(r) });
@@ -281,7 +287,11 @@ export class Engine {
   /** The one quality value, 'low' | 'high', what everything that scales by quality reads: the device's tier, unless the player's preset says otherwise (shared point 'tier') @type {'low' | 'high'} */
   get tier() { return this.stacks.has('tier') ? this.stacks.get('tier').value() : this._deviceTier; }
   /** The device's tier, the base under a player's preset */
-  set tier(t) { this._deviceTier = t; if (this.stacks.has('tier')) this.stacks.get('tier').base = t; }
+  set tier(t) {
+    this._deviceTier = t;
+    const st = this.stacks.has('tier') ? this.stacks.get('tier') : null;
+    if (st && st.base !== t) { st.base = t; st._changed(); }   // through the stack's change path: onTierChange followers (post, cascades) run once; writing base alone told nobody
+  }
   /** True once the world is built (phase 'ready' or 'running'): fixed steps, ops and rendering run from here on @type {boolean} */
   get ready() { return this.phase === 'ready' || this.phase === 'running'; }
   /** @internal start() is on its way: no game time passes */

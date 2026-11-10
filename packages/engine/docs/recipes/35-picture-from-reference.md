@@ -1,7 +1,9 @@
 # Making a new picture from a reference picture
 
-**In this recipe**: Example · The loop · What picture code can change, and what it cannot · Steps · Picture check after every shot · Picture questions ·
-Guard rails · A fixed scene to judge by
+> **Covers:** matching a reference picture: the loop, the picture check after every shot, a fixed scene to judge by.
+> **Use when:** the look should come close to a given image.
+> **Shortest:** `threedog picture palette ref.png`, then `threedog shot`.
+> **Sections:** The loop every round · What picture code can · Steps · Picture check after every · Picture questions · Guard rails · A fixed scene to
 
 ```sh
 threedog picture palette art/reference/ref.png --n 8 --average     # the colors: they go in picture/palette.js
@@ -12,9 +14,8 @@ threedog picture compare art/reference/ref.png .threedog/shots/now.png --out sid
 No reference picture? Skip the measuring (step 2, `picture palette`, `picture compare` against a reference); judge each shot against DESIGN.md and
 its "Loved / Not for this game" list, and use the rest: the loop, the picture check after every shot and the picture questions.
 
-For an AI that is given one picture ("make it look like this") and has to turn it into the game's picture. The tools keep the work measurable: `threedog picture palette`
-and `picture compare` measure pictures, your game's `picture/` folder holds the result in plain three.js (recipe 62). They never say which colors are right; the taste is
-yours. How the `picture/` folder is laid out and which signals it reads are in `62-picture-code.md`; this page is the order of work.
+For turning one given picture ("make it look like this") into the game's picture. `threedog picture palette` and `picture compare` measure; the game's `picture/` folder
+holds the result in plain three.js (recipe 62). They never say which colors are right: the taste is yours. This page is the order of work.
 
 ## The loop (every round, in this order)
 Looping "edit, screenshot, read the image" costs the most tokens and fixes the least. Numbers come first, pictures last.
@@ -27,14 +28,13 @@ Looping "edit, screenshot, read the image" costs the most tokens and fixes the l
    pixel diff and the picture differences. Through MCP the `snap` tool is 480 px wide by default; `picture_compare` gives the numbers.
 4. **Read the numbers first, then at most one image per round.** Name the biggest remaining difference and fix only that. With no reference, read the shot's hints (below). Then look at the image as a player would and judge it
    against the picture DESIGN.md wants and its "Loved / Not for this game" list (never against a technique example): what would a player read as a
-   mistake? Typical ones are objects floating or cutting into each other, odd flat discs or blobs (a hard-edged opaque "puddle" reads as a gray ball),
-   glare, areas too dark or busy to read, placeholder-looking shapes; these are prompts, not a list to tick. Fix what you find, or note it in
+   mistake (objects floating or cutting into each other, odd flat discs, glare, areas too dark or busy to read, placeholder shapes)? Fix what you find, or note it in
    STATUS.md with why it stays. Before calling a picture done, go through the "Picture questions" below that matter for this game.
 5. **Wrong in a way the numbers do not explain?** Diagnose before guessing: `engine.debug.view('albedo' | 'lighting' | 'shadow' | 'normals')` shows which
    layer is off, and every value has one writer, a line in your `picture/` code. Nothing drawn: `threedog scene --hidden` (reasons per mesh).
    Washed-out or too-dark textures, odd normals: `threedog inspect materials` (wrong color spaces first, sizes, who made each material).
 6. **If the biggest difference stops shrinking over a few rounds, change approach** (in this order) and tell the user which and why:
-   painted textures (`map`, `normalMap`) -> `onBeforeCompile` on your own material -> your own `ShaderMaterial`.
+   painted textures (`map`, `normalMap`) -> node inputs (`colorNode` ...) on your own node material (WebGPU, recipe 56; on WebGL `onBeforeCompile`) -> a whole shader of your own (TSL, or `ShaderMaterial` on WebGL).
    Never call it "close" to stop tuning.
 7. **Every few rounds show the user the shot and the numbers.**
 

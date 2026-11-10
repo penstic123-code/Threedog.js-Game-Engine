@@ -281,4 +281,62 @@ export const specs = [
       check('save -> load round trip: save data identical', r.same13, r.diff);
     },
   },
+  {
+    // 不许绕开 (group V 5): hiding a Group between the root and a batched mesh hides it in the scene, so the batch must let go of it too
+    name: '[guard] batching: a hidden Group between the root and a batched mesh takes the object out of its batch',
+    url: '/?cutscene=skip',
+    async run({ check, ev }) {
+      const r = await ev(async () => {
+        const { B, tick } = await window.__bt();
+        const T = __threedogThree, geo = new T.BoxGeometry(), mat = new T.MeshStandardMaterial(), p = engine.player.position, roots = [], subs = [];
+        for (let i = 0; i < Math.max(B.minCount, 10) + 2; i++) {
+          const root = new T.Group(), sub = new T.Group();   // root -> sub -> mesh
+          root.userData.batch = true; root.position.set(p.x + 3 + i * 1.5, 0, p.z + 40); sub.add(new T.Mesh(geo, mat)); root.add(sub); engine.add(root); roots.push(root); subs.push(sub);
+        }
+        for (let i = 0; i < 6; i++) { engine.step(0.1); await tick(); }
+        const before = B.of(roots[0]).length > 0;
+        const warns = [], w0 = console.warn; console.warn = (...a) => { warns.push(String(a[0])); };
+        subs[0].visible = false;
+        for (let i = 0; i < 10; i++) { engine.step(0.1); await tick(); }
+        const afterHide = B.of(roots[0]).length > 0, others = B.of(roots[1]).length > 0;
+        subs[0].visible = true;   // group Q 1: hidden is not a change of the model: it rejoins when shown again, no eviction warning, geometry not banned
+        for (let i = 0; i < 40; i++) { engine.step(0.1); await tick(); }
+        const afterShow = B.of(roots[0]).length > 0, banned = B.banned.has(roots[0].children[0].children[0].geometry);
+        console.warn = w0;
+        engine.remove(...roots);
+        return { before, afterHide, others, afterShow, banned, warns };
+      });
+      check('with the Group shown the object is in a batch, as are its neighbours', r.before && r.others, JSON.stringify(r));
+      check('hiding the middle Group removes it from the batch', !r.afterHide, JSON.stringify(r));
+      check('showing it again batches it again, no warning, geometry not banned', r.afterShow && !r.banned && !r.warns.length, JSON.stringify(r));
+    },
+  },
+  {
+    // group Q review: a part that changed while hidden is judged as at first tracking, not blindly rejoined
+    name: '[guard] batching: a part hidden, given its own render order, then shown is not batched again',
+    url: '/?cutscene=skip',
+    async run({ check, ev }) {
+      const r = await ev(async () => {
+        const { B, tick } = await window.__bt();
+        const T = __threedogThree, geo = new T.BoxGeometry(), mat = new T.MeshStandardMaterial(), p = engine.player.position, roots = [], subs = [];
+        for (let i = 0; i < Math.max(B.minCount, 10) + 2; i++) {
+          const root = new T.Group(), sub = new T.Group();
+          root.userData.batch = true; root.position.set(p.x + 3 + i * 1.5, 0, p.z + 40); sub.add(new T.Mesh(geo, mat)); root.add(sub); engine.add(root); roots.push(root); subs.push(sub);
+        }
+        for (let i = 0; i < 6; i++) { engine.step(0.1); await tick(); }
+        const before = B.of(roots[0]).length > 0;
+        const w0 = console.warn; console.warn = () => {};
+        subs[0].visible = false;
+        for (let i = 0; i < 10; i++) { engine.step(0.1); await tick(); }
+        subs[0].children[0].renderOrder = 5;   // not batchable (a batch draws at one order); only _eligible notices, the group key and the live checks do not
+        subs[0].visible = true;
+        for (let i = 0; i < 40; i++) { engine.step(0.1); await tick(); }
+        console.warn = w0;
+        const after = B.of(roots[0]).length > 0;
+        engine.remove(...roots);
+        return { before, after };
+      });
+      check('batched before; after hide, a render order and show it is not in a batch', r.before && !r.after, JSON.stringify(r));
+    },
+  },
 ].map(s => ({ ...s, async run(ctx) { await ctx.ev(src => { window.__bt = new Function('return ' + src)(); }, setup.toString()); return s.run.call(this, ctx); } }));

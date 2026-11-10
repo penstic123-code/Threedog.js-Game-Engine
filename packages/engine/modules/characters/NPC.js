@@ -46,6 +46,7 @@ import { leaveLink } from './moveHelpers.js';
 import { Behaviors } from './behaviors.js';
 import { codedError } from '../../core/base/errorHints.js';
 import { isModelName } from '../../core/base/util.js';
+import { passesOf } from '../collision/grid.js';
 
 const STRINGS = {
   noInteract: 'NPC "{name}" has interact set, but the interactions() module is not installed: nothing can use it',
@@ -268,8 +269,9 @@ export class NPCManager {
       position, zone = null, speed = 2.6, initial = false, behavior = 'schedule', mind = {}, ...rest } = opts;
     if (io !== null && !(io && typeof io === 'object' && typeof io.op === 'string')) throw codedError('character-option', fmt(STRINGS.badInteract, { got: JSON.stringify(io) }), TypeError);
     if (io) readParams('npcs.add() interact', keysSchema(['label', 'op', 'args', 'radius']), io);
+    passesOf('npcs.add() passes', rest.passes);   // here, not when its body is first built near the player
     const id = given ?? name, look = {}, runtime = { ...this._runtime.get(id) };   // a re-add keeps what it does not pass, as the record does
-    if (given == null) { if (this._byName.has(id)) throw codedError('world-id', fmt(STRINGS.sameName, { name })); this._byName.add(id); }
+    if (given == null && this._byName.has(id)) throw codedError('world-id', fmt(STRINGS.sameName, { name }));
     // an asset name is data (saved); a model object, animation, clips and whatever is not plain stay in memory
     for (const [k, v] of Object.entries(rest)) {
       if ((RUNTIME_KEYS.includes(k) && !(k === 'model' && isModelName(v))) || !W.isPlain(v)) runtime[k] = v;
@@ -277,7 +279,8 @@ export class NPCManager {
     }
     if (io) { if (typeof io.label === 'function') runtime.interactLabel = io.label; else delete runtime.interactLabel; }
     this._b.check(behavior);
-    this._runtime.set(id, runtime);
+    const old = W.get(id);
+    if (old && old.kind !== KIND) throw codedError('world-id', fmt(STRINGS.notNpc, { id, kind: old.kind }));
     const hpd = e.calendar?.hoursPerDay ?? 24;
     // at may be 'HH:MM' or 0-1
     const sched = schedule.map(s => { const [x, z] = xzOf(s.position), y = yOf(s.position); return { at: parseClock(s.at, hpd), x, ...(y !== undefined && { y }), z }; }).sort((a, b) => a.at - b.at);
@@ -285,23 +288,32 @@ export class NPCManager {
     // the record keeps plain values only: a function label stays in runtime (above), the record gets null and the view reads runtime first
     const interact = io && { label: typeof io.label === 'string' ? io.label : null, op: io.op, args: io.args ?? {}, radius: io.radius ?? 3.2 };
     const def = { name, behavior, mind, schedule: sched, interact, pathStep, repath, arriveDistance, speed, look, zone };
-    const old = W.get(id);
-    if (old) {
-      if (old.kind !== KIND) throw codedError('world-id', fmt(STRINGS.notNpc, { id, kind: old.kind }));
-      // re-add overrides only fields passed explicitly (unpassed zone, schedule etc. keep their values)
-      const patch = {};
-      const keys = ['name', 'interact', 'pathStep', 'repath', 'arriveDistance', 'speed', 'zone', 'schedule'];
-      for (const k of keys) if (opts[k] !== undefined) patch[k] = k === 'schedule' ? sched : def[k];
-      // a new behavior starts a new memory, as setBehavior does; naming the one it has is setup code running again, and the memory is state
-      const changes = opts.behavior !== undefined && behavior !== old.behavior;
-      if (changes) { patch.behavior = behavior; patch.nav = { ...old.nav, path: null, repath: 0 }; }
-      if (changes || opts.mind !== undefined) patch.mind = mind;
-      if (Object.keys(look).length) patch.look = { ...old.look, ...look };
-      W.set(id, patch);
-    } else {
-      const i = stopIndex(sched, timeOfDay(e)), at = position ?? (i != null ? sched[i] : { x: 0, z: 0 }), [x, z] = xzOf(at);
-      const nav = { stop: null, path: null, repath: 0 };
-      W.add({ id, kind: KIND, position: [x, placeAtHeight(e, `npcs.${id}`, x, z, yOf(at), 0, 0).y, z], ...def, state: 'idle', busy: false, nav, motion: null }, { initial });
+    // the name and the runtime entry (the presenters read it as the record arrives) are taken only now, and given back if the world write throws (checkPlain on a mind with a function, a
+    // dev id clash): a failed add leaves nothing behind, so a retry is not 'sameName' and a non-NPC id has no entry
+    const prev = this._runtime.get(id);
+    if (given == null) this._byName.add(id);
+    this._runtime.set(id, runtime);
+    try {
+      if (old) {
+        // re-add overrides only fields passed explicitly (unpassed zone, schedule etc. keep their values)
+        const patch = {};
+        const keys = ['name', 'interact', 'pathStep', 'repath', 'arriveDistance', 'speed', 'zone', 'schedule'];
+        for (const k of keys) if (opts[k] !== undefined) patch[k] = k === 'schedule' ? sched : def[k];
+        // a new behavior starts a new memory, as setBehavior does; naming the one it has is setup code running again, and the memory is state
+        const changes = opts.behavior !== undefined && behavior !== old.behavior;
+        if (changes) { patch.behavior = behavior; patch.nav = { ...old.nav, path: null, repath: 0 }; }
+        if (changes || opts.mind !== undefined) patch.mind = mind;
+        if (Object.keys(look).length) patch.look = { ...old.look, ...look };
+        W.set(id, patch);
+      } else {
+        const i = stopIndex(sched, timeOfDay(e)), at = position ?? (i != null ? sched[i] : { x: 0, z: 0 }), [x, z] = xzOf(at);
+        const nav = { stop: null, path: null, repath: 0 };
+        W.add({ id, kind: KIND, position: [x, placeAtHeight(e, `npcs.${id}`, x, z, yOf(at), 0, 0).y, z], ...def, state: 'idle', busy: false, nav, motion: null }, { initial });
+      }
+    } catch (err) {
+      if (prev) this._runtime.set(id, prev); else this._runtime.delete(id);
+      if (given == null) this._byName.delete(id);
+      throw err;
     }
     return this._handle(id);
   }

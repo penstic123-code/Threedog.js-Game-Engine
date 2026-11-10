@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ENGINE } from '../paths.mjs';
 import { search, tryNext, libraryHits, queryTokens } from '../how.mjs';
-import { answer, routeModules, exampleLines } from '../how-answer.mjs';
+import { answer, routeModules, exampleLines, readDoc } from '../how-answer.mjs';
+import { docRef, parseDocRef, docReadCommand } from 'threedog/error-hints';
 import { STATIC_TOOLS } from '../threedog/mcp-extra.mjs';
 
 export const name = 'how: offline doc search is deterministic, matches word starts only, plain three.js first, weighs rare words, knows synonyms, says when nothing fits';
@@ -22,7 +23,8 @@ export async function run({ check }) {
     check('[guard] an answer leads with one route, and it does not read as the only way', /^Recommended \(.*not the only allowed one\): /.test(lines[0]) && lines.filter(l => l.startsWith('Recommended')).length === 1, lines[0]);
     check('[guard] it says what this project has and lacks', /Installed: world\(\)|Not installed: .*pickups\(\)/.test(a.text) && /Not installed: .*pickups\(\)/.test(a.text) && /Missing dependency: /.test(a.text), a.text.slice(0, 500));
     check('[guard] a module a route needs and the game lacks is named with who requires it', a.data.install.absent.includes('pickups()'), JSON.stringify(a.data.install));
-    check('it has an example and a next route, and stays short by default', /^Example/m.test(a.text) && /^When it does not fit: /m.test(a.text) && lines.length <= 30, String(lines.length));
+    // the section text replaces the old ten-line example; the limit is the output rule's bytes (docs/testing/tool-output-sizes.md), not a line count
+    check('it has the section or an example and a next route, within the 4 KB output rule', /^(Example|The section)/m.test(a.text) && /^When it does not fit: /m.test(a.text) && Buffer.byteLength(a.text) <= 4096, String(Buffer.byteLength(a.text)));
     const full = await answer(game, 'items and pickups', { full: true });
     check('--full lists the other routes, the default only counts them', /^Other routes:$/m.test(full.text) && /^Other routes: \d+ more/m.test(a.text));
     // [guard] a game that exists gets the lines to add, not a second createEngine; with no game the whole file stays the answer
@@ -40,7 +42,10 @@ export async function run({ check }) {
     check('no game folder: installed is unknown, not a guess', /Installed: unknown/.test((await answer(join(game, 'nowhere'), 'items and pickups')).text));
     check('an optional use (engine.particles?.emit) does not count as a needed module', !routeModules('engine.particles?.emit(1)').length && routeModules('engine.particles.emit(1)').length === 1);
     check('a plain three.js answer needs nothing installed', /Installed: nothing to install/.test((await answer(game, 'tone mapping')).text));
-    check('a weak query names no recommendation', !/^Recommended/.test((await answer(game, 'qqzzxx wibble game')).text));
+    // health check D3: the Installed line reads the recipe page's own module list, not one phrase's section text
+    const talk = (await answer(ENGINE, 'talk to npc')).text, folder = (await answer(ENGINE, 'picture folder')).text;
+    check('[guard] a recipe route takes its modules from the page: the NPC section says characters(), a picture section does not say calendar()', /characters\(\)/.test(talk) && !/Installed: nothing to install/.test(talk) && /Installed: nothing to install/.test(folder), `${talk.slice(0, 400)} | ${folder.slice(0, 400)}`);
+    check('a weak query names no recommendation',!/^Recommended/.test((await answer(game, 'qqzzxx wibble game')).text));
   } finally { rmSync(game, { recursive: true, force: true }); }
   const rain = search(docs, 'rain'), again = search(docs, 'rain');
   check('"rain" finds the weather recipe in the top 3 and never terrain', rain.slice(0, 3).some(h => /weather/.test(h.line)) && !rain.some(h => /28-terrain/.test(h.line)), JSON.stringify(rain.map(h => h.line)));
@@ -118,10 +123,10 @@ export async function run({ check }) {
     ['blur background', /dof/], ['focus blur', /dof/], ['bokeh', /dof/], ['miniature', /dof/], ['tilt shift', /dof/], ['cinematic', /dof/],
     ['add a post processing pass', /engine\.post\.add/],
     ['tone mapping', /toneMapping/],
-    ['save game', /saves\.register/],
+    ['save game', /saves\.define/],
     ['pathfinding', /findPath/],
     ['pick up items', /engine\.pickups/],
-    ['talk to an npc', /npc\.talk/],
+    ['talk to an npc', /02-npc\.md §1/],   // the conversation first; the bubble form is the next test (health check D3)
     ['bark over an npc head', /channel: 'bubble'/],
     ['pause the game for a menu', /engine\.freeze/],
     ['build on a grid', /engine\.grids/],
@@ -142,17 +147,22 @@ export async function run({ check }) {
   const SPOKEN = [
     ['game is slow, find why fps drops', /15-perf/],
     ['low fps stutter', /15-perf/],
+    // look-dev lives in the gallery (recipe 05), textures from nodes in recipe 56: no tool of their own, so how must reach the sections
+    ['look at one material alone under studio light', /Look-dev/],
+    ['turntable a shader', /Look-dev/],
+    ['seamless tiling texture', /Textures from nodes/],
+    ['bake a tsl node into a texture', /Textures from nodes/],
     ['performance', /15-perf/],
     ['custom sky', /engine\.sky\.replace/],
     ['volumetric fog', /59-depth-post-effects/],
     ['god rays', /59-depth-post-effects/],
     ['top-down farm: place on grid, crops grow over days, sell at shop', /18-world\.md §3|29-grid|engine\.grids/],
-    ['save', /saves\.register/],
+    ['save', /saves\.define/],
     ['2D side-scroller with sprites and dynamic lights', /sideScroller.*rc2d/],
     ['sprite lighting normal map 2d', /rc2d/],
     ['push boxes with physics puzzle', /engine\.rigid|11-vehicles/],
     ['can the player push rigid bodies', /11-vehicles/],
-    ['third person character running and jumping on terrain', /createPlayer|presets\.player/],
+    ['third person character running and jumping on terrain', /addPlayer|presets\.player/],
     ['my own toon material with color bands and outline', /ShaderMaterial|43-shader/],
     ['rainy night street with wet ground, street lamps and fog', /weather|lightPool/],
     ['sky color for my shader', /uSkyHorizon|Sky color for my shader/],
@@ -163,6 +173,9 @@ export async function run({ check }) {
     ['tune the (picture)', /60-judge-the-picture/],
     ['look prettier', /60-judge-the-(picture)/],
     ['visual polish', /60-judge-the-(picture)/],
+    // a game-wide model setup and one node of a kit file (05-props-bake.md 2f), asked the way a game report put them
+    ['post-process every model the engine spawns', /05-props-bake.*Every model through one setup/],
+    ['reference a node inside a multi-part glb', /05-props-bake.*multi-part GLB/],
   ];
   const off = SPOKEN.map(([q, want]) => [q, search(docs, q)[0]?.line ?? '(none)', want]).filter(([, first, want]) => !want.test(first));
   check(`${SPOKEN.length} whole-sentence / spoken queries: the first answer is the right recipe or row`, off.length === 0, off.map(([q, l]) => `"${q}" -> ${l}`).join('\n'));
@@ -177,10 +190,10 @@ export async function run({ check }) {
   const spread = search(fake, 'alpha bravo charlie delta echo foxtrot golf'), thin = search(fake, 'alpha echo foxtrot golf hotel india');
   rmSync(fake, { recursive: true });
   check('[guard] weak reads the whole list: words spread over rows are a match, one word of six is not', spread.weak === false && thin.weak === true, JSON.stringify({ spread: spread.weak, thin: thin.weak }));
-  // [guard] a recipe's "In this recipe" list and a section's first bullet do not rank: they name other sections and one item, not this section
+  // [guard] a recipe's card and a section's first bullet do not rank: they name other sections and one item, not this section
   const fake2 = mkdtempSync(join(tmpdir(), 'how-rank-'));
   mkdirSync(join(fake2, 'recipes'));
-  writeFileSync(join(fake2, 'recipes', '01-a.md'), '# Top\n\n**In this recipe**: 1. Zebra crossing\n\n## 1. Zebra crossing\nHow to paint one.\n\n## 2. Rules\n- one lamp near a yak\n');
+  writeFileSync(join(fake2, 'recipes', '01-a.md'), '# Top\n\n> **Sections:** 1 Zebra crossing\n\n## 1. Zebra crossing\nHow to paint one.\n\n## 2. Rules\n- one lamp near a yak\n');
   const zebra = search(fake2, 'zebra crossing'), yak = search(fake2, 'yak');
   rmSync(fake2, { recursive: true });
   check('[guard] the section answers, not the list of sections above it; a bullet word ranks nothing', /Zebra crossing/.test(zebra[0]?.line) && zebra.length === 1 && yak.length === 0, JSON.stringify([zebra, yak]));
@@ -197,7 +210,34 @@ export async function run({ check }) {
   const oneLine = t => !t.includes('\n') && t.length < 140 && /how --browse/.test(t) && /Search words are English/.test(t) && /docs\/AI\.md/.test(t);
   const zh = await answer(game, '下雨'), ru = await answer(game, 'дождь'), mixed = await answer(game, '下雨 rain'), accent = await answer(game, 'música');
   check('[guard] how: non-English text answers in one short line', oneLine(zh.text) && oneLine(ru.text) && oneLine(accent.text) && zh.ok, zh.text);
-  check('[guard] how: nothing found answers in one short line', oneLine((await answer(game, 'qqzzxx')).text.replace('No match for "qqzzxx". ', '')), (await answer(game, 'qqzzxx')).text);
+  // English words that match nothing: the short line, then AI.md's domains (pick one instead of guessing more words), still short
+  const miss = (await answer(game, 'qqzzxx')).text, [first, next] = miss.split('\n');
+  check('[guard] how: nothing found answers in one short line, then the domains', oneLine(first.replace('No match for "qqzzxx". ', '')) && /^Domains/.test(next) && miss.length < 2048, miss);
+  // [guard] section pointers (review 2026-11-09): a heading with quotes reads back as itself, a broken selector is no pointer, and the printed command
+  // needs no quotes, so a heading with an apostrophe cannot break it in bash or PowerShell
+  const quoted = 'Check "advance 10h normally == skip 10h"';
+  check('[guard] docRef: a heading with quotes round-trips', parseDocRef(docRef('recipes/49-x.md', quoted))?.title === quoted);
+  check('[guard] docRef: a broken selector is no pointer', ['recipes/21-camera.md §不存在', 'recipes/21-camera.md §1.2', 'recipes/21-camera.md §1 tail'].every(r => parseDocRef(r) === null) && parseDocRef('recipes/a.md#中文-x')?.anchor === '中文-x');
+  const cmd = docReadCommand(docRef('recipes/02-npc.md', "Avoidance (NPCs don't clump)"));
+  check('[guard] docRef: the read command has no quote of any kind', !/['"]/.test(cmd) && /--read recipes\/02-npc\.md#avoidance-npcs-dont-clump --full$/.test(cmd), cmd);
+  const back = readDoc(cmd.replace(/^threedog how --read | --full$/g, ''));
+  check('[guard] how --read: the printed command opens the section, and always says how to get all of it', back.ok && /^##+ Avoidance/.test(back.text) && /threedog how --read \S+ --full$/.test(back.text), back.text.slice(0, 200));
+  // [guard] how --read <api name> (how-field.mjs): one option by name from the API pages, through a method's option type, the createEngine options and a page's
+  // properties; a typo gets close names, never a guess. The MCP tool takes the same field, so the two cannot answer differently
+  const field = n => readDoc(n).text;
+  check('[guard] how --read interactions.add.once prints that one option of InteractionOptions', /^InteractionOptions\.once \(api\/interactions\.md\)\n {2}`once\?: boolean`/.test(field('interactions.add.once')) && field('interactions.add.once').split('\n').length <= 4, field('interactions.add.once'));
+  check('[guard] how --read: createEngine options, engine.<module>.<method>, a type with its fields', /`budget\?: BudgetLimits`/.test(field('createEngine.budget')) && /saves\.autosave\(minutes/.test(field('engine.saves.autosave'))
+    && /fields: .*\bonce\b.*\bcounter\b/.test(field('InteractionOptions')), field('InteractionOptions'));
+  check('[guard] how --read: an unknown name is not ok and lists close names', !readDoc('interactions.ad.once').ok && /Close: .*interactions\.add/.test(field('interactions.ad.once')), field('interactions.ad.once'));
+  // [guard] review 2026-11-09 (research/2026-11-09-gpt-review-agent-entry.md): a named option heading ("followCamera options"), two levels through a field's type,
+  // a type it extends, an inline { files? } in the signature, and a namespace typed wrong; each once answered "unknown"
+  for (const [name, re] of [['followCamera.pointerLock', /^FollowCameraOptions\.pointerLock /], ['createEngine.budget.fps', /^BudgetLimits\.fps /], ['characters.addPlayer.speed', /^CharacterOptions\.speed /],
+    ['saves.exportFile.files', /^saves\.exportFile\.files \(an inline option/], ['engine.onFixed.channel', /^engine\.onFixed\.channel /]]) check(`[guard] how --read ${name}`, readDoc(name).ok && re.test(field(name)), field(name));
+  check('[guard] how --read: a namespace typed wrong gets the whole name back', /Close: interactions\.add\.once\./.test(field('interactons.add.once')), field('interactons.add.once'));
+  check('[guard] the MCP how tool reads the same name', (await STATIC_TOOLS.how.run(game, { read: 'interactions.add.once' })).text === field('interactions.add.once'));
+  // [guard] the whole answer, with its section, stays within the output rule in bytes and lines
+  const long = await answer(game, 'save and load the game');
+  check('[guard] how: the answer with its section is at most 4000 bytes and 40 lines', Buffer.byteLength(long.text) <= 4000 && long.text.split('\n').length <= 40 && /^The section/m.test(long.text) && /--read \S+ --full$/m.test(long.text), `${Buffer.byteLength(long.text)} B, ${long.text.split('\n').length} lines`);
   check('[guard] how: English beside other text keeps its answer, the line first', /^Search words are English/.test(mixed.text) && /Recommended/.test(mixed.text), mixed.text.slice(0, 200));
   check('[guard] how: a plain English task is not told to use English', !/Search words are English/.test((await answer(game, 'rain')).text));
   check('[guard] how: word forms reach the docs word (losing -> lose, enemies -> enemy)', queryTokens('losing').concepts[0].alts.some(x => x.a === 'lose') && queryTokens('enemies').concepts[0].alts.some(x => x.a === 'enemy'));

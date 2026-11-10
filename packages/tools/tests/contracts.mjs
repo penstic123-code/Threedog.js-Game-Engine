@@ -77,7 +77,7 @@ export async function run(t) {
 async function checkContracts({ check }) {
   for (const [file, impls] of Object.entries(CONTRACTS)) {
     const contract = (await imp(file)).default;
-    for (const [who, make, prepare] of impls) runContract(contract, () => make(contract.options), { check, label: `${contract.name} (${who})`, prepare });
+    for (const [who, make, prepare] of impls) await runContract(contract, () => make(contract.options), { check, label: `${contract.name} (${who})`, prepare });
   }
   // guard: every contract file in the engine is run above
   const found = [];
@@ -96,6 +96,26 @@ async function checkContracts({ check }) {
   const unbound = [];
   for (const f of found) { const c = (await imp(f)).default; if (!CAP_CONTRACTS.has(c.name) && !NOT_CAPS[c.name]) unbound.push(c.name); }
   check('[guard] every module contract binds at its capability (on the list in index.js) or says why not', CAP_CONTRACTS.size > 0 && !unbound.length, `size ${CAP_CONTRACTS.size}; missing: ${unbound.join(', ')}`);
+
+  // ---- [guard] the contract engine is not looser than the real one: what engine.use() refuses fails the contract, and the save round trip loads in the engine's order
+  // (first ranks, a part load returning a Promise holds the later ones). A third-party module that passes here must not throw when a game installs it
+  const tiny = { name: 'tiny', api: ['get'], ops: [], saves: { zone: 1, level: 1 }, probe: { state: { read: ['get'], expect: 'zone in level' } } };
+  const tinyModule = (o = {}) => () => ({ name: 'tiny', install(_e, ctx) {
+    let level = null, zone = 'zone in level';
+    // the zone is defined first but needs the level: only first: true puts the level ahead, and the level's load finishes later (a Promise) than the zone would start
+    ctx.saves.define('zone', { notAtomic: 'test part', save: () => 'zone', load: d => { zone = level ? `${d} in ${level}` : `${d} before the level`; } });
+    ctx.saves.define('level', { notAtomic: 'test part', first: o.badFirst ? 'yes' : true, save: () => 'level', load: d => new Promise(r => setTimeout(() => { level = d; r(); }, 1)) });
+    if (o.twice) ctx.saves.define('level', { notAtomic: 'test part', save: () => 1, load() {} });
+    const api = { get: () => zone };
+    return o.async ? Promise.resolve(api) : api;
+  } });
+  const failsOf = async o => { const bad = []; await runContract(tiny, tinyModule(o), { check: (l, ok, d) => { if (!ok) bad.push(`${l} (${d ?? ''})`); } }); return bad; };
+  const good = await failsOf();
+  check('[guard] contract engine: the save round trip loads by first and waits for a part load that returns a Promise, as saves.load does', !good.length, good.join('; '));
+  for (const [what, o] of [['a save key defined twice', { twice: true }], ["a first that is no number or boolean", { badFirst: true }], ['an install that returns a Promise', { async: true }]]) {
+    const bad = await failsOf(o);
+    check(`[guard] contract engine refuses ${what}, as engine.use() does`, bad.some(x => x.includes('installs on the contract engine')), bad.join('; ') || 'passed');
+  }
 
   // ---- engine.wrap
   const e = contractEngine(), mod = inventory(), inv = mod.install(e, contractCtx(e, mod.name));

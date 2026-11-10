@@ -3,6 +3,7 @@
 // The naming rules mirror modules/level (meshes.js COL_RE, nodes.js MARKER_RE and record ids); change them together.
 import { basename, extname } from 'node:path';
 import { sanitize } from 'threedog/spelling';
+import { renamedNodeIssues } from './names.mjs';
 
 const MARKER_RE = /^(spawn|spawn_.*|npc_.*|trigger_.*|marker_.*)$/i;
 
@@ -40,6 +41,7 @@ export function levelManifest(doc, file) {
     for (const c of node.listChildren()) walk(c, underCol || col);
   };
   for (const s of doc.getRoot().listScenes()) for (const n of s.listChildren()) walk(n, false);
+  m.issues.push(...renamedNodeIssues(doc));
   for (const [n, c] of names) if (c > 1) issue('error', 'duplicate-marker', `marker ${n} appears ${c} times; the level keeps only one of them (rename in Blender)`);
   for (const [id, c] of ids) if (c > 1) issue('error', 'duplicate-id', `record id ${id} is used by ${c} nodes, they would share one saved state (rename the nodes in Blender)`);
   m.counts = { spawns: m.spawns.length, colliders: m.colliders.length, triggers: m.triggers.length, npcs: m.npcs.length, markers: m.markers.length, records: m.records.length };

@@ -1,8 +1,8 @@
 // Opt-in gameplay presets: named, plain option objects a game picks on purpose, like a style for feel.
-// The engine never applies one by itself (weather() alone has only 'clear', sky() has no seasons and no day cycle, music() does not duck for dialogue, no module binds a gameplay key, createPlayer() and interactions() refuse to guess a feel
+// The engine never applies one by itself (weather() alone has only 'clear', sky() has no seasons and no day cycle, music() does not duck for dialogue, no module binds a gameplay key, addPlayer() and interactions() refuse to guess a feel
 // or a key); a preset only bundles options the game could write itself, so spreading it and overriding a field is always the same as writing it out:
 //   engine.use(weather({ ...presets.weather.temperate, autoPool: ['clear', 'rain'] }));
-//   engine.characters.createPlayer({ ...presets.player.lockOn, faceTarget: boss });
+//   engine.characters.addPlayer({ ...presets.player.lockOn, faceTarget: boss });
 //   engine.use(interactions({ ...presets.interactions.nearest, radius: 3 }));
 // No imports and no engine state: plain data plus small control functions that call public API only.
 
@@ -17,7 +17,7 @@ const keys = (...k) => Object.freeze(k);
 /**
  * Opt-in presets, grouped by the option they fill. Each value is an options object for the function named in its group.
  * @example engine.use(openWorld({ weather: presets.weather.temperate, calendar: presets.calendar.fourSeasons }))
- * @example engine.use(followCamera(presets.camera.overShoulder)); engine.characters.createPlayer({ ...presets.player.aim, spawn })
+ * @example engine.use(followCamera(presets.camera.overShoulder)); engine.characters.addPlayer({ ...presets.player.aim, spawn })
  * @example engine.use(interactions({ ...presets.interactions.nearest }))
  */
 export const presets = Object.freeze({
@@ -46,7 +46,7 @@ export const presets = Object.freeze({
     /** One time of day that never moves (dungeon, arena, space station), what calendar() does without a dayLength; pick the hour with time */
     fixedTime: Object.freeze({ dayLength: Infinity }),
   }),
-  /** characters.createPlayer({ ... }) movement, facing and camera follow (createPlayer has no default: pick one of these or write the options; keys: presets.bindings.walk) */
+  /** characters.addPlayer({ ... }) movement, facing and camera follow (addPlayer has no default: pick one of these or write the options; keys: presets.bindings.walk) */
   player: Object.freeze({
     /** Keys relative to the camera, turn toward the move direction, camera follows (adventure, life sim) */
     thirdPerson: walk('camera', 'move'),
@@ -72,7 +72,7 @@ export const presets = Object.freeze({
    * an action bound to [] has deliberately no key.
    */
   bindings: Object.freeze({
-    /** characters.createPlayer(): Shift / gamepad LB runs, Space / gamepad A jumps */
+    /** characters.addPlayer(): Shift / gamepad LB runs, Space / gamepad A jumps */
     walk: Object.freeze({ run: keys('ShiftLeft', 'ShiftRight', 'PadLB'), jump: keys('Space', 'PadA') }),
     /** interactions(): E / gamepad X uses the picked one */
     interact: Object.freeze({ interact: keys('KeyE', 'PadX') }),

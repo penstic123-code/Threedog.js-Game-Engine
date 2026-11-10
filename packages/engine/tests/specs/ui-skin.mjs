@@ -31,7 +31,7 @@ export const specs = [
         await engine.session.newGame(); engine.ui.close('title');
         await __t.until(() => engine.input.enabled, 5000);
         window.toast('hello');
-        engine.hud.counter('shells', { label: 'Shells', value: 1, max: 4 }); engine.hud.bar('hp', { value: 0.5, label: 'HP' });
+        engine.hud.addCounter('shells', { label: 'Shells', value: 1, max: 4 }); engine.hud.bar('hp', { value: 0.5, label: 'HP' });
         engine.step(0.1);
         const parts = { toast: css('.threedog-toast'), prompt: css('.threedog-prompt'), counter: css('.threedog-hud-counter'), hudText: css('.threedog-hud'), fill: css('.threedog-hud-bar-fill') };
         engine.dialogue.start('npc'); engine.step(0.1);

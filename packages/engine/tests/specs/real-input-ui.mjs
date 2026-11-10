@@ -6,7 +6,7 @@ export const specs = [
     name: '[guard] real keys: rebinding in the open menu with a held key, Space and Enter on the focused button, then playing with the new key',
     url: '/?cutscene=skip',
     async run({ page, check, ev, frames }) {
-      await ev(() => { engine.input.action('audit', { keys: ['KeyO'] }); window.pressed = 0; engine.onFixed(() => { if (engine.input.pressed('audit')) window.pressed++; }); });
+      await ev(() => { engine.input.define('audit', { keys: ['KeyO'] }); window.pressed = 0; engine.onFixed(() => { if (engine.input.pressed('audit')) window.pressed++; }); });
       await page.keyboard.down('KeyW'); await frames(3);
       const held = await ev(() => engine.input.down('moveForward'));
       await ev(() => { engine.settings.open(); }); await frames(3);

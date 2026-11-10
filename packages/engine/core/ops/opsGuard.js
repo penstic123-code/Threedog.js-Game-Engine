@@ -7,9 +7,9 @@ import { fmt, warnOnce } from '../base/validate.js';
 const STRINGS = {
   canWrote: "{name}'s can changed state ({where}). can is read-only; change state in run",
   guard: "[engine] gameplay state changed outside a fixed step or an op: {where}{at}.\n"
-    + "Change state from UI buttons and timers through an op: engine.ops.run('name', args); put simulation in a module's fixed or world.simulate. See recipes/23-ops.md",
+    + "Change state from UI buttons and timers through an op: engine.ops.run('name', args); put simulation in a module's fixed or world.simulate. See recipes/23-ops.md §5",
   clientGuard: "[engine] net client changed shared state locally: {where}{at}.\n"
-    + "On a client the host owns the state; request the change with engine.ops.run (op defined with net: 'peer'). See recipes/27-net.md",
+    + "On a client the host owns the state; request the change with engine.ops.run (op defined with net: 'peer'). See recipes/27-net.md §2",
 };
 
 /** Warn once per call site when `where` writes state outside the allowed places; throws when called from inside a can() */

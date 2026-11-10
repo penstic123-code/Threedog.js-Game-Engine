@@ -15,7 +15,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FusedPass, groupFuse, checkDepthOrder } from './fuse.js';
 import { codedError } from '../core/base/errorHints.js';
-import { holdShadowRedraw, MSAA_SAMPLES } from './backend.js';
+import { holdShadowRedraw, MSAA_SAMPLES, borrowRenderer } from './backend.js';
 import { notePatch, patchOn } from '../core/scene/threePatches.js';
 
 // One FusedPass per group of neighboring fuse effects, kept while the same effects stay grouped (a changed group recompiles once)
@@ -72,9 +72,9 @@ function toTarget(post, dt, target) {
   const c = post.composer, r = post.engine.renderer;
   c.renderToScreen = false;
   try { webglPost.render(post, dt); } finally { c.renderToScreen = true; }
-  const prev = r.getRenderTarget();
   c.copyPass.renderToScreen = false;
-  try { c.copyPass.render(r, target, c.readBuffer); } finally { r.setRenderTarget(prev); }
+  borrowRenderer(r, () => c.copyPass.render(r, target, c.readBuffer));
+  post._tgtIdle = 0;   // with no effect on the targets stay for the next renderOnce(target) (a minimap asks every frame); direct() frees them after IDLE_FRAMES frames without one
 }
 
 // The meshes three draws a texture background with (WebGLBackground's plane and box), by their material names
@@ -102,10 +102,62 @@ function toneBackground(post, draw) {
   } finally { post._toneBg = false; }
 }
 
+// Fog in the same space as the chain. three mixes fog after tone mapping and the output encoding, with the fog colour in output space, when a material
+// draws to the canvas; under the composer (a render target) it mixes in linear space and OutputPass tone-maps the result. So the far fog changed colour
+// whenever the chain turned on or off, and met a tone-mapped sky backdrop with a seam. WebGPU already mixes before tone mapping on both paths. The rule:
+// fog is mixed in linear space BEFORE any output conversion (tone curve or colour encoding; with or without a tone curve, toneMapped or not). So the mix
+// goes first in tonemapping_fragment (always before colorspace_fragment), from the fog colour decoded back from the output space (probe below; a render
+// target is linear and needs no decode). THREEDOG_FOG_DONE is set by whichever fog code runs first: fog_fragment skips its mix when it is set, and the
+// injection is skipped when a custom shader already ran fog_fragment before the tone chunk (fogFactor would be declared twice). A shader without the fog
+// chunks (THREEDOG_FOG_PARS) keeps three's code. The decode assumes an sRGB or linear output; a wide-gamut output keeps three's unconverted fog colour.
+// threedogFogColor / threedogFogFactor are what the fog slot (render/slots.js) reads too, so a patch that wants default fog writes the same mix.
+const FOG_FNS = `
+#ifdef USE_FOG
+vec3 threedogFogColor() { return linearToOutputTexel( vec4( vec3( 0.2 ), 1.0 ) ).x > 0.25 ? sRGBTransferEOTF( vec4( fogColor, 1.0 ) ).rgb : fogColor; }
+float threedogFogFactor() {
+	#ifdef FOG_EXP2
+		return 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
+	#else
+		return smoothstep( fogNear, fogFar, vFogDepth );
+	#endif
+}
+#endif
+`;
+const FOG_LINEAR = `
+#if defined( USE_FOG ) && defined( THREEDOG_FOG_PARS ) && ! defined( THREEDOG_FOG_DONE )
+	gl_FragColor.rgb = mix( gl_FragColor.rgb, threedogFogColor(), threedogFogFactor() );
+	#define THREEDOG_FOG_DONE
+#endif
+`;
+{
+  // the originals live on the page (a symbol), not in this module: a second evaluation of this file (hot reload, a second copy) would take the patched chunks as the originals
+  const C = THREE.ShaderChunk, KEY = Symbol.for('threedog.fogChunks');
+  const was = C[KEY] ??= Object.fromEntries(['fog_pars_fragment', 'tonemapping_fragment', 'fog_fragment'].map(n => [n, C[n]]));   // by name, not R42's patch-slot anchors
+  const put = () => {
+    C.fog_pars_fragment = `${was.fog_pars_fragment}
+#ifdef USE_FOG
+#define THREEDOG_FOG_PARS
+#endif
+${FOG_FNS}`;
+    C.tonemapping_fragment = FOG_LINEAR + was.tonemapping_fragment;
+    C.fog_fragment = `#ifndef THREEDOG_FOG_DONE
+${was.fog_fragment}
+#define THREEDOG_FOG_DONE
+#endif
+`;
+  };
+  put();
+  notePatch('fog-linear', "three's fog_pars_fragment, tonemapping_fragment and fog_fragment shader chunks: fog is mixed in linear space before the tone curve when drawing to the canvas, as under the composer and on WebGPU (render/postWebGL.js)",
+    () => { C.tonemapping_fragment = was.tonemapping_fragment; }, { scope: 'page', lost: 'with no effect on, distant fog is mixed after tone mapping in output space: it changes colour when the first effect turns on and leaves a seam against a tone-mapped sky backdrop' });
+}
+
+/** Canvas frames without a renderOnce(target) after which an effect-free engine gives the composer targets back */
+const IDLE_FRAMES = 120;
+
 export const webglPost = {
   /** @param {any} post */
   init(post) {
-    /** @internal */ post._fused = /** @type {Map<string, FusedPass>} */ (new Map()); post._scenePass = null; post._output = null;
+    /** @internal */ post._fused = /** @type {Map<string, FusedPass>} */ (new Map()); post._scenePass = null; post._output = null; post._tgtIdle = 0;
     /** @internal three's background meshes already hooked (toneBackground) */ post._bgMeshes = new WeakSet(); post._toneBg = false;
   },
   object: post => post.composer,
@@ -118,7 +170,8 @@ export const webglPost = {
   refresh(post) { for (const p of post._fused.values()) p.refresh(); },
   samples: post => (post.active ? post.composer?.renderTarget1.samples ?? (post._aa ? MSAA_SAMPLES : 0) : post._ownAA ? MSAA_SAMPLES : 0),
   setAntialias(post, on) {
-    if (post.composer) for (const rt of [post.composer.renderTarget1, post.composer.renderTarget2]) { rt.samples = on ? MSAA_SAMPLES : 0; rt.dispose(); }
+    const samples = on ? MSAA_SAMPLES : 0;   // only a real change of samples frees the targets
+    if (post.composer) for (const rt of [post.composer.renderTarget1, post.composer.renderTarget2]) if (rt.samples !== samples) { rt.samples = samples; rt.dispose(); }
   },
   // Rebuild the pass chain from the list: scene (or the default RenderPass) -> hdr -> tone (or the default OutputPass) -> ldr -> final.
   // Only enabled effects are in the chain; an implementation is built the first time its effect is on and kept after.
@@ -137,7 +190,7 @@ export const webglPost = {
     const c = post.composer, on = post._sorted().filter(e => e.enabled);
     for (const e of on) if (!e._impl && !e._def.fuse) {
       if (typeof e._def.create !== 'function') throw codedError('post-effect', `post effect '${e.name}' has only node() (a TSL node, WebGPURenderer only) and this game chose WebGLRenderer: use createEngine({ renderer: 'webgpu' }), or give it create: (ctx) => pass (a three.js postprocessing Pass)`);
-      e._impl = e._def.create({ engine: post.engine, scene, camera, width: size.x, height: size.y, params: e.params });
+      e._impl = e._def.create({ engine: post.engine, scene, camera, width: size.x, height: size.y, params: e.params, borrowRenderer });
       if (!e._impl || typeof e._impl.render !== 'function') { e._impl = null; throw codedError('post-effect', `post effect '${e.name}': create() must return a pass with render() (a three.js postprocessing Pass)`); }
     }
     const used = new Set();
@@ -167,7 +220,7 @@ export const webglPost = {
     return post.composer?.renderTarget1 ?? null;   // RenderPass draws into readBuffer, which is renderTarget1 or its twin (same format: same program key)
   },
   render(post, dt, target = null) {
-    if (!post.composer) post._sync();
+    if (!post.composer) webglPost.sync(post);   // post._sync() does nothing with no effect on, and renderOnce(target) still goes through scene + output
     follow(post);
     if (target) { toTarget(post, dt, target); return; }
     // no background: RenderPass clears the half-float target with whatever clear value three last set, which after the previous frame's
@@ -190,8 +243,10 @@ export const webglPost = {
    */
   direct(post, target = null) {
     const { renderer: r, scene: s, camera } = post.engine, bg = s.background;
-    // a render target gets the scene as three draws into one (linear, no tone mapping); post.active is what gives the canvas's pixels
-    if (target) { const prev = r.getRenderTarget(); r.setRenderTarget(target); try { r.render(s, camera); } finally { r.setRenderTarget(prev); } return; }
+    // exactly once, IDLE_FRAMES canvas frames after the last renderOnce(target): the targets it left allocated go back (three allocates them again on the next use)
+    if (!target && post.composer && !post.active && ++post._tgtIdle === IDLE_FRAMES) for (const rt of [post.composer.renderTarget1, post.composer.renderTarget2]) rt.dispose();
+    // a target gets the canvas's pixels too (tone mapped, output color space), whether or not an effect is on: through the scene + output passes, which are the chain with nothing added
+    if (target) { webglPost.render(post, 0, target); return; }
     if (r.toneMapping !== THREE.NoToneMapping && bg?.isTexture && THREE.ColorManagement.getTransfer(bg.colorSpace) === THREE.SRGBTransfer) {
       toneBackground(post, () => r.render(s, camera)); return;
     }

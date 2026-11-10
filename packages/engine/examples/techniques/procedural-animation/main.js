@@ -19,7 +19,7 @@ const { root, parts } = buildCreature({ material: mat.creature });
 const RUN_SPEED = 7;
 // The game's own state: 'sit' after 4 s without moving. The hook runs every fixed step after the mover's state; null keeps the mover's.
 let stillSince = 0;
-const player = engine.characters.createPlayer({
+const player = engine.characters.addPlayer({
   ...presets.player.thirdPerson, runSpeed: RUN_SPEED,
   // rig: the body is ours; limbs: [] so the engine swings nothing. The engine still bobs `body` from its own rule; onPose below overwrites it.
   rig: { root, body: parts.body, limbs: [] },

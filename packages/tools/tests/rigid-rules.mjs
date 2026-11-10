@@ -1,6 +1,7 @@
 // The rigid module's replaceable parts on real Rapier, in Node: rule 'fall', rigid({ fallbackFloor }), rule 'ragdoll.graph', the collider3d contract.
 // The "no way around it" checks: the source keeps no second fall decision (no literal height in the step, no preventDefault on character:fall),
 // ragdoll.js knows no body part by name (a human is only the default graph), and rigid holds the collider3d slot, so callers ask the capability, not the module.
+import { fakeSaves } from './fixtures/fake-saves.mjs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { readFileSync } from 'node:fs';
@@ -17,11 +18,11 @@ export const name = 'rigid rules: fall on real Rapier, fallbackFloor, ragdoll gr
 /** The small engine the rigid module reads: flat ground without collision of its own, no water, one world channel */
 export async function physics(opts) {
   const e = { i18n: { add() {} }, movement: { radius: 0.3, height: 1.8 }, rays: { addProvider() {} }, events: { on: () => ({ remove() {} }), emit() {} }, stream: { _sources: [] }, collision: { mirror: () => ({ sync() {}, clear() {} }) },
-    time: { dt: () => 1 / 60 }, focus: new THREE.Vector3(), surface: () => 0, waterAt: () => -Infinity, _poses: { add() {}, remove() {} }, add() {},
+    time: { dt: () => 1 / 60 }, focus: new THREE.Vector3(), surface: () => 0, waterAt: () => -Infinity, _poses: { add: () => ({ remove() {} }) }, add() {},
     ground: { voidY: () => -Infinity, has: () => true, forEachCollider() {} }, assets: { animatorOf: () => null } };
   e.stacks = new Stacks(e); e.mod = (n, o) => e.stacks.mod(n, o);
   const mod = rigid(opts);
-  const r = mod.install(e, { name: 'rigid', track: h => h, rule: (n, d, l) => e.stacks.rule(n, d, l), budget: { metric() {} }, stream: { addReadyCheck() {} }, saves: { register() {} } });
+  const r = mod.install(e, { name: 'rigid', track: h => h, rule: (n, d, l) => e.stacks.rule(n, d, l), budget: { metric() {} }, stream: { addReadyCheck() {} }, saves: fakeSaves() });
   await r.init();
   return { e, r, mod, steps: n => { for (let i = 0; i < n; i++) r.step(1 / 60); } };
 }

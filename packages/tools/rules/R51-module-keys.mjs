@@ -2,7 +2,7 @@
 // Why: modules bind no keys, so forgetting the bind leaves a game that builds, loads and passes every other check while E does nothing. The engine reports it
 // at run time too (interaction-no-key, input-unbound), but `check` is what runs after every change, with no browser.
 // Why only a warning: a click-only or touch-only game, or one with its own on-screen button, has no key and is right. The rule cannot see that.
-// Scanned per game folder (a bind in main.js covers a module installed in plugins/): createEngine({ bindings }), input.bind(...), input.action(name, { keys }).
+// Scanned per game folder (a bind in main.js covers a module installed in plugins/): createEngine({ bindings }), input.bind(...), input.define(name, { keys }).
 // Any key counts, a rebind to another key or to [] included: only "no key at all" is the fault. Bindings this pass cannot read (a variable, a spread of one,
 // a computed name) count as "may cover it", so the rule stays quiet rather than guess. content/actions.js entries with keys count by their name.
 // Scope: the same as R33 (examples, templates, games/*); tests/ pages are skipped. An action name other than the default is read from the literal `action:` given
@@ -50,7 +50,7 @@ export function scanGame(files, groups, parseFile = parse) {
       if (ts.isIdentifier(n.expression) && NEEDS[name] && imported.has(name)) needs.push({ action: literalOption(a0, 'action') ?? NEEDS[name], file: f, line: lineOf(n), module: name });
       else if (name === 'createEngine') { const b = a0 && ts.isObjectLiteralExpression(a0) && a0.properties.find(p => p.name?.getText() === 'bindings'); if (b) readBindings(ts.isShorthandPropertyAssignment(b) ? b.name : b.initializer, bound, groups); }
       else if (name === 'bind' && inputCall(n) && a0) { if (ts.isStringLiteralLike(a0)) bound.add(a0.text); else readBindings(a0, bound, groups); }
-      else if (name === 'action' && inputCall(n) && a0 && a1) { if (ts.isStringLiteralLike(a0)) bound.add(a0.text); else bound.unknown = true; }
+      else if ((name === 'define' || name === 'action') && inputCall(n) && a0 && a1) { if (ts.isStringLiteralLike(a0)) bound.add(a0.text); else bound.unknown = true; }
       else if (name === 'add' && /interactions$/.test(n.expression.expression?.getText() ?? '')) { const action = literalOption(a1, 'action'); if (action) needs.push({ action, file: f, line: lineOf(n), module: 'interactions.add' }); }
     });
     // content/actions.js: { actions: { name: { keys } } } or a default export of that map, loaded by content(); its names are the object keys

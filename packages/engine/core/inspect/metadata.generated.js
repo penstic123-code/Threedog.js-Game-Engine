@@ -333,7 +333,7 @@ export const metadata = {
    "documented": true,
    "names": [
     "findSpawn",
-    "createPlayer",
+    "addPlayer",
     "moveInput",
     "addVehicle",
     "support",
@@ -833,10 +833,12 @@ export const metadata = {
    "documented": true,
    "names": [
     "marker",
-    "counter",
+    "addCounter",
     "bump",
     "value",
     "bar",
+    "button",
+    "hint",
     "remove",
     "markers"
    ],
@@ -1593,6 +1595,12 @@ export const metadata = {
      "docType": "number",
      "desc": "(experimental) How many photos the album keeps at most, default 50"
     },
+    "pathTracer": {
+     "type": "any",
+     "optional": true,
+     "docType": "(() => Promise<any>) | null",
+     "desc": "(experimental) The game's import of its optional path tracer, called on the first photo.trace(): () => import('three-gpu-pathtracer/webgpu')"
+    },
     "scale": {
      "type": "any",
      "optional": true
@@ -1618,11 +1626,13 @@ export const metadata = {
    "documented": true,
    "names": [
     "take",
+    "trace",
     "subject",
     "album",
     "canTake",
     "format",
-    "maxAlbum"
+    "maxAlbum",
+    "tracing"
    ],
    "sections": [],
    "saves": [],
@@ -2667,6 +2677,7 @@ export const metadata = {
     "removeInstance",
     "restoreInstance",
     "instanceAt",
+    "plantOf",
     "material",
     "patches"
    ],
@@ -2781,15 +2792,15 @@ export const metadata = {
      "desc": "Flat shading (low poly), default true"
     },
     "size": {
-     "type": "any",
+     "type": "number",
      "optional": true,
-     "docType": "number",
+     "min": 5e-324,
      "desc": "Edge length of the global water plane (meters), default 900"
     },
     "segments": {
-     "type": "any",
+     "type": "int",
      "optional": true,
-     "docType": "number",
+     "min": 1,
      "desc": "Mesh subdivision of the global water, default 150"
     }
    },
@@ -3108,7 +3119,7 @@ export const metadata = {
   },
   "player": {
    "module": "characters",
-   "by": "createPlayer"
+   "by": "addPlayer"
   }
  },
  "sections": {
@@ -3258,7 +3269,7 @@ export const metadata = {
   "characters": {
    "file": "packages/engine/modules/characters/contract.js",
    "api": [
-    "createPlayer",
+    "addPlayer",
     "removePlayer",
     "findSpawn",
     "findPath",
@@ -3654,7 +3665,7 @@ export const metadata = {
    "collide": {
     "type": "any",
     "optional": true,
-    "desc": "collision: 'box', 'circle', { circle: radius, occluder?: false }, or false = none",
+    "desc": "collision: 'box', 'circle', { circle?: radius, occluder?: false, layer?: 'gate' } (layer: characters with passes: ['gate'] walk through), or false = none",
     "label": "Collision",
     "rare": true
    },
@@ -3973,7 +3984,7 @@ export const metadata = {
   "keys": {
    "kind": "keys",
    "seen": "a raw keydown / keyup listener",
-   "use": "engine.input.action('jump', { label, keys }) in a module, the game binds keys with engine.input.bind (rebinding, contexts, gamepad); read engine.input.pressed(name) (recipe 58)",
+   "use": "engine.input.define('jump', { label, keys }) in a module, the game binds keys with engine.input.bind (rebinding, contexts, gamepad); read engine.input.pressed(name) (recipe 58)",
    "raw": "/(?:^|[^\\w.])(?:(?:window|document|self|globalThis|canvas|document\\.body|[\\w.]*domElement)\\.)?(?:addEventListener\\s*\\(\\s*['\"]|on)key(?:down|up)\\b/",
    "yields": {
     "kind": "pause",
@@ -4072,7 +4083,7 @@ export const metadata = {
   "quests": {
    "kind": "quests",
    "seen": "a quest list of its own",
-   "use": "the quests module: steps, rewards, markers and the log, saved with the game (recipe 04)",
+   "use": "engine.quests (quests()): steps, rewards, markers and the log, saved with the game (recipe 04)",
    "quiet": "/\\b(engine|e|eng|ctx)\\.quests\\b|\\bquests\\(\\s*[{)]/",
    "code": "/(?:\\b(?:const|let|var)\\s+|\\bthis\\.)(?:quests?|questLog|missions?|objectives?)(?:List|Log|Data|s)?\\s*=\\s*(?:\\[\\s*\\]|\\{\\s*\\}|new Map\\b)/i",
    "file": "packages/engine/modules/gameplay/Quests.js"
@@ -4104,7 +4115,7 @@ export const metadata = {
   "save": {
    "kind": "save",
    "seen": "a save of its own in localStorage",
-   "use": "engine.saves: autosave(minutes), register('game', { version: 1, save, load }), and Continue on the start screen (recipe 63); versions, slots and a corrupt save are handled",
+   "use": "engine.saves: autosave(minutes), define('game', { version: 1, save, load }), and Continue on the start screen (recipe 63); versions, slots and a corrupt save are handled",
    "quiet": "/\\bengine\\.saves\\b/",
    "code": "/\\blocalStorage\\.setItem\\s*\\(/",
    "notRaw": "/setItem\\s*\\(\\s*(?![^,)]*(?:save|progress))[^,)]*(?:volume|mute|lang|locale|theme|music|sfx|quality|sensitiv|brightness|fullscreen|tutorial|dismiss|setting|pref|option|keybind)/i",
@@ -4113,7 +4124,7 @@ export const metadata = {
   "settings": {
    "kind": "settings",
    "seen": "a settings menu of its own",
-   "use": "the settings module: volume, keys, quality and language in one menu that remembers itself; settings.define adds your own (recipe 26)",
+   "use": "engine.settings (settings()): volume, keys, quality and language in one menu that remembers itself; engine.settings.define adds your own (recipe 26)",
    "quiet": "/\\bsettings\\(|\\bengine\\.settings\\b/",
    "code": "/\\b(createElement|innerHTML|className|classList|getElementById|querySelector|\\.id)\\b/",
    "raw": "/(?:createElement|innerHTML|className|classList|getElementById|querySelector|\\.id\\b)[^,;{}]*(?:settings|options-?(?:menu|panel|screen)|pause-?menu)|(?:settings|options|pause)-?(?:menu|panel|screen)[^,;{}]*(?:createElement|innerHTML|className|classList|getElementById|querySelector|\\.id\\b)/i",

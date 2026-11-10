@@ -18,13 +18,20 @@ function picture(w, h, [x0, y0, x1, y1]) {
 export async function run({ check }) {
   // ── options ──
   check('no --mode: no extra pictures', parseModes(undefined, true).length === 0);
-  check('a list, duplicates dropped', parseModes('silhouette,value,value', true).join() === 'silhouette,value' && MODES.length === 2);
-  check('an unknown mode fails naming the known ones', /unknown --mode outline; modes: silhouette, value/.test(throws(() => parseModes('outline', true))));
+  check('a list, duplicates dropped; the channels are modes too', parseModes('silhouette,value,value,roughness', true).join() === 'silhouette,value,roughness' && MODES.length === 7);
+  check('an unknown mode fails naming the known ones', /unknown --mode outline; modes: silhouette, value, albedo, normal, roughness, metalness, ao/.test(throws(() => parseModes('outline', true))));
   check('--mode without --shots fails instead of being ignored', /--mode works with --shots/.test(throws(() => parseModes('value', false))));
 
   // ── the other options: wrong ones stop; names stay apart on disk and safe in the page ──
-  check('--size / --only without --shots fail instead of being ignored', /--size works with --shots/.test(throws(() => parseGalleryOptions({ size: '128' }))) && /--only works with --shots/.test(throws(() => parseGalleryOptions({ only: 'a' }))) && parseGalleryOptions({ size: '128', shots: true }).length === 0);
-  check('--port must be a number', /--port is a port number/.test(throws(() => parseGalleryOptions({ port: 'abc' }))) && parseGalleryOptions({ port: '5181' }).length === 0);
+  check('--size / --only / --light / --material without --shots fail instead of being ignored', /--size works with --shots/.test(throws(() => parseGalleryOptions({ size: '128' }))) && /--only works with --shots/.test(throws(() => parseGalleryOptions({ only: 'a' })))
+    && /--light works with --shots/.test(throws(() => parseGalleryOptions({ light: 'studio' }))) && /--material works with --shots/.test(throws(() => parseGalleryOptions({ material: 'lava' }))) && parseGalleryOptions({ size: '128', shots: true }).modes.length === 0);
+  check('--port must be a number', /--port is a port number/.test(throws(() => parseGalleryOptions({ port: 'abc' }))) && parseGalleryOptions({ port: '5181' }).modes.length === 0);
+  // ── the look-dev options: a wrong one stops naming the right ones; a right one is passed through as the value shots() takes ──
+  const look = parseGalleryOptions({ shots: true, light: 'studio,game,studio', exposure: '1.5', tone: 'agx', material: 'lava' });
+  check('--light / --exposure / --tone / --material parse to what shots() takes', look.lights.join() === 'studio,game' && look.exposure === 1.5 && look.tone === 'agx' && look.material === 'lava', JSON.stringify(look));
+  check('an unknown --light / --tone, a non-positive --exposure fail naming what is allowed', /unknown --light noon; light setups: midday, lowSun, overcast, studio, game/.test(throws(() => parseGalleryOptions({ shots: true, light: 'noon' })))
+    && /unknown --tone filmic; tone mappings: none, linear/.test(throws(() => parseGalleryOptions({ shots: true, tone: 'filmic' }))) && /--exposure is a number above 0/.test(throws(() => parseGalleryOptions({ shots: true, exposure: '0' }))));
+  check('no look-dev option: the gallery as before (the three neutral setups, the game\'s tone mapping)', Object.values(parseGalleryOptions({ shots: true })).filter(v => v != null && !(Array.isArray(v) && !v.length)).length === 0);
   const stems = fileStems(['a/b', 'a_b', 'a/b', 'c']);
   check('names that sanitize alike get different file stems; the same name keeps one', stems.get('a/b') === 'a_b' && stems.get('a_b') === 'a_b-2' && stems.get('c') === 'c', JSON.stringify([...stems]));
   const cased = fileStems(['Rock', 'rock']);

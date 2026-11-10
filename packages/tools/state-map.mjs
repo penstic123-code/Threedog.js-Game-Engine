@@ -29,7 +29,7 @@ const ownerOf = f => /\/modules\/([^/]+)\//.exec(f)?.[1] ?? short(f).split('/').
 
 // One walk over the syntax tree: a line scan also matched names inside error messages. A first argument is read when it is a string, a plain `a ? 'x' : 'y'`, or the loop
 // variable of `for (const n of [...])` / `[...].map(n => ...)`; anything else is `dynamic`, so a reader knows what the table cannot see
-const KINDS = { emit: c => c.name === 'emit', on: c => /^(on|once)$/.test(c.name) && /(^|\.)(events|e|engine)$/.test(c.obj), save: c => c.name === 'register' && /saves$/.test(c.obj),
+const KINDS = { emit: c => c.name === 'emit', on: c => /^(on|once)$/.test(c.name) && /(^|\.)(events|e|engine)$/.test(c.obj), save: c => (c.name === 'define' || c.name === 'register') && /saves$/.test(c.obj),
   op: c => c.name === 'define' && /ops$/.test(c.obj), mod: c => c.name === 'mod', point: c => /^(define|rule)$/.test(c.name) && /stacks$/.test(c.obj) };
 const found = Object.fromEntries(Object.keys(KINDS).map(k => [k, new Map()]));
 const tracks = new Map(), borrows = [];
@@ -102,7 +102,7 @@ function build(rows) {
     out.push(`| ${r.name} | ${short(r.m.file)} | ${r.m.type} | ${r.m.stage ?? '-'} | ${cell(r.m.provides)} | ${cell(r.m.requires)} | ${r.def?.skipKind ?? 'unknown'} | ${cell(r.hooks)} | ${cell(savedBy.get(f) ?? [])} | ${tracks.get(f) ?? 0} |`);
   }
 
-  out.push(`\n### G2. Save parts (every literal \`saves.register\`)\n`, '| Key | Registered at | Owner |', '|---|---|---|');
+  out.push(`\n### G2. Save parts (every literal \`saves.define\`)\n`, '| Key | Registered at | Owner |', '|---|---|---|');
   for (const [key, list] of [...found.save].sort()) if (!key.startsWith('dynamic ')) out.push(`| ${key} | ${whereList(list)} | ${cell(owners(list))} |`);
 
   out.push(`\n### G3. Lifecycle listeners (every literal listener on a moment event)\n`, '| Event | Emitted at | Listeners |', '|---|---|---|');

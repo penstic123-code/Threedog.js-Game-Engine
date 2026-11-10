@@ -1,6 +1,6 @@
 // Player control is replaceable (genericity audit A1 / A2 / B1): control 'camera' / function, a game step through engine.control, faceMode, push, input.simulate, follow camera shoulder / frame, target selection.
 // Guards [must not be bypassed]: while a game step holds the player's control nothing else in the engine moves it; while framing, a yaw the game writes directly is pulled back (frame() owns yaw);
-// the engine picks no player feel (createPlayer without control throws, run / jump keys and camera follow exist only when given) and openWorld picks no camera.
+// the engine picks no player feel (addPlayer without control throws, run / jump keys and camera follow exist only when given) and openWorld picks no camera.
 
 export const specs = [
   {
@@ -36,9 +36,9 @@ export const specs = [
         b = at(); out.fnDx = b.x - a.x; out.fnDz = Math.abs(b.z - a.z);
         out.describeFn = engine.describe().player.control; side.remove();
         out.back = engine.describe().player.control;
-        try { engine.characters.createPlayer({ control: 'manual' }); } catch (err) { out.err = String(err.message); }
-        try { engine.characters.createPlayer({ control: true }); } catch (err) { out.errOld = String(err.message); }
-        try { engine.characters.createPlayer({ spawn: { x: 0, z: 0 } }); } catch (err) { out.errNone = String(err.message); out.codeNone = err.code; }
+        try { engine.characters.addPlayer({ control: 'manual' }); } catch (err) { out.err = String(err.message); }
+        try { engine.characters.addPlayer({ control: true }); } catch (err) { out.errOld = String(err.message); }
+        try { engine.characters.addPlayer({ spawn: { x: 0, z: 0 } }); } catch (err) { out.errNone = String(err.message); out.codeNone = err.code; }
         out.stillPlayer = engine.player === p;
         return out;
       });
@@ -46,7 +46,7 @@ export const specs = [
       check('[guard] a game step holds the player: W / A do nothing, only its +X moves it', r.offIdle < 0.05 && r.offDx > 1 && Math.abs(r.offDz) < 0.3 && r.describeOff === 'lunge', JSON.stringify(r));
       check('side-scroller step: W does not move it, D moves only along X; removing it gives the keys back', r.fnW < 0.05 && r.fnDx > 1 && r.fnDz < 1e-6 && r.describeFn === 'side' && r.back === 'player-input', JSON.stringify(r));
       check('bad control throws with the fix, before touching the existing player', /is not a control/.test(r.err) && /presets\.player\.thirdPerson/.test(r.err) && /is not a control/.test(r.errOld) && r.stillPlayer, r.err + ' | ' + r.errOld);
-      check('[guard] no control: createPlayer throws player-control and names the preset (the engine picks no feel)', r.codeNone === 'player-control' && /presets\.player\.thirdPerson/.test(r.errNone) && /engine\.control\.take/.test(r.errNone), r.errNone);
+      check('[guard] no control: addPlayer throws player-control and names the preset (the engine picks no feel)', r.codeNone === 'player-control' && /presets\.player\.thirdPerson/.test(r.errNone) && /engine\.control\.take/.test(r.errNone), r.errNone);
     },
   },
   {

@@ -33,7 +33,7 @@ export const specs = [
     async run({ check, ev }) {
       await ev(setup);
       const r = await ev(() => msRun('ms-world', msBase, async ({ E, out, step, settle }) => {
-        E.characters.createPlayer({ control: 'camera' });
+        E.characters.addPlayer({ control: 'camera' });
         await settle();
         msTry(out, () => E.unuse('world'));
         step(3);

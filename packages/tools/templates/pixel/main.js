@@ -1,10 +1,7 @@
 // @ts-check
 // __NAME__: pixel 2.5D start (--pixel) — a sprite character in an orthographic, pixel-snapped view; input, interaction, dialogue and saves wired. Gray placeholders, no gameplay: build what DESIGN.md describes.
-// One starting point among many, not the way to make a pixel game: a side view, a top-down grid or a 3D look all start from the blank game too. Everything here is the engine's:
-// engine.input actions (presets.bindings), engine.interactions (E near an object), engine.dialogue (flags are saved), engine.saves (autosave + start screen Continue), engine.characters
-// (the mover: ground, collision, camera follow), `pixelSize` (whole art pixels on screen), `pixelSprite` and the camera's `pixelSnap` (threedog/pixel, recipe 62 section 4b).
-// Extend them, do not rewrite them by hand: the start screen, autosave and Esc menu stay (CLAUDE.md "Already here"); a new key is engine.input.action(...), a new talker is engine.dialogue.define(...),
-// a new thing to use is engine.interactions.add(object, ...); anything else: threedog how "<task>". Which modules need a character and which take any object: recipe 13 section 3d.
+// One start among many (a side view, a grid or a 3D look start from the blank game). Everything here is the engine's: extend it, do not rewrite it:
+// a new key is engine.input.define(...), a talker engine.dialogue.define(...), a thing to use engine.interactions.add(object, ...); pixels: recipe 62 §4b; which modules take a sprite: recipe 13 §3d.
 __TSL_IMPORT__
 import { createEngine, presets, world, content, settings, collision, characters, followCamera, hud, interactions, dialogue, THREE } from 'threedog';
 import { pixelSprite, spriteFrame } from 'threedog/pixel';
@@ -20,7 +17,7 @@ const ARENA = { minX: -12, maxX: 12, minZ: -12, maxZ: 12 };
 engine.use(world(), content(), settings({ freezeWorld: true, sections: [{ id: 'graphics', omit: ['antialias'] }, 'audio', 'controls', 'language', 'saves'] }), collision(), characters({ fall: 'rescue' }),
   followCamera({ projection: 'orthographic', yaw: Math.PI / 4, pitch: 0.6, lockPitch: true, mouseLook: false, pixelSnap: { pixelsPerMeter: 32, bounds: ARENA } }),
   hud(), interactions({ ...presets.interactions.nearest }), dialogue());
-engine.saves.autosave(0.5);   // minutes of play; Continue on the start screen loads it. The game's own state joins with engine.saves.register('game', { version: 1, save, load }), recipe 20
+engine.saves.autosave(0.5);   // minutes of play; the game's own state: engine.saves.define('game', { version: 1, save, load }), recipe 20
 engine.use(createPicture());   // a picture module; to switch looks: engine.use(another(), { replaces: 'picture' })
 const { picture } = engine;   // picture.materials: the game's materials by name
 engine.assets.manifest(packs);   // assets.js: the models / sounds / textures content names
@@ -44,12 +41,12 @@ const guide = makeSprite(0xb08060, 'world'); guide.position.set(3, 0, -2); engin
 engine.interactions.add(guide, { id: 'guide', label: 'Talk', onUse: () => engine.dialogue.start('guide') });
 const shell = new THREE.Mesh(new THREE.SphereGeometry(0.25), picture.materials.default); shell.name = 'shell'; shell.position.set(-3, 0.25, 2); engine.scene.add(shell);
 engine.interactions.add(shell, { id: 'shell-1', label: 'Pick up', once: true, counter: 'coins' });
-engine.hud.counter('coins', { label: 'Coins', value: 0 });
+engine.hud.addCounter('coins', { label: 'Coins', value: 0 });
 
-// ---- The player: a character whose model is a pixelSprite. onPose picks the frame from the character's state each frame; the character's own position stays exact (saves and physics read that).
+// ---- The player: a character whose model is a pixelSprite. onPose picks the frame from the character's state each frame; the character's position stays exact (saves and physics read it).
 const ROW = /** @type {Record<string, number>} */ ({ idle: 0, walk: 1, run: 1, jump: 2, fall: 2 });   // which row of the sheet is which state: your sheet's layout
 const hero = makeSprite(0x9a9a9a, 'followed');   // 'followed': the one object the camera follows (recipe 62 4b)
-const player = engine.characters.createPlayer({ ...presets.player.thirdPerson, model: hero, spawn: [0, 0, 0] });
+const player = engine.characters.addPlayer({ ...presets.player.thirdPerson, model: hero, spawn: [0, 0, 0] });
 // facing is an angle (radians around Y), not a left/right sign: mirror when the heading points to the screen's left
 player.onPose(c => {
   const right = grid.axes().right, mirrored = Math.sin(c.facing) * right.x + Math.cos(c.facing) * right.z < 0;

@@ -39,6 +39,7 @@ export const SYNONYMS = [
   ['inventory', 'backpack', 'bag'],
   ['shader', 'shaders', 'glsl', 'applyEffects', 'patches'],
   ['probes', 'volumes', 'lightmaps'],
+  ['lookdev', 'look-dev', 'turntable', 'gallery'],
   ['post', 'postfx', 'postprocessing'],
   ['multiplayer', 'coop', 'online', 'net'],
   ['settings', 'options', 'preferences', 'quality', 'slider', 'sliders'],

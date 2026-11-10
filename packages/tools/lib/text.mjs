@@ -111,7 +111,8 @@ export const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** Bytes as "12.3 KB" */
 export const kb = n => (n / 1024).toFixed(1) + ' KB';
 /** A heading as its markdown anchor (what GitHub links to): lower case, code ticks and punctuation gone, each whitespace a hyphen */
-export const slug = h => h.trim().toLowerCase().replace(/[`*]/g, '').replace(/[^\p{L}\p{N}\s_-]/gu, '').replace(/\s/g, '-');
+// one anchor rule for the docs and threedog how --read: the engine's (core/base/docRef.js), so a printed command and a heading always agree
+export { docSlug as slug } from 'threedog/error-hints';
 /** A value with object keys sorted at every depth, so two JSON texts compare without key order */
 export const sorted = v => Array.isArray(v) ? v.map(sorted) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map(k => [k, sorted(v[k])])) : v;
 /** Equal ignoring object key order */

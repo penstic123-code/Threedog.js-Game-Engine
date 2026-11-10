@@ -260,7 +260,7 @@ export const specs = [
       await ev(setup);
       const r = await ev(async () => {
         const q = vQuiet(), E = await vCam('v-auto', vFollow);
-        let opened = false; E.saves.register('story', { save: () => ({ opened }), load: d => { opened = d.opened; } });
+        let opened = false; E.saves.define('story', { save: () => ({ opened }), load: d => { opened = d.opened; } });
         await E.session.newGame();
         E.saves.autosave(0.001);
         const p = E.timeline.play([{ wait: 0.3 }, { do: () => { opened = true; } }], { actors: [] });
@@ -307,7 +307,7 @@ export const specs = [
       const r = await ev(async shot => {
         const { all, mk, createEngine, world, collision, characters, level, THREE } = threedogThreads, q = vQuiet();
         const E = mk(createEngine, 'v-body'); E.use(world(), collision(), characters(), level({ scene: new THREE.Group() }), all.firstPersonCamera(), all.timeline()); await E.start();
-        const P = E.characters.createPlayer({ control: 'camera', cameraFollow: true }), m = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial());
+        const P = E.characters.addPlayer({ control: 'camera', cameraFollow: true }), m = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial());
         P.root.add(m); E.step(0.1);
         const inFirst = m.layers.test(E.camera.layers);
         const p = E.timeline.play([{ camera: { to: shot, duration: 0.1 } }, { wait: 0.2 }], { actors: [] });

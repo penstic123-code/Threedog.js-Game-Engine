@@ -90,7 +90,7 @@ export const specs = [
       const r = await ev(async () => {
         engine.haltLoop();
         let release = null, fixed = 0, state = 1;
-        engine.saves.register('loSlow', { save: () => ({ v: state }), load: d => new Promise(res => { release = () => { state = d.v; res(); }; }) });
+        engine.saves.define('loSlow', { save: () => ({ v: state }), load: d => new Promise(res => { release = () => { state = d.v; res(); }; }) });
         engine.ops.define('lo.poke', { args: {}, run: () => { state = 99; } });
         const h = engine.onFixed(() => fixed++);
         engine.saves.save('loSlot');

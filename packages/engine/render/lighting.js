@@ -38,8 +38,40 @@ vec3 threedogRim(vec3 normal, vec3 viewDir, vec3 color, float strength, float po
 Object.assign(THREE.ShaderChunk, { threedog_lighting: LIGHTING_CHUNK });   // the same registry effects.js fills
 
 // Functions need getShadow and the light uniforms, which exist only after these includes: they go after shadowmap_pars_fragment
+// With cascades (render/cascades.js, the 'csm' patch: USE_CSM) the sun is N directional lights with one color and direction, one shadow map each: the shadow is
+// the map of the cascade this fragment's depth falls in, picked the way three's CSMShader picks it (linear depth against CSM_cascades; the last one takes the rest).
+// Cascade 0 alone read as "lit" past its far edge, so wrap added sun light inside shadows and shadowTint went missing there.
+// With CSM_FADE (the engine default) CSMShader adds each cascade's light weighted by its margin ratio and fades the last one out; the sun's light is linear
+// in the shadow factor, so the same sum on the factor gives the same result, from the same CSM_cascades values.
 const SUN = `float threedogSunShadow(){
-  #if NUM_DIR_LIGHTS > 0 && defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0
+  #if NUM_DIR_LIGHTS > 0 && defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0 && defined( USE_CSM ) && defined( CSM_CASCADES )
+    float s = 1.0, sh, linearDepth = vViewPosition.z / ( shadowFar - cameraNear );
+    #ifdef CSM_FADE
+      vec2 cascade; float cascadeCenter, margin, csmx, csmy, ratio; bool lastOne;
+      s = 0.0;   // each cascade adds its share (CSMShader: reflectedLight = mix( before, before + this cascade's light, ratio ))
+    #endif
+    #pragma unroll_loop_start
+    for ( int i = 0; i < NUM_DIR_LIGHT_SHADOWS; i ++ ) {
+      #ifdef CSM_FADE
+        cascade = CSM_cascades[ i ]; cascadeCenter = ( cascade.x + cascade.y ) / 2.0;
+        margin = 0.25 * pow( linearDepth < cascadeCenter ? cascade.x : cascade.y, 2.0 );
+        csmx = cascade.x - margin / 2.0; csmy = cascade.y + margin / 2.0; lastOne = UNROLLED_LOOP_INDEX == CSM_CASCADES - 1;
+        if ( linearDepth >= csmx && ( linearDepth < csmy || lastOne ) ) {
+          ratio = clamp( min( linearDepth - csmx, csmy - linearDepth ) / margin, 0.0, 1.0 );
+          sh = receiveShadow ? getShadow( directionalShadowMap[ i ], directionalLightShadows[ i ].shadowMapSize, directionalLightShadows[ i ].shadowIntensity,
+            directionalLightShadows[ i ].shadowBias, directionalLightShadows[ i ].shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;
+          sh = mix( 1.0, sh, lastOne && linearDepth > cascadeCenter ? ratio : 1.0 );   // the last cascade fades out to unshadowed
+          s += sh * ( !lastOne || linearDepth < cascadeCenter ? ratio : 1.0 );   // neighbours cross over across the margin
+        }
+      #else
+        if ( linearDepth >= CSM_cascades[ i ].x && linearDepth < CSM_cascades[ i ].y )   // past the last far edge three lights unshadowed: s stays 1
+          s = receiveShadow ? getShadow( directionalShadowMap[ i ], directionalLightShadows[ i ].shadowMapSize, directionalLightShadows[ i ].shadowIntensity,
+            directionalLightShadows[ i ].shadowBias, directionalLightShadows[ i ].shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;
+      #endif
+    }
+    #pragma unroll_loop_end
+    return s;
+  #elif NUM_DIR_LIGHTS > 0 && defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0
     return receiveShadow ? getShadow( directionalShadowMap[ 0 ], directionalLightShadows[ 0 ].shadowMapSize, directionalLightShadows[ 0 ].shadowIntensity,
       directionalLightShadows[ 0 ].shadowBias, directionalLightShadows[ 0 ].shadowRadius, vDirectionalShadowCoord[ 0 ] ) : 1.0;
   #else

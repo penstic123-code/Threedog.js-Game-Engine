@@ -41,7 +41,7 @@ window dark but still readable if the game needs it readable. Check from the cam
 ## Plain three.js
 - Sun patch: a `DirectionalLight` with `castShadow`, every wall / ceiling / frame `castShadow`, and `shadow.camera` fitted to the room
   ([DirectionalLightShadow](https://threejs.org/docs/#api/en/lights/shadows/DirectionalLightShadow)).
-- Window sky light: [RectAreaLight](https://threejs.org/docs/#api/en/lights/RectAreaLight) with `RectAreaLightUniformsLib.init()`
+- Window sky light: [RectAreaLight](https://threejs.org/docs/#api/en/lights/RectAreaLight) (the engine loads its tables when it enters the scene)
   ([webgl_lights_rectarealight](https://threejs.org/examples/#webgl_lights_rectarealight)).
 - Bounce: a [LightProbe](https://threejs.org/docs/#api/en/lights/LightProbe) filled by `LightProbeGenerator.fromCubeRenderTarget` after a
   `CubeCamera` render inside the room; or a weak unshadowed `PointLight` above the patch; or a lightmap (`material.lightMap`, needs a second UV set).
@@ -64,7 +64,7 @@ window dark but still readable if the game needs it readable. Check from the cam
   when the zone changes. It writes `hemi.intensity`, `scene.environmentIntensity` and `renderer.toneMappingExposure`; call its `update(dt)` from
   `engine.onFrame`, and `update()` to jump to the zone's values at once. The page uses a box around the room and `EXPOSURE.day.outside` / `.inside`,
   eased over `EXPOSURE.ease` seconds.
-- `windowLight(engine, { position, lookAt, width, height })`: a `RectAreaLight` with its one-time uniforms init done.
+- `windowLight(engine, { position, lookAt, width, height })`: a `RectAreaLight` placed in the opening and aimed.
 
 | fill | what it gives | cost |
 |---|---|---|
@@ -86,7 +86,7 @@ decay 2, intensity in candela) inside shades with an emissive of 0.35; one casts
 only to the light that needs it). With bloom (`@threedog/post-effects`), keep the emitter's `emissiveIntensity` low or it blooms across the room.
 
 Rules (correctness):
-- `RectAreaLight` needs `RectAreaLightUniformsLib.init()` once, lights only `MeshStandardMaterial` / `MeshPhysicalMaterial`, and **casts no
+- `RectAreaLight` lights only `MeshStandardMaterial` / `MeshPhysicalMaterial`, and **casts no
   shadow**: it lights through furniture and walls on its front side. Use it for the window's soft sky light or a screen, and keep the
   shadowed part to the sun (a DirectionalLight) or a SpotLight.
 - The sun through a window needs every wall, the ceiling and the window frame to `castShadow`, and a shadow box that covers the room. `picture/lights.js`

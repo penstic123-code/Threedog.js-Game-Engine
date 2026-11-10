@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { materialInfo, infoLine } from './MaterialInfo.js';
 import { describeRender } from './describeRender.js';
-import { r1 } from '../base/math.js';
+import { r1, cameraFrustum } from '../base/math.js';
 
 const KINDS = [['isMesh', 'Mesh'], ['isPoints', 'Points'], ['isLine', 'Line'], ['isSprite', 'Sprite']];
 const kindOf = o => KINDS.find(([k]) => o[k])?.[1] ?? null;
@@ -46,9 +46,17 @@ function emptyReason(o) {
   return null;
 }
 
+/** The materials that are actually drawn: an array is drawn per geometry group, so a material no (non-empty) group points at is never used */
+function usedMaterials(o) {
+  if (!Array.isArray(o.material)) return [o.material].filter(Boolean);
+  const gs = o.geometry?.groups;
+  if (!gs?.length) return o.material.filter(Boolean);   // no groups: whatever three does with that, these checks do not model it
+  return [...new Set(gs.filter(g => g.count > 0).map(g => o.material[g.materialIndex]))].filter(Boolean);
+}
+
 /** Reasons from the material(s). An array of materials draws if any one of them does, so it only hides when all of them hide */
 function materialReasons(o) {
-  const per = (Array.isArray(o.material) ? o.material : [o.material]).filter(Boolean).map(m => {
+  const per = usedMaterials(o).map(m => {
     const r = [], id = `material "${m.name || m.type}"`;
     if (m.visible === false) r.push(why('material-hidden', `${id} has visible = false`, 'material.visible = true'));
     if (m.opacity === 0 && m.transparent) r.push(why('opacity-zero', `${id} is transparent with opacity 0`, 'raise material.opacity'));
@@ -75,9 +83,23 @@ function materialReasons(o) {
 function viewOf(cam) {
   if (!cam) return null;
   cam.updateMatrixWorld();
-  const inv = new THREE.Matrix4().copy(cam.matrixWorld).invert(), me = cam.matrixWorld.elements;
-  return { pos: new THREE.Vector3().setFromMatrixPosition(cam.matrixWorld), fwd: new THREE.Vector3(-me[8], -me[9], -me[10]).normalize(),
-    frustum: new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, inv)) };
+  const me = cam.matrixWorld.elements;
+  return { pos: new THREE.Vector3().setFromMatrixPosition(cam.matrixWorld), fwd: new THREE.Vector3(-me[8], -me[9], -me[10]).normalize(), frustum: cameraFrustum(cam) };
+}
+
+/**
+ * What a zero scale does to this object: 'none' (nothing left to see), 'flat' (flattened to a plane: seen edge-on it is gone), or null. A zero on an axis the
+ * geometry has no extent on (a plane's z) changes nothing. A surface needs two axes with extent, a line one; points keep their screen size at any scale
+ */
+function zeroScale(o, type, sc) {
+  if (!sc.some(s => s < 1e-9) || type === 'Points') return null;
+  if (type === 'Sprite') return sc[0] < 1e-9 || sc[1] < 1e-9 ? 'none' : null;   // a sprite is drawn in x and y only
+  const g = o.geometry;
+  if (g && !g.boundingBox && g.attributes?.position) g.computeBoundingBox();
+  const size = g?.boundingBox ? g.boundingBox.getSize(new THREE.Vector3()) : { x: 1, y: 1, z: 1 };
+  const own = [size.x, size.y, size.z], live = own.filter((v, i) => v * sc[i] > 1e-9).length;
+  if (live < (type === 'Line' ? 1 : 2)) return 'none';
+  return own.some((v, i) => v > 1e-9 && sc[i] < 1e-9) ? 'flat' : null;
 }
 
 /** Transform and geometry sanity: NaN positions / scales, scale 0, NaN vertices, nothing to draw */
@@ -88,8 +110,11 @@ function shapeReasons(o, type, sc, memo) {
   else if (![me[12], me[13], me[14]].every(Number.isFinite)) r.push(why('position-nan',
     'its world position is NaN: a transform up the parent chain has NaN or Infinity', 'check the positions / scales of its ancestors'));
   if (sc.some(s => !Number.isFinite(s))) r.push(why('scale-zero', 'its world scale is NaN or Infinity', 'check scale on it and its ancestors'));
-  else if (sc.some(s => s < 1e-9)) r.push(why('scale-zero', `its world scale is 0 on at least one axis (${sc.map(r1).join(', ')}): it flattens to nothing`,
-    `${fmt(o)}.scale.set(1, 1, 1), and check ancestors`));
+  else {
+    const z = zeroScale(o, type, sc);
+    if (z) r.push(why('scale-zero', `its world scale is 0 on at least one axis (${sc.map(r1).join(', ')}): ${z === 'none' ? 'it flattens to nothing' : 'it is flattened to a plane, gone when seen edge-on'}`,
+      `${fmt(o)}.scale.set(1, 1, 1), and check ancestors`, z === 'none' ? 'hidden' : 'maybe'));
+  }
   if (type !== 'Sprite' && badPositions(o.geometry, memo)) {
     r.push(why('geometry-nan', 'the geometry has NaN or Infinity in its vertex positions: it cannot be culled or drawn correctly',
       'fix the generator that wrote the positions (radius 0, division by zero, missing input)'));

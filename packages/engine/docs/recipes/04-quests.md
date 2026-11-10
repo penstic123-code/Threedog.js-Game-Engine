@@ -1,5 +1,10 @@
 # Adding quests (with HUD objective markers)
 
+> **Covers:** quests as data or code, progress, objective markers.
+> **Use when:** goals the player follows and checks off.
+> **Shortest:** a quest entry in content data with `quests()` installed (§1).
+> **Sections:** 1 Write data recommended) · 2 In code complex · 3 Verify · Reading and moving progress
+
 Modules needed: `quests()` (quest log; the game binds its `quests` action: `presets.bindings.quests` is J / gamepad Select, `quests: []` for
 none); objective markers need `hud()` (neither is in openWorld, add them yourself:
 `engine.use(openWorld({ camera: 'follow', ...}), quests(), hud())`).
@@ -13,10 +18,10 @@ export default {
   'restore-power': {
     title: 'Restore power',
     desc: 'The engineer needs three fuses to restart the relay.',
-    startOn: 'engine:ready',                     // the event that starts it automatically (or use { startQuest: 'restore-power' } in a dialogue)
+    startOn: 'engine:ready',  // the event that starts it automatically (or use { startQuest: 'restore-power' } in a dialogue)
     steps: [
-      { id: 'talk', text: 'Talk to the engineer', done: { flag: 'metEngineer' }, target: { npc: 'engineer' } },   // the marker follows the NPC
-      { id: 'gather', text: 'Find 3 fuses', done: { has: { fuse: 3 } }, target: 'storage' },           // a place name
+      { id: 'talk', text: 'Talk to the engineer', done: { flag: 'metEngineer' }, target: { npc: 'engineer' } },  // the marker follows the NPC
+      { id: 'gather', text: 'Find 3 fuses', done: { has: { fuse: 3 } }, target: 'storage' },  // a place name
       { id: 'return', text: 'Fit them at the relay', done: { flag: 'relayOn' }, target: { place: 'home', x: 0, z: 3 } },
     ],
     reward: [{ take: { fuse: 3 } }, { give: { coin: 5 } }, { toast: 'Power restored!' }],
@@ -43,13 +48,13 @@ Not every quest is a straight line. A step can hold several goals done in any or
   startOn: 'engine:ready',
   steps: [
     { text: 'Reach the camp', done: { flag: 'atCamp' }, target: 'camp' },
-    { all: [                                                            // text defaults to the required goals: "Hold the north gate / Hold the south gate"
+    { all: [  // text defaults to the required goals: "Hold the north gate / Hold the south gate"
       { text: 'Hold the north gate', done: { counter: { northWaves: 3 } }, target: 'northGate' },
       { text: 'Hold the south gate', done: { counter: { southWaves: 3 } }, target: 'southGate' },
-      { text: 'No ally hurt', done: { notFlag: 'allyHurt' }, optional: true },   // a bonus: never blocks, shown done if met in time
+      { text: 'No ally hurt', done: { notFlag: 'allyHurt' }, optional: true },  // a bonus: never blocks, shown done if met in time
     ] },
   ],
-  fail: { flag: 'campBurned' },                    // checked while the quest is active
+  fail: { flag: 'campBurned' },  // checked while the quest is active
   onFail: [{ toast: 'The camp has fallen' }, { setFlag: 'mayRetryCamp' }],
   reward: { give: { coin: 20 } },
 },
@@ -62,18 +67,18 @@ Not every quest is a straight line. A step can hold several goals done in any or
 ```js
 engine.quests.define('slimes3', {
   title: 'Clear the cellar',
-  steps: [{ text: 'Defeat 3 slimes', done: e => e.vars.counter('slimes') >= 3, target: () => engine.npcs.get('engineer')?.position }],   // the function returns a position every frame: when the NPC is far away and has no model, root is null, so read position from the data
+  steps: [{ text: 'Defeat 3 slimes', done: e => e.vars.counter('slimes') >= 3, target: () => engine.npcs.get('engineer')?.position }],  // the function returns a position every frame: when the NPC is far away and has no model, root is null, so read position from the data
   reward: e => e.inventory.add('coin', 3),
 });
 engine.quests.start('slimes3');
-engine.vars.bump('slimes');                      // each time one is defeated
-engine.events.on('quest:done', ({ id }) => { /* quest completed */ });   // there are also quest:start, quest:step, quest:part and quest:fail
+engine.vars.bump('slimes');  // each time one is defeated
+engine.events.on('quest:done', ({ id }) => { /* quest completed */ });  // there are also quest:start, quest:step, quest:part and quest:fail
 ```
 A failed reward (full bag, refused `{ op }`, a function returning `{ ok: false, code }`) still finishes the quest and fires `quest:unpaid`. Items that did not fit stay owed (`quests.list()`, saved) until there is room, unless the game decides itself with `onUnpaid` (effect words, or `(e, answer) => ...`).
 
 To turn off automatic markers: `hud({ questMarkers: false })`. To add a marker by hand: `const m = engine.hud.marker('gate', { label: 'Gate' }); m.remove();`;
 content effects can add them too: `{ marker: 'gate' }` / `{ clearMarker: 'gate' }`. A counter in the screen corner:
-`engine.hud.counter('slimes', { label: 'Slimes', value: 2, max: 3 })`; `anchor: 'top-right'` (or `top`, `bottom`, `bottom-left`...) puts a counter
+`engine.hud.addCounter('slimes', { label: 'Slimes', value: 2, max: 3 })`; `anchor: 'top-right'` (or `top`, `bottom`, `bottom-left`...) puts a counter
 or bar in that screen column.
 
 ## 3. Verify

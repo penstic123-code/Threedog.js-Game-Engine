@@ -14,6 +14,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { metadata } from 'threedog/metadata';
+import { docRef, parseDocRef, docReadCommand } from 'threedog/error-hints';
 import { ENGINE, rel } from './paths.mjs';
 import { walk, esc, slug } from './lib/text.mjs';
 import { STOP as STOP_WORDS, SYNONYMS } from './how-words.mjs';
@@ -162,22 +163,36 @@ function sectionBlocks(lines, i) {
 /** A section's own text (to score which section of a recipe an AI.md row should open) */
 function sectionText(lines, i) { let t = ''; for (; i < lines.length && !/^#/.test(lines[i]); i++) t += lines[i] + ' '; return t; }
 
+/**
+ * AI.md's "What exists" rows by domain: [{ domain, task, use, where, text }]. One parser for the three readers of that table: the search (one entry per row),
+ * the fallback when no words match (the domains, so the AI picks one instead of guessing words), and llms.txt (apidoc.mjs writes it from these rows).
+ * `where` is the recipe column with its folder: "recipes/62-picture-code.md §0, 34-environment-lighting.md".
+ */
+export function aiTable(docsDir) {
+  const ai = join(docsDir, 'AI.md'), out = [];
+  if (!existsSync(ai)) return out;
+  let domain = '';
+  for (const line of readFileSync(ai, 'utf8').split('\n')) {
+    const h = /^###\s+(.*)/.exec(line);
+    if (h) { domain = h[1].trim(); continue; }
+    if (/^## /.test(line)) domain = '';
+    if (!line.startsWith('|') || isRule(line) || /^\|\s*To do\s*\|/i.test(line)) continue;
+    const c = line.split('|').slice(1, -1).map(x => x.trim());
+    if (c.length < 2) continue;
+    // the recipe column is a pointer, not task words: "content-actions-save.md" must not make the content row answer "save game"
+    // the last column names recipes by file ("06-clock-events.md, 08-weather-sky.md"): give the first its folder
+    const where = c.length > 2 ? c[c.length - 1].replace(/`/g, '').replace(/^(?:recipes\/)?(\d\d-)/, 'recipes/$1') : '';
+    out.push({ domain, task: c[0], use: c.length > 2 ? c[1] : '', where, text: (c.length > 2 ? c.slice(0, -1) : c).join(' ') });
+  }
+  return out;
+}
+
 /** All candidates from the docs: AI.md rows, recipe sections, THREE.md rows (plain three.js, or engine + three.js) */
 const entriesCache = new Map();
 export function docEntries(docsDir) {
   if (entriesCache.has(docsDir)) return entriesCache.get(docsDir);   // a run reads the docs once: rule R64 searches about 140 times
-  const out = [], ai = join(docsDir, 'AI.md');
-  if (existsSync(ai)) {
-    for (const line of readFileSync(ai, 'utf8').split('\n')) {
-      if (!line.startsWith('|') || isRule(line) || /^\|\s*To do\s*\|/i.test(line)) continue;
-      const c = line.split('|').slice(1, -1).map(x => x.trim());
-      if (c.length < 2) continue;
-      // the recipe column is a pointer, not task words: "content-actions-save.md" must not make the content row answer "save game"
-      // the last column names recipes by file ("06-clock-events.md, 08-weather-sky.md"): give the first its folder
-      const where = c.length > 2 ? c[c.length - 1].replace(/`/g, '').replace(/^(?:recipes\/)?(\d\d-)/, 'recipes/$1') : '';
-      out.push({ src: 'AI.md', title: c[0], use: c.length > 2 ? c[1] : '', where, text: (c.length > 2 ? c.slice(0, -1) : c).join(' ') });
-    }
-  }
+  const out = [];
+  for (const r of aiTable(docsDir)) out.push({ src: 'AI.md', title: r.task, use: r.use, where: r.where, text: r.text });
   // CONVENTIONS.md "One task, which entry": | Task | First | Go down a layer when | (the detail AI.md rows leave out)
   const conv = join(docsDir, 'CONVENTIONS.md');
   if (existsSync(conv)) {
@@ -200,14 +215,14 @@ export function docEntries(docsDir) {
       if (m[1] === '#') h1 = m[2];
       let snip = ''; for (let j = i + 1; j < lines.length && !/^#/.test(lines[j]); j++) if (lines[j].trim() && !lines[j].startsWith('```') && !lines[j].startsWith('|')) { snip = lines[j]; break; }
       const sec = /^(\d+)\./.exec(m[2]);
-      // snip is shown but only some of it ranks: an "In this recipe" list names every section, so the top of a recipe would outrank the section that
-      // answers; a bullet speaks for one item of a list, so one word in an example ("one street lamp shot out") would decide for the whole section
+      // snip is shown but only some of it ranks: a recipe's top ranks by its card's first line (Covers, R22), which says what the page is about, never by
+      // the card's Sections line, which names every section and would outrank the section that answers; a bullet speaks for one item of a list, so one word in an example ("one street lamp shot out") would decide for the whole section
       // a task section opens with its code: only its heading ranks and speaks for it (an import line naming five modules would answer for each of them)
       const task = f === TASKS_RECIPE && m[1] === '##', skeleton = task && m[2].startsWith(SKELETON);
       if (task) snip = 'a whole example, run by a test';
-      const ranks = !task && !/^\*\*In this recipe\*\*|^\s*[-*] /.test(snip);
+      const ranks = !task && !/^> \*\*Sections:\*\*|^\s*[-*] /.test(snip);
       out.push({ src: 'recipe', title: m[2], h1, where: `recipes/${f}${m[1] === '#' ? '' : sec ? ` §${sec[1]}` : ` "${m[2]}"`}`, snip, name: m[2].replace(/^\d+\.\s*/, ''), text: ranks ? m[2] + ' ' + snip : m[2].replace(SKELETON, ''), head: m[1] === '#' ? '' : h1,
-        at: `recipes/${f}${m[1] === '#' ? '' : '#' + slug(m[2])}`, para: paragraph(lines, i + 1), body: sectionText(lines, i + 1), blocks: sectionBlocks(lines, i + 1),
+        at: `recipes/${f}${m[1] === '#' ? '' : '#' + slug(m[2])}`, ref: docRef(`recipes/${f}`, m[1] === '#' ? '' : m[2]), para: paragraph(lines, i + 1), body: sectionText(lines, i + 1), blocks: sectionBlocks(lines, i + 1),
         task, skeleton, nofit: NOFIT.exec(sectionText(lines, i + 1))?.[1] });
     });
   }
@@ -310,7 +325,9 @@ export function search(docsDir, q, max = 5, opts = {}) {
       : e.src === 'line' ? `docs text · ${e.where} — ${clip(e.text, 150)}`
       : e.src === 'api' ? `${e.where} · ${clip(e.title, 70)} — ${clip(e.use, 110)}`
       : e.src === 'three' ? `engine + three.js · ${clip(e.title, 60)} → ${clip(e.use, 100)} → ${e.where}` : `${e.where} · ${clip(e.name, 60)} — ${clip(e.snip)}`,
-      at: e.src === 'line' ? e.where : open?.at ?? e.where.replace(/ (§\d+\w*|".*")$/, ''),
+      at: e.src === 'line' ? e.where : open?.at ?? e.where.replace(/ (§\d+\w*|§?".*")$/, ''),
+      // ref: the same place in the one pointer spelling (core/base/docRef.js), which is what is printed and what --read takes
+      ref: e.src === 'line' ? e.where : open?.ref ?? e.where.replace(/, .*$/, ''),
       // the row may serve both renderers while the paragraph printed under it shows one: a GLSL sample under a row in a WebGPU game reads as the answer
       para: otherRenderer(open?.para ?? '', opts.renderer) ? '' : open?.para ?? '',
       blocks: open?.blocks ?? [], nofit: e.nofit ?? open?.nofit ?? '', task: !!e.task, skeleton: !!e.skeleton, plain: !!e.plain, text: e.text });
@@ -336,12 +353,24 @@ export function search(docsDir, q, max = 5, opts = {}) {
   return out;
 }
 
+/**
+ * The route how recommends from a search result, or null when it stands behind none (no hits, or a weak match: then how lists the closest hits instead).
+ * One function for threedog how and rule R64, so the route list checks the answer the AI really gets. In a game, the lines to add (a skeleton task of
+ * recipe 66) among the first three come before a whole new file; further down it is a different task.
+ * @param {ReturnType<typeof search>} hits  @param {boolean} inGame
+ */
+export function firstRoute(hits, inGame) {
+  if (!hits.length || hits.weak) return null;
+  return (inGame && hits.slice(0, 3).find(h => h.skeleton)) || hits[0];
+}
+
 /** The section of the recipe an AI.md row points at ("recipes/30-templates.md §5", a #anchor, or the file) that best matches the query */
-function openSection(sections, where, qt) {
+export function openSection(sections, where, qt) {
   const file = /recipes\/[\w.-]+\.md/.exec(where)?.[0];
   if (!file) return null;
   const mine = sections.filter(x => x.at.split('#')[0] === file);
-  const anchor = /#([\w-]+)/.exec(where)?.[1], sec = / §(\d+\w*)/.exec(where)?.[1], quoted = / "(.+?)"/.exec(where)?.[1];
+  // a row may list several pointers ("03-x.md §"A", 22-y.md"): the first is the recommended one, and parseDocRef reads one pointer only
+  const { anchor, sec, title: quoted } = parseDocRef(where.split(/, (?=(?:recipes\/)?[\w-]+\.md)/)[0]) ?? {};
   const named = mine.find(x => (anchor && x.at.endsWith('#' + anchor)) || (sec && x.title.startsWith(sec + '.')) || (quoted && x.title.startsWith(quoted)));
   if (named) return named;
   // a heading that names more of the typed words wins (body words break ties); else the file's top (its H1 and its summary paragraph).
@@ -363,7 +392,39 @@ function entrySection(sections, e, qt) {
 
 /** One hit as printed: the line, then where to read (path#section) and that paragraph */
 export function format(h, i) {
-  return `${i + 1}. ${h.line}` + (h.at ? `\n   read: ${h.at}` : '') + (h.para ? `\n   ${h.para}` : '');
+  return `${i + 1}. ${h.line}` + (h.ref ? `\n   read: ${h.ref}` : '') + (h.para ? `\n   ${h.para}` : '');
+}
+
+/**
+ * One section as text, for `threedog how --read <pointer>` and the first answer of `how`: { ref, text, more } or null when the page or heading is not there.
+ * The section runs to the next heading of its level or above (its ### subsections come with it); the file alone gives its card, everything above the first ##.
+ * Cut at a line so the printed lines (each with `indent` spaces in front) stay within max bytes and maxLines (the output-length rule,
+ * docs/testing/tool-output-sizes.md). `more` is always the command that prints all of it (docReadCommand: no quotes to break in any shell), with what was left out.
+ * An #anchor may be a section number (`#3b`) or the start of a heading's anchor: that is what the command prints for a pointer kept by number or heading start.
+ * @param {string} docsDir  @param {string} ref a pointer in any spelling parseDocRef reads  @param {{ max?: number, maxLines?: number, indent?: number }} [o]
+ */
+export function readSection(docsDir, ref, { max = 3500, maxLines = Infinity, indent = 0 } = {}) {
+  const r = parseDocRef(ref), p = r && join(docsDir, r.file);
+  if (!p || !existsSync(p)) return null;
+  const L = readFileSync(p, 'utf8').split('\n'), heads = [];
+  let fence = false;
+  L.forEach((l, i) => { if (l.startsWith('```')) fence = !fence; const m = !fence && /^(#{1,4})\s+(.*)/.exec(l); if (m) heads.push({ i, level: m[1].length, title: m[2].trim() }); });
+  const low = s => s.toLowerCase().replace(/[`*]/g, '');
+  const h = r.sec ? heads.find(x => x.title.startsWith(r.sec + '.')) : r.title ? heads.find(x => low(x.title).startsWith(low(r.title))) : r.anchor ? heads.find(x => slug(x.title) === r.anchor) ?? heads.find(x => x.title.startsWith(r.anchor + '.') || slug(x.title).startsWith(r.anchor)) : null;
+  if ((r.sec || r.title || r.anchor) && !h) return null;
+  const start = h ? h.i : 0, level = h ? h.level : 2, end = heads.find(x => x.i > start && x.level <= level)?.i ?? L.length;
+  const all = L.slice(start, end).join('\n').trim().split('\n'), out = [];
+  let n = 0;
+  for (const l of all) { const b = Buffer.byteLength(l) + indent + 1; if (n + b > max || out.length >= maxLines) break; out.push(l); n += b; }
+  const at = docRef(r.file, h?.title), left = all.length - out.length, cmd = docReadCommand(at);
+  return { ref: at, text: out.join('\n'), more: left > 0 ? `… ${left} more lines: ${cmd}` : `All of it: ${cmd}` };
+}
+
+/** AI.md's domains, one line each with its first tasks: the fallback when no words match, so the AI picks a domain instead of guessing more words */
+export function domainLines(docsDir, width = 170) {
+  const by = new Map();
+  for (const r of aiTable(docsDir)) if (r.domain) by.set(r.domain, [...(by.get(r.domain) ?? []), r.task]);
+  return [...by].map(([d, tasks]) => `${d}: ${clip(tasks.join('; '), width)}`);
 }
 
 /** What to try when nothing fits: drop the words the docs never use, use 2-4 task words, or read the closest AI.md row */

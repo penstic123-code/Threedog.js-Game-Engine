@@ -4,7 +4,7 @@
 //   engine.page.pauseOnBlur = false;         // same, at runtime (e.g. a settings toggle)
 //   engine.events.on('page:blur', () => engine.flow?.go('paused'));   // show the pause menu as well, if the game wants one
 // While the page is away (window lost focus or tab hidden) with pauseOnBlur, gameplay is frozen by owner 'page': an ordinary freeze, so everything that obeys a freeze
-// (fixed steps, timers, cutscenes, engine.frozen, runState, describe) agrees with no code of its own here, and the sound waits too (Audio._hold). It is a full still ({ ambient: true }): limbs walking on
+// (fixed steps, timers, cutscenes, engine.frozen, runState, describe) agrees with no code of its own here, and the sound waits too (Audio._hold). It is a full still ({ still: true }): limbs walking on
 // the spot over a stopped world look broken. Rendering and UI go on. Coming back resumes from where it stopped, with no catch-up burst (the loop drops the time spent
 // away). A halted engine (tests, the dev bridge) has no real-time loop to hold, so there is no page freeze, and step() drives a page in a background window.
 // Held keys are released by Input when it hears page:blur.
@@ -26,6 +26,9 @@ const DEV = { lost: '[page] WebGL context lost: gameplay waits until the browser
 notePatch('device-lost-hook', "renderer.onDeviceLost of a WebGPURenderer (three's own hook, kept and called first): reports the loss through engine.page (core/engine/page.js)", () => {},
   { scope: 'engine renderer', lost: 'engines made from now on: after a device loss the picture freezes while the game keeps running, with no message' });
 
+notePatch('page-exit-pointer-lock', "document.exitPointerLock (one wrapper for every live engine, taken off with the last one): tells engine.page the unlock was the game's own call (core/engine/page.js)", () => {},   // off: the wrapper stays (gone with the last engine) and stops telling
+  { scope: 'page', lost: 'a game-requested unlock reads as the player pressing Esc (page:pointerlock byEngine stays false)' });
+
 // document.exitPointerLock is one property for the page: one wrapper for every live engine, gone with the last. A wrapper per engine could only be taken off all at once
 const lockers = new Set();
 /** @param {Page} page @param {AbortSignal} signal */
@@ -34,7 +37,7 @@ function watchExitLock(page, signal) {
   if (!exitLock) return;
   if (!lockers.size) {
     const own = Object.hasOwn(document, 'exitPointerLock');
-    const wrapper = () => { for (const p of lockers) p._releasing = document.pointerLockElement === p.engine.renderer.domElement; return exitLock.call(document); };
+    const wrapper = () => { if (patchOn('page-exit-pointer-lock')) for (const p of lockers) p._releasing = document.pointerLockElement === p.engine.renderer.domElement; return exitLock.call(document); };
     document.exitPointerLock = wrapper;
     lockers.unwrap = () => { if (document.exitPointerLock !== wrapper) return; if (own) document.exitPointerLock = exitLock; else delete document.exitPointerLock; };
   }
@@ -99,7 +102,7 @@ export class Page {
   _sync() {
     const want = !this.engine.halted && ((this._pauseOnBlur && this.away) || this.contextLost);
     if (want === !!this._hold) return;
-    if (want) this._hold = this.engine.freeze('page', { ambient: true });
+    if (want) this._hold = this.engine.freeze('page', { still: true });
     else { this._hold.remove(); this._hold = null; }
     this.engine.audio?._hold(want);   // a frozen game keeps no loop sounding on its own in a background tab
   }

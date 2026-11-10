@@ -101,7 +101,20 @@ async function steps(check, plain) {
     check('a failed op is not a connection failure; errors carries data.cursor', bad.isError && bad.structuredContent.code !== 'ok'
       && !['no-server', 'starting', 'page-error', 'no-bridge'].includes(bad.structuredContent.code) && typeof er.structuredContent.data?.cursor === 'number',
       JSON.stringify([bad.structuredContent, er.structuredContent]).slice(0, 300));
-    check('describe path: one field', /\d\d:\d\d/.test(p.content[0].text), p.content[0].text);
+    // freezeReload goes through the CLI's own parser (dispatch.mjs): the dev server holds file-save reloads for the run and lets go after it. The server runs in this process,
+    // so its hot-update hook can be asked while the call is out (frozen = it returns [] and nothing reloads)
+    const hot = server.config.plugins.find(pl => pl.name === 'threedog-bridge')?.handleHotUpdate, frozen = () => Array.isArray(hot?.());
+    const sch = (await plain.rpc('tools/list')).tools.filter(t => t.name === 'scenario' || t.name === 'verify').map(t => !!t.inputSchema.properties.freezeReload);
+    let sawFrozen = true, polling = true;
+    let fz;
+    for (const tool of ['scenario', 'verify']) {
+      let saw = false; polling = true; const poll = (async () => { while (polling) { if (frozen()) saw = true; await new Promise(r => setImmediate(r)); } })();
+      fz = await plain.rpc('tools/call', { name: tool, arguments: { name: 'no-such-scenario', freezeReload: true } });
+      polling = false; await poll; sawFrozen &&= saw && !frozen();
+    }
+    check('scenario / verify take freezeReload; the call freezes hot reload for the run and releases it after',
+      sch.length === 2 && sch.every(Boolean) && hot && sawFrozen && !frozen() && !/unknown option|started before/.test(fz.content[0].text), `${sch} ${!!hot} ${sawFrozen} ${frozen()} ${fz.content[0].text.slice(0, 120)}`);
+    check('describe path: one field',/\d\d:\d\d/.test(p.content[0].text), p.content[0].text);
     const s = await plain.rpc('tools/call', { name: 'snap', arguments: { name: 'mcp-test' } });
     const img = s.content.find(c => c.type === 'image');
     check('snap: an MCP image (PNG) next to the text', !s.isError && img?.mimeType === 'image/png' && Buffer.from(img.data, 'base64').subarray(1, 4).toString() === 'PNG', JSON.stringify(s).slice(0, 200));

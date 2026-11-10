@@ -28,7 +28,7 @@ engine.use(openWorld({ camera: followCamera({ ...presets.camera.overShoulder, ya
 const picture = withPicture ? createPicture(engine) : null;
 
 engine.assets.manifest(packs);   // assets.js: floor / wall / pillar / enemy (content/templates.js) and the blip synth (content/audio.js)
-engine.characters.createPlayer({ ...presets.player.aim, spawn: TUNE.spawn });   // no body asset: the engine's gray capsule; face where the camera looks: a swing goes where you aim
+engine.characters.addPlayer({ ...presets.player.aim, spawn: TUNE.spawn });   // no body asset: the engine's gray capsule; face where the camera looks: a swing goes where you aim
 engine.content.load(data, { places: { room: { x: 0, z: 0 } } });
 
 // ---------- Game state: plain values, described and saved (one player, so it is not keyed by actor) ----------
@@ -37,7 +37,7 @@ const fresh = () => ({ hp: TUNE.hp, cooldown: 0, over: false, deaths: 0 });
 const game = fresh();
 const slimes = () => engine.world.query({ kind: 'slime' }).map(r => ({ id: r.id, hp: r.hp, x: +r.position.x.toFixed(2), z: +r.position.z.toFixed(2) }));
 engine.describe.add('action', () => ({ ...game, maxHp: TUNE.hp, onDeath: TUNE.onDeath, slimes: slimes() }));
-engine.saves.register('action', { version: 1, save: () => ({ ...game }), load: d => { Object.assign(game, fresh(), d); } });
+engine.saves.define('action', { version: 1, save: () => ({ ...game }), load: d => { Object.assign(game, fresh(), d); } });
 
 // ---------- Ops: every caller (mouse, key, dev bridge, MCP, tests, enemy AI) runs the same rule ----------
 const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
@@ -124,7 +124,7 @@ engine.onFrame(() => {
   engine.hud.bar('hp', { value: game.hp, max: TUNE.hp, label: 'HP' });
   const s = engine.world.query({ kind: 'slime', near: engine.player.position, radius: TUNE.aggro + 2 })[0];
   if (s) engine.hud.bar('enemy', { value: s.hp, max: s.maxHp, label: 'Slime' }); else engine.hud.remove('enemy');
-  engine.hud.counter('gem', { icon: '💎', label: 'Gems', value: engine.inventory.count('gem') });
+  engine.hud.addCounter('gem', { icon: '💎', label: 'Gems', value: engine.inventory.count('gem') });
   if (game.over !== shownOver && (shownOver = game.over) && TUNE.onDeath === 'gameover') toast(engine, 'You died. Press R to retry');
   if (game.over && !restarting && (TUNE.onDeath === 'restart' || engine.input.pressed('retry'))) restarting = engine.session.newGame().finally(() => { restarting = null; });
   if (engine.input.pressed('save')) engine.saves.save('slot1').then(ok => { if (ok) toast(engine, 'Saved'); });

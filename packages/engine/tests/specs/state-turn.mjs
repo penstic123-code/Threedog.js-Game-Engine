@@ -40,7 +40,7 @@ export const specs = [
         const R = await rig('st-in', [{ name: 'stHook', type: 'rules', skipKind: 'none', afterLoad: async (e, turn) => { if (hook) await hook(e, turn); } },
           { name: 'stProbe', type: 'rules', skipKind: 'none', content: { stProbe: { commit: d => { log.push(d); } } } }]);
         const { E, save } = R;
-        E.saves.register('stTrip', { save: () => ({}), async load(d, turn) {
+        E.saves.define('stTrip', { save: () => ({}), async load(d, turn) {
           await tick();
           if (d.how === 'level') await E.level.load('stCave', { turn });
           if (d.how === 'pack') await E.content.load({ level: 'stCave', stProbe: 'in pack' }, { turn });
@@ -75,7 +75,7 @@ export const specs = [
         const release = () => { const h = held; held = null; h.open(); };
         const R = await rig('st-out', [{ name: 'stProbe', type: 'rules', skipKind: 'none', content: { stProbe: { prepare: d => d.wait ? d.wait.then(() => d) : d, commit: d => { log.push(d.say); } } } }]);
         const { E, save } = R;
-        E.saves.register('stTrip', { save: () => ({}), async load(d, turn) {
+        E.saves.define('stTrip', { save: () => ({}), async load(d, turn) {
           kept = turn;
           log.push('in ' + d.n);
           if (held) await held.p;
@@ -144,7 +144,7 @@ export const specs = [
         const { E, save, said } = R;
         const free = gate();
         let lvl = null;
-        E.saves.register('stNaked', { save: () => ({}), async load() { await tick(); lvl = E.level.load('stCave'); await Promise.race([lvl, free.p]); } });
+        E.saves.define('stNaked', { save: () => ({}), async load() { await tick(); lvl = E.level.load('stCave'); await Promise.race([lvl, free.p]); } });
         const a = E.saves.apply(save({ stNaked: {} }));
         for (let i = 0; i < 100 && !said.some(s => /save-nested/.test(s)); i++) await new Promise(res => setTimeout(res, 50));
         out.told = said.find(s => /save-nested/.test(s)) ?? null;
@@ -155,7 +155,7 @@ export const specs = [
         out.root = R.root();
         let inner = null;
         const seen = [];
-        E.saves.register('stNest', { save: () => ({}), load(d) { seen.push(d.n); if (d.n === 1) inner = E.saves.apply(save({ stNest: { n: 2 } })); } });
+        E.saves.define('stNest', { save: () => ({}), load(d) { seen.push(d.n); if (d.n === 1) inner = E.saves.apply(save({ stNest: { n: 2 } })); } });
         out.nest = (await within(E.saves.apply(save({ stNest: { n: 1 } })))).ended;
         out.inner = (await within(inner)).ended;
         out.seen = seen;
@@ -178,11 +178,11 @@ export const specs = [
         const R = await rig('st-late', [{ name: 'stHook', type: 'rules', skipKind: 'none', afterLoad: () => { hooks++; } }]);
         const { E, save } = R, S = E.saves;
         const held = gate();
-        S.register('stSlow', { save: () => ({}), async load() { log.push('slow in'); await held.p; log.push('slow out'); } });
+        S.define('stSlow', { save: () => ({}), async load() { log.push('slow in'); await held.p; log.push('slow out'); } });
         const a = S.apply(save({ stSlow: {}, stLate: { v: 1 } }));
         await tick();
         // both halves: the line before its first await and the line after it stay out of the running replacement
-        S.register('stLate', { save: () => ({}), load: async (d, turn) => { log.push('late in'); out.lateTurn = !!turn; await tick(); await E.level.load('stCave', { turn }); log.push('late out'); } });
+        S.define('stLate', { save: () => ({}), load: async (d, turn) => { log.push('late in'); out.lateTurn = !!turn; await tick(); await E.level.load('stCave', { turn }); log.push('late out'); } });
         await tick(); await tick();
         out.during = [...log];
         held.open();
@@ -193,7 +193,7 @@ export const specs = [
         // a sync part registered with only afterLoad left: it waits too, and does not take the replacement's afterLoad over
         hooks = 0; log.length = 0;
         const b = S.apply(save({ stLate2: { v: 2 } }));
-        S.register('stLate2', { save: () => ({}), load: d => { log.push('late2 ' + d.v); } });
+        S.define('stLate2', { save: () => ({}), load: d => { log.push('late2 ' + d.v); } });
         out.syncAt = [...log];
         await within(b); await within(S.settled());
         out.hooks = hooks; out.sync = [...log];
@@ -201,17 +201,17 @@ export const specs = [
         // idle it is at once, as before
         await within(S.apply(save({ stLate3: { v: 3 } })));
         log.length = 0;
-        S.register('stLate3', { save: () => ({}), load: d => { log.push('late3 ' + d.v); } });
+        S.define('stLate3', { save: () => ({}), load: d => { log.push('late3 ' + d.v); } });
         out.idle = [...log];
         S.providers.delete('stLate3');
         // a newer load was asked first: the state the late data belonged to is gone when its turn comes
         const gate2 = gate();
-        S.register('stSlow2', { save: () => ({}), load: async d => { if (d.first) await gate2.p; } });
+        S.define('stSlow2', { save: () => ({}), load: async d => { if (d.first) await gate2.p; } });
         const c = S.apply(save({ stSlow2: { first: true }, stLate4: { v: 'old' } }));
         const d2 = S.apply(save({ stSlow2: {} }));
         await tick();
         log.length = 0;
-        S.register('stLate4', { save: () => ({}), load: d => { log.push('late4 ' + d.v); } });
+        S.define('stLate4', { save: () => ({}), load: d => { log.push('late4 ' + d.v); } });
         gate2.open();
         await within(c); await within(d2); await within(S.settled());
         out.gone = [...log];
@@ -220,7 +220,7 @@ export const specs = [
       });
       check('neither half of a late load() runs during the replacement', r.during.join() === 'slow in', J(r));
       check('it runs after it, with a turn of its own that level.load accepts', r.after.join() === 'slow in,slow out,late in,late out' && r.lateTurn === true && r.root === 'cave', J(r));
-      check('a sync part arriving with only afterLoad left waits, and the afterLoad still ran', r.syncAt.length === 0 && r.sync.join() === 'late2 2' && r.hooks === 1, J(r));
+      check('a sync part arriving with only afterLoad left waits, and the afterLoad still ran', r.syncAt.length === 0 && r.sync.join() === 'late2 2' && r.hooks === 2, J(r));   // 2: the replacement's afterLoad, then the late part's own (it loads by the same protocol)
       check('[guard] idle: a late part loads before register returns', r.idle.join() === 'late3 3', J(r));
       check('data of a state a newer load replaced does not land', r.gone.length === 0, J(r));
     },
@@ -353,7 +353,7 @@ export const specs = [
       const q = src('core/saves/stateReplace.js'), apply = src('core/saves/saveApply.js'), lvl = src('modules/level/load.js'), idx = src('modules/level/index.js'), loader = src('modules/content/loader.js');
       check('no marker that lives on the call stack decides who a call belongs to', !/\.inside\b|\.within\(/.test(q + apply), 'stateReplace.js / saveApply.js');
       check('every whenTurnFree hands on a turn', [...(idx + loader).matchAll(/whenTurnFree\(.*$/gm)].every(m => /turn\)/.test(m[0])), 'level/index.js, content/loader.js');
-      check('a late part is loaded inside the queued function, not before it', /adoptPart[\s\S]*?\.run\(null, \(\) => \{[\s\S]*?p\.load\(/.test(apply), 'saveApply.js adoptPart');
+      check('a late part is loaded inside the queued function, not before it', /adoptPart[\s\S]*?\.run\(null, \(\) => \{[\s\S]*?applyRead\(/.test(apply), 'saveApply.js adoptPart');
       check('the undo of a level swap hands its reload back: no background load, no swallowed failure', !/\.catch\(\(\) => \{\}\)/.test(lvl), 'level/load.js');
     },
   },

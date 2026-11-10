@@ -56,7 +56,7 @@ export function trailer(rt) {
 /**
  * Which commands move game time: THE table. The MCP tool labels and the server instructions (mcp-extra.mjs) are generated from it, and COMMANDS.md
  * says the same in words (tests/mcp.mjs checks both).
- * advances: step, press, hold, skip (and scenario / verify, which use them); op / state / eval run between steps and move no game time.
+ * advances: step, press, hold, skip (and scenario / verify, which use them); op / state / eval run between steps and move no game time (state only with wait: wait advances N real seconds).
  */
 export const TIME = {
   advances: ['step', 'press', 'hold', 'skip', 'scenario', 'verify'],

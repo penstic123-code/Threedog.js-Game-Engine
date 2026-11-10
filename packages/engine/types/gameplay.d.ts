@@ -434,7 +434,7 @@ export interface Settings {
   presets: Record<string, QualityPreset>;
   /** Tabs @experimental */
   sections: Map<string, any>;
-  /** Whether the menu is open @experimental */
+  /** Whether the menu is open */
   readonly isOpen: boolean;
   /** Read a setting, e.g. get('vol.music') */
   get(key: string): any;
@@ -535,7 +535,7 @@ export interface CharacterOptions {
   /**
    * The game's own states on top of the built-in ones (crouch, climb, glide, dash, roll): run after the mover's state each step, return a state name
    * or null to keep facts.base. The state picks the clip like any other (clips: { crouch: 'Crouch' }); speed changes stay engine.mod('move.speed')
-   * @example createPlayer({ ..., clips: { crouch: 'Crouch' }, states: (c, f) => f.grounded && engine.input.down('crouch') ? 'crouch' : null })
+   * @example addPlayer({ ..., clips: { crouch: 'Crouch' }, states: (c, f) => f.grounded && engine.input.down('crouch') ? 'crouch' : null })
    */
   states?: CharacterStates | null;
   /** Water depth (meters) at which water counts as deep, default 1 */
@@ -568,12 +568,14 @@ export interface CharacterOptions {
   fall?: false | { belowY: number | ((character: Character) => boolean) };
   /** Time channel its movement and animation follow when the engine drives it (player default 'player', others 'world') */
   channel?: string;
+  /** Collider layers it walks through, e.g. ['gate'] (collision.addBox { layer: 'gate' }): its walking, walkTo and NPC paths, navmesh included, follow it. Default: stopped by every collider */
+  passes?: string[];
   /**
    * The body, one path for every kind: the name of a registered model asset, or what engine.assets.model() returned. A procedural builder name
    * (from an asset pack) is built at once; a file model name shows a gray capsule and swaps in a copy when it loads (Character.ready / whenReady,
    * event 'character:model'). Without model and rig: a gray capsule placeholder (warned once)
-   * @example engine.assets.manifest(yourAssets); engine.characters.createPlayer({ model: 'yourBody' })   // a generator or GLB name from an asset pack
-   * @example engine.characters.createPlayer({ model: 'hero' })   // after engine.assets.manifest({ models: { hero: '/models/hero.glb' } })
+   * @example engine.assets.manifest(yourAssets); engine.characters.addPlayer({ model: 'yourBody' })   // a generator or GLB name from an asset pack
+   * @example engine.characters.addPlayer({ model: 'hero' })   // after engine.assets.manifest({ models: { hero: '/models/hero.glb' } })
    */
   model?: Object3D | string | null;
   /** A ready procedural body (CharacterRig), used instead of model (a hand-built guard / pet) */
@@ -603,7 +605,7 @@ export type MoveRequest = { x: number; y?: number; z: number; run?: boolean } | 
  * a function returning the move request. The game moving the player itself takes control: engine.control.take(player, { owner, layer: 'script', step })
  */
 export type PlayerControl = 'camera' | ((player: Character, input: Input, dt: number) => MoveRequest);
-/** Parameters of createPlayer() */
+/** Parameters of addPlayer() */
 export interface PlayerOptions extends CharacterOptions {
   /** A further local player's id and world record; left out, the one player (engine.player) */
   id?: string;
@@ -625,7 +627,7 @@ export type CharacterState = 'idle' | 'walk' | 'run' | 'swim' | 'jump' | 'fall' 
 /** Character (player and NPCs) */
 export declare class Character {
   constructor(engine: Engine, opts?: CharacterOptions);
-  /** Root node: add it to the scene with engine.add(character.root) when you built the Character yourself; add children, change visible and scale on it */
+  /** Root node, the character's model (there is no character.model; the loaded glTF is a child of root): add it to the scene with engine.add(character.root) when you built the Character yourself; add children, change visible and scale on it */
   root: Object3D;
   /** Position (= root.position) */
   readonly position: Vector3;
@@ -670,6 +672,8 @@ export declare class Character {
   fall: false | { belowY: number | ((character: Character) => boolean) };
   /** Time channel the engine drives it on (see CharacterOptions.channel) */
   channel: string;
+  /** Collider layers it goes through (the passes option, sorted); undefined = stopped by every collider. Plain: a write counts from its next step and path */
+  passes: readonly string[] | undefined;
   /** The character's id, the one form engine.mod / time.local take: its world record id ('player', an NPC's record id), else the id option, else a generated one */
   readonly id: string;
   /**
@@ -727,7 +731,7 @@ export declare class Character {
   dispose(): void;
   /**
    * Request a jump (buffered for jumpBuffer s): the ground jump on the ground or in coyote time, else an air jump while maxJumps allows; air: false = ground only
-   * @example createPlayer({ ...presets.player.thirdPerson, maxJumps: 2 })   // double jump
+   * @example addPlayer({ ...presets.player.thirdPerson, maxJumps: 2 })   // double jump
    */
   jump(opts?: { air?: boolean }): this;
   /** Put it on the ground at position (Vector3 / object / [x, y, z] / { x, z }) */
@@ -934,10 +938,10 @@ export interface CharactersApi {
    */
   findSpawn(position?: PositionLike, opts?: FindSpawnOptions): Vector3;
   /**
-   * Create the player and set engine.player; control is required (no default feel), e.g. createPlayer({ ...presets.player.thirdPerson, spawn }). An
+   * Create the player and set engine.player; control is required (no default feel), e.g. addPlayer({ ...presets.player.thirdPerson, spawn }). An
    * existing player is deleted first
    */
-  createPlayer(opts: PlayerOptions): Character;
+  addPlayer(opts: PlayerOptions): Character;
   /**
    * The 'camera' player control as a value: keys / stick relative to the camera, the 'run' action if bound, input.autopilot. Reused object; call it
    * inside your own control function to wrap it
@@ -976,7 +980,7 @@ export interface CharactersApi {
    */
   findPathAsync(
     from: PositionLike, to: PositionLike, done: (path: NavPathPoint[] | null, status: 'ok' | 'noPath' | 'notReady') => void,
-    opts?: { radius?: number; step?: number; maxNodes?: number }
+    opts?: { radius?: number; passes?: string[]; step?: number; maxNodes?: number }
   ): { remove(): void };
   /** How many findPathAsync requests leave per fixed step (default 32); the rest wait for the next steps */
   pathsPerStep: number;
@@ -1005,9 +1009,9 @@ export interface CharactersOptions {
 }
 /**
  * Pathfinding options: step is the grid size (meters, A*), maxNodes the maximum cells searched (A*), radius the character radius (meters,
- * default engine.movement.radius); for detailed see findPath
+ * default engine.movement.radius), passes the collider layers the path goes through (collision.addBox { layer }); for detailed see findPath
  */
-export interface FindPathOptions { step?: number; maxNodes?: number; radius?: number; detailed?: boolean; id?: string }
+export interface FindPathOptions { step?: number; maxNodes?: number; radius?: number; passes?: string[]; detailed?: boolean; id?: string }
 
 // ======================================================================
 // Interactions interactions()
@@ -1584,10 +1588,11 @@ export interface Quests {
   state(id: string): { step: number; steps: number; done: boolean; failed: boolean; active: boolean; visited: string[] } | null;
   /** Finish the current step from code (its done() is not asked) and go on; the last step completes the quest. false when not active */
   advance(id: string): boolean;
-  /** @experimental */ isDone(id: string): boolean;
+  /** Finished (done, not failed) */
+  isDone(id: string): boolean;
   /** Started, not done and not failed */
   isActive(id: string): boolean;
-  /** Its fail condition held (start(id) begins it again) @experimental */
+  /** Its fail condition held (start(id) begins it again) */
   isFailed(id: string): boolean;
   /** Check completion conditions once immediately */
   check(): void;
@@ -1642,6 +1647,8 @@ export interface PhotoShot {
   url: string; time: string; position: XZ | null;
   /** What was in the middle of the frame: name is the name, kind the kind (npc, entity, vegetation...), distance in meters */
   subject?: { name: string; kind: string; distance: number } | null;
+  /** Only on a path-traced shot: samples per pixel reached, milliseconds, picture size, and the one line naming what the tracer did not draw as the game does (plus 'no post effects') @experimental */
+  pathTraced?: { samples: number; ms: number; size: [number, number]; untraced: string };
 }
 export interface PhotoTakeOptions {
   /** Resolution multiplier, default 1.6 */
@@ -1658,6 +1665,8 @@ export interface PhotoTakeOptions {
 export interface PhotoOptions extends PhotoTakeOptions {
   /** How many photos the album keeps at most, default 50 @experimental */
   maxAlbum?: number;
+  /** The game's import of its optional path tracer, called on the first photo.trace(): () => import('three-gpu-pathtracer/webgpu') @experimental */
+  pathTracer?: (() => Promise<any>) | null;
 }
 /** engine.photo */
 export interface Photo {
@@ -1670,6 +1679,11 @@ export interface Photo {
   /** @experimental */ maxAlbum: number;
   /** Capture a photo now without checks. Gameplay takes photos through the op: engine.ops.run('photo.take') (checks canTake, logged) */
   take(opts?: PhotoTakeOptions): PhotoShot;
+  /** A path-traced photo (WebGPU backend or a WebGLRenderer; the game's photo({ pathTracer })): samples (whole, >= 1, default 128) accumulate on a snapshot while the game
+   *  runs, until seconds (>= 1, default 60); resolves to the shot, rejects naming why. scale defaults to 1 here. The op photo.trace starts it (r.value is this Promise) @experimental */
+  trace(opts?: PhotoTakeOptions & { samples?: number; seconds?: number }): Promise<PhotoShot>;
+  /** While a path-traced photo accumulates: samples per pixel so far and the target; null otherwise @experimental */
+  tracing: { samples: number; of: number } | null;
   /** What is in the middle of the frame (NPC, entity, named object, vegetation), null if nothing; this is the subject of take() @experimental */
   subject(): { name: string; kind: string; distance: number } | null;
 }
@@ -1731,6 +1745,8 @@ export interface FocusHandle extends Handle {
   index: number | null;
   /** The choice cursor used confirm on this entry this frame (the owner's own confirm handling skips this frame) */
   readonly consumed: boolean;
+  /** This entry is the top of the focus stack (a window over it makes it false: its owner must not read confirm / choice keys then) */
+  readonly onTop: boolean;
   /** Change the cursor's controls while pushed (the index starts over); null = no cursor */
   setNav(nav: FocusNav | null): void;
 }
@@ -1836,17 +1852,22 @@ export interface Stack {
 export interface Stacks {
   /**
    * Define your own point: kind 'number' (default, base 1), 'value' (any data, set only), 'any' (true while held), 'top' (latest holder wins),
-   * 'one' (exclusive slot); per: true = one value per record id; manual = the takeover call the conflict error offers
+   * 'one' (exclusive slot); per: true = one value per record id; manual = the takeover call the conflict error offers;
+   * important: true = always on the "Values being changed now" line (changed()), even at its base
    */
-  define(name: string, opts?: { kind?: 'number' | 'value' | 'any' | 'top' | 'one'; base?: any; min?: number; max?: number; per?: boolean | 'optional'; save?: boolean; manual?: string }): Stack;
+  define(name: string, opts?: { kind?: 'number' | 'value' | 'any' | 'top' | 'one'; base?: any; min?: number; max?: number; per?: boolean | 'optional'; save?: boolean; manual?: string; important?: boolean }): Stack;
   get(name: string): Stack;
   has(name: string): boolean;
   list(): string[];
-  mod(name: string, opts: ModOptions): ModHandle;
   /** describe().shared: one row per point with entries */
   describe(): Record<string, SharedRow>;
   /** Everything one owner changes now, e.g. ['time.world (mul 0.8, effect)', 'inventory (holds)'] */
   of(owner: string): string[];
+  /**
+   * The values being changed now, furthest from base first, at most max (default 5): points off their base, capped by a setting, or defined with
+   * { important: true }. describeText's "Values being changed now" line and the dev panel read this.
+   */
+  changed(max?: number): { name: string; base: any; now: any; how: string; text: string }[];
 }
 /** engine.time: time channels (world, player, your own). Speeds change only through engine.mod('time.<channel>', ...) */
 export interface Time {
@@ -1873,7 +1894,7 @@ export interface Vars {
   counters: Record<string, number>;
   /** Read a flag */
   flag(key: string): any;
-  /** Set a flag (default true) @experimental */
+  /** Set a flag (default true) */
   setFlag(key: string, value?: any): void;
   /** Read a counter (0 if none) */
   counter(key: string): number;
@@ -2142,8 +2163,8 @@ export interface Hud {
   markers: HudMarker[];
   /** Add an objective marker: target is an object, position or place name */
   marker(target: HudTarget, opts?: HudMarkerOptions): HudMarker;
-  /** Counter or text status (calling again with the same id = update; calling every frame is fine): counter('fish', { label: '鱼', value: 2, max: 5 }), counter('clock', { value: '08:30' }); no value = the label alone, no label = the value alone (the id is not shown) */
-  counter(id: string, opts: { label?: string; icon?: string; value?: number | string; max?: number; anchor?: HudAnchor }): void;
+  /** Counter or text status, returns { set(value), remove() } (calling again with the same id = update; calling every frame is fine): addCounter('fish', { label: '鱼', value: 2, max: 5 }), addCounter('clock', { value: '08:30' }); no value = the label alone, no label = the value alone (the id is not shown) */
+  addCounter(id: string, opts: { label?: string; icon?: string; value?: number | string; max?: number; anchor?: HudAnchor }): { id: string; set(value: number | string | { label?: string; icon?: string; value?: number | string; max?: number }): void; remove(): void };
   /** Add n (default 1) to a number counter, return the new value; one not declared yet starts at 0 with its id as the label */
   bump(id: string, n?: number): number;
   /** Current value of a counter or bar (number or text), undefined when there is none; reads what interactions.add({ counter }) has added up */
@@ -2151,7 +2172,11 @@ export interface Hud {
   /** Progress bar (calling again with the same id = update; calling every frame is fine, the DOM is untouched when the value is unchanged),
    *  value/max 0–max */
   bar(id: string, opts: { value: number; max?: number; label?: string; anchor?: HudAnchor }): void;
-  /** Delete a counter or progress bar */
+  /** Clickable button (calling again with the same id = update): label is text or an i18n key, run() is called on a click / tap. The press never reaches the game and focus goes back to it; a locked mouse has no cursor, so free it first (Esc) */
+  button(id: string, opts: { label: string; run: () => void; icon?: string; anchor?: HudAnchor; action?: string }): void;
+  /** Key hint "E · Talk" (same id = update): the key text is engine.input.label(action) (the input.noKey text when the action needs a key and has none, as in the prompt), so it follows rebinding and keyboard / pad switching; label is text or an i18n key. A button with `action` shows its key too @experimental */
+  hint(id: string, opts: { action: string; label?: string; anchor?: HudAnchor }): void;
+  /** Delete a counter, progress bar, button or key hint */
   remove(id: string): void;
 }
 /**

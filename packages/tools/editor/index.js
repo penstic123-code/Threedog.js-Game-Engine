@@ -1,5 +1,5 @@
 // The in-browser editor's screen: select, drag, turn, the property rows, add, delete, undo. Dev server only, loaded by vite/vite-threedog-editor.js (plan
-// docs/plans/2026-11-05-editor.md). Picking, camera and handles are the engine's and three.js's own; this file only wires them. It knows nothing of content
+// docs/plans/done/2026-11-05-editor.md). Picking, camera and handles are the engine's and three.js's own; this file only wires them. It knows nothing of content
 // files: it holds a neutral entry from design.js and asks design.js for every change (rule R54).
 //
 // The handles and the selection box live in a little scene of their own, drawn after the game's frame: nothing is added to engine.scene, so the game's scene

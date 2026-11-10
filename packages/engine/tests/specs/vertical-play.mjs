@@ -16,7 +16,7 @@ const setup = () => {
     const E = mk(T.createEngine, name);
     E.use(T.world(), T.collision(), T.characters({ npcs }), T.level({ scene: vpFlat() }), ...mods(T));
     await E.start();
-    E.ops.allow(() => E.characters.createPlayer({ control: 'camera', spawn: { x: 0, z: 0 } }));
+    E.ops.allow(() => E.characters.addPlayer({ control: 'camera', spawn: { x: 0, z: 0 } }));
     return E;
   };
   window.vpRide = n => vpGame(n, T => [T.rigid()]);
@@ -26,7 +26,7 @@ const setup = () => {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 4)); mesh.position.set(5, 1, 0);
     return E.ops.allow(() => E.rigid.addWheeled(mesh, { id, wheels, ...o }));
   };
-  window.vpSecond = E => E.ops.allow(() => E.characters.createPlayer({ id: 'p2', control: 'camera', spawn: { x: 3, z: 3 } }));
+  window.vpSecond = E => E.ops.allow(() => E.characters.addPlayer({ id: 'p2', control: 'camera', spawn: { x: 3, z: 3 } }));
   window.vpWalk = (ch, to) => { const w = { status: null }; ch.walkTo(to).then(r => { w.status = r.status; }); return w; };
 };
 

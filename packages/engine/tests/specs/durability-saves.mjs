@@ -16,8 +16,8 @@ export const specs = [
         const S = engine.saves, out = {}, gate = () => { let open; const p = new Promise(res => { open = res; }); return { p, open }; };
         const state = { x: 0, y: 0 };
         let wait = null;   // the gate part X stops at, for the save whose x equals wait.at
-        S.register('rpX', { save: () => ({ x: state.x }), load: d => { state.x = d.x; if (wait?.at === d.x) return wait.p; } });
-        S.register('rpY', { save: () => ({ y: state.y }), load: d => { if (d.y < 0) throw new Error('replace boom'); state.y = d.y; } });
+        S.define('rpX', { save: () => ({ x: state.x }), load: d => { state.x = d.x; if (wait?.at === d.x) return wait.p; } });
+        S.define('rpY', { save: () => ({ y: state.y }), load: d => { if (d.y < 0) throw new Error('replace boom'); state.y = d.y; } });
         const save = (x, y) => ({ format: 1, versions: { rpX: 1, rpY: 1 }, parts: { rpX: { x }, rpY: { y } } });
         const tick = () => new Promise(res => setTimeout(res, 0));
         // the review's repro: A (1,1) stops after part X, B (2,2) is asked for, A resumes. B waits its turn, so A is released before B is awaited
@@ -42,10 +42,10 @@ export const specs = [
         await c;
         // apply, apply on the next line (a replay in one stretch of code), with afterLoad hooks installed: both apply at once and the hooks rebuild for the last
         let rebuilt = 0;
-        engine.modules.set('rp-count', { name: 'rp-count', afterLoad() { rebuilt++; } });
+        engine.modules.set('rp-count', { name: 'rp-count', afterLoad() { rebuilt++; } }); engine._modState.set('rp-count', 'running');   // a stand-in module: the afterLoad gate runs only modules that run
         const c1 = S.apply(save(4, 4), 'C1'), first = state.x, c2 = S.apply(save(5, 5), 'C2');
         out.twice = { first, second: state.x, ok: [await c1, await c2], rebuilt };
-        engine.modules.delete('rp-count');
+        engine.modules.delete('rp-count'); engine._modState.delete('rp-count');
         // session.newGame asked during a direct apply starts after it, on the same rule
         const log = [], h = engine.events.on('session:end', () => log.push('end'));
         wait = { ...gate(), at: 7 };
@@ -57,7 +57,7 @@ export const specs = [
         h.remove();
         // a load() that asks for another replacement: it waits for this one
         let inner = null;
-        S.register('rpNest', { save: () => ({}), load: () => { inner ??= S.apply(save(8, 8), 'inner'); } });
+        S.define('rpNest', { save: () => ({}), load: () => { inner ??= S.apply(save(8, 8), 'inner'); } });
         out.nestOuter = await S.apply({ format: 1, versions: { rpNest: 1 }, parts: { rpNest: {} } }, 'outer');
         out.nestInner = await inner;
         out.nest = { x: state.x };
@@ -66,7 +66,7 @@ export const specs = [
         let v = 0;
         const held = gate();
         await S.apply({ format: 1, versions: { rpLate: 1 }, parts: { rpLate: { v: 1 } } }, 'old');
-        S.register('rpLate', { save: () => ({ v }), load: async dd => { if (dd.v === 1) await held.p; v = dd.v; } });
+        S.define('rpLate', { save: () => ({ v }), load: async dd => { if (dd.v === 1) await held.p; v = dd.v; } });
         const e2 = S.apply({ format: 1, versions: { rpLate: 1 }, parts: { rpLate: { v: 2 } } }, 'new');
         await tick();
         held.open();
@@ -102,7 +102,7 @@ export const specs = [
         let value = 0, release, entered, fail = false, slow = null;
         E.use({ name: 'rpRebuild', type: 'rules', afterLoad() { entered?.(); return new Promise((res, rej) => { release = () => (fail ? rej(new Error('replace hook boom')) : res()); }); } });
         E.ops.define('rp.change', { run() { value++; }, undo() {} });
-        S.register('rpSlow', { save: () => ({}), load: () => slow?.() });
+        S.define('rpSlow', { save: () => ({}), load: () => slow?.() });
         const started = () => new Promise(res => { entered = res; });
         // 1. a pending afterLoad
         let on = started(), loading = S.apply(S.collect(), 'rp');
@@ -176,9 +176,9 @@ export const specs = [
         out.listener = { ok: await S.load('dur-good'), flag: engine.vars.flag('dur-after'), error: /dur listener boom/.test(engine.error?.message ?? '') };
         h.remove(); clear();
         // 3. a module's afterLoad that throws: same rollback
-        engine.modules.set('dur-after-load', { name: 'dur-after-load', afterLoad() { throw new Error('dur afterLoad boom'); } });
+        engine.modules.set('dur-after-load', { name: 'dur-after-load', afterLoad() { throw new Error('dur afterLoad boom'); } }); engine._modState.set('dur-after-load', 'running');   // a stand-in module: the afterLoad gate runs only modules that run
         out.hook = { ok: await S.load('dur-good'), flag: engine.vars.flag('dur-after'), loadHeld: loadHeld(), error: /dur afterLoad boom/.test(engine.error?.message ?? '') };
-        engine.modules.delete('dur-after-load'); clear();
+        engine.modules.delete('dur-after-load'); engine._modState.delete('dur-after-load'); clear();
         out.clean = await S.load('dur-good');   // the same save loads once nothing throws
         out.flagAfterClean = engine.vars.flag('dur-after');
         // 4. a null part is a corrupt save: refused before anything changes
@@ -187,7 +187,7 @@ export const specs = [
         const recs = engine.world.records.size;
         out.nul = { check: S.check('dur-null'), ok: await S.load('dur-null'), recs: engine.world.records.size === recs, flag: engine.vars.flag('dur-after') };
         // a part with nothing to save is left out, never written as null
-        S.register('dur-empty', { save: () => null, load: () => {} });
+        S.define('dur-empty', { save: () => null, load: () => {} });
         out.nullWritten = 'dur-empty' in S.collect().parts;
         S.providers.delete('dur-empty');
         errH.remove();
@@ -316,15 +316,15 @@ export const specs = [
         const S = engine.saves, out = {}, held = () => S.replacing && engine.stacks.get('freeze').has('threedog:state-replace');
         const clear = () => { engine.error = null; engine.stacks.get('freeze').release('error'); };
         let seen = [];
-        S.register('durBoom', { first: true, save: () => ({}), load: d => { if (d.bad) throw new Error('dur rollback boom'); } });
-        S.register('durSlow', { save: () => ({}), load: async () => { await new Promise(res => setTimeout(res, 0)); seen.push(held()); } });
+        S.define('durBoom', { first: true, save: () => ({}), load: d => { if (d.bad) throw new Error('dur rollback boom'); } });
+        S.define('durSlow', { save: () => ({}), load: async () => { await new Promise(res => setTimeout(res, 0)); seen.push(held()); } });
         const good = S.collect(), bad = JSON.parse(JSON.stringify(good));
         bad.parts.durBoom = { bad: true };
         out.sync = { ok: await S.apply(bad, 'dur'), seen }; clear();   // threw before any hold was taken
         seen = [];
-        engine.modules.set('dur-al', { name: 'dur-al', afterLoad() { throw new Error('dur rollback boom'); } });
+        engine.modules.set('dur-al', { name: 'dur-al', afterLoad() { throw new Error('dur rollback boom'); } }); engine._modState.set('dur-al', 'running');   // a stand-in module: the afterLoad gate runs only modules that run
         out.hook = { ok: await S.apply(good, 'dur') }; out.hook.seen = seen;   // the parts' hold ended before the hook failed
-        engine.modules.delete('dur-al'); clear();
+        engine.modules.delete('dur-al'); engine._modState.delete('dur-al'); clear();
         out.released = !held();
         S.providers.delete('durBoom'); S.providers.delete('durSlow');
         await S._put('dur-odd', JSON.stringify({ parts: {} }), undefined);

@@ -24,12 +24,15 @@ export class Session {
     /**
      * Start a new playthrough from the state the game had right after start(). Returns Promise<boolean> (false only if a save part failed to load: the
      * old playthrough then goes on, with its data, listeners and timers, and 'session:failed' fires instead of 'session:start').
+     * @param {{ turn?: object }} [o]  turn: the running request's own (what a save part's load(), an afterLoad or a module's applyState was given): the call then runs inside that request instead of waiting behind it for itself, as level.load({ turn }) does
      * @returns {Promise<boolean>}
      * @example
      * // a "Restart" button in a game-over screen
      * restartBtn.onclick = () => engine.session.newGame();
      */
-    newGame(): Promise<boolean>;
+    newGame({ turn }?: {
+        turn?: object;
+    }): Promise<boolean>;
     /**
      * Continue from a save (or retry from a checkpoint) with nothing of the current playthrough left over: the new-game state with the save on top,
      * so a part the save does not have (a module added in a later version of the game) starts from its new-game state.
@@ -43,8 +46,11 @@ export class Session {
     /**
      * End the playthrough and show the title screen (the title part when the game turned it on; flow returns to its start state).
      * The state behind the title is the new-game state, so nothing from the old playthrough runs while the title is up.
+     * @param {{ turn?: object }} [o]  turn: the running request's own (what a save part's load(), an afterLoad or a module's applyState was given): the call then runs inside that request instead of waiting behind it for itself, as level.load({ turn }) does
      * @returns {Promise<boolean>}
      * @example settingsBackToTitle.onclick = () => engine.session.quit();
      */
-    quit(): Promise<boolean>;
+    quit({ turn }?: {
+        turn?: object;
+    }): Promise<boolean>;
 }

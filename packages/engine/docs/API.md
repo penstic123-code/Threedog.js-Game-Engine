@@ -15,41 +15,41 @@
 - `engine.describeText(opts?: { radius?, full?, path? }) → string` — The same information as English text, summary first: at most 30 lines…
 - `engine.applyState(params: StateParams) → Promise<{ ok: boolean, refused: {…` — Set up a scenario: time of day, weather, player position, load a save, advance time, skip cutscenes
 - `engine.onFixed(fn: (dt: number) => void, opts?: { channel?, phase? }) → Handle` — Fixed-step logic (60 times per second, dt in fixed seconds): movement, physics, cooldowns, and game…
-- `engine.onFrame(fn: (dt: number) => void) → Handle` — Once per frame (dt in frame seconds): animation, camera, UI and UI keys…
+- `engine.onFrame(fn: (dt: number) => void) → Handle` — Once per frame
 - `engine.add(obj: T, ...more: (Object3D | { id?, save? })[]) → T` — Add objects to the scene and register them (engine.thing), returns the first one
 - `engine.remove(...objs: Object3D[])` — Fully delete an object (use it when you no longer want the object): removes it from its parent, unr…
 - `engine.surface(x: number, z: number, refY?: number) → number` — Ground height (meters) at (x, z)
 - `engine.snapToGround(obj: T, offset?: number) → T` — Put an object on the ground under it (y = ground height + offset) and return the object
 - `engine.raycast(origin: Vec3Like, dir: Vec3Like, opts?: RaycastOptions) → RayHit | null` — Ray: shoot from origin along dir, returns the nearest hit or null…
 - `engine.pick(ndcX: number, ndcY: number, opts?: RaycastOptions) → RayHit | null` — Shoot a ray through the camera from screen coordinates (-1..1, e.g. input.pointer.ndcX/ndcY)
-- `engine.freeze(owner?: string | { owner?, kind?, ambient? }, opts?: { kind?, ambient? }) → OwnerHandle` — Gameplay pause (menu, flow's paused): fixed steps are skipped entirely…
+- `engine.freeze(owner?: string | { owner?, kind?, still? }, opts?: { kind?: 'title'; still?: boolean }) → OwnerHandle` — Gameplay pause (menu, flow's paused): fixed steps are skipped entirely…
 - `engine.haltLoop(owner?: string | { owner?: string }) → OwnerHandle` — Pause the real-time loop: the picture stops and even rendering stops, only step() advances…
-- `engine.stateApplied` — (experimental) Scenario is ready: start() completed, and the URL parameters / the latest applyState…
+- `engine.stateApplied` — Scenario is ready: start() completed, and the URL parameters / the latest applyState have all been …
 - `engine.ready` — phase is 'ready' or 'running': the world is built and the loading screen is gone…
-- `engine.player` — The player (exists only after characters.createPlayer())
+- `engine.player` — The player (exists only after characters.addPlayer())
 - `engine.scene` — three.js scene
 - `engine.camera` — The camera the engine draws with, a plain THREE.PerspectiveCamera to begin with
 
 ## Core objects (engine.xxx, no install needed)
 - [`engine.events`](api/events.md) the event bus: traceFocus note trace recent on once emit; event table
-- [`engine.input`](api/input.md) Input: read by "action": action bind touchButton simulate seat rebind rebound keysOf isUnbound label down pressed released pressedRaw …
+- [`engine.input`](api/input.md) Input: read by "action": define bind touchButton simulate seat rebind rebound keysOf isUnbound label down pressed released pressedRaw …
 - [`engine.clock`](api/clock.md) calendar seconds and "after how long / every how long": after every
 - [`engine.vars`](api/vars.md) story flags and counters (autosaved): flag setFlag counter bump
-- [`engine.saves`](api/saves.md) engine.saves handles saving: register putAttachment removeAttachment attachments storageKey flush collect check apply save load list remove export …
-- [`engine.assets`](api/assets.md) Assets: manifest builder paramsOf setParams preload font model lod modelNow geometry gridFromImage texture useTexture release …
+- [`engine.saves`](api/saves.md) engine.saves handles saving: define putAttachment removeAttachment attachments storageKey flush collect check apply save load list remove export …
+- [`engine.assets`](api/assets.md) Assets: manifest builder paramsOf setParams preload font model lod modelNow onModel geometry gridFromImage texture useTexture …
 - [`engine.audio`](api/audio.md) buses: addBus setVolume duck condition measure value matches volumeOf sfx noiseBurst tone load play
 - [`engine.i18n`](api/i18n.md) string tables: add setLocale has
-- [`engine.rays`](api/rays.md) engine.rays is the ray registry…: addStatic forget addProvider
+- [`engine.rays`](api/rays.md) engine.rays is the ray registry…: addStatic addProvider
 - [`engine.jobs`](api/jobs.md) engine.jobs queues build work in a binary heap: add run
 - [`engine.stream`](api/stream.md) engine.stream builds on demand by space: only entries n…: add source teleport addReadyCheck sources
-- [`engine.budget`](api/budget.md) performance budget (turned on by createEngine: enable disable metric limitOf report checkStartup values byTag
-- [`engine.post`](api/post.md) PostFX: object targets add get own list render
+- [`engine.budget`](api/budget.md) performance budget (turned on by createEngine: enable disable metric limitOf report checkStartup values record notice byTag
+- [`engine.post`](api/post.md) PostFX: object targets add get byRole own list render
 - [`engine.occlusion`](api/occlusion.md) Occlusion
-- [`engine.ground`](api/ground.md) Ground: whoever provides the ground height is the "terr…: height slope type has voidY forEachCollider viewRange chunkCollision staticTrimeshes staticVersion
+- [`engine.ground`](api/ground.md) Ground provider: whoever provides the ground height is …: height slope type water has voidY forEachCollider viewRange chunkCollision staticTrimeshes staticVersion
 
 ## Modules (installed with engine.use; the openWorld preset installs only world and environment, see [api/openWorld.md](api/openWorld.md))
 - [`engine.terrain`](api/terrain.md) terrain() Procedural terrain, data part: recolor view retry rebuild edit
-- [`engine.vegetation`](api/vegetation.md) vegetation() Vegetation: sway color view rebuild setShadowRing define get list isRemoved removeInstance restoreInstance instanceAt
+- [`engine.vegetation`](api/vegetation.md) vegetation() Vegetation: sway color view rebuild setShadowRing define get list isRemoved removeInstance restoreInstance instanceAt …
 - [`engine.sky`](api/sky.md) sky() Sky dome and the sun / daylight / sky-color signals, from the calendar's time; it writes no light or fog: keyframes clouds layer replace environment
 - [`engine.calendar`](api/calendar.md) calendar() Time of day, day, seasons and clock-time timers: at between daily onSeason untilMark
 - [`engine.weather`](api/weather.md) weather() Weather state: defineField set label
@@ -68,20 +68,20 @@
 - [`engine.swarm`](api/swarm.md)  swarm
 - [`engine.settings`](api/settings.md) settings() Settings menu: get set preset define addSection open close toggle reset resetBindings rebind actionList …
 - [`engine.music`](api/music.md) music() Background music: define play stop stinger rules override pick
-- [`engine.characters`](api/characters.md) characters() Characters: findSpawn createPlayer moveInput addVehicle support removePlayer findPath findPathAsync; Character, NPC; engine.npcs: list add remove behavior tiers get character avoid (behavior and avoid: see recipes/02-npc)
+- [`engine.characters`](api/characters.md) characters() Characters: findSpawn addPlayer moveInput addVehicle support removePlayer findPath findPathAsync; Character, NPC; engine.npcs: list add remove behavior tiers get character avoid (behavior and avoid: see recipes/02-npc)
 - [`engine.interactions`](api/interactions.md) interactions() Interaction prompts: add get
 - [`engine.dialogue`](api/dialogue.md) dialogue() Dialogue: define start say bubbles end
 - [`engine.inventory`](api/inventory.md) inventory() Inventory: of define item count has list get add remove trade setData container …
 - [`engine.pickups`](api/pickups.md) pickups() pickups: spawn nearest
 - [`engine.quests`](api/quests.md) quests() Quests: define start state advance isDone isActive isFailed check list
-- [`engine.photo`](api/photo.md) photo() Photo mode: take subject
+- [`engine.photo`](api/photo.md) photo() Photo mode: take trace subject
 - [`engine.ambience`](api/ambience.md) ambience() Ambience: add rules nearWater
 - [`engine.nav`](api/nav.md) nav() Navmesh: findPath dispose
 - [`engine.hlod`](api/hlod.md) hlod() hlod: add
 - [`engine.lightPool`](api/lightPool.md) lightPool() Light pool: add
 - [`engine.content`](api/content.md) content() Content loading: load condition test run place where template fields spawn
 - [`engine.flow`](api/flow.md) flow() Game flow and scene transitions: define go transition
-- [`engine.hud`](api/hud.md) hud() Objective markers, counters, progress bars: marker counter bump value bar remove
+- [`engine.hud`](api/hud.md) hud() Objective markers, counters, progress bars: marker addCounter bump value bar button hint remove
 
 ## Custom drawing (only to replace how a module draws: the facades above are the entry; `engine.use(mine, { replaces })`, recipe 28 §6)
 - [`engine.terrainDraw`](api/terrainDraw.md) terrain() terrainDraw: recolor

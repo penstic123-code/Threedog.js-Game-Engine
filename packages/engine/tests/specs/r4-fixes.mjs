@@ -38,7 +38,7 @@ export const specs = [
   {
     // W6：夜里下雨 / 阴天时星星要被天气的云量压暗（天空与天气的协调：dome 着色器读 uWeatherCloud，并且星星在画出来的云后面）
     software: true,   // reads rendered pixels: stays on software rendering (same pixels on every machine)
-    name: 'r4 W6: night stars dim with the weather cloud cover (rain shows far fewer bright star pixels than clear)',
+    name: 'r4 W6: night stars dim with the weather cloud cover (rain shows far less star light than clear)',
     url: '/',
     async run({ check, ev }) {
       const r = await ev(() => { try {
@@ -55,19 +55,22 @@ export const specs = [
           const d = g.getImageData(0, 0, c.width, c.height).data, L = [];
           for (let i = 0; i < d.length; i += 4) L.push(0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]);
           // 星星 = 孤立的亮点：比左右上下四个邻居都亮很多（云、月亮、天空渐变都是平滑的，不算）
-          const W = c.width, H = c.height; let bright = 0;
+          // light: how far each such point stands above its brightest neighbor, summed. Why not the count alone: a dimmed star (x 0.1)
+          // still clears the 40 margin after the sRGB curve, so how many stars a rainy sky keeps depends on which ones its clouds cover
+          // (the random arrangement); the light measures the dimming itself
+          const W = c.width, H = c.height; let bright = 0, light = 0;
           for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
-            const v = L[y * W + x] - 40;
-            if (v > L[y * W + x - 1] && v > L[y * W + x + 1] && v > L[(y - 1) * W + x] && v > L[(y + 1) * W + x]) bright++;
+            const v = L[y * W + x] - 40, n = Math.max(L[y * W + x - 1], L[y * W + x + 1], L[(y - 1) * W + x], L[(y + 1) * W + x]);
+            if (v > n) { bright++; light += L[y * W + x] - n; }
           }
-          return { bright };
+          return { bright, light: Math.round(light) };
         };
         const clear = stars('clear'), rain = stars('rain');
         return { clear, rain, cloud: engine.uniforms.uWeatherCloud.value };
       } catch (err) { return { err: String(err.stack) }; } });
       if (r.err) { check('runs without error', false, r.err); return; }
       check('a clear night shows stars', r.clear.bright > 0, JSON.stringify(r));
-      check('a rainy night shows at most a fifth of the clear night bright star pixels', r.rain.bright * 5 <= r.clear.bright, JSON.stringify(r));
+      check('a rainy night shows at most a fifth of the clear night star light', r.rain.light * 5 <= r.clear.light, JSON.stringify(r));
     },
   },
   {
@@ -93,11 +96,11 @@ export const specs = [
     async run({ check, ev }) {
       const r = await ev(() => {
         const text = id => [...document.querySelectorAll('.threedog-hud-counter')].map(el => el.textContent).find(t => t.includes(id)) ?? null;
-        engine.hud.counter('r4-clock', { label: 'Clock', value: '08:30' });
-        engine.hud.counter('r4-step', { label: 'Step: find the key' });
-        engine.hud.counter('r4-fish', { label: 'Fish', value: 2, max: 5 });
+        engine.hud.addCounter('r4-clock', { label: 'Clock', value: '08:30' });
+        engine.hud.addCounter('r4-step', { label: 'Step: find the key' });
+        engine.hud.addCounter('r4-fish', { label: 'Fish', value: 2, max: 5 });
         const out = { clock: text('Clock'), step: text('Step'), fish: text('Fish') };
-        try { engine.hud.counter('r4-bad', { value: { n: 1 } }); } catch (err) { out.bad = err.message; }
+        try { engine.hud.addCounter('r4-bad', { value: { n: 1 } }); } catch (err) { out.bad = err.message; }
         for (const id of ['r4-clock', 'r4-step', 'r4-fish']) engine.hud.remove(id);
         return out;
       });

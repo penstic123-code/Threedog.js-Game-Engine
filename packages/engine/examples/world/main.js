@@ -52,11 +52,14 @@ engine.onFrame(() => {
 });
 
 // ---------- 3. Player + content (vegetation, items, pickups, NPCs, dialogues, quests, key actions, templates, props, physics props, custom conditions) ----------
-engine.characters.createPlayer({ ...presets.player.thirdPerson, model: 'humanoid', spawn: { x: home.x + 4, z: home.z + 7 } });   // body: the humanoid asset from art/
-engine.content.load(data, { places: { home, river, water: waterSpot } });   // content names models only; the asset packs above resolve them
+engine.characters.addPlayer({ ...presets.player.thirdPerson, model: 'humanoid', spawn: { x: home.x + 4, z: home.z + 7 } });   // body: the humanoid asset from art/
+// Impostor comparison (threedog perf --only=pages --renderer=webgpu --impostor): ?impostor draws the trees that have a low-poly as baked cards instead
+const cards = new URLSearchParams(location.search).has('impostor');
+const veg = cards ? Object.fromEntries(Object.entries(/** @type {Record<string, any>} */ (data.vegetation)).map(([n, { lod, ...v }]) => [n, lod ? { ...v, impostor: true } : data.vegetation[n]])) : data.vegetation;
+engine.content.load({ ...data, vegetation: veg }, { places: { home, river, water: waterSpot } });   // content names models only; the asset packs above resolve them
 
 // Show the film count at the top left (hud counter)
-const showFilm = () => engine.hud.counter('film', { icon: '🎞', label: '胶卷', value: engine.inventory.count('film') });
+const showFilm = () => engine.hud.addCounter('film', { icon: '🎞', label: '胶卷', value: engine.inventory.count('film') });
 for (const ev of ['item:add', 'item:remove', 'save:loaded']) engine.events.on(ev, showFilm);
 showFilm();
 

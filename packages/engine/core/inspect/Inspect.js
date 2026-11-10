@@ -5,6 +5,7 @@
 //   engine.explain({ op: 'shop.buy', args })   why an op can / cannot run now (text: reason + fix first; detail: its last attempt and the events around it)
 //   engine.explain({ value: 'fog.far' })      who wrote a watched value, its short history, a fight if one was seen (core/inspect/pictureWriters.js); a value not tracked says so
 //   engine.explain({ thing: 'chest-home' })   everything about one id: text says where it comes from, detail has the whole ThingExplanation
+//   engine.explain({ asset: 'rock' })        who holds an asset's data (lease labels) and why a pinned or retired build is still in memory
 //   engine.explain({ module: 'quests' })      whether a module runs, and what blocks it; { capability: 'ground' } who provides that, and whether it can be called
 //   engine.explain({ quest: 'first-light' })  any other key is answered by the module whose definition has explain: { quest(e, id) {...} }
 //   engine.pick(x, y).thing        point -> thing: the world record a ray hit belongs to, else the engine.add object (thingOf; engine.thing is the same lookup)
@@ -63,12 +64,13 @@ export function thingOf(e, obj, hit) {
 export function explain(e, q) {
   if (q?.op) return explainOp(e, q);
   if (q?.value) return e._picture?.why(String(q.value)) ?? { ok: false, text: `${q.value}: ${NO_WRITERS}`, detail: null };
+  if (q?.asset) return e.assets._explain(String(q.asset));
   if (q?.thing != null) return thingAnswer(e, q.thing);
   if (q?.module) return moduleAnswer(e, String(q.module));
   if (q?.capability) return capabilityAnswer(e, String(q.capability));
   const key = Object.keys(q || {})[0];
   for (const m of e.modules.values()) if (m.explain?.[key]) return m.explain[key](e, q[key], q);
-  const keys = ['op', 'value', 'thing', 'module', 'capability', ...[...e.modules.values()].flatMap(m => Object.keys(m.explain || {}))];
+  const keys = ['op', 'value', 'asset', 'thing', 'module', 'capability', ...[...e.modules.values()].flatMap(m => Object.keys(m.explain || {}))];
   const near = key === 'picture' ? 'value' : closest(key, keys);   // the key's old name: closest() cannot see that one
   throw codedError('unknown-name', `engine.explain({ ${key}: ... }): nothing explains '${key}'${near ? ` (did you mean '${near}'?)` : ''}. Keys: ${keys.join(', ')} (a module adds one with explain: { ${key}(e, value) { return { ok, text } } })`);
 }
@@ -85,7 +87,7 @@ function thingAnswer(e, id) {
 function moduleAnswer(e, name) {
   const m = e.modules.get(name), names = [...e.modules.keys()];
   if (!m) return { ok: false, text: `${name}: not installed${closest(name, names) ? ` (did you mean '${closest(name, names)}'?)` : ''}. engine.catalog() lists what can be installed` };
-  const state = e.moduleStates[name], blocked = e.catalog(name).blockedBy ?? [];
+  const state = e.moduleStates[name], blocked = e.catalog('module:' + name).blockedBy ?? [];
   return { ok: state === 'running', text: `${name}: ${state}${blocked.map(b => `; requires ${b.requires}, and ${b.module} is ${b.state}`).join('')}`, detail: { state, blockedBy: blocked, provides: m.provides ?? [], requires: m.requires ?? [] } };
 }
 

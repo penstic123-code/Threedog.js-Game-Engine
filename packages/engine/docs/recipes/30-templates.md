@@ -1,28 +1,29 @@
 # Templates: reusable objects, definition vs instance state
 
-**In this recipe**: 1. Define a template · 2. Place instances · 3. What belongs to the definition, what to the instance ·
-5. Point -> thing · 6. When to use a template · 7. A group of things
+> **Covers:** templates: one kind of object defined once, placed many times, instance state.
+> **Use when:** many objects of the same kind.
+> **Shortest:** a template entry in content data, then instances (§1, §2).
+> **Sections:** 1 Define a template · 2 Place instances · 3 What belongs to · 5 Point -> thing · 6 When to use · 7 A group of
 
 Requires `world()` (in `openWorld()`); a template with `interact` needs `interactions({ ...presets.interactions.nearest })`, with `container` needs
 `inventory()`.
 
-A **template** describes one kind of object once: its model, collision, interaction, container, sound, animation and the default values of its saved
-state. Every chest, campfire or bed you place is an **instance**: a world record that names the template (its `kind` is the template name) and holds
-only its own state. There is no inheritance and no variant layer; a different look or behaviour is another template, and a template is plain JS, so
-`{ ...chest, model: 'iron-chest' }` is that other template in one line.
+A **template** describes one kind of object once: model, collision, interaction, container, sound, animation and the defaults of its saved state. Each
+placed one is an **instance**: a world record whose `kind` is the template name, holding only its own state. No inheritance or variants: another look is
+another template, `{ ...chest, model: 'iron-chest' }`.
 
 ## 1. Define a template
 `games/<game>/content/templates.js` (add it to `content/index.js`):
 ```js
 export default {
   chest: {
-    model: 'chest',                        // an asset name (file or generator of an asset pack, the same name pickups and vegetation take); every chest clones one shared prototype
-    collide: 'box',                        // 'box' = the model's bounds; 'circle' = a cylinder on its base; omitted = does not block
-    state: { opened: false },              // instance fields and their defaults, copied onto each record and saved
-    interact: { label: rec => rec.opened ? '关上' : '打开', op: 'chest.toggle', radius: 2 },   // using it runs the op with { id }
-    container: { capacity: 6, items: { berry: 2 } },   // each chest gets a container whose id is the record id; items = starting goods (placed once)
-    sound: { use: 'chest' },               // engine.audio.sfx after a successful use
-    animate: (rec, obj, dt) => { obj.children[0].rotation.x = rec.opened ? -1.1 : 0; },   // per-frame look from the record, only while the model exists
+    model: 'chest',  // an asset name (file or generator of an asset pack, the same name pickups and vegetation take); every chest clones one shared prototype
+    collide: 'box',  // 'box' = the model's bounds; 'circle' = a cylinder on its base; omitted = does not block
+    state: { opened: false },  // instance fields and their defaults, copied onto each record and saved
+    interact: { label: rec => rec.opened ? 'Close' : 'Open', op: 'chest.toggle', radius: 2 },  // using it runs the op with { id }
+    container: { capacity: 6, items: { berry: 2 } },  // each chest gets a container whose id is the record id; items = starting goods (placed once)
+    sound: { use: 'chest' },  // engine.audio.sfx after a successful use
+    animate: (rec, obj, dt) => { obj.children[0].rotation.x = rec.opened ? -1.1 : 0; },  // per-frame look from the record, only while the model exists
   },
 };
 ```
@@ -72,7 +73,7 @@ spot near the river) stay in code and come in through `content.load(data, { plac
 has now (`-`/`+` lines, dry run); `--write` writes them into the content files. Writing today's id changes nothing for old saves. To give an entry a
 readable id later, change it and add the pair to `content/renames.js`: <!-- r18-ignore-line -->
 ```js
-export default { 'chest:3': 'chest-home', 'prop:rock:12': null };   // old id -> new id; null = deleted on purpose
+export default { 'chest:3': 'chest-home', 'prop:rock:12': null };  // old id -> new id; null = deleted on purpose
 ```
 Loading a save then moves its changes, removal, owed time and container goods from `chest:3` to `chest-home` (save loaded before or after content),
 and drops `prop:rock:12`'s data quietly. `npm run check` errors on a target no entry defines and on a source content still defines; dev warns about an
@@ -112,13 +113,13 @@ export default {
   crop: {
     model: 'crop-seed', state: { watered: false },
     stages: [{ name: 'seed', duration: 600 }, { name: 'sprout', duration: 900, scale: 0.6 }, { name: 'ripe', model: 'crop-ripe' }],
-    canGrow: rec => rec.watered,                       // asked every step, near and far; false holds the stage and blocked time does not count
-    interact: { label: 'Water', op: 'crop.water' },    // an interaction is always an op, run with { id }
+    canGrow: rec => rec.watered,  // asked every step, near and far; false holds the stage and blocked time does not count
+    interact: { label: 'Water', op: 'crop.water' },  // an interaction is always an op, run with { id }
   },
   turret: {
     model: 'turret', state: { heat: 0 },
     stages: [{ name: 'cold', duration: 5 }, { name: 'armed' }],
-    update: (rec, dt, e) => { if (rec.stage === 1) rec.heat = Math.min(1, rec.heat + dt); },   // every fixed step while near
+    update: (rec, dt, e) => { if (rec.stage === 1) rec.heat = Math.min(1, rec.heat + dt); },  // every fixed step while near
   },
 };
 ```
@@ -156,9 +157,9 @@ plus the changing values on the record, and wrap the table with `Object.freeze` 
 Runtime ops change only the current session and its saves. To change the level itself, edit the content files or the level model, then reload. To find
 the entry, ask the engine what a thing is:
 ```js
-const t = engine.pick(0, 0)?.thing;   // what is in the middle of the screen
+const t = engine.pick(0, 0)?.thing;  // what is in the middle of the screen
 // { id: 'chest-home', kind: 'chest', template: 'chest', definedAt: 'content/props.js:14', templateAt: 'content/templates.js:3', fields: { opened: false }, edit: 'defined in content/props.js:14: …' }
-engine.world.origin('chest-home');     // the same source info for an id
+engine.world.origin('chest-home');  // the same source info for an id
 ```
 `hit.thing` is on every `engine.pick` / `engine.raycast` hit (computed when read); a hit on a batched copy resolves to its original object.
 `engine.inspect(id).thing` and `engine.explain({ op, args: { id } })` say the same. A hit on a plain object added with `engine.add` gets its
@@ -201,7 +202,7 @@ save follows the new place too. Only places in `places.js` (or the `places` of `
 
 **`source`** (experimental, with `content stamp` and `content capture`) is a plain optional string on a model or template entry, naming what the entry was copied from. It has no effect at runtime; it is there to ask:
 ```js fragment
-engine.world.query({ where: r => r.source === 'stall' });   // every thing copied from that arrangement
+engine.world.query({ where: r => r.source === 'stall' });  // every thing copied from that arrangement
 ```
 **Moving entries by hand.** On the dev server press F2 (or add `?edit=1` to the address), click an entry and drag its handle: letting go writes `x` and `z` into its content file, as an offset when it stands on a place. Comments and alignment stay. A value someone changed since the click is refused, and code-built entries and things added by code say why they cannot be saved.
 

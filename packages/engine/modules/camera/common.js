@@ -19,7 +19,8 @@ import * as THREE from 'three';
 import { defineOwned, dropOwned } from '../../core/ops/owned.js';
 import { readParams, keysSchema } from '../../core/base/params.js';
 import { setFov, setProjection } from '../../core/scene/view.js';
-import { codedError } from '../../core/base/errorHints.js';
+import { codedError, coded } from '../../core/base/errorHints.js';
+import { warnOnce } from '../../core/base/validate.js';
 
 // the takeover calls the owned-camera warning quotes (core/ops/owned.js): takeCamera is the one explicit entry (its remove() gives the camera back);
 // back is the hand-back for a camera the engine yielded to a direct write (that takeover has no handle)
@@ -37,6 +38,22 @@ function applyOverride(e) {
 function planar(dir, fallback = { x: 0, z: -1 }) {
   const l = Math.hypot(dir.x, dir.z);
   return l < 1e-4 ? { x: fallback.x, z: fallback.z } : { x: dir.x / l, z: dir.z / l };
+}
+/**
+ * A rig value kept to its range [rig[loName], rig[hiName]] (the documented limit). Asked for outside it, it is said once in dev, naming the option that
+ * widens it: a silent clamp made a game's wheel zoom do nothing past the default maxDistance. kept: return the value as given (a start value the first
+ * wheel notch or drag pulls in), else the limit
+ * @param {any} rig @param {string} kind the module function ('followCamera') @param {string} call where the value came from ('followCamera()', 'cameraRig.setView()')
+ * @param {string} name @param {number} v @param {string[]} names [loName, hiName] @param {boolean} [kept]
+ * @internal
+ */
+export function inRange(rig, kind, call, name, v, [loName, hiName], kept = false) {
+  const limit = v > rig[hiName] ? hiName : v < rig[loName] ? loName : null;
+  if (!limit) return v;
+  const at = rig[limit];
+  // a factory: the text is built only the one time it is said (a zoom past the limit asks every frame)
+  warnOnce(() => coded('camera-clamped', `${call}: ${name} ${v} is ${limit === hiName ? 'above' : 'below'} ${limit} (${at}), so the camera keeps to ${at}. To allow it: ${kind}({ ${limit}: ${v} }) or engine.cameraRig.${limit} = ${v}`), `camera-clamped:${call}:${limit}`);
+  return kept ? v : at;
 }
 /** Right direction from the forward direction (Y up) */
 export const rightOf = f => ({ x: -f.z, z: f.x });
@@ -138,7 +155,7 @@ export function rigPlaced(engine) { RIG_OWNED.get(engine)?.mark(); }
 const RIG_OWNED = new WeakMap();   // engine -> the camera's owned entry (one camera module per engine)
 
 /** Camera kind table: kind name -> build(engine, opts, input). Each camera file registers once with defineRig; setCamera switches by name.
- * input.action(name, o) declares an action owned by the camera module (once per name, removed with the module), so a rig built later by
+ * input.define(name, o) declares an action owned by the camera module (once per name, removed with the module), so a rig built later by
  * setCamera or a new session leaves no declaration behind */
 const RIGS = new Map();
 const RIG_PARAMS = new Map();   // kind -> params schema (the option keys of that camera)
@@ -157,7 +174,7 @@ export function rigModule(kind, opts) {
   const cache = new Map();   // kind -> camera instance: params like distance and pitch survive switching away and back
   const builtWith = new WeakMap();   // rig -> the options it was built with
   let modInput = null; const declared = new Set();
-  const input = { action: (n, o) => { if (!declared.has(n)) { declared.add(n); modInput.action(n, o); } } };
+  const input = { define: (n, o) => { if (!declared.has(n)) { declared.add(n); modInput.define(n, o); } } };
   const make = (k, o) => {
     const build = RIGS.get(k);
     if (!build) throw codedError('camera-kind', `setCamera() has no camera kind '${k}'; available: ${[...RIGS.keys()].join(', ')}`);
@@ -197,7 +214,7 @@ export function rigModule(kind, opts) {
       c.onEnter?.(false);
       // The view the player had is save data. Written to a rig of the saved kind only: a follow rig's pitch means the opposite of a first-person one's, so across kinds
       // only the heading carries (as in setCamera). A kind switched to at runtime is not restored: its options are the game's and are not save data
-      ctx.saves.register('cameraRig', { notAtomic: 'the view is output: no game rule reads it, and a rollback must not move the camera',
+      ctx.saves.define('cameraRig', { notAtomic: 'the view is output: no game rule reads it, and a rollback must not move the camera',
         save: () => ({ kind: c.kind, yaw: c.yaw, pitch: c.pitch }),
         load: d => {
           const r = d.kind === c.kind ? c : home;
@@ -219,7 +236,7 @@ export function rigModule(kind, opts) {
         for (const k of Object.keys(home)) delete home[k];
         c = e.cameraRig = Object.assign(home, built, yaw !== undefined && { yaw, pitch });
         cache.set(kind, home);
-        // follows the player only if the game asked (createPlayer({ cameraFollow })), through the seat the load put it in: the rig was rebuilt after that seat was taken
+        // follows the player only if the game asked (addPlayer({ cameraFollow })), through the seat the load put it in: the rig was rebuilt after that seat was taken
         const P = e.player, car = P?.cameraFollow ? P.vehicle : null;
         c.onEnter?.(false); c.follow(car ? car.object : P?.cameraFollow ? P.root : null, car?.camera); fresh = true;
         e.events.emit('camera:change', { kind, previous: old.kind });   // settings re-apply the player's sensitivity / fov to the rebuilt rig

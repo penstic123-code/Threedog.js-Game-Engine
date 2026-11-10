@@ -31,10 +31,10 @@ export const COMMANDS = {
     'scale 0 / NaN, NaN position or vertices, empty geometry, behind the camera, beyond camera.far, outside the view. "maybe" reasons (depthWrite off, fully fogged...) do not stop drawing. scene [--hidden (only undrawn)] [--limit N | --full (40)] [--json]. Code: engine.inspect.scene(). Cannot see shader output',
   pick: 'what is at screen pixel x,y (from the canvas top-left): pick 480,270 -> record id, kind, template, where it is defined (content file:line), fields',
   explain: 'why: explain op shop.buy shop=bakery item=bread (can it run; --full adds its last attempt) / explain quest first-light (where it is stuck) / explain value fog.far (which line last changed it) / explain thing player-chest (where it is defined; --full: everything about the id as JSON) / explain module quests / explain capability ground. engine.explain; recipes/23-ops.md, recipes/40-scene.md section 9, recipes/62-picture-code.md',
-  scenario: 'run one scenario test (tests/scenarios/<name>.json) on this page: scenario barter (prints failed checks and the Coverage block of verify; the scenario leaves the page halted)',
-  catalog: 'what the game can do, from its registrations: catalog = a line per module with ops or problems, the rest named on one line (--full: a line each); catalog shop = one module ' +
+  scenario: 'run one scenario test (tests/scenarios/<name>.json) on this page: scenario barter [--freeze-reload: saves do not reload the page during the run] (prints failed checks and the Coverage block of verify; the scenario leaves the page halted)',
+  catalog: 'what the game can do: catalog = a line per module with ops or problems, the rest named on one line (--full: a line each); catalog shop = one module ' +
     '(dependencies, params + defaults, ops with args and failure codes, saved parts, time hooks, problems, doc / recipe / source files); catalog shop.buy ' +
-    '= one op; catalog --find throw; --json for the raw data; recipes/51-capability-catalog.md',
+    '= one op; catalog picture = picture menu + checks; catalog --find throw; --json for the raw data; recipes/51-capability-catalog.md',
   loading: 'what loading waits for / what failed / does it block the start (answers while start() is stuck); loading hero: one task with its manifest and path; recipes/05-props-bake.md',
 };
 
@@ -46,7 +46,7 @@ export const EXTRA = {
   status: 'is it ready: engine ready / loading / page errors / running, halted or frozen. When the bridge cannot answer it names one of five causes with one next step: no server (threedog play), server still starting (wait, status again), server busy and not answering in time (wait, status again), page script error (threedog errors latest), no dev bridge installed (use gameConfig)',
   'picture-palette': 'measure a reference picture, no game needed: picture-palette art/reference/ref.png [--n 8] [--average] [--ignore-ui] [--region x,y,w,h] (same as threedog picture palette)',
   'picture-compare': 'numbers for two pictures, no game needed: picture-compare ref.png .threedog/shots/snap.png [--region x,y,w,h] [--out side.png] (same as threedog picture compare)',
-  verify: 'run a scenario (tests/scenarios/<name>.json) and report PASS / FAIL, what it tested (ops with outcomes, describe sections compared, time advanced) and what it never touched (ops never run, sections never compared, steps skipped after a failure, key path, picture): verify barter. ' +
+  verify: 'run a scenario (tests/scenarios/<name>.json) and report PASS / FAIL, what it tested (ops with outcomes, describe sections compared, time advanced) and what it never touched (ops never run, sections never compared, steps skipped after a failure, key path, picture): verify barter [--freeze-reload: saves do not reload the page during the run] [--save-baseline: perf medians to .threedog/]; a Perf: line if over budget or slower. ' +
     'Also a Layers: line (steps by layer: direct = op/describe call, simulated-input = bridge press; real-browser-input is always 0 and printed as not verified, visual 0 because scenario snapshots are describe, not pixels), tests that mention an error code seen, and the threedog test command to re-run. ' +
     'A page error during the run fails it. JSON adds layers / layerCounts / evidence (per-check layers, notProven, ops / modules coverage; text: Evidence, NOT proven, Coverage: ops ran/total with refused ones marked, modules tested / indirect / untested, lists capped with "+N more")',
 };

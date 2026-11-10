@@ -1,14 +1,20 @@
 // engine.stacks: the registry of every shared point (the point itself and its rules are core/ops/sharedPoint.js). Here: define / get / mod, the timers
 // behind `for`, saving entries, and describe().shared. Kept apart from sharedPoint.js only for size: the rules read without the bookkeeping between.
-import { codedError } from '../base/errorHints.js';
+import { codedError, coded } from '../base/errorHints.js';
+import { refuseSave } from '../base/saveValues.js';
 import { DEV, warnOnce } from '../base/validate.js';
-import { Stack } from './sharedPoint.js';
+import { Stack, showValue } from './sharedPoint.js';
 
+const BAD_SAVED = "[saves] shared value '{name}' in the save was not restored ({why}); the save is from a build that defined it differently. The next save writes what is defined now";
 const KEYS = ['owner', 'set', 'add', 'mul', 'clamp', 'value', 'for', 'clock', 'id', 'layer'];
 // Saved: engine / game / effect entries (what the playthrough did). Not saved: system / debug (menus, cutscenes, debug: "what the
 // screen is doing now", retaken after a load), settings (the settings module re-applies the player's choices from its own prefs)
 const SAVED = new Set(['engine', 'game', 'effect']);
 const saved = e => SAVED.has(e.layer);
+const layerOf = l => (SAVED.has(l) ? l : 'game');
+// a saved entry of a point not defined yet: only its shape can be checked before the point says its kind (the rest is checked when it is defined)
+const OPS = ['set', 'add', 'mul', 'clamp'];
+const entryShape = e => !!e && typeof e === 'object' && typeof e.owner === 'string' && !!e.owner && OPS.includes(e.op) && (e.left == null || Number.isFinite(e.left));
 
 /** engine.stacks: every shared point by name; engine.mod(name, o) is the one way to change one */
 export class Stacks {
@@ -26,7 +32,7 @@ export class Stacks {
    *  createServices calls this once saves and events exist */
   _hook() {
     const e = this.engine;
-    e.saves.register('stacks', { notAtomic: 'a mod is ended through the handle its owner keeps, which a load cannot put back', save: () => this._save(), load: d => this._load(d) });
+    e.saves.define('stacks', { notAtomic: 'a mod is ended through the handle its owner keeps, which a load cannot put back', save: () => this._save(), load: d => this._load(d) });
     // input.keys and input.gate key their entries by action name, not record id: a removed record 'fire' must not unbind the action 'fire'
     e.events.on('world:remove', ({ id }) => { for (const s of this._all.values()) if (s.per && !s.name.startsWith('input.')) s.dropId(id); });
   }
@@ -36,7 +42,7 @@ export class Stacks {
    * per: true = one value per record id (mod with { id }); per: 'optional' = an entry with { id } is that record's, one without is every record's
    * (move.speed: haste on the player, mud on everyone). save: false keeps it out of saves (screen state like the camera holder).
    * manual: the copyable takeover call the conflict error offers (a drawing part's manual()).
-   * @param {string} name @param {{ kind?: 'number' | 'value' | 'any' | 'top' | 'one', base?: any, min?: number, max?: number, per?: boolean | 'optional', save?: boolean, manual?: string, settingsSet?: boolean, onChange?: (id: string | null) => void }} [o]
+   * @param {string} name @param {{ kind?: 'number' | 'value' | 'any' | 'top' | 'one', base?: any, min?: number, max?: number, per?: boolean | 'optional', save?: boolean, manual?: string, settingsSet?: boolean, important?: boolean, onChange?: (id: string | null) => void }} [o]
    * @returns {Stack}
    * @example engine.stacks.define('damageTaken', { per: true, min: 0 }); engine.mod('damageTaken', { owner: 'shield', id: 'player', mul: 0.5, for: 3 });
    */
@@ -44,7 +50,7 @@ export class Stacks {
     if (this._all.has(name)) throw codedError('engine-misuse', `engine.stacks.define('${name}'): already defined; read it with engine.stacks.get('${name}')`);
     const s = new Stack(this, name, o);
     this._all.set(name, s);
-    if (this._pending[name]) { this._loadOne(s, this._pending[name]); delete this._pending[name]; }
+    if (this._pending[name]) { this._loadOne(s, this._pending[name]); delete this._pending[name]; }   // checked now that the kind is known
     return s;
   }
   /**
@@ -79,6 +85,7 @@ export class Stacks {
   /** Names of every point */
   list() { return [...this._all.keys()]; }
   /**
+   * @internal The entry behind engine.mod (services.js hands it out): games and modules call engine.mod / ctx.mod; stacks.define, get, changed and describe stay public.
    * The one entry: change a shared point; returns a handle whose remove() ends only this owner's entry.
    * @param {string} name @param {{ owner: string, set?: any, add?: number, mul?: number, clamp?: { min?: number, max?: number }, value?: any, for?: number, clock?: string, id?: string, layer?: 'engine' | 'game' | 'effect' | 'system' | 'settings' | 'debug' }} o
    * @returns {{ owner: string, remove(): void, change(value: any): boolean }} remove() ends it; change(v) rewrites its value in place (same op, layer)
@@ -92,15 +99,40 @@ export class Stacks {
    * { 'time.enemies': { value, writer, layer?, at?, how?, also: [{ owner, layer, op, value, left?, at?, hidden? }] } }.
    * Per-record points show as 'move.speed[player]'; a per: 'optional' point's every-record entries as 'move.speed[*]'.
    */
-  describe() {
-    const out = {};
+  describe(rows = this._rows()) { return Object.fromEntries(rows.filter(x => x.has).map(x => [x.label, x.row])); }
+  /** @internal one snapshot of every point's row (describe() and changed() take it, so a describe builds the rows once). has = the point has entries */
+  _rows() {
+    const out = [], add = (label, s, row, has) => out.push({ label, s, row, has });
     for (const s of this._all.values()) {
       if (s.per) {
-        for (const id of s.ids()) out[`${s.name}[${id}]`] = s.row(id);
-        if (s.size()) out[`${s.name}[*]`] = s.row();
-      } else if (s.size()) out[s.name] = s.row();
+        for (const id of s.ids()) add(`${s.name}[${id}]`, s, s.row(id), true);
+        if (s.size()) add(`${s.name}[*]`, s, s.row(), true);
+      } else add(s.name, s, s.row(), s.size() > 0);
     }
     return out;
+  }
+  /**
+   * The values being changed now: [{ name, base, now, how, text }], at most `max`, the furthest from base first. A point is in when its value is off
+   * its base (the base the record is read with, e.g. the character's own speed), a settings entry caps it, or it was defined with
+   * { important: true } (then also at base). Only number / value points: a hold or the camera slot has no base to be off. Two owners setting one
+   * layer throws at take, so a conflict never exists to list here.
+   * describeText's "Values being changed now" line and the dev panel's folder both read this, nothing computes it a second way.
+   * @param {number} [max] @param {ReturnType<Stacks['_rows']>} [snap] rows already taken (describe passes its own)
+   * @example engine.stacks.changed() // [{ name: 'move.speed[player]', base: 6, now: 4.2, how: 'default 6 × haste 1.4 × mud 0.5' }]
+   */
+  changed(max = 5, snap = this._rows()) {
+    const same = (a, b) => a === b || JSON.stringify(a) === JSON.stringify(b);
+    const rows = [];
+    for (const { label: name, s, row: r, has } of snap) {
+      if (s.kind !== 'number' && s.kind !== 'value') continue;
+      const off = has && !same(r.value, r.base), capped = r.layer === 'settings' || r.also.some(h => h.layer === 'settings');
+      if (!off && !capped && !s.important) continue;
+      const far = off ? (s.kind === 'number' ? Math.abs(r.value - r.base) / Math.max(Math.abs(r.base), 1) : 1) : 0;
+      rows.push({ name, base: r.base, now: r.value, how: r.how, text: `${name} ${showValue(r.base)} → ${showValue(r.value)}${r.how ? ` (${r.how})` : ''}`, far, keep: s.important });
+    }
+    // important points are picked first (they must not fall off the cap), then the list is ordered by distance from base
+    const pick = rows.sort((a, b) => b.keep - a.keep || b.far - a.far).slice(0, max);
+    return pick.sort((a, b) => b.far - a.far).map(({ far, keep, ...row }) => row);
   }
   /**
    * Everything one owner changes now, grouped the other way round from describe().shared: "what did rainyNight change?"
@@ -148,7 +180,8 @@ export class Stacks {
   _rebase(clock, delta) { for (const [, e] of this._timed()) if (e.clock === clock) e.until += delta; }
   /** @internal number and value points; entries below the settings layer */
   _save() {
-    const out = {};
+    // entries of a point the game has not defined yet ride along (shape-checked on load), as Time keeps channels not defined yet: else the next save lost them
+    const out = { ...this._pending };
     for (const s of this._all.values()) {
       if (s.save === false || (s.kind !== 'number' && s.kind !== 'value')) continue;
       const list = [];
@@ -163,20 +196,27 @@ export class Stacks {
   /** @internal a load replaces every saved (engine..effect) entry; system / settings / debug entries stay (the menu that holds them is still up) */
   _load(d) {
     this._pending = {};
-    for (const s of this._all.values()) if (s.save !== false && (s.kind === 'number' || s.kind === 'value')) this._loadOne(s, d?.[s.name] ?? []);
-    for (const [k, v] of Object.entries(d ?? {})) if (!this._all.has(k)) this._pending[k] = v;
+    for (const s of this._all.values()) if (s.save !== false && (s.kind === 'number' || s.kind === 'value')) this._loadOne(s, d != null && Object.hasOwn(d, s.name) ? d[s.name] : []);   // [] only when absent: an explicit null is damage, refused by the check
+    for (const [k, v] of Object.entries(d ?? {})) if (!this._all.has(k)) {
+      if (Array.isArray(v) && v.every(entryShape)) this._pending[k] = v;
+      else warnOnce(coded('save-value', BAD_SAVED.replace('{name}', k).replace('{why}', 'not a list of { owner, op, value } entries')));   // a stack this code no longer defines (an old save): dropped with one warning, never a reason to refuse the save
+    }
   }
   /**
    * @internal Replace s's saved entries with list. An owner that holds an entry now and also in the save keeps the SAME entry object, rewritten
    * with the saved values: handles taken before the load (engine.mod, ctx.mod) still remove() / change() it. A new object here made every such
    * handle stale in silence (a slow zone's time.world mul 0.5 stayed after leaving the zone).
+   * The list is checked first, as engine.mod checks (Stack._fromSave): a list that fails changes nothing on s and is reported once; the rest of the save loads.
    */
-  _loadOne(s, list) {
+  _loadOne(s, raw) {
+    let list;
+    try { list = s._fromSave(raw, layerOf); }
+    catch (err) { refuseSave('stacks', s.name, 'is not a valid list: ' + err.message, raw); }
     const had = new Map();
     for (const m of [...s._by.values()]) for (const e of [...m.values()]) if (saved(e)) { had.set(`${e.id ?? ''}\0${e.owner}`, e); s._drop(e.owner, e.id, e); }
     for (const e of list) {
-      const m = s._map(e.id, true), clock = e.clock ?? 'real', old = had.get(`${e.id ?? ''}\0${e.owner}`);
-      const fields = { since: this._at(), op: e.op, value: e.value, layer: SAVED.has(e.layer) ? e.layer : 'game', clock, until: e.left == null ? null : this._nowOf(clock) + e.left };
+      const m = s._map(e.id, true), clock = e.clock, old = had.get(`${e.id ?? ''}\0${e.owner}`);
+      const fields = { since: this._at(), op: e.op, value: e.value, layer: e.layer, clock, until: e.left == null ? null : this._nowOf(clock) + e.left };
       m.set(e.owner, old ? Object.assign(old, fields) : { owner: e.owner, id: e.id ?? null, where: null, ...fields });
       this._timedDirty = true;
       s._changed(e.id);

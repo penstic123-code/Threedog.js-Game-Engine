@@ -1,14 +1,17 @@
 # Scheduling events on the game clock
 
-**In this recipe**: Changing how fast time runs · The time table · 1. Where to write it · 1b. Smooth movement between fixed steps · 2. Skipping time · 3. Verify
+> **Covers:** timers on game time, the time table, smooth movement between steps, skipping time.
+> **Use when:** something happens later, repeatedly, or at an hour of the day.
+> **Shortest:** `engine.clock.after(seconds, fn)`.
+> **Sections:** Changing how fast time · The time table the · 1 Where to write · 1b Smooth movement between · 2 Skipping time sleep · 3 Verify
 
 ## Changing how fast time runs: `engine.mod`
 ```js
-engine.time.channel('enemies');                                                    // once: a channel of your own (world and player are built in)
+engine.time.channel('enemies');  // once: a channel of your own (world and player are built in)
 const bt = engine.mod('time.enemies', { owner: 'bullet-time', mul: 0.35, for: 2 });  // bullet time: enemies at 35% for 2 real seconds
-engine.mod('time.player', { owner: 'haste', mul: 1.2, for: 5 });                     // haste on the player
-engine.mod('freeze', { owner: 'pause-menu' });                                       // pause menu (= engine.freeze('pause-menu'))
-engine.onFixed(dt => moveEnemies(dt), { channel: 'enemies' });                        // this dt is already scaled; plain onFixed dt stays 1/60
+engine.mod('time.player', { owner: 'haste', mul: 1.2, for: 5 });  // haste on the player
+engine.mod('freeze', { owner: 'pause-menu' });  // pause menu (= engine.freeze('pause-menu'))
+engine.onFixed(dt => moveEnemies(dt), { channel: 'enemies' });  // this dt is already scaled; plain onFixed dt stays 1/60
 ```
 `engine.mod(target, { owner, mul | add | set | clamp, for, clock })` is the one entry for every quantity several systems share (time channels,
 `'clock.rate'`, `'freeze'`, your own from `engine.stacks.define(name, { base })`). It returns `{ remove() }`; `remove()` ends only this owner's entry.
@@ -32,7 +35,7 @@ Details, only when you need them:
 **One time source.** `engine.time` counts one thing, `engine.time.tick` (fixed steps run). Every other time is a
 read-only view of it, moved only by the engine, and always together: a fixed step, `engine.skip` and a new playthrough move or reset all of them.
 Read any view with `engine.time.now(name)`: `'real'`, `'ambient'`, `'calendar'` or a channel (`'world'`, `'player'`, your own).
-`'ambient'` (= `engine.uniforms.uTime`: wind, water, clouds) is the one view that keeps moving while gameplay is frozen, unless the freeze is a full still (`{ ambient: true }`, which also stops skeletal animation and particles; `engine.still` says so, for your own frame code).
+`'ambient'` (= `engine.uniforms.uTime`: wind, water, clouds) is the one view that keeps moving while gameplay is frozen, unless the freeze is a full still (`{ still: true }`, which also stops skeletal animation and particles; `engine.still` says so, for your own frame code).
 
 Three rulers, always named: **real seconds** (`engine.time.now('real')` = tick / 60; the `dt` of a plain `onFixed` / module `fixed` / `world.simulate`, the N of
 `engine.step(N)`; never scaled), **channel seconds** (`engine.time.now(ch)`, the `dt` of
@@ -50,7 +53,7 @@ from calendar seconds: one day = `calendar.dayLength` calendar seconds. **Frame 
 | Crop / template stage growth, vegetation and pickup respawn, "ripe after 10 minutes" | calendar seconds (`clock.now`, `clock.after / every`; saved) | stops | twice as fast: growth that needs 600 calendar seconds is ripe after 300 real seconds |
 | Calendar, day, season, clock hours, lamps and shop doors (`calendar.at / between / daily / onSeason`) | time of day (`engine.calendar`, derived from calendar seconds) | stops | twice as fast: with `dayLength = 360` one hour (15 calendar seconds) passes in 7.5 real seconds |
 | UI animation and effects that follow the game (bobbing, sway) | `engine.time.now('real')` | stops | unchanged |
-| Shader motion that should not stop behind a pause menu (wind, water) | `engine.time.now('ambient')` / `uniforms.uTime` | keeps running (unless `freeze(owner, { ambient: true })`) | unchanged |
+| Shader motion that should not stop behind a pause menu (wind, water) | `engine.time.now('ambient')` / `uniforms.uTime` | keeps running (unless `freeze(owner, { still: true })`) | unchanged |
 | Menu / HUD animation that must keep running while paused | frame seconds (`onFrame` `dt`) | keeps running | unchanged |
 | Toast and loading fade-out, music volume fades | wall-clock time (they never affect gameplay) | keeps running | unchanged |
 | `saves.autosave(minutes)` | real seconds of play (only while a playthrough runs: not on the title screen, not during newGame / load) | stops | unchanged |
@@ -64,7 +67,7 @@ seconds = 6.7 hours. The docs say "calendar seconds" and "N clock hours/minutes"
 Tick, real and ambient seconds are not saved (a new game or a session load starts them at 0, like a fresh page); channels and the calendar are; to keep a cooldown across a save, use a `mod` with `for` (saved with its time left) or store it in a
 world record. Don't use `setTimeout` / `setInterval` / `performance.now()` (they ignore pause, are not saved, and can't be tested with fast-forward).
 The engine itself runs on the fixed step except the wall-clock items in the table.
-"After how long / every how long" uses `engine.clock` (part of the core; one timer queue for every view: `{ channel: 'real' | '<channel>' }`, default calendar seconds; a removed timer never fires, not even later in the same step); "at what time every day / within a time window / when the season changes"
+"After how long / every how long" uses `engine.clock` (part of the core; one timer queue for every view: `{ channel: 'real' | '<channel>' }`, default calendar seconds); "at what time every day / within a time window / when the season changes"
 uses `engine.calendar` (the `calendar()` module with a `dayLength`; at a fixed time of day these never fire).
 
 **The calendar is gameplay, the sky is a picture.** `calendar()` owns the time of day, the day, seasons, the timers below and their save; NPC schedules,
@@ -79,8 +82,7 @@ the sun, moon, colors and season tint. So each kind of game installs what it nee
 A game's own calendar (turns, a lunar calendar) replaces the module by meeting `modules/calendar/contract.js` (recipe 55 "Replacing a module").
 
 ## 1. Where to write it
-Game logic goes in `games/<game>/main.js` (or the game's own module); a one-off story timer can also be started by a dialogue / quest effect and then
-call `after` in code.
+Game logic goes in `main.js` or the game's own module.
 
 ```js
 import { parseClock, formatClock } from 'threedog';
@@ -90,22 +92,21 @@ const lamp = new THREE.PointLight();
 const lampHours = engine.calendar.between('18:00', '06:00', { on: () => lamp.visible = true, off: () => lamp.visible = false });
 
 // An event when a clock time is crossed (an "action" once per day): open the market at 12:00
-engine.calendar.at('12:00', day => engine.vars.bump('marketDays'), { days: [1, 3, 5] });   // only on days 1, 3, 5; a function also works: day => day % 7 === 6
+engine.calendar.at('12:00', day => engine.vars.bump('marketDays'), { days: [1, 3, 5] });  // only on days 1, 3, 5; a function also works: day => day % 7 === 6
 
 // After how long: pass an event name to make it saveable (still fires after loading a save); a function cannot be saved
 engine.clock.after(120, 'bread:ready', { data: { oven: 1 } });
 engine.events.on('bread:ready', ({ oven }) => engine.vars.bump('bread'));
 
-engine.clock.every(30, () => engine.vars.bump('birds'));             // every 30 calendar seconds (not 30 clock seconds)
-engine.calendar.daily(day => console.log('day', day));              // every day at 00:00
-engine.calendar.onSeason('winter', () => engine.weather?.set('snow', { seconds: 20 }));   // needs seasons (presets.calendar.fourSeasons) and a 'snow' weather (presets.weather.temperate)
+engine.clock.every(30, () => engine.vars.bump('birds'));  // every 30 calendar seconds (not 30 clock seconds)
+engine.calendar.daily(day => console.log('day', day));  // every day at 00:00
+engine.calendar.onSeason('winter', () => engine.weather?.set('snow', { seconds: 20 }));  // needs seasons (presets.calendar.fourSeasons) and a 'snow' weather (presets.weather.temperate)
 
 // Clock conversion: 'HH:MM' <-> fraction of a day 0-1
-engine.calendar.timeOfDay = parseClock('17:30');                          // jump straight to 17:30 (see the catch-up rules below)
-formatClock(engine.calendar.timeOfDay);                                   // '17:30' (engine.calendar.clock is the same text)
+engine.calendar.timeOfDay = parseClock('17:30');  // jump straight to 17:30 (see the catch-up rules below)
+formatClock(engine.calendar.timeOfDay);  // '17:30' (engine.calendar.clock is the same text)
 ```
-**Use between for states, at for actions.** "The lamp is on, the shop is open, the NPC is home" are states, so use `between`: it checks the current
-time every step, and no way of jumping the time can leave the state wrong.
+**Use between for states, at for actions.** A lamp on, a shop open, an NPC home are states: `between` checks the time every step, so no time jump leaves them wrong.
 `at` is an event for "crossing a clock time", with these catch-up rules:
 - It fires only when time moves **forward** across the time: walking naturally, `step` fast-forward, or setting `calendar.timeOfDay` later (17:00 -> 19:00
   on the same day). When several trigger points are crossed at once, `catchUp` decides: `'once'` fires once (default), `'all'` fires them all,
@@ -113,29 +114,28 @@ time every step, and no way of jumping the time can leave the state wrong.
 - Turning time **back** does not fire; it only resets the baseline: `applyState({ time })` to an earlier time, or lowering `calendar.timeOfDay` (19:00 ->
   05:50 is going back within the same day, not "a night passed").
 - Loading a save does not fire; it only resets the baseline (trigger points between the save and the load are not made up).
-So "applyState to 05:50, then wait until 06:00" fires the 06:00 `at`, but after "applyState back to 17:50" the lamp will not switch itself off: use
-`between` for states like a lamp.
+So after "applyState back to 17:50" an `at`-driven lamp will not switch itself off: use `between`.
 Length of a day: `openWorld({ camera: 'follow', dayLength: 600 })` / `calendar({ dayLength })` (calendar seconds; without it the time of day never moves,
 `presets.calendar.cycle` is 360); `engine.mod('clock.rate', { owner: 'game', set: 10 })` speeds things up temporarily (`remove()` on its handle undoes it; see the table above).
-For "which time" or "has this been done" in a story, use `engine.vars.bump / setFlag`; don't keep your own variables (vars are saved automatically).
+For "has this been done" in a story, use `engine.vars.bump / setFlag` (saved automatically).
 
 ## 1b. Smooth movement between fixed steps: `engine.stepBlend`
-The game runs in fixed steps and the screen draws at its own rate, so most frames fall between two steps. Something you move in `onFixed` and draw at its latest position jumps from step to step and stutters, the more so on a fast screen. Keep where it was before the step and where it is now, and draw between them. `engine.stepBlend` says how far this frame is from the last step to the next, from 0 to 1:
+Most frames fall between two fixed steps, so something moved in `onFixed` and drawn at its latest position stutters, more on a fast screen. Keep where it was before the step and draw between: `engine.stepBlend` is how far this frame is from the last step to the next, 0 to 1:
 ```js fragment
 const body = { x: 0, lastX: 0 };
-engine.onFixed(dt => { body.lastX = body.x; body.x += speed * dt; });                                // the rules read body.x
-engine.onFrame(() => { mesh.position.x = body.lastX + (body.x - body.lastX) * engine.stepBlend; });   // the picture only
+engine.onFixed(dt => { body.lastX = body.x; body.x += speed * dt; });  // the rules read body.x
+engine.onFrame(() => { mesh.position.x = body.lastX + (body.x - body.lastX) * engine.stepBlend; });  // the picture only
 ```
-The picture runs at most one step behind the rules, too little to see. Rules read the fixed-step value, never the drawn one. After a teleport set `lastX` to `x` too, or the object slides across. While the game is frozen `stepBlend` holds still, so nothing jitters. `engine.swarm` does this by itself (recipe 65).
+The picture runs at most one step behind; rules read the fixed-step value, never the drawn one. After a teleport set `lastX` to `x` too. While frozen `stepBlend` holds still. `engine.swarm` does this by itself (recipe 65).
 
 ## 2. Skipping time (sleep until morning, wait an hour)
 `engine.skip` moves calendar seconds and the calendar clock forward without running every fixed step, so even a game with a real-length day can sleep through
 the night instantly.
 ```js
-await engine.skip({ to: '06:00' });                          // until the calendar clock next reads 06:00 (at 06:00 exactly: a full day; throws without a calendar dayLength)
-engine.skip({ seconds: 600 });                               // 600 calendar seconds
+await engine.skip({ to: '06:00' });  // until the calendar clock next reads 06:00 (at 06:00 exactly: a full day; throws without a calendar dayLength)
+engine.skip({ seconds: 600 });  // 600 calendar seconds
 await engine.skip({ to: '06:00', fade: 0.6, save: 'auto' }); // fade out, jump, save, fade in (through flow.transition when flow is installed)
-engine.events.on('time:skip', ({ seconds }) => engine.vars.bump('restSeconds', seconds));   // after the jump
+engine.events.on('time:skip', ({ seconds }) => engine.vars.bump('restSeconds', seconds));  // after the jump
 ```
 What catches up, and how:
 - `clock.after / every`, `calendar.at / daily / between`, `day:start`, `season:change` fire **in time order, once per crossing, as if stepped** (a 3-day

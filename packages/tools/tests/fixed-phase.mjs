@@ -1,6 +1,6 @@
 // Fixed-step order is declared, not "which line registered first" (docs/plans/done/2026-11-02-gameplay-architecture.md §3.3, §7 step 8):
 //   - onFixed({ phase: 'early' }) (default) runs before every module fixed hook, 'late' after them and before the clock
-//   - the player is driven by the characters module's fixed hook, so a game callback registered before createPlayer and one registered after it read
+//   - the player is driven by the characters module's fixed hook, so a game callback registered before addPlayer and one registered after it read
 //     the same player position (both 'early': before this step's move; both 'late': after it)
 // The "no way around it" check: characters/index.js registers no engine.onFixed / onFrame of its own (player control lives in the module hooks only).
 import { join } from 'node:path';
@@ -12,7 +12,7 @@ const imp = f => import(pathToFileURL(join(ENGINE, f)).href);
 const { loopMethods } = await imp('core/engine/loop.js');
 const { Engine } = await imp('core/engine/Engine.js');
 
-export const name = 'fixed phase: onFixed early / late around module hooks, player position the same before or after createPlayer';
+export const name = 'fixed phase: onFixed early / late around module hooks, player position the same before or after addPlayer';
 
 /** The real _fixedStep and onFixed on a minimal engine; one module hook stands in for the characters module driving the player */
 function fake() {
@@ -28,13 +28,13 @@ function fake() {
 
 export async function run({ check }) {
   const e = fake(), seen = {};
-  e.onFixed(() => { seen.earlyBefore = e.player.x; });                  // "registered before createPlayer"
+  e.onFixed(() => { seen.earlyBefore = e.player.x; });                  // "registered before addPlayer"
   e.onFixed(() => { seen.lateBefore = e.player.x; }, { phase: 'late' });
-  e.onFixed(() => { seen.earlyAfter = e.player.x; });                   // "registered after createPlayer"
+  e.onFixed(() => { seen.earlyAfter = e.player.x; });                   // "registered after addPlayer"
   e.onFixed(() => { seen.lateAfter = e.player.x; seen.clockAtLate = e.clockRan ?? 0; }, { phase: 'late' });
   e._fixedStep(); e._fixedStep();
-  check('early callbacks before and after createPlayer read the same (pre-move) position', seen.earlyBefore === 1 && seen.earlyAfter === 1, JSON.stringify(seen));
-  check('late callbacks before and after createPlayer read the same (moved) position', seen.lateBefore === 2 && seen.lateAfter === 2, JSON.stringify(seen));
+  check('early callbacks before and after addPlayer read the same (pre-move) position', seen.earlyBefore === 1 && seen.earlyAfter === 1, JSON.stringify(seen));
+  check('late callbacks before and after addPlayer read the same (moved) position', seen.lateBefore === 2 && seen.lateAfter === 2, JSON.stringify(seen));
   check('late runs before the clock advances this step', seen.clockAtLate === 1, String(seen.clockAtLate));
   const h = e.onFixed(() => { seen.removed = true; }, { phase: 'late' }); h.remove(); e._fixedStep();
   check('a late handle removes like an early one', !seen.removed);

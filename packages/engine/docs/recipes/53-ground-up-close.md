@@ -1,5 +1,10 @@
 # The ground up close: options, crisp color borders, normals, diagnosis
 
+> **Covers:** the ground up close: approaches, crisp borders, lighting normals, diagnosis.
+> **Use when:** the ground looks wrong at short range.
+> **Shortest:** `terrain({ shading: 'texture' })` is one of the approaches.
+> **Sections:** Approaches pick by the · Crisp borders shading 'texture' · Lighting normals normals and · Symptom, causes, options
+
 Not a standard recipe. Several pictures are right for different games, and none is the default. **Decide from the reference images first**: is the
 ground flat color shapes, a painted surface, a photographic texture, or a few lit polygons? Then pick a row. If the ground already looks wrong,
 jump to the symptoms.
@@ -61,7 +66,7 @@ texture mode it is sampled per pixel, so `patches: { size: 20, levels: 4 }` give
 - `normalFn(i, j, h, cell) => [nx, ny, nz]` replaces the smooth normal at grid point `(i, j)`; `h(i, j)` reads a grid-point height, `cell` is the
   spacing in meters. Pure like `height` / `groundType`. The engine normalizes the result. Default: central difference of the four neighbors.
 ```js
-terrain({ normalFn: (i, j, h, cell) => [(h(i - 1, j) - h(i + 1, j)) / cell, 4, (h(i, j - 1) - h(i, j + 1)) / cell] })   // gentler lighting on slopes
+terrain({ normalFn: (i, j, h, cell) => [(h(i - 1, j) - h(i + 1, j)) / cell, 4, (h(i, j - 1) - h(i, j + 1)) / cell] })  // gentler lighting on slopes
 ```
 `normals` and `normalFn` change light only, never height or collision. `engine.terrain.recolor({ normals: 'flat' })` changes it at run time (rebuilds the chunks).
 

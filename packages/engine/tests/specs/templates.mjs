@@ -79,7 +79,8 @@ export const specs = [
         // a write to a definition inside gameplay halts with the hint that names the fix
         engine.ops.define('tchest.bad', { run: e => { e.content.template('tchest').state.opened = true; } });
         const bad = engine.ops.run('tchest.bad', {});
-        out.bad = bad.code; out.hint = engine.error?.docs?.includes('recipes/30-templates.md') && /world record/.test(engine.error.fix ?? '');
+        out.bad = bad.code; out.hint = !!engine.error?.docs?.some(d => d.startsWith('recipes/30-templates.md')) &&   // a pointer names the section too ('recipes/30-templates.md §3')
+           /world record/.test(engine.error.fix ?? '');
         return out;
       }, setup.toString());
       const a = mid.after;

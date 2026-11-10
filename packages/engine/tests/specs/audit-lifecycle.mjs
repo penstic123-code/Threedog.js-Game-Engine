@@ -20,8 +20,8 @@ export const specs = [
         const full = (name, boom) => ({ name, provides: ['audit-slot'],
           install(e, ctx) {
             ctx.ops.define(name + '.go', { run: () => 1 });
-            ctx.saves.register(name, { save: () => ({ a: 1 }), load() {} });
-            ctx.input.action(name + 'Act', { context: 'gameplay' }); ctx.input.bind(name + 'Act', ['KeyK']);
+            ctx.saves.define(name, { save: () => ({ a: 1 }), load() {} });
+            ctx.input.define(name + 'Act', { context: 'gameplay' }); ctx.input.bind(name + 'Act', ['KeyK']);
             ctx.mod('time.world', { mul: 0.5 }); ctx.borrow(e.renderer, { toneMappingExposure: 3 });
             ctx.control.take('audit-npc', { layer: 'script' });
             ctx.track(e.events.on('audit:x', () => {})); ctx.track(e.onFixed(() => {})); ctx.track(e.onFrame(() => {}));
@@ -104,18 +104,18 @@ export const specs = [
           // everything the old install tries after it was swapped out, on the names the newcomer holds
           ctx.mod('time.world', { mul: 0.1 });
           ctx.control.take('npc1', { layer: 'script' });
-          ctx.input.action('shopAct', { context: 'gameplay' }); ctx.input.bind('shopAct', ['KeyZ']);
+          ctx.input.define('shopAct', { context: 'gameplay' }); ctx.input.bind('shopAct', ['KeyZ']);
           ctx.borrow(e.renderer, { toneMappingExposure: 9 });
           ctx.track(e.events.on('audit:late', () => { seen.staleListener = true; }));
-          try { ctx.saves.register('shopSave', { save: () => ({ who: 'stale' }), load() {} }); ctx.ui.define('shopPart', () => ({ el: document.createElement('div') })); } catch (err) { seen.threw = err.message; }
+          try { ctx.saves.define('shopSave', { save: () => ({ who: 'stale' }), load() {} }); ctx.ui.define('shopPart', () => ({ el: document.createElement('div') })); } catch (err) { seen.threw = err.message; }
           throw new Error('late failure of the old install');
         } };
         const v2 = { name: 'shop', provides: ['shopSlot'], install(e, ctx) {
           ctx.mod('time.world', { mul: 0.5 });
           ctx.control.take('npc1', { layer: 'script' });
-          ctx.input.action('shopAct', { context: 'gameplay' }); ctx.input.bind('shopAct', ['KeyX']);
+          ctx.input.define('shopAct', { context: 'gameplay' }); ctx.input.bind('shopAct', ['KeyX']);
           ctx.borrow(e.renderer, { toneMappingExposure: 2 });
-          ctx.saves.register('shopSave', { save: () => ({ who: 'new' }), load() {} });
+          ctx.saves.define('shopSave', { save: () => ({ who: 'new' }), load() {} });
           ctx.ui.define('shopPart', () => ({ el: document.createElement('div') }));
         } };
         E.use(v1);
@@ -508,11 +508,11 @@ export const specs = [
         // an atomic part with nothing to save at the start: run writes, then fails
         E = await fresh('audit-e4');
         let list = ['new game'], bare = null;
-        E.saves.register('auditPart', { atomic: true, save: () => list, load: d => { list = d; } });
-        E.saves.register('auditBare', { atomic: true, save: () => bare, load: d => { bare = d; } });
+        E.saves.define('auditPart', { atomic: true, save: () => list, load: d => { list = d; } });
+        E.saves.define('auditBare', { atomic: true, save: () => bare, load: d => { bare = d; } });
         list = null;
         E.ops.define('bad.atomic', { atomic: true, run: () => { list = ['written']; bare = ['written']; return { ok: false, code: 'nope' }; } });
-        out.atomic = { r: E.ops.run('bad.atomic').code, list, said: errs.some(s => s.includes("'auditBare' keeps what the op wrote")) }; E.dispose();
+        out.atomic = { r: E.ops.run('bad.atomic').code, list, said: errs.some(s => s.includes("'auditBare' keeps what the op wrote") && s.includes('[rollback-incomplete]')) }; E.dispose();
         // a commit that throws: the others due on that step still land
         E = await fresh('audit-e5');
         const landed = [];

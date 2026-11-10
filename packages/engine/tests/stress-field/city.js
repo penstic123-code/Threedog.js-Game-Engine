@@ -139,6 +139,7 @@ export function cityMethods({ mkEngine, ready, heap, gc, r2 }) {
       const glRead = () => { if (glQ && !glOpen && gl.getQueryParameter(glQ, gl.QUERY_RESULT_AVAILABLE)) { if (!gl.getParameter(tq.GPU_DISJOINT_EXT)) glMs.push(gl.getQueryParameter(glQ, gl.QUERY_RESULT) / 1e6); gl.deleteQuery(glQ); glQ = null; } };
       let renderMs = 0; const orig = e._render.bind(e);
       e._render = dt => { const t = performance.now(); if (tq) { glRead(); if (!glQ) { glQ = gl.createQuery(); gl.beginQuery(tq.TIME_ELAPSED_EXT, glQ); glOpen = true; } } orig(dt); if (glOpen) { gl.endQuery(tq.TIME_ELAPSED_EXT); glOpen = false; } renderMs += performance.now() - t; };
+      const timing = e.profile() !== null;   // dev builds time modules all along: put it back as it was
       e.profile(true);
       // walls: real time between frames from performance.now(). rAF's own timestamp sits on the display's grid, so a 17 ms frame can read 34 then 2 (p95 of ivs is that grid, not the frame)
       const ivs = [], cpus = [], walls = []; let lastWall = performance.now(), last = performance.now(), renderSum = 0, tails = [], d0 = G.draws ?? 0, p0 = G.passes ?? 0, f0 = 0, frames = 0;
@@ -195,7 +196,9 @@ export function cityMethods({ mkEngine, ready, heap, gc, r2 }) {
       const byKind = {}; for (const f of allFrames) (byKind[f.stream > 0.2 || f.jobs > 0.2 ? 'entry' : f.fixed > 0.2 ? 'fixed' : 'plain'] ??= []).push(f);
       const frameKinds = Object.fromEntries(Object.entries(byKind).map(([k, l]) => { const c = l.map(f => f.cpu).sort((x, y) => x - y); return [k, { n: l.length, over13: l.filter(f => f.cpu > 13).length, cpu50: r2(pct(c, 0.5)), cpu95: r2(pct(c, 0.95)), cpuMax: r2(c.at(-1)), avg: stageAvg(l) }]; }));
       if (failure) throw new Error(failure);
-      const modules = e.profile(); e.profile(false); e._render = orig;
+      const modules = Object.fromEntries(Object.entries(e.profile()).map(([k, p]) => [k, p.mean]));   // the run's average per frame
+      if (!timing) e.profile(false);
+      e._render = orig;
       if (glMs.length) { const s = [...glMs].sort((a, b) => a - b); window.__gpuTimeGL = { frames: s.length, busyP50: r2(pct(s, 0.5)), busyP95: r2(pct(s, 0.95)), busyP99: r2(pct(s, 0.99)), busyMax: r2(s.at(-1)) }; }
       const top = Object.entries(modules).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([k, ms]) => [k, r2(ms)]);
       // records split by whether their object is still in the scene, and the live GPU buffers by kind: a cache of what is loaded is bounded, what has left the scene is a leak

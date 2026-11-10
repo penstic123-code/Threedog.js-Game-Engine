@@ -111,7 +111,7 @@ export const specs = [
         E.dispose();
         // the same list holds for the engine's own character: a member added to the contract, or dropped from Character, fails here
         const c = threedogThreads.characterContract, R = threedogThreads.mk(T.createEngine, 'layer-contract-real', {}); R.use(T.world(), T.characters()); await R.start();
-        const P = R.ops.allow(() => R.characters.createPlayer({ control: () => null }));
+        const P = R.ops.allow(() => R.characters.addPlayer({ control: () => null }));
         out.gaps = [...c.api.filter(m => typeof P[m] !== 'function'), ...c.fields.filter(f => !(f in P))]; R.dispose();
         return out;
       });

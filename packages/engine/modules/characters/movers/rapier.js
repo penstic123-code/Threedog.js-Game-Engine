@@ -4,6 +4,8 @@
 // The player uses rigid.playerBody / playerCollider (rigid syncs it to the player position each step); each NPC builds its own kinematic capsule.
 import { steer, water, float, tryJump, tickJump, leaveGround, land, finish, stat, inherited, climbLimit } from './common.js';
 import { beginMove, endMove } from './support.js';
+import { passesThrough } from '../../collision/grid.js';
+import { warnOnce, DEV } from '../../../core/base/validate.js';
 
 /** Create the 'rapier' mover (c is the character, fallback is the simple mover used when not ready) */
 export function rapierMover(c, fallback) {
@@ -32,7 +34,9 @@ export function rapierMover(c, fallback) {
         else { c.vy += stat(c, 'gravity') * dt; dy = c.vy * dt; }
       }
       const wasGrounded = c.grounded;
-      m.controller.computeColliderMovement(col, { x: (c.velocity.x + (inh?.x ?? 0)) * dt, y: dy, z: (c.velocity.y + (inh?.y ?? 0)) * dt }, r.rapier.QueryFilterFlags.EXCLUDE_DYNAMIC | r.rapier.QueryFilterFlags.EXCLUDE_SENSORS);
+      // a collision-module collider with a layer this body passes is skipped (the same passesThrough the simple mover and paths use); no layers anywhere: no predicate, as before
+      const through = c.passes && r._layered.size ? m.through : undefined;
+      m.controller.computeColliderMovement(col, { x: (c.velocity.x + (inh?.x ?? 0)) * dt, y: dy, z: (c.velocity.y + (inh?.y ?? 0)) * dt }, r.rapier.QueryFilterFlags.EXCLUDE_DYNAMIC | r.rapier.QueryFilterFlags.EXCLUDE_SENSORS, undefined, through);
       const mv = m.controller.computedMovement();
       p.x += mv.x; p.y += mv.y; p.z += mv.z;
       // hit a wall (not stepping up): velocity becomes the wall-sliding velocity, so standing at a wall does not keep walking
@@ -70,7 +74,18 @@ export function rapierMover(c, fallback) {
   function setup(e, r) {
     const R = r.rapier, w = r.world, p = c.root.position;
     m.world = w;   // what the handles below belong to: the world object itself, since a count would match across two rigid modules
-    if (c === e.player) { m.body = r.playerBody; m.collider = r.playerCollider; }
+    // built with the controller: a replaced rigid keeps its layered colliders in its own map, and a test kept from the first one would read every collider as "no layer"
+    m.through = hit => { const o = r._layered.get(hit); return !(o && passesThrough(o, c.passes)); };
+    if (c === e.player) {
+      m.body = r.playerBody; m.collider = r.playerCollider;
+      // the capsule is the character's radius (as for every other character, and for simple movers and paths), unless the game set rigid({ playerCapsule: { radius } }): that wins.
+      // Written back, so a rebuilt world (rigid _newWorld) makes the same capsule
+      if (r._capsuleRadiusGiven) { if (DEV && c.radius !== r.playerCapsule.radius) warnOnce(`rigid({ playerCapsule: { radius: ${r.playerCapsule.radius} } }) differs from the player's radius ${c.radius}: the rapier collider uses ${r.playerCapsule.radius}, paths and the simple mover ${c.radius}. Set one of them, or make them equal`); }
+      else if (c.radius !== r.playerCapsule.radius) {
+        r.playerCapsule = { ...r.playerCapsule, radius: c.radius };
+        m.collider.setRadius(c.radius); m.collider.setTranslationWrtParent({ x: 0, y: r.playerCapsule.halfHeight + c.radius, z: 0 });
+      }
+    }
     else {
       const hh = r.playerCapsule.halfHeight;
       m.body = w.createRigidBody(R.RigidBodyDesc.kinematicPositionBased().setTranslation(p.x, p.y, p.z));

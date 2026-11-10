@@ -10,6 +10,7 @@ import { existsSync, statSync } from 'node:fs';
 import { join, relative, dirname, basename, extname, posix as pp, resolve } from 'node:path';
 import { read, walk, balanced, splitTop, esc, noComments } from './lib/text.mjs';
 import { posix } from './paths.mjs';
+import { assetFiles } from './lib/asset-url.mjs';
 import { gameAssets } from './content-check/load.mjs';
 import { fileStems } from './gallery/index.js';
 import { readLibrary } from './lib.mjs';
@@ -110,10 +111,11 @@ function register(b, kind, name, value, base, defAt) {
   const url = typeof value === 'string' ? value : value?.url ?? null;
   if (!url) return b.add({ kind, name, file: defAt, extra: { made: 'code', defAt } });
   b.registered.add(url);
-  const places = candidates(typeof base === 'string' && !/^[a-z][a-z\d+.-]*:|^\//i.test(url) ? pp.join(base, url) : url, 'assets.js');
-  if (!places) return b.add({ kind, name, file: url, extra: { remote: true, defAt } });
-  const hit = places.find(p => b.byFile.has(p)), it = hit && b.byFile.get(hit);
-  if (!hit) return b.add({ kind, name, file: places[0], extra: { defAt, problem: 'file not found' } });
+  // the one url -> file rule (lib/asset-url.mjs, the same as content check and assets check): a manifest url is a file of public/, never of the game root
+  const served = assetFiles(b.dir, url, base);
+  if (!served) return b.add({ kind, name, file: url, extra: { remote: true, defAt } });
+  const hit = 'public' + served.path, it = b.byFile.get(hit);
+  if (!it) return b.add({ kind, name, file: hit, extra: { defAt, problem: 'file not found' } });
   if (it.defAt) return b.add({ kind, name, file: hit, size: it.size, extra: { defAt, preview: it.preview } });   // two names, one file
   b.named.delete(`${it.kind}:${it.name}`);
   it.name = b.free(kind, name); it.kind = kind; it.defAt = defAt;

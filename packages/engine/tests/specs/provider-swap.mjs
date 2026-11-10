@@ -35,7 +35,7 @@ const setup = () => {
     const step = n => { for (let i = 0; i < n; i++) E.step(1 / 60, { render: false, describe: false }); };
     const settle = async n => { for (let i = 0; i < n; i++) { await E.loading.settled(); await new Promise(r => setTimeout(r, 8)); step(1); } };
     for (let i = 0; i < 40 && !E.nav.ready; i++) await settle(1);
-    const p = E.characters.createPlayer({ control: 'camera', cameraFollow: true });
+    const p = E.characters.addPlayer({ control: 'camera', cameraFollow: true });
     E.ops.define('ps.open', { run: () => ({ ok: true }) });
     E.content.load({ templates: { psCrate: { model: 'psCrate', body: { shape: 'box', mass: 2 } }, psChest: { model: 'psCrate', collide: 'box', interact: { label: 'Open', op: 'ps.open' } } },
       props: [{ id: 'ps-crate', template: 'psCrate', x: 4, z: 4 }, { id: 'ps-chest', template: 'psChest', x: 1, z: 0 }] });

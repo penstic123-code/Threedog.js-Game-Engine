@@ -41,7 +41,7 @@ export const specs = [
         const E = mk(createEngine, 'rv-rap');
         E.use(world(), collision(), characters(), level({ scene: s }), T.rigid());
         await E.start();
-        const p = E.characters.createPlayer({ control: 'camera', mover: 'rapier' });
+        const p = E.characters.addPlayer({ control: 'camera', mover: 'rapier' });
         const step = n => { for (let i = 0; i < n; i++) E.step(1 / 60); };
         step(10);
         const out = { mover: p.mover?.name ?? p.mover ?? null, before: E.error?.message ?? null };

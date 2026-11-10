@@ -7,9 +7,10 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { metadata } from 'threedog/metadata';
 import { abs, P } from './_lib.mjs';
-import { search, tokens } from '../how.mjs';
+import { search, tokens, firstRoute } from '../how.mjs';
+import { parseDocRef } from 'threedog/error-hints';
 import { capabilityCards } from '../how-browse.mjs';
-import { MODULES, FACTORIES, GROUPS, RECIPES, CATEGORIES, NOT_FOR } from '../how-tasks.mjs';
+import { MODULES, FACTORIES, GROUPS, RECIPES, CATEGORIES, NOT_FOR, ROUTES } from '../how-tasks.mjs';
 
 const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const split = s => s.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 2);
@@ -38,6 +39,22 @@ export function gap(c, docs) {
   return hits.some(h => c.found(`${h.line} ${h.at} ${h.para} ${h.text}`)) ? '' : `threedog how "${c.task}" does not list ${c.kind} ${c.id}`;
 }
 
+/** Does pointer `got` name the section `want` names (the same file; the same number or a heading starting the same; a file-only want takes any section of it) */
+const sameSection = (got, want) => !!got && got.file === want.file && (want.sec ? got.sec === want.sec : want.title ? !!got.title?.toLowerCase().startsWith(want.title.toLowerCase()) : true);
+/**
+ * A ROUTES line (how-tasks.mjs) against how: '' when how opens the section it names, else what it did. A `top` route is checked against the route how
+ * really recommends (firstRoute, the same pick as threedog how, in a game and outside one); any route fails on a weak match, where how recommends nothing.
+ */
+export function routeMiss([task, want, o = {}], docs) {
+  const w = parseDocRef(`recipes/${want}`), hits = search(docs, task, 5, { renderer: o.renderer });
+  if (!w) return `ROUTES line "${task}" names no section that parses: recipes/${want}`;
+  const ok = h => !!h && sameSection(parseDocRef(h.ref ?? ''), w), i = hits.findIndex(ok);
+  const picks = [firstRoute(hits, false), firstRoute(hits, true)];
+  if (!hits.weak && (o.top ? picks.every(ok) : i >= 0)) return '';
+  const got = picks.find(p => !ok(p)) ?? hits[0];
+  return `threedog how "${task}"${o.renderer ? ` (${o.renderer} game)` : ''} ${hits.weak ? 'is a weak match for' : i < 0 ? 'does not list' : `does not recommend`} recipes/${want}; recommends: ${got?.ref || 'nothing'}`;
+}
+
 /** What browsing gets wrong against the capabilities: one with no category or card, a card with nothing to act on, a line whose capability is gone. [sentence] */
 export function browseProblems(list, cards, tables = { MODULES, FACTORIES, GROUPS, RECIPES, NOT_FOR }, categories = CATEGORIES) {
   const ids = new Set(list.map(c => c.id)), card = new Map(cards.map(c => [c.id, c]));
@@ -61,6 +78,9 @@ export default {
     const out = list.flatMap(c => { const msg = gap(c, docs); return msg ? [{ level: error, file: c.file, line: 1, msg, fix: c.task ? 'add the author\'s word to how-words.mjs, or a row to CONVENTIONS.md "One task, which entry"' : 'add a line to packages/tools/how-tasks.mjs' }] : []; });
     const wrong = browseProblems(list, capabilityCards(docs)).map(msg => ({ level: error, file: 'packages/tools/how-tasks.mjs', line: 1, msg, fix: 'keep how-tasks.mjs to what exists and give each capability a place in CATEGORIES; cards are generated from it, the metadata and the docs' }));
     const quiet = silent(metadata.modules).map(p => ({ level: error, line: 1, ...p, fix: "add export const handRolled = [{ kind, seen, use, code }] to the file (rules/R40-bypass-hints.mjs lists the fields), or = 'none: <why no code shape shows it>'; then npm run map" }));
-    return Object.assign([...out, ...wrong, ...quiet], { note: `${list.length - out.length} of ${list.length} capabilities reached by their fixed task line` });
+    // the route list: a top route that is not the first answer is an error (the template sends the AI there in one step); any other miss warns, so the
+    // count stays visible while the ranking is improved (2026-11-09: 19 of 74 open, listed in docs/plans/2026-11-09-docs-layers.md)
+    const routes = ROUTES.flatMap(r => { const msg = routeMiss(r, docs); return msg ? [{ level: r[2]?.top ? error : /** @type {const} */ ('warn'), file: 'packages/tools/how-tasks.mjs', line: 1, msg, fix: 'fix where how reads: the section heading, the AI.md row, how-words.mjs; not the task words' }] : []; });
+    return Object.assign([...out, ...wrong, ...quiet, ...routes], { note: `${list.length - out.length} of ${list.length} capabilities reached by their fixed task line; ${ROUTES.length - routes.length} of ${ROUTES.length} routes open their section` });
   },
 };

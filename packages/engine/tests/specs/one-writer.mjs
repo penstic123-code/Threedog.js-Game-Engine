@@ -31,7 +31,7 @@ export const specs = [
       await ev(setup);
       const r = await ev(async () => {
         const quiet = owQuiet(), out = {}, E = await owEngine('ow-tween');
-        const P = E.characters.createPlayer({ control: () => null, spawn: { x: 0, z: 0 } });
+        const P = E.characters.addPlayer({ control: () => null, spawn: { x: 0, z: 0 } });
         const base = E.control.of(P).owner;
         const free = () => ({ playing: E.timeline.playing, owner: E.control.of(P).owner, blocked: E.runState.blockedBy.includes('cutscene'), tasks: E.timeline._tweener.list.length });
         const last = owBad(x => x === 1);
@@ -72,7 +72,7 @@ export const specs = [
         // a zero-length tween runs inside the call: a refused write is still the promise's, or a skipped run would stop before its other tasks
         try { out.zero = await said(T.tween(owBad(), { v: 1 }, { duration: 0 })); } catch (x) { out.sync = x.message; }
         // skip jumps every task to its end: the first one throwing leaves the rest going to theirs
-        const bad = owBad(), good = { v: 0 };
+        const bad = owBad(x => x === 1), good = { v: 0 };   // throws on the end value only: mid-run failure cancels (group T), this is the skip's jump
         const skipped = T.play([{ parallel: [{ tween: { target: bad, to: { v: 1 }, duration: 5 } }, { tween: { target: good, to: { v: 1 }, duration: 5 } }] }], { actors: [] });
         await owRun(E, 0.1);
         try { T.skip(); } catch (x) { out.thrown = x.message; }
@@ -105,7 +105,7 @@ export const specs = [
       await ev(setup);
       const r = await ev(async () => {
         const { THREE } = threedogThreads, quiet = owQuiet(), out = {}, E = await owEngine('ow-path');
-        const P = E.characters.createPlayer({ control: () => null, spawn: { x: 0, z: 0 } });
+        const P = E.characters.addPlayer({ control: () => null, spawn: { x: 0, z: 0 } });
         await owRun(E, 0.1);
         let syncs = 0;
         const sync = P.syncRecord; P.syncRecord = function () { syncs++; return sync.call(this); };

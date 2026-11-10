@@ -5,6 +5,7 @@
 import { engineOwned } from '../core/scene/things.js';
 import * as THREE from 'three';
 import { defineOwned } from '../core/ops/owned.js';
+import { onTierChange } from '../core/scene/tier.js';
 
 const BOX = 30, SNAP = 0.5;
 
@@ -18,12 +19,19 @@ export function createDefaultLights(engine, { add = true } = {}) {
   // baseline shadow box: 2048 map over 60 m around engine.focus (~3 cm texels; 1024 on a low-tier device, a quarter of the fill cost), PCF with a small blur
   // radius = soft edges; bias / normalBias keep acne off flat ground and slopes without visible peter-panning at this texel size. bias is in the shadow
   // camera's 0-1 depth (near 1 - far 250 m): -0.0001 = 2.5 cm; the old -0.0005 was 12 cm and cut the shadow at the base of things standing on the ground
-  const sc = sun.shadow.camera, map = engine.tier === 'low' ? 1024 : 2048;
+  const sc = sun.shadow.camera, sizeFor = () => engine.tier === 'low' ? 1024 : 2048;
+  let map = sizeFor();
   sun.shadow.mapSize.set(map, map);
   sc.left = sc.bottom = -BOX; sc.right = sc.top = BOX; sc.near = 1; sc.far = 250; sc.updateProjectionMatrix();
   sun.shadow.bias = -0.0001; sun.shadow.normalBias = 0.04; sun.shadow.radius = 3;
   // add: false (createEngine({ lights: false })): the objects still exist so engine.lights.sun / hemi and the sky module never hit undefined, but they
   // are not in the scene, so nothing is lit by them and they cost no shader light slots; the game brings all its own lights
+  // the size is a tier default: it follows the tier (a stored preset arrives after this runs, settings installs last) unless the game wrote another size
+  // on the sun, which stays. engine.shadows.mapSize is the one resize path (reallocates the map on WebGL, the cascades' maps too); the engine lives as long as this listener
+  onTierChange(engine, () => {
+    const was = map, next = map = sizeFor();
+    if (sun.shadow.mapSize.x === was && sun.shadow.mapSize.y === was && next !== was) (engine.shadows ? engine.shadows.mapSize(sun, next) : sun.shadow.mapSize.set(next, next));
+  });
   engineOwned('lights', hemi, sun, sun.target);   // the module's, not the game's, when the scene adopts what is added (core/scene/things.js)
   if (add) engine.scene.add(hemi, sun, sun.target);
   return { sun, hemi };

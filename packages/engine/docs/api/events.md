@@ -24,6 +24,7 @@
 - `ui:close` [id: string] A window was closed
 - `settings:shadows` [on: boolean] Shadows were toggled
 - `settings:change` [values: Record<string, any>] A value in the settings menu changed (the argument is all setting values)
+- `post:add` [name: string] A post effect was added (its name)
 - `water:add` [body: WaterBody] A water body was added
 - `water:remove` [body: WaterBody] A water body was removed
 - `day:start` [day: number] A new day (the argument is the day number, starting at 1; needs the calendar module)
@@ -93,10 +94,10 @@
 - `net:close` [{}] Client (net): connection lost
 - `net:sync` [{ tick: number; full: boolean }] Client (net): host state applied (full: a whole snapshot, else a diff); redraw UI from state here
 - `net:result` [{ seq: number; name: string; ok: boolean; code: string | null; value… Client (net): the host's answer to an op request (seq from ops.run's return value; tick is the host's), sent after the state it caused
-- `engine:error` [EngineError] A gameplay error in development / testing; gameplay is frozen (error severity levels, see engine.error)
+- `engine:error` [EngineError] A gameplay error: in development / testing gameplay is frozen; a release build keeps running and sends it once per site (engine.error holds the first; error severity levels, see engine.error)
 - `module:disabled` [{ name: string; message: string }] A picture or ui module errored and was disabled (the game continues)
 - `module:restored` [{ modules: any[] }] 
-- `state:replaced` [{ undone: boolean }] 
+- `op:rolledBack` [{ op: string; parts: number }] An atomic op failed and its parts were put back (its own events already went out and stay): read derived state again. Not sent for a load's rollback (that ends in state:replaced)
 - `vehicle:enter` [{ character: Character; vehicle: Rideable }] A character boarded a vehicle
 - `vehicle:exit` [{ character: Character; vehicle: Rideable }] A character exited a vehicle
 - `flow:change` [{ from: string; to: string }] Game flow state changed

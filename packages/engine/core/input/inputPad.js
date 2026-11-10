@@ -54,3 +54,7 @@ export function keyLabel(input, action) {
   const name = k => input.engine.i18n.has('key.' + k) ? input.engine.t('key.' + k) : keyName(k);
   return use.map(name).filter((v, i, arr) => arr.indexOf(v) === i).join('/');
 }
+/** The key an on-screen hint shows: its label; the 'input.noKey' text when it needs a key and has none (never an empty name); '' for none on purpose (touch, click only) or an action removed since @internal */
+export function hintKey(input, action) { return keyLabel(input, action) || (input.actions.has(action) && input.isUnbound(action) ? input.engine.t('input.noKey') : ''); }
+/** "E · Talk": the one way an on-screen key and its text read (the interaction prompt, HUD hints and markers) @internal */
+export const keyed = (key, text) => key ? (text ? `${key} · ${text}` : key) : text;

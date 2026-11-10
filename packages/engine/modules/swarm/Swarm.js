@@ -319,7 +319,7 @@ export function swarm() {
       // onRender and not frame: step(render: false) skips the matrices, only drawn frames write them
       ctx.track(e.onRender(() => { for (const s of list) if (s.mesh) writeMesh(s, e.stepBlend); }));
       // one save part for all swarms: a load or new game also empties swarms not in saves, or last round's bullets stay on the field
-      ctx.saves.register('swarm', { notAtomic: 'simulated in bulk each step: one copy per atomic run would cost more than the op', version: 1,
+      ctx.saves.define('swarm', { notAtomic: 'simulated in bulk each step: one copy per atomic run would cost more than the op', version: 1,
         save: () => ({ ...pending, ...Object.fromEntries(list.filter(s => s.saved).map(s => [s.name, s._save()])) }),   // pending: swarms of the loaded save not made yet stay in the next save
         load: d => {
           pending = { ...d };

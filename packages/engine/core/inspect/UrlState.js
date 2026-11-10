@@ -65,20 +65,32 @@ export class UrlState {
     if (p.at != null) p.play ??= true;   // a place is somewhere in the game, never on the start screen
     return p;
   }
-  _hooks(p, keys) {
+  _hooks(p, keys, turn) {
     const part = {}; for (const k of keys) if (p[k] != null) part[k] = p[k];
     if (!Object.keys(part).length) return [];
-    return [...this.engine.modules.values()].filter(m => m.applyState).map(m => m.applyState(this.engine, part));
+    // a hook's synchronous lines may write; it gets the request's turn, so a door it asks (session.newGame({ turn }), level.load) goes inside the request
+    // the permit ends with the synchronous lines: allow() handed a Promise would hold it to the end. A hook that throws stops the ones after it from starting,
+    // and goes in as a rejection, so _ask still waits for the ones already started
+    const out = [];
+    for (const m of this.engine.modules.values()) {
+      if (!m.applyState) continue;
+      try { let r; this.engine.ops.allow(() => { r = m.applyState(this.engine, part, turn); }); out.push(r); } catch (err) { out.push(Promise.reject(err)); break; }
+    }
+    return out;
   }
   /** The keys of these params that a module answers @param {Record<string, any>} p */
   _moduleKeys(p) { return Object.keys(p).filter(k => !KEYS.includes(k)); }
   _refuse(p, key, reason) { this._refused.set(key, { key, value: p[key], reason }); }
   /** Run the hooks for these keys and keep what they refused; a key no installed module handles is refused here, since nothing else would ever say so */
-  async _ask(p, keys) {
+  async _ask(p, keys, turn) {
     const mods = [...this.engine.modules.values()].filter(m => m.applyState);
     for (const k of keys) this._refused.delete(k);   // asked again (weather and time are, late in the setup): the last answer is the one that stands
     for (const k of keys) if (p[k] != null && !NOTHING_NEEDED.includes(k) && !mods.some(m => !m.stateKeys || m.stateKeys.includes(k))) this._refuse(p, k, `no installed module handles ${k}`);
-    const out = await Promise.all(this._hooks(p, keys));
+    // every hook settles before the first failure goes on: the request's turn is released on that rejection (stateReplace.js), and a sibling hook still
+    // running would then write over the state of the request that took the turn next (Promise.all would reject at the first failure)
+    const all = await Promise.allSettled(this._hooks(p, keys, turn)), bad = all.find(x => x.status === 'rejected');
+    if (bad) throw /** @type {PromiseRejectedResult} */ (bad).reason;
+    const out = all.map(x => /** @type {PromiseFulfilledResult<any>} */ (x).value);
     for (const r of out) for (const [k, reason] of Object.entries(r?.refused ?? {})) this._refuse(p, k, reason);
     return out;
   }
@@ -95,25 +107,25 @@ export class UrlState {
   }
   _place(pos) {
     const e = this.engine, [x, z] = xzOf(pos);
-    if (e.player) e.player.placeAt(pos); else e.focus.set(x, e.surface(x, z, yOf(pos)), z);
+    e.ops.allow(() => { if (e.player) e.player.placeAt(pos); else e.focus.set(x, e.surface(x, z, yOf(pos)), z); });
     e.events.emit('state:placed', { x, z });
   }
-  async _fresh() {
+  async _fresh(turn) {
     const e = this.engine;
     await Promise.all(e.saves.list().map(s => e.saves.remove(s.slot)));
     if (!e.ready) return;   // during start(): the title has not been drawn yet, and nothing runs to end
     if (e.ui.isOpen('title')) e.ui.close('title');   // closed first so quit draws it again, without Continue
-    await e.session.quit();
+    await e.session.quit({ turn });
     this._ended = true;
   }
-  async _early(p) {
+  async _early(p, turn) {
     const e = this.engine;
-    if (freshOn(p.fresh)) await this._fresh();
-    if (p.save != null && !await e.saves.load(String(p.save))) this._refuse(p, 'save', e.saves.check(String(p.save)) ?? 'the load failed, so the game went back to how it was');
+    if (freshOn(p.fresh)) await this._fresh(turn);
+    if (p.save != null && !await e.saves.load(String(p.save), { turn })) this._refuse(p, 'save', e.saves.check(String(p.save)) ?? 'the load failed, so the game went back to how it was');
     if (p.pos) this._place(p.pos);
-    await this._ask(p, this._moduleKeys(p));
+    await this._ask(p, this._moduleKeys(p), turn);
   }
-  async _late(p) {
+  async _late(p, turn) {
     const e = this.engine;
     // play: what the title's Start does (ui/defaults.js), so the game's session:start setup runs; a module with a title of its own (flow's
     // start state) leaves it in its applyState hook. Before wait, so the advanced seconds are played seconds
@@ -121,32 +133,32 @@ export class UrlState {
     if (p.play != null) {
       // ended: without a title part quit leaves nothing open to press Start on, and a run that ended must still start again (session:start)
       const started = ended || e.ui.isOpen('title');
-      const fresh = started && await e.session.newGame();
+      const fresh = started && await e.session.newGame({ turn });
       if (fresh) e.ui.close('title');
-      await this._ask(p, ['play']);
+      await this._ask(p, ['play'], turn);
       if (started && !fresh) this._refuse(p, 'play', 'the new game failed, so the game went back to how it was');   // after _ask, which clears the keys it is given
       // a new run puts the player at the start, which undid the pos of _early while `state` still printed Set
       if (fresh && p.pos && p.at == null) { this._place(p.pos); await this._settle(); }
     }
     if (p.at != null) {
-      const where = (await this._ask(p, ['at'])).find(r => r && !r.refused);
+      const where = (await this._ask(p, ['at'], turn)).find(r => r && !r.refused);
       // save, position, time and weather are already applied, so this is a refusal like its siblings, never a throw that leaves the rest undone
       if (where) { this._place(where); await this._settle(); }   // the ground and models around the place, before wait and the picture
       else if (!this._refused.has('at')) this._refuse(p, 'at', 'no installed module knows place names: install content(), or use pos=x,z');
     }
-    await this._ask(p, ['cutscene', ...this._moduleKeys(p)]);   // once more: an opening's own weather or time, or settings in engine:ready, may have changed them
+    await this._ask(p, ['cutscene', ...this._moduleKeys(p)], turn);   // once more: an opening's own weather or time, or settings in engine:ready, may have changed them
     if (p.wait > 0) for (let s = p.wait; s > 1e-6; s -= 0.5) {   // advance in small slices so Promises (the next cutscene segment) and background threads continue between them
       e.step(Math.min(0.5, s), { render: false, describe: false });
       await new Promise(r => setTimeout(r, 0));   // main-loop: yield to the browser (background threads, Promise continuations) without advancing game time
     }
-    await this._ask(p, this._moduleKeys(p));        // advancing moves time and the day, so align them last
+    await this._ask(p, this._moduleKeys(p), turn);        // advancing moves time and the day, so align them last
     if (p.view && e.views.list().length && e.views.show(p.view)) {   // a page with its own ?view= (no engine.views declared) handles it itself
       if (e.headless) e._frameHooks(0, true);   // one loading frame: the modules see the new focus, so _settle has something to wait for
       await this._settle();                     // a picture of the view must not be taken before the world around it has loaded
     }
-    this.applied = true;
+    this.applied = !(this._open > 1);   // a request still in line keeps stateApplied waiting
     e.events.emit('state:applied', p);
-    e.events.emit('state:replaced', { undone: false });   // a scenario is a door like a load: time, weather and position moved without a step
+    e.saves._replace.changed();   // a scenario is a door like a load: time, weather and position moved without a step, so its turn ends with state:replaced
   }
 
   /** What the last applyState or the URL could not do: applyState hands this back, but a URL has no caller, so a tool that built one reads it here @returns {{ key: string, value: any, reason: string }[]} */
@@ -155,15 +167,22 @@ export class UrlState {
   /** Apply a set of parameters (usable any time in a game; both phases run back to back). Resolves to { ok, refused } */
   apply(params) {
     const p = this._expand(params);
-    this.applied = false;
-    this._refused.clear();
-    // setting up a scenario is not a gameplay action: the ops guard lets its writes through until it finishes
-    return this.engine.ops.allow(async () => {
-      await this._early(p); await this._settle(); await this._late(p);
+    this.applied = false; this._open = (this._open ?? 0) + 1;
+    return this._turn(async turn => {
+      this.applied = false; this._refused.clear();   // this request's answer only: the one before it in line has ended
+      await this._early(p, turn); await this._settle(); await this._late(p, turn);
       const { refused } = this;
       return { ok: !refused.length, refused };
-    }).finally(() => { this.applied = true; });   // a scenario that threw is over too: stateApplied must not wait for it
+    }).finally(() => { if (--this._open === 0) this.applied = true; });   // a scenario that threw is over too; only the last one in line ends the wait
   }
+  /**
+   * A whole scene request is one job of the state line (stateReplace.js), whole: a second applyState starts when the first ended, so the first cannot set time,
+   * weather or position again over the second, and _refused is one request's. No async ops.allow spans it (a global write permit for its whole span,
+   * which design 12.1 forbids): each write point allows its own synchronous lines (_place, _hooks, the doors) and the doors it
+   * asks (saves.load, session.newGame / quit) get its turn by hand, so they run inside it (review l2 #5).
+   * @param {(turn: object) => Promise<any>} fn
+   */
+  _turn(fn) { const q = this.engine.saves._replace; return q.run(null, () => fn(q.job.turn), { whole: true }); }
   /** In start(), before modules are ready: read the URL parameters and apply save/pos/time/weather */
   early() {
     if (!this.fromUrl) return;
@@ -175,12 +194,12 @@ export class UrlState {
       delete this.pending.fresh;
       warnOnce('?fresh is ignored outside dev mode: a link must not delete saves in a shipped game. Game code can call engine.applyState({ fresh: true }).');
     }
-    return this._early(this.pending);
+    return this._turn(turn => this._early(this.pending, turn));
   }
   /** In start(), after engine:ready: cutscene, wait, align time again, then emit state:applied */
   late() {
     if (!this.pending) { this.applied = true; return; }
     const p = this.pending;
-    return this.engine.ops.allow(async () => { await this._settle(); await this._late(p); });
+    return this._turn(async turn => { await this._settle(); await this._late(p, turn); });
   }
 }

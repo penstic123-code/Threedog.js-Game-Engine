@@ -32,7 +32,7 @@ export const specs = [
     url,
     async run({ check, page }) {
       const b = await second(page);
-      const round = (p, tag) => p.evaluate(async t => { const out = []; engine.saves.register('r3mark', { version: 1, save: () => ({ t, n: window.__n = (window.__n ?? 0) + 1 }), load() {} }); for (let i = 0; i < 15; i++) { out.push(await engine.saves.save('r3-same')); await new Promise(r => setTimeout(r, Math.random() * 12)); } return out; }, tag);
+      const round = (p, tag) => p.evaluate(async t => { const out = []; engine.saves.define('r3mark', { version: 1, save: () => ({ t, n: window.__n = (window.__n ?? 0) + 1 }), load() {} }); for (let i = 0; i < 15; i++) { out.push(await engine.saves.save('r3-same')); await new Promise(r => setTimeout(r, Math.random() * 12)); } return out; }, tag);
       const [ra, rb] = await Promise.all([round(page, 'a'), round(b, 'b')]);
       await page.waitForTimeout(400);
       const view = p => p.evaluate(async () => { const dec = j => { const t = /^\{/.test(j) ? j : new TextDecoder().decode(Uint8Array.from(atob(j), c => c.charCodeAt(0))); return JSON.parse(t); }; const d = await engine.saves.store.getSlot('r3-same'); return { disk: dec(d.json).parts?.r3mark, mem: dec(engine.saves._json.get('r3-same')).parts?.r3mark }; });
@@ -57,8 +57,8 @@ export const specs = [
     url,
     async run({ check, page }) {
       const b = await second(page);
-      await page.evaluate(() => { engine.saves.register('r3who', { version: 1, save: () => 'a', load() {} }); });
-      await b.evaluate(() => { engine.saves.register('r3who', { version: 1, save: () => 'b', load() {} }); });
+      await page.evaluate(() => { engine.saves.define('r3who', { version: 1, save: () => 'a', load() {} }); });
+      await b.evaluate(() => { engine.saves.define('r3who', { version: 1, save: () => 'b', load() {} }); });
       await b.evaluate(() => engine.saves.save('r3-own'));
       await page.waitForTimeout(0);
       // A 的通知可能还没到：这正是竞争窗口。立刻写
@@ -74,8 +74,8 @@ export const specs = [
     async run({ check, ev }) {
       const r = await ev(async () => {
         const S = engine.saves; let n = 0;
-        S.register('r3a', { version: 1, save: () => ({ v: n }), load: d => { n = d.v; } });
-        S.register('r3b', { version: 1, save: () => ({ v: n }), load: d => { if (d.v !== n) throw new Error('half'); } });
+        S.define('r3a', { version: 1, save: () => ({ v: n }), load: d => { n = d.v; } });
+        S.define('r3b', { version: 1, save: () => ({ v: n }), load: d => { if (d.v !== n) throw new Error('half'); } });
         await S.save('r3-x'); n = 5; await S.save('r3-y');
         const out = [];
         for (let i = 0; i < 20; i++) {

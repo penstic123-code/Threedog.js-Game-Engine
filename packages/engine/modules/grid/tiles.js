@@ -61,7 +61,7 @@ export function layerTiles(e, layer, st) {
       mesh.visible = e.world?.inZone(g) ?? true;
       if (layer._ver !== ver || ground !== built) { ver = layer._ver; built = ground; rebuild(); }
     },
-    dispose() { for (const o of offs) o.remove(); e.remove(mesh); geo.dispose(); own.dispose(); },   // a material the game set stays the game's
+    dispose() { for (const o of offs) o.remove(); mesh.material = own; e.remove(mesh); },   // one free through e.remove (design 6.2): the part's own geometry and material go with it; a material the game set is taken off first, so it stays the game's
   };
 }
 

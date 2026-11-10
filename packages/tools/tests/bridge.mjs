@@ -59,7 +59,15 @@ export async function run({ check, browser }) {
     check('step 2: advances 2 seconds', s.out.startsWith('✓ Stepped 2 s') && Math.abs(+await clockOf() - t0 - 2) < 0.1, s.out);
     await threedog('state', 'cutscene=skip');   // the game's opening camera (5 s) takes Esc as "skip" while it plays
     const p = (await threedog('press', 'cancel'));
-    check('press cancel: the settings window opens (settings opens on the basic cancel key)', p.out.includes('settings'), p.out);
+    check('press cancel: the settings window opens (settings opens on the basic cancel key)', p.out.includes('settings') && !/Blocked/.test(p.out), p.out);
+    // with the settings window open a game action is refused for a real key too: threedog press names the holder, and a scenario press step fails with it
+    const blockedPress = await threedog('press', 'moveForward');
+    const bsDir = join(dir, 'tests', 'scenarios'), bsFile = join(bsDir, 'tmp-blocked.json'), bsHad = existsSync(bsDir);
+    let bs;
+    try { mkdirSync(bsDir, { recursive: true }); writeFileSync(bsFile, JSON.stringify({ name: 'tmp', steps: [{ press: 'moveForward' }] })); bs = await threedog('scenario', 'tmp-blocked'); }
+    finally { rmSync(bsHad ? bsFile : bsDir, { recursive: true, force: true }); }
+    check('[guard] a blocked press says who holds input (command and scenario step), not a silent no-op',
+      /Blocked: moveForward did nothing, input is held by win-settings/.test(blockedPress.out) && bs.code === 1 && /win-settings/.test(bs.out), blockedPress.out + ' | ' + bs.out);
     (await threedog('press', 'cancel'));
     check('press again: it closes', !(await threedog('describe')).out.includes('settings'));
     check('press an unknown action: lists the available actions', (await threedog('press', 'nope')).out.includes('Unknown'));

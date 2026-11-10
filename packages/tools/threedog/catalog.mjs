@@ -86,7 +86,7 @@ function summaryText(rows, full) {
   const quiet = rows.filter(s => !loud(s)), byKind = {};
   for (const s of quiet) (byKind[s.kind === 'capability' ? 'capabilities' : 'modules without ops'] ??= []).push(s.id);
   return [...rows.filter(loud).map(rowLine), ...Object.entries(byKind).map(([k, ids]) => `${ids.length} ${k}: ${ids.join(', ')}`),
-    `Details: threedog catalog <id> (module, op name, core or game)${full ? '' : '; --full for one line per module'}`].join('\n');
+    `Details: threedog catalog <id> (module, op name, core, game; module:<id> / op:<name> pick the kind, picture is the picture menu)${full ? '' : '; --full for one line per module'}`].join('\n');
 }
 
 function moduleText(x, where) {
@@ -121,12 +121,50 @@ function findText(rows, library, { find, full }) {
     ...lib.map(e => `library: ${e.name} [${e.kind}] ${e.summary} (threedog lib pull ${e.name})`), failed].filter(Boolean).join('\n');
 }
 
+/**
+ * catalog picture, node side: the effects of @threedog/post-effects (both entries) as { name, ...fn.about }, resolved from the game's folder,
+ * for the page to list next to what is in its chain. Why node reads them: the engine never imports that package, and a game that has not
+ * imported it still should see what it could add. Not installed: [] and the menu's `more` line says how to get them.
+ * @param {string} dir @returns {Promise<any[]>}
+ */
+export async function offeredEffects(dir) {
+  const { createRequire } = await import('node:module'), { pathToFileURL } = await import('node:url');
+  const req = createRequire(join(dir || process.cwd(), 'package.json')), out = [];
+  for (const spec of ['@threedog/post-effects', '@threedog/post-effects/tsl']) {
+    let ns;
+    try { ns = await import(pathToFileURL(req.resolve(spec)).href); } catch { continue; }
+    for (const f of Object.values(ns)) if (typeof f === 'function' && f.about) out.push({ name: f.name, ...f.about });
+  }
+  return out;
+}
+
+/**
+ * The picture menu as text. Checks first (they are what may need a change, and a cut must never drop them), then the capabilities: by
+ * default one line each for "on now" and "can turn on" (name and cost), so the whole answer stays near 1 KB (docs/testing/tool-output-sizes.md);
+ * --full or --find <word> give a row's full line (how, recipe, what it cannot do).
+ */
+function menuText(m, { full, find } = {}) {
+  const row = x => `${x.on ? '●' : '○'} ${x.id} · runs ${x.runs} · cost ${x.cost} · ${x.how} · ${x.recipe} · cannot: ${x.limits}`;
+  const head = [`picture menu (${m.env.renderer}, backend ${m.env.backend}, tier ${m.env.tier}); capabilities only, no values`,
+    ...m.checks.map(c => `${c.kind === 'mistake' ? '✗ mistake' : '· note'} ${c.id}: ${c.text}`), ...(m.checks.length ? [] : ['checks: nothing wrong found']),
+    ...(m.sameNameModule ? [`the game's module of this name: threedog catalog ${m.sameNameModule}`] : [])];
+  const q = find?.toLowerCase(), picked = q ? m.rows.filter(x => `${x.id} ${x.how} ${x.limits}`.toLowerCase().includes(q)) : null;
+  if (full || picked) return [...head, ...(picked && !picked.length ? [`no capability mentions "${find}"`] : []), ...(picked ?? m.rows).map(row)].join('\n');
+  const name = x => `${x.id} (${x.cost}${x.runs === 'yes' ? '' : ', ' + x.runs.split(':')[0]})`;
+  const on = m.rows.filter(x => x.on), can = m.rows.filter(x => !x.on && !x.runs.startsWith('no')), cannot = m.rows.length - on.length - can.length;
+  return [...head, `on now: ${on.map(name).join(', ') || 'none'}`, `can turn on: ${can.map(name).join(', ') || 'none'}`,
+    ...(cannot ? [`${cannot} more cannot run on this renderer`] : []), ...(m.more ? [m.more] : []),
+    'one row in full (how to turn it on, recipe, what it cannot do): --find <word>; every row: --full'].join('\n');
+}
+
 /** Bridge command: r is the page result { data, ids, ops } of engine.catalog(id) */
-export function catalogCommand(r, id, opt, dir, library = null) {
+export function catalogCommand(r, asked, opt, dir, library = null) {
   const max = opt.max || MAX_TEXT, cut = s => s.length > max ? s.slice(0, max) + '\n… (--max N for more, --json for the data)' : s;
-  if (!id && opt.find) return { ok: true, text: cut(findText(r.data, library, opt)), data: { rows: r.data, library } };
-  if (!id) return { ok: true, text: cut(summaryText(r.data, opt.full)), data: r.data };
-  if (!r.data) return { ok: false, text: `✗ catalog: no module or op "${id}". Modules: ${r.ids.join(', ')}; ops: ${r.ops.slice(0, 20).join(', ')}` };
+  if (!asked && opt.find) return { ok: true, text: cut(findText(r.data, library, opt)), data: { rows: r.data, library } };
+  if (!asked) return { ok: true, text: cut(summaryText(r.data, opt.full)), data: r.data };
+  if (!r.data) return { ok: false, text: `✗ catalog: no module or op "${asked}". Modules: ${r.ids.join(', ')}; ops: ${r.ops.slice(0, 20).join(', ')}` };
+  if (r.data.kind === 'menu') return { ok: true, text: cut(menuText(r.data, opt)), data: r.data };
+  const id = r.data.id ?? asked;   // 'module:picture' asked, 'picture' found: files and docs go by the plain name
   const where = locate(id, r.data.kind, dir);
   const data = { ...r.data, files: where };
   if (data.params && data.kind !== 'op') {   // type and description come from the JSDoc-generated api page (drawing parts: their own desc)

@@ -77,6 +77,14 @@ Open the address the terminal prints. The default template is an empty scene wit
 
 The two render routes use different picture code, so the choice is made when the project is created. `createEngine()` itself defaults to WebGL, and the project template sets WebGPU.
 
+Or let the agent do all of it. Paste this to your agent, then describe the game:
+
+```text
+Create a threedog game in this empty folder: npm init -y, npm install threedog@1 three@~0.187.0, npm install -D @threedog/tools@1, npx threedog init, npm install.
+Read the new CLAUDE.md first: it lists what the engine already has, and `npx threedog how "<task words>"` finds everything else.
+Then loop until the game plays and looks as asked: `npx threedog play` to run it, `npx threedog shot --play` to look at it, fix what the errors and `npx threedog check` point to.
+```
+
 ### Work on the engine itself
 
 Clone this repository only to change the engine. It holds the engine source and its maintainer documents (`CLAUDE.md`, `docs/design.md`, `docs/architecture.md`, `.claude/rules/`), which a game does not need. A project made here lands in `games/my-game/`, linked to the engine source, and F2 opens the editor on the dev server.
@@ -203,7 +211,7 @@ Time has three stages:
 | `onFrame` | Per-frame display such as animation and the HUD |
 | `onRender` | Picture updates just before drawing |
 
-`scene.add(obj)` suits ordinary display objects. An object that needs a stable ID and engine registration uses `engine.add(obj, { id })`; see [the scene conventions](packages/engine/docs/recipes/40-scene.md). A project's own state joins saves through `engine.saves.register(...)`.
+`scene.add(obj)` suits ordinary display objects. An object that needs a stable ID and engine registration uses `engine.add(obj, { id })`; see [the scene conventions](packages/engine/docs/recipes/40-scene.md). A project's own state joins saves through `engine.saves.define(...)`.
 
 Maintainers can read [the current architecture](docs/architecture.md). Project authors do better starting from the [AI index](packages/engine/docs/AI.md).
 

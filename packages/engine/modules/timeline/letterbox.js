@@ -19,6 +19,7 @@ background:none;border:0;cursor:pointer;pointer-events:auto;opacity:0;transition
   t.skipBtn.type = 'button'; t.skipBtn.className = 'threedog-letterbox-skip';
   t.skipBtn.addEventListener('click', () => { for (const r of t.runs) if (r.skippable) t.skip(r); });
   t.bottom.appendChild(t.skipBtn);
+  t._track({ remove() { t.top.remove(); t.bottom.remove(); } });   // the bars own the button and its click listener
   t._track(t.engine.events.on('i18n:change', () => t._refreshUI()));
   t._track(t.engine.events.on('input:rebind', () => t._refreshUI()));
 }

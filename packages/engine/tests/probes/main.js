@@ -10,6 +10,7 @@ const wall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 6, 20), new THREE.MeshBas
 wall.position.set(3.6, 3, 0); wall.name = 'redWall';
 engine.add(floor, wall);
 engine.camera.position.set(0, 1.7, 6);
-window.threedogTest = { THREE, wall, LightProbeGridWebGL };
+import * as tsl from 'three/tsl';   // scene.fogNode = tsl.fog(...) for the fog readers (tests/specs/group-p5.mjs)
+window.threedogTest = { THREE, wall, LightProbeGridWebGL, tsl };
 window.engine = engine;
 engine.start();

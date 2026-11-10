@@ -13,7 +13,7 @@ export const specs = [
       const r = await ev(async CLEAR_SRC => {
         const S = engine.saves, clear = (0, eval)('(' + CLEAR_SRC + ')'), out = {};
         let v = 1;
-        const h = S.register('hsV', { save: () => v, load: () => {} });
+        const h = S.define('hsV', { save: () => v, load: () => {} });
         await S.save('hs-two');
         const put = S.store.putSlot;
         S.store.putSlot = () => Promise.reject(new DOMException('quota', 'QuotaExceededError'));
@@ -29,17 +29,17 @@ export const specs = [
         // NaN became null in the text: save() said true and wrote a save that every later load refuses as corrupt
         await S.save('hs-nan');
         const before = S._json.get('hs-nan');
-        S.register('hsNaN', { save: () => NaN, load: () => {} });
+        S.define('hsNaN', { save: () => NaN, load: () => {} });
         out.nan = { ok: await S.save('hs-nan'), kept: S._json.get('hs-nan') === before, check: S.check('hs-nan') };
         clear(); S.providers.delete('hsNaN');
         await S.remove('hs-nan');
         // a version that is no number skipped every migrate step and handed the old shape to load()
         let got = null;
-        S.register('hsVer', { version: 2, migrate: { 1: () => ({ v: 2 }) }, save: () => ({ v: 2 }), load: d => { got = d; } });
+        S.define('hsVer', { version: 2, migrate: { 1: () => ({ v: 2 }) }, save: () => ({ v: 2 }), load: d => { got = d; } });
         out.ver = { ok: await S.apply({ format: 1, versions: { hsVer: 'abc' }, parts: { hsVer: { old: 1 } } }, 'hs'), got };
         S.providers.delete('hsVer');
         // a provider that cannot work is told at register, not when the player saves
-        out.reg = ['save', 'load'].map(k => { try { S.register('hsBad', { save: () => 1, load: () => {}, [k]: 5 }); S.providers.delete('hsBad'); return 'accepted'; } catch (e) { return e.message.includes(k) ? 'refused' : e.message; } });
+        out.reg = ['save', 'load'].map(k => { try { S.define('hsBad', { save: () => 1, load: () => {}, [k]: 5 }); S.providers.delete('hsBad'); return 'accepted'; } catch (e) { return e.message.includes(k) ? 'refused' : e.message; } });
         return out;
       }, CLEAR);
       check('two refused writes: both false, memory holds what is stored', r.two[0] === false && r.two[1] === false && r.mem === 1 && r.disk === 1, JSON.stringify(r));
@@ -136,7 +136,7 @@ export const specs = [
       const r = await ev(async CLEAR_SRC => {
         const S = engine.saves, clear = (0, eval)('(' + CLEAR_SRC + ')'), out = {};
         // background results of the playthrough that goes on still land
-        S.register('hsF', { save: () => ({ a: 1 }), load: d => { if (d.bad) throw new Error('hs boom'); } });
+        S.define('hsF', { save: () => ({ a: 1 }), load: d => { if (d.bad) throw new Error('hs boom'); } });
         const good = S.collect(), bad = JSON.parse(JSON.stringify(good));
         bad.parts.hsF = { bad: 1 };
         let hit = 0, hit2 = 0, dropped = 0;
@@ -159,8 +159,8 @@ export const specs = [
         S.providers.delete('hsF');
         // a part's load / an afterLoad sets up the playthrough being loaded; only what the old one had goes
         let timer = 0, ear = 0, ear2 = 0, oldEar = 0, oldTimer = 0;
-        S.register('hsS', { save: () => ({ a: 1 }), load: () => { engine.session.track(engine.events.on('hs:ping', () => ear++)); engine.clock.after(0.1, () => timer++); } });
-        engine.modules.set('hsM', { name: 'hsM', afterLoad() { engine.session.track(engine.events.on('hs:ping', () => ear2++)); } });
+        S.define('hsS', { save: () => ({ a: 1 }), load: () => { engine.session.track(engine.events.on('hs:ping', () => ear++)); engine.clock.after(0.1, () => timer++); } });
+        engine.modules.set('hsM', { name: 'hsM', afterLoad() { engine.session.track(engine.events.on('hs:ping', () => ear2++)); } }); engine._modState.set('hsM', 'running');   // a stand-in module: the afterLoad gate runs only modules that run
         await S.save('hs-s');
         engine.session.track(engine.events.on('hs:ping', () => oldEar++));
         engine.clock.after(0.1, () => oldTimer++);
@@ -168,7 +168,7 @@ export const specs = [
         engine.events.emit('hs:ping');
         engine.step(0.5, { describe: false });
         out.setup = { timer, ear, ear2, oldEar, oldTimer };
-        S.providers.delete('hsS'); engine.modules.delete('hsM');
+        S.providers.delete('hsS'); engine.modules.delete('hsM'); engine._modState.delete('hsM');
         await S.remove('hs-s');
         // quit whose apply fails: the game goes on, flow comes back, session:failed says so
         const log = [], id = engine.session.id;
@@ -176,7 +176,7 @@ export const specs = [
         let boom = true, opened = 0;
         const open = engine.ui.open;
         engine.ui.open = function (n, d) { if (n === 'title') opened++; return open.call(this, n, d); };
-        S.register('hsQ', { save: () => ({ a: 1 }), load: () => { if (boom) { boom = false; throw new Error('hs boom'); } } });
+        S.define('hsQ', { save: () => ({ a: 1 }), load: () => { if (boom) { boom = false; throw new Error('hs boom'); } } });
         out.quit = await engine.session.quit();
         engine.ui.open = open;
         clear();
@@ -202,9 +202,9 @@ export const specs = [
         const d = JSON.parse(JSON.stringify(base));
         d.parts.hsA = { keep: 'gold' }; d.versions.hsA = 3; d.parts.hsB = { keep: 'silver' }; d.parts.hsC = { keep: 'iron' };
         await S.apply(d, 'hs');
-        S.register('hsA', { version: 2, migrate: { 1: x => x }, save: () => ({ fresh: true }), load: () => {} });
-        S.register('hsB', { save: () => ({ fresh: true }), load: () => { throw new Error('hs boom'); } });
-        S.register('hsC', { save: () => ({ fresh: true }), load: () => Promise.reject(new Error('hs boom')) });
+        S.define('hsA', { version: 2, migrate: { 1: x => x }, save: () => ({ fresh: true }), load: () => {} });
+        S.define('hsB', { save: () => ({ fresh: true }), load: () => { throw new Error('hs boom'); } });
+        S.define('hsC', { save: () => ({ fresh: true }), load: () => Promise.reject(new Error('hs boom')) });
         await new Promise(res => setTimeout(res, 20));
         clear();
         const c = S.collect();
@@ -335,7 +335,7 @@ export const specs = [
     async run({ check, ev, page }) {
       const [tab2] = await Promise.all([page.waitForEvent('popup'), ev(u => { window.open(u); }, page.url())]);
       await tab2.waitForFunction(() => window.engine?.ready, null, { timeout: 90000 });
-      const part = () => { window.hsBig = 'A'; engine.saves.register('hsBig', { save: () => ({ big: window.hsBig }), load: () => {} }); window.hsGo = async () => { const o = []; for (let i = 0; i < 20; i++) o.push(await engine.saves.save('hs-race')); return o; }; };
+      const part = () => { window.hsBig = 'A'; engine.saves.define('hsBig', { save: () => ({ big: window.hsBig }), load: () => {} }); window.hsGo = async () => { const o = []; for (let i = 0; i < 20; i++) o.push(await engine.saves.save('hs-race')); return o; }; };
       await ev(part); await tab2.evaluate(part);
       const [a, b] = await Promise.all([ev(() => window.hsGo()), tab2.evaluate(() => window.hsGo())]);
       const race = await ev(async () => {

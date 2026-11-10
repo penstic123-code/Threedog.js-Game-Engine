@@ -20,7 +20,7 @@ export const specs = [
         const steps = n => { for (let i = 0; i < n; i++) E.step(1 / 60, { render: false, describe: false }); };
         const car = () => ({ object: new THREE.Object3D(), speed: 0, driver: null, seats: 2, hideDriver: false, passengers: [], braked: 0,
           drive(t, s, b) { this.braked += b; }, seatPosition: s => ({ x: 20 + s, y: 0, z: 20 }), exitPosition: () => ({ x: 18, y: 0, z: 20 }) });
-        const P = E.characters.createPlayer({ control: () => ({ x: 0, z: 0 }), spawn: { x: 0, z: 0 } });
+        const P = E.characters.addPlayer({ control: () => ({ x: 0, z: 0 }), spawn: { x: 0, z: 0 } });
         const npc = E.npcs.add({ id: 'rw-npc', name: 'Rider', position: { x: 4, z: 0 } });
         steps(2);
         const left = []; E.events.on('vehicle:exit', ({ character }) => left.push(character.id));
@@ -80,7 +80,7 @@ export const specs = [
         E.use(T.world(), T.collision(), T.characters());
         await E.start(); E.haltLoop();
         const steps = n => { for (let i = 0; i < n; i++) E.step(1 / 60, { render: false, describe: false }); };
-        const P = E.characters.createPlayer({ control: () => ({ x: 0, z: 0 }), spawn: { x: 0, z: 0 } });
+        const P = E.characters.addPlayer({ control: () => ({ x: 0, z: 0 }), spawn: { x: 0, z: 0 } });
         const npc = E.npcs.add({ id: 'rw-n', name: 'Stander', position: { x: 4, z: 0 } });
         steps(2);
         const pose = c => ({ facing: c.facing, y: c.root.rotation.y, s: c.root.scale.toArray() });
@@ -202,7 +202,7 @@ export const specs = [
         const steps = n => { for (let i = 0; i < n; i++) E.step(1 / 60, { render: false, describe: false }); };
         const car = () => { const object = new THREE.Object3D(); E.add(object); return { object, speed: 0, driver: null, seats: 3, hideDriver: false, passengers: [],
           drive() {}, seatPosition: s => ({ x: 20 + s, y: 0, z: 20 }), exitPosition: () => ({ x: 18, y: 0, z: 20 }) }; };
-        const P = E.characters.createPlayer({ control: () => ({ x: 0, z: 0 }), spawn: { x: 0, z: 0 } });
+        const P = E.characters.addPlayer({ control: () => ({ x: 0, z: 0 }), spawn: { x: 0, z: 0 } });
         const A = E.npcs.add({ id: 'rw-a', name: 'A', position: { x: 4, z: 0 } }), B = E.npcs.add({ id: 'rw-b', name: 'B', position: { x: 4, z: 3 } });
         steps(2);
         const a = A.character, b = B.character, place = id => { const args = { id, position: [5, 0, 6] }; return { args, res: E.ops.run('thing.set', args) }; };

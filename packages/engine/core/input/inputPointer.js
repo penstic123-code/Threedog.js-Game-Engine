@@ -42,8 +42,9 @@ export function bindPointer(input, canvas, signal) {
   // When the mouse is locked (first person), use relative movement
   addEventListener('mousemove', e => { if (document.pointerLockElement === canvas) { input.look.dx += e.movementX; input.look.dy += e.movementY; } }, { signal });
   const end = e => {
+    if (drag && drag.id !== e.pointerId) return;   // another finger lifting is not this gesture's end
     const swallowed = drag?.swallowed;
-    if (drag && !swallowed && drag.moved < 6) input.pointer.clicked = true;
+    if (drag && !swallowed && drag.moved < 6 && e.type === 'pointerup') input.pointer.clicked = true;   // a cancelled pointer (the browser took the gesture) is no click
     drag = null;
     if (swallowed) return;
     input.pointer.down = false;

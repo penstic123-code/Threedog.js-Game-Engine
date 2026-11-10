@@ -14,7 +14,7 @@ import { readRuntime, trailer } from './runtime.mjs';
 import { saveSnapshot, compareSnapshot, changeLine } from '../describe-snapshot.mjs';
 import { hintFor } from 'threedog/error-hints';
 import { errorsCommand, markReload } from './errorlog.mjs';
-import { catalogCommand } from './catalog.mjs';
+import { catalogCommand, offeredEffects } from './catalog.mjs';
 import { isStepsScript, stepsReport } from './steps.mjs';
 import { parseOptions, intOption } from '../lib/cli-args.mjs';
 import { drawnBy } from '../lib/page-url.mjs';
@@ -66,7 +66,7 @@ const OPTIONS = {
   explain: { flags: ['full'], values: ['max'] },
 };
 /** One command's arguments → { rest, opt }, the numbers and lists already converted */
-function options(cmd, args) {
+export function options(cmd, args) {
   const { rest, opt } = parseOptions(args, { positional: true, ...OPTIONS[cmd] });
   for (const k of ['max', 'width']) if (k in opt) opt[k] = intOption(opt, k);
   for (const k of ['wait', 'tolerance']) if (k in opt) opt[k] = +opt[k];
@@ -133,7 +133,7 @@ export async function run(driver, cmd, args = [], { dir = process.cwd() } = {}) 
       r.text = lines(r.text, 3) + '\n' + changeLine(before, await ev(driver, 'raw', {}));
       // a press on a frozen page is normal (a title's Start, a dialogue choice): it fails only when the engine stopped on an error, or a hold never ran
       const held = cmd === 'hold' && r.short;
-      return r.stopped || held ? { ok: false, text: `✗ ${held ? `Only ${r.moved} of ${seconds} s passed: ${r.why} · ` : ''}` + r.text } : { ok: true, text: '✓ ' + r.text };
+      return r.stopped || held ? { ok: false, text: `✗ ${held ? `Only ${r.moved} of ${seconds} s passed: ${r.why} · ` : ''}` + r.text } : { ok: true, blocked: r.blocked, text: '✓ ' + r.text };
     }
     case 'state': {
       const stray = rest.find(kv => !kv.includes('='));
@@ -215,7 +215,8 @@ export async function run(driver, cmd, args = [], { dir = process.cwd() } = {}) 
       return { ok: true, text: '✓ Page reloaded' };
     case 'resume':
       return { ok: true, text: '✓ ' + await ev(driver, 'resume', {}) };
-    case 'catalog': return catalogCommand(await ev(driver, 'catalog', { id: rest[0], find: opt.find }), rest[0], opt, dir, await libraryHits(opt.find));
+    case 'catalog': return catalogCommand(await ev(driver, 'catalog', { id: rest[0], find: opt.find, offered: /^(capability:)?picture$/.test(rest[0] ?? '') ? await offeredEffects(dir) : undefined }),
+      rest[0], opt, dir, await libraryHits(opt.find));
     case 'ops':
       return { ok: true, text: lines(await ev(driver, 'ops', {}), 3) };
     case 'op': {

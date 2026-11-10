@@ -31,11 +31,11 @@ games/<game>/            none in this repo (`threedog new-game <name>` creates o
 ## Working rules
 - What belongs in the engine: `docs/design.md` section 2.2. One entry per mechanism; customization follows the ladder in `packages/engine/docs/CONVENTIONS.md` "Customization ladder".
 - Before writing, list every place the change must reach (callers, games and examples, tests, types, docs, saves). Then take the first option that fully works: not needed at all (say so in one line) -> already in the engine (CODEMAP, `threedog catalog`) -> three.js or the platform -> an installed dependency -> the least new code.
-- No abstraction, option or "for later" code nobody asked for. Deleting beats adding: a replaced way, option, test or doc is deleted in the same change, no compat layer.
+- No abstraction, option or "for later" code nobody asked for. Deleting beats adding: a replaced way, option, test or doc is deleted in the same change, no compat layer inside the engine; a rename removes the old name in the same change and the CHANGELOG lists it (docs/design.md 2.6).
 - Bug fix: grep every caller, find the root cause, fix it once in the layer that owns it.
 - New logic with weight gets one test that cannot be bypassed; a known-limit shortcut gets `// shortcut: <limit>, <when to upgrade>`; other comments say why in one line. Never cut save-data safety, option validation at public entries, or what was asked for.
 - A new public API adds its AI.md row and recipe section in the same commit (checked by R22); R18 checks names in hand-written docs.
-- Verify in this order and say what you ran: `npm run map` (only if you changed a public API, JSDoc or content) -> `npm run check` -> the related tests. Attach before / after numbers for performance changes.
+- Verify in this order, and report only after the commands really ran and passed: `npm run map` (only if you changed a public API, JSDoc or content) -> `npm run check` -> the related tests (`npm test -- name`). Attach before / after numbers (`describe().perf` or `npm run perf`) for performance changes.
 - A design trade-off that changes gameplay or a recorded decision: ask first.
 - Reply in the language the user writes in.
 

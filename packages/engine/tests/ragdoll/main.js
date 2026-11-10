@@ -17,7 +17,7 @@ engine.scene.add(sun, new THREE.AmbientLight('#ffffff', 0.6));
 engine.assets.manifest({ name: 'ragdoll-test', models: { king: { url: new URL('../anim/public/king.glb', import.meta.url).href, animation: { states: { idle: { clip: 'Idle_Sword' }, walk: { clip: 'Walk' }, run: { clip: 'Run' } } } } } });
 engine.events.on('engine:ready', async () => {
   const model = await engine.assets.model('king');
-  engine.characters.createPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 0 }, model });
+  engine.characters.addPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 0 }, model });
   window.ready = true;
 });
 engine.start();

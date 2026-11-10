@@ -1,6 +1,9 @@
 # Terrain: your own generator, digging, raising and painting the ground, islands
 
-**In this recipe**: 0. Noise preset · 1. Your own generator · 2. Changing the ground · 3. Farming soil and ground types · 4. Height and snapping · 5. Where the ground ends: `shape` · 6. Replace the picture, keep play · 7. A chunk that fails · 8. Triangle cut and bounds margin · 9. Height from a grid or image
+> **Covers:** terrain: generators, digging and raising, soil and ground types, height, roads, islands.
+> **Use when:** a ground of your own, generated or shaped by play.
+> **Shortest:** `openWorld({ terrain: terrainPreset() })`.
+> **Sections:** 0 A ready-made generator · 1 Your own generator · 2 Changing the ground · 3 Farming soil and · 4 Height and snapping · 4b A road laid · 5 Where the ground · 6 Drawing the ground · 7 A chunk that · 8 Triangle cut and · 9 Height from a
 
 Requires module `terrain()` (in the `openWorld()` preset). The API list is in `../api/terrain.md`.
 
@@ -13,9 +16,9 @@ Flat island (no noise): `terrain({ height: () => 2, shape: { mask: (x, z) => 25 
 ## 0. A ready-made generator: the noise preset
 ```js
 import { openWorld, createTerrain } from 'threedog';
-import { terrainPreset, riverAt } from '@threedog/terrain-noise';   // optional package: noise hills, rivers, biomes
-engine.use(openWorld({ camera: 'follow', seed: 7, terrain: terrainPreset({ shape: 'island' }) }));   // 'hills' (default) | 'island' | 'canyon' | 'flat'
-const preview = createTerrain({ seed: 7, ...terrainPreset() });                    // same heights before the engine starts
+import { terrainPreset, riverAt } from '@threedog/terrain-noise';  // optional package: noise hills, rivers, biomes
+engine.use(openWorld({ camera: 'follow', seed: 7, terrain: terrainPreset({ shape: 'island' }) }));  // 'hills' (default) | 'island' | 'canyon' | 'flat'
+const preview = createTerrain({ seed: 7, ...terrainPreset() });  // same heights before the engine starts
 const dry = (x, z) => riverAt(x, z, preview.noise) === 0;
 ```
 Its ground types are `beach snow rock riverbank wetland savanna forest highland meadow`; the game colors them (`terrain({ colors, biomeColors })`),
@@ -31,7 +34,7 @@ terrain({
   height: (x, z, n) => 4 + 30 * n.fbm(x * 0.004, z * 0.004) - 8 * Math.abs(Math.sin(x * 0.01)),
   // a ground type name (null = 'default'); its colors come from biomeColors[type]
   groundType: (x, z, h, slope) => slope > 0.8 ? 'rock' : h < 1 ? 'beach' : 'grass',
-  waterLevel: 0,   // a sea at y = 0; leave it out for no water (the default is -Infinity; terrainPreset() sets 0)
+  waterLevel: 0,  // a sea at y = 0; leave it out for no water (the default is -Infinity; terrainPreset() sets 0)
 });
 ```
 The terrain moves the camera's far plane out to its view distance and leaves the fog to the game; `terrain({ viewFog: true })` (on in `openWorld()`) writes that
@@ -43,10 +46,10 @@ Both functions run in workers, so they are **pure**: they see only their paramet
 
 ## 2. Changing the ground: `engine.terrain.edit`
 ```js
-const at = [12, 0, 20];   // an op's 'position' argument is [x, y, z]
+const at = [12, 0, 20];  // an op's 'position' argument is [x, y, z]
 engine.ops.define('ground.dig', { args: { at: 'position' }, run(e, a) { e.terrain?.edit(a.at, { radius: 3, lower: 1.5 }); } });
 engine.ops.define('ground.level', { args: { at: 'position' }, run(e, a) {
-  e.terrain?.edit(a.at, { shape: 'square', radius: 6, flatten: e.surface(a.at) });   // a flat foundation at the height of its center
+  e.terrain?.edit(a.at, { shape: 'square', radius: 6, flatten: e.surface(a.at) });  // a flat foundation at the height of its center
 } });
 engine.ops.run('ground.dig', { at });
 ```
@@ -65,7 +68,7 @@ saved, works on levels and indoors, and draws its own tiles. See `recipes/29-gri
 types and gives them colors in its own style object: `terrain.colors` + `terrain.biomeColors`). `engine.groundType(pos)` reads the painted type
 (footsteps, `can` checks):
 ```js
-engine.ops.define('path.sand', { args: { at: 'position' },   // a sandy path; a new type name needs biomeColors (section 1)
+engine.ops.define('path.sand', { args: { at: 'position' },  // a sandy path; a new type name needs biomeColors (section 1)
   run(e, a) { e.terrain?.edit(a.at, { shape: 'square', radius: (e.terrain.cellSize ?? 4) / 2, paint: 'beach' }); } });
 ```
 
@@ -78,7 +81,7 @@ raycast the terrain for this: the height function is exact and works before the 
 The road and the height function must read the same data, or the road floats or sinks wherever they disagree. Write the road's shape once as plain numbers and hand them over with `terrain({ params })`. The height function runs in workers and sees only `n.params`, so it works out the centre line itself: a formula or a small table of numbers, never a curve object. Near the line it returns the road's level, and it blends to the hills further out.
 
 ```js
-const ROAD = { R: 130, wobble: 24, level: 14, flat: 10, blend: 40 };   // the one copy of the road's shape
+const ROAD = { R: 130, wobble: 24, level: 14, flat: 10, blend: 40 };  // the one copy of the road's shape
 
 function height(x, z, n) {
   const p = n.params, t = Math.atan2(z, x);
@@ -110,19 +113,19 @@ where `mask > 0`; the rim is cut through the cells in straight lines, walls hang
 import { createEngine, openWorld } from 'threedog';
 
 const engine = createEngine({ canvas: document.querySelector('canvas') });
-engine.use(openWorld({ camera: 'follow', water: false, terrain: {   // water: false -- a floating island has no sea under it
+engine.use(openWorld({ camera: 'follow', water: false, terrain: {  // water: false -- a floating island has no sea under it
   height: (x, z, n) => 4 + 6 * n.fbm(x * 0.02, z * 0.02),
   shape: {
-    mask: (x, z) => 60 - Math.hypot(x, z),                    // > 0 ground: a 60 m disc (meters read best)
-    edge: { noise: 8, size: 20, jitter: 0.6, round: 1.5 },    // ragged outline, jagged rim, top bends down 1.5 m at the edge
-    side: { depth: 3, ground: 'cliff' },                      // 3 m of cliff band, colored by biomeColors.cliff
-    bottom: { depth: (x, z, n, m) => 2 + m * 0.5 + 4 * n.fbm(x * 0.1, z * 0.1), ground: 'rock' },   // hangs lower inland (m grows inward)
+    mask: (x, z) => 60 - Math.hypot(x, z),  // > 0 ground: a 60 m disc (meters read best)
+    edge: { noise: 8, size: 20, jitter: 0.6, round: 1.5 },  // ragged outline, jagged rim, top bends down 1.5 m at the edge
+    side: { depth: 3, ground: 'cliff' },  // 3 m of cliff band, colored by biomeColors.cliff
+    bottom: { depth: (x, z, n, m) => 2 + m * 0.5 + 4 * n.fbm(x * 0.1, z * 0.1), ground: 'rock' },  // hangs lower inland (m grows inward)
   },
 } }));
 await engine.start();
 
 const home = { x: 0, z: 0 };
-engine.events.on('terrain:void', ({ who }) => {   // fell off: the game decides (the engine never respawns)
+engine.events.on('terrain:void', ({ who }) => {  // fell off: the game decides (the engine never respawns)
   if (who === engine.player) engine.player.placeAt(home);
 });
 ```
@@ -160,7 +163,7 @@ engine.use({ name: 'myGround', type: 'picture', provides: ['terrain-draw'], inst
   const meshes = new Map();
   ctx.track(e.terrain.view({
     add(c) { const m = buildMesh(c.data.pos, c.data.nor, c.data.col); m.position.set(c.cx * e.terrain.chunkSize, 0, c.cz * e.terrain.chunkSize); e.scene.add(m); meshes.set(c, m); },
-    change(c) { refill(meshes.get(c), c.data); },   // terrain.edit rewrote the arrays (the count can differ on an 'adaptive' rim)
+    change(c) { refill(meshes.get(c), c.data); },  // terrain.edit rewrote the arrays (the count can differ on an 'adaptive' rim)
     remove(c) { e.scene.remove(meshes.get(c)); meshes.delete(c); },
     show(c, visible) { meshes.get(c).visible = visible; },
   }));
@@ -178,7 +181,7 @@ and `describe().perf.chunks.failed` counts it. Fix the rule, then `engine.terrai
 
 ## 8. Triangle cut and bounds margin
 ```js
-terrain({ diagonal: 'adaptive' })   // 'fixed' (default) | 'adaptive' | 'alternate'
+terrain({ diagonal: 'adaptive' })  // 'fixed' (default) | 'adaptive' | 'alternate'
 ```
 `fixed` cuts every cell the same way. `adaptive` cuts along the diagonal with the smaller height difference, which removes
 the zigzag ridges a fixed cut leaves on a slope; `alternate` flips every other cell (no directional bias on flat low-poly facets). `engine.surface`,
@@ -197,11 +200,11 @@ ground-type weight, spawn density, a walkable mask, danger, travel cost.
 `'cubic'` for slopes without cell creases, which can overshoot beside a sharp step (`clamp: true` keeps it inside the four corner values).
 
 ```js fragment
-const g = await engine.assets.gridFromImage('/maps/height16.png', { range: [-5, 60] });   // meters, 16-bit file
+const g = await engine.assets.gridFromImage('/maps/height16.png', { range: [-5, 60] });  // meters, 16-bit file
 const heightAt = sampleGrid(g.data, { ...g, size: [512, 512], origin: [-256, -256], interp: 'cubic', clamp: true });
-heightAt(10, 20);                                                    // gameplay side: where to put a camp, a mine, a lighthouse
-const wet = sampleGrid(moisture, { width: 32, height: 32, cellSize: 8 });   // a hand-made field: wetter ground grows reeds, rice, moss
-const walk = sampleGrid(mask, { width: 64, height: 64, cellSize: 1, interp: 'nearest', outside: 0 });   // 0 / 1 per tile; off the map: not walkable
+heightAt(10, 20);  // gameplay side: where to put a camp, a mine, a lighthouse
+const wet = sampleGrid(moisture, { width: 32, height: 32, cellSize: 8 });  // a hand-made field: wetter ground grows reeds, rice, moss
+const walk = sampleGrid(mask, { width: 64, height: 64, cellSize: 1, interp: 'nearest', outside: 0 });  // 0 / 1 per tile; off the map: not walkable
 ```
 A terrain `height` function is recompiled in a worker and cannot capture `heightAt`, so the terrain reads the same image through its own
 `heightmap` (bilinear, centered on `center`): `terrain({ heightmap: { ...g, size: [512, 512], min: -5, max: 60 } })` with `g` from `gridFromImage`

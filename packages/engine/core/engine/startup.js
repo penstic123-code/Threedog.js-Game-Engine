@@ -13,7 +13,7 @@ import { touchStart } from '../input/inputTouch.js';
 import { Loading, failureText } from './Loading.js';
 import { startHeadlessLoad } from './headlessLoad.js';
 import * as THREE from 'three';
-import { isWebGPU, backendName, whyNoWebGPU, firstNodeMaterial, webglOnlyOn, tier as detectTier, timerContext, rendererSwapped, compileThrough } from '../../render/backend.js';
+import { isWebGPU, backendName, whyNoWebGPU, firstNodeMaterial, webglOnlyOn, tier as detectTier, timerContext, rendererSwapped, compileThrough, borrowRenderer } from '../../render/backend.js';
 import { bindUniforms } from '../../render/engineUniforms.js';
 import { nameShaderErrors } from '../../render/shaderErrors.js';
 import { forcedTier } from '../scene/tier.js';
@@ -107,14 +107,13 @@ export const startupMethods = {
     // Compile every visible material for the current lights now, behind the loading screen, instead of stalling the first frame that shows it
     // (async where the browser has KHR_parallel_shader_compile). A later change in the number of lights compiles again: see recipes/09 "Lights and stalls"
     this._checkBackendScene();                 // the scene is built now: materials the chosen backend cannot draw fail by name, not as a blank picture
+    this._gameLights?.sync();                  // the light watch sees it before the compile: a RectAreaLight's tables must be set first (gameLights.js)
     const tc = performance.now();   // measure
     // Everything below is handed to the parallel compile together, then awaited once: the scene, and on WebGL the post chain's fullscreen passes
     // compile for the target the scene really draws into (the composer's when post is on): see PostFX._sceneTarget.
     // compile() runs synchronously inside compileAsync, so the target only needs to be set around the call, not across the await
     const r = this.renderer, target = this.post._sceneTarget();
-    r.setRenderTarget(target);
-    let compiling;
-    try { compiling = r.compileAsync(this.scene, this.camera); } finally { r.setRenderTarget(null); }
+    const compiling = borrowRenderer(r, () => { r.setRenderTarget(target); return r.compileAsync(this.scene, this.camera); });
     // the chain's passes draw through three themselves, so compileAsync of the scene never sees their materials: a dry run of the chain
     // (render/backend.js compileThrough) starts them now instead of one by one in the warm-up frame (~130 ms measured, nine passes).
     // Not on WebGPU: its passes are nodes of one pipeline whose inner renders run only inside a real frame
@@ -123,6 +122,7 @@ export const startupMethods = {
     for (const f of this._whileCompiling.splice(0)) { try { f(); } catch (err) { reportError(this, err, 'warm-up while compiling', { soft: true }); } }
     await Promise.all([compiling, post]);
     this._alive();
+    this.stream._prep.mark(this.scene);   // compiled now: streamed content sharing these materials is shown at once (core/stream/prepare.js)
     // One hidden frame behind the loading screen: shadow depth materials, the post passes and the background quad are programs compileAsync
     // never sees, and without this frame they compiled in the first frame the player saw (a 300 ms hitch measured)
     if (!this.headless) { try { this._render(0); } catch (err) { reportError(this, err, 'render (warm-up frame)', { soft: true }); } }
@@ -161,7 +161,7 @@ export const startupMethods = {
     const r = this.renderer, want = this._backendWant;
     if (!isWebGPU(r)) { this._backend = { requested: 'webgl', backend: 'webgl', reason: null }; return; }
     const forced = !!r.backend?.parameters?.forceWebGL;   // the game asked for the WebGL2 backend itself: not a fallback
-    let reason = forced || (r.initialized && r.backend.isWebGPUBackend) ? null : await whyNoWebGPU();
+    let reason = forced || (r.initialized && r.backend.isWebGPUBackend) ? null : await whyNoWebGPU(want.limits, r.backend?.parameters?.powerPreference);
     this._alive();
     if (reason && want.fallback === 'error') {
       throw codedError('renderer-backend', `[threedog] WebGPU unavailable (${reason}) and createEngine({ fallback: 'error' }) asked not to fall back; `

@@ -3,10 +3,13 @@
 //   window.skinnedGlb() (rig.js) builds a minimal skinned GLB in code for the generated-rig spec.
 //   window.swing is a gameplay action timeline (fixed-step seconds): windup 0.16, active 0.12, recovery 0.34. Its timing pairs
 //   put the clip's down-swing (measured: the right wrist peaks at clip ~0.24 s and comes down by ~0.5 s) inside the active phase.
+//   ?ik=1 shows the IK layers (a step under one foot, a look target).
 //   ?swing=1 keeps swinging (sync driven by a fixed-step counter) to look at it.
 import { createEngine, presets, world, sky, collision, followCamera, characters, Character, THREE } from '../../index.js';
 import { level } from '../../modules/level/index.js';
 import { skinnedGlb } from './rig.js';
+import { twoBone } from '../../core/assets/ik.js';
+window.twoBone = twoBone;   // the IK spec checks the solver's corner cases directly
 
 const root = new THREE.Group(); root.name = 'animLevel';
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0x8a8a8a })); floor.name = 'floor'; root.add(floor);
@@ -29,8 +32,12 @@ engine.assets.manifest({ name: 'anim-test', models: { king: { url: new URL('./pu
 
 engine.events.on('engine:ready', async () => {
   const model = await engine.assets.model('king');
-  engine.characters.createPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 0 }, model });
+  engine.characters.addPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 0 }, model });
   window.ready = true;
+  if (new URLSearchParams(location.search).get('ik')) {   // ?ik=1: a 15 cm step under the left foot, feet on it, the head on a point to the front left (look with threedog shot)
+    const step = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.15, 0.8), floor.material); step.position.set(0.3, 0.075, 0); engine.scene.add(step); engine.characters.support(step);
+    engine.player.anim.addFeet(); engine.player.anim.addAim({ bones: ['Neck', 'Head'], target: [1.5, 1.3, 2] });
+  }
   if (new URLSearchParams(location.search).get('swing')) {
     let t = 0;
     engine.onFixed(dt => { t = (t + dt) % 1.2; if (t < window.swing.duration) engine.player.anim.sync('attack', t); else engine.player.anim.sync(null); });

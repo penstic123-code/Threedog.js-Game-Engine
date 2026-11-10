@@ -1,6 +1,11 @@
 // Test page: observable loading (engine.loading). The page's own engine starts normally with one good model;
 // the spec builds extra headless engines through window.threedogLoad to provoke missing files, critical failures and slow steps.
-import { createEngine, level } from '../../index.js';
+import { createEngine, level, sky, characters, world, content, pickups } from '../../index.js';
+import { protoOf, holdProtos, protoSlots, copyLeft, protoLease } from '../../core/assets/namedModel.js';
+import { engineOwned } from '../../core/scene/things.js';
+import { neutralMaterial } from '../../render/neutral.js';
+import { markEngineMade } from '../../render/patches.js';
+import { keepPart } from '../../core/base/freeParts.js';
 
 /** A one-triangle glTF as a data URL; texture: an image URL the material references (to provoke a missing reference) */
 function gltfUrl(texture) {
@@ -20,7 +25,7 @@ function gltfUrl(texture) {
 
 /** A headless engine for one scenario (not window.engine); extra: createEngine options such as a custom loading part */
 const make = (key, extra = {}) => createEngine({ canvas: document.createElement('canvas'), headless: true, urlState: false, saveKey: 'load-' + key, ...extra });
-window.threedogLoad = { make, gltfUrl, level };   // level: tests/specs/loading.mjs (a missing level file blocks start)
+window.threedogLoad = { make, gltfUrl, level, protoOf, holdProtos, protoSlots, engineOwned, neutralMaterial, markEngineMade, keepPart, copyLeft, sky, characters, world, content, pickups, protoLease };   // level: tests/specs/loading.mjs (a missing level file blocks start); the rest: tests/specs/resource-lifetime.mjs
 const engine = window.engine = createEngine({ canvas: document.getElementById('view'), ui: { loading: { title: 'Loading test' } }, saveKey: 'test-loading', adaptiveResolution: false });
 engine.assets.manifest({ name: 'page', models: { tri: { url: gltfUrl(), preload: true } } });
 await engine.start();

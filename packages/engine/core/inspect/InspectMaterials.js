@@ -5,16 +5,18 @@
 // metalness, ao, bump, displacement, alpha) are NoColorSpace / linear. A wrong one is listed as an issue, first.
 // Plain three.js equivalent: scene.traverse + material[slot] + texture.colorSpace / texture.image; renderer.info.memory.textures is the count.
 import { isEngineMade, materialPatchSlots } from '../../render/patches.js';
+import { nodeTextures } from './MaterialInfo.js';
 import { textureBytes, mb } from './textureBytes.js';
 import { COLOR_SLOTS, DATA_SLOTS } from '../assets/assetReport.js';
 
 const OTHER_SLOTS = ['lightMap', 'envMap', 'gradientMap', 'matcap'];   // listed, with no one right color space
 const SRGB = 'srgb';
 
-/** Textures of a material: the standard slots, then any texture uniform of a ShaderMaterial */
+/** Textures of a material: the standard slots, the textures inside a node material's graph, then any texture uniform of a ShaderMaterial */
 function texturesOf(m) {
   const out = [];
   for (const k of [...COLOR_SLOTS, ...DATA_SLOTS, ...OTHER_SLOTS]) if (m[k]?.isTexture) out.push([k, m[k]]);
+  for (const [k, t] of nodeTextures(m)) if (!out.some(([, x]) => x === t)) out.push([k, t]);
   for (const [k, u] of Object.entries(m.uniforms || {})) if (u?.value?.isTexture && !out.some(([, t]) => t === u.value)) out.push([`uniform ${k}`, u.value]);
   return out;
 }

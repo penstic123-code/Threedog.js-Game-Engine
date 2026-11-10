@@ -49,7 +49,9 @@ export function addSupport(e, object, { id, safe = true, carry = 'position', inh
     box.union(_b.copy(g.boundingBox).applyMatrix4(_m.multiplyMatrices(inv, o.matrixWorld)));
   });
   if (box.isEmpty()) throw codedError('character-option', `characters.support(object '${id}'): it has no mesh to measure; pass a mesh or a group with meshes`);
-  const entry = { id, object, safe, carry, inherit, box };
+  // r: the box's reach across x / z from the object's origin, for a quick "nowhere near" test (standAt's quick form)
+  const r = Math.max(...[box.min, box.max].flatMap(a => [box.min, box.max].map(b => Math.hypot(a.x, b.z))));
+  const entry = { id, object, safe, carry, inherit, box, r };
   R.list.set(id, entry);
   return { id, remove: () => {
     if (R.list.get(id) !== entry) return;
@@ -58,9 +60,13 @@ export function addSupport(e, object, { id, safe = true, carry = 'position', inh
   } };
 }
 
-/** Height of entry's top under world (x, z), or null when (x, z) is off it */
-function topAt(entry, x, z) {
+/** Height of entry's top under world (x, z), or null when (x, z) is off it. quick: judge "nowhere near" by the matrix as last refreshed first */
+function topAt(entry, x, z, quick) {
   const o = entry.object, b = entry.box;
+  if (quick) {
+    const el = o.matrixWorld.elements, sc = Math.max(Math.hypot(el[0], el[1], el[2]), Math.hypot(el[8], el[9], el[10]));
+    if (Math.hypot(x - el[12], z - el[14]) > entry.r * sc + 1) return null;   // +1 m: it may have moved since the last refresh
+  }
   o.updateWorldMatrix(true, false);   // the game moved it this step; matrixWorld is otherwise only refreshed at render
   _v.set(x, 0, z).applyMatrix4(_inv.copy(o.matrixWorld).invert());
   if (_v.x < b.min.x || _v.x > b.max.x || _v.z < b.min.z || _v.z > b.max.z) return null;
@@ -71,15 +77,18 @@ function topAt(entry, x, z) {
  * @internal What stands at (x, z): { y, on } with on the support that won, or null. With a height y: engine.surface plus every registered support whose
  * top is within `step` above y, higher ones are passed under. Without y (undefined): the highest support top, so a placement on a boat at sea stands on
  * the deck and not on the sea floor. y may be -Infinity beyond terrain({ shape }). The one rule for walking, placing and data-only NPCs: one place, one answer.
+ * out: the object to fill (a per-frame caller allocates nothing); quick: skip supports far from (x, z) by their last refreshed matrix (feet IK, a picture
+ * reader every frame; the movers keep the exact form).
  */
-export function standAt(e, x, z, y, step) {
+export function standAt(e, x, z, y, step, out = { y: 0, on: null }, quick = false) {
   let h = e.surface(x, z, y), on = null;
   const R = REG.get(e);
   if (R?.list.size) for (const en of R.list.values()) {
-    const t = topAt(en, x, z);
+    const t = topAt(en, x, z, quick);
     if (t != null && t > h && (y === undefined || t <= y + step + 1e-3)) { h = t; on = en; }
   }
-  return { y: h, on };
+  out.y = h; out.on = on;
+  return out;
 }
 
 /** @internal Ground height under (x, z) for a character at height y (standAt). Sets the state's `hit` to the support that won (or null) */
@@ -161,7 +170,7 @@ function tellNoFallRule(c) {
   if (c !== e.player || c.root.position.y >= Math.max(e.ground.voidY?.() ?? -Infinity, FALL_Y)) return;
   const point = e.stacks.get('fall');
   if (point.holders().length + point.holders(c.id).length) return;
-  warnOnce(coded('character-option', `the player fell past the void and no rule 'fall' is set, so nothing brings it back. Decide what a fall is: engine.mod('fall', { owner: 'game', set: 'rescue' }) with createPlayer({ fall: { belowY } }) returns it to safeGround, a function is your own rule, and set: false says the game handles it`), 'fall-no-rule');
+  warnOnce(coded('character-option', `the player fell past the void and no rule 'fall' is set, so nothing brings it back. Decide what a fall is: engine.mod('fall', { owner: 'game', set: 'rescue' }) with addPlayer({ fall: { belowY } }) returns it to safeGround, a function is your own rule, and set: false says the game handles it`), 'fall-no-rule');
 }
 
 /** belowY: a height or (character) => boolean. character:fall once per fall, then the rule 'fall' decides: 'rescue' goes back to safeGround, nothing or false leaves it to the game */

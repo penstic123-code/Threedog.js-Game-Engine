@@ -10,7 +10,7 @@
 //   engine.cameraRig.lookAt(position);    // turn toward a point (Vector3 / object / [x, y, z])
 //   engine.setCamera('follow');           // switch back to third person at runtime (mouse lock releases, body shows again); see recipes/21-camera.md
 import * as THREE from 'three';
-import { rigModule, defineRig, YAW_RIG, HIDE_RIG, clickToLock, releaseLock } from './common.js';
+import { rigModule, defineRig, YAW_RIG, HIDE_RIG, clickToLock, releaseLock, inRange } from './common.js';
 import { vec3 } from '../../core/base/math.js';
 import { setFov } from '../../core/scene/view.js';
 
@@ -24,6 +24,7 @@ export class FirstPersonCamera {
   constructor(engine, { height = 1.6, sensitivity = 1, fov = null, headBob = 0.04, bobFrequency = 0.9, hideTarget = true, hideLayer = 30,
     pointerLock = true, yaw = 0, pitch = 0, minPitch = -1.45, maxPitch = 1.45, yawLimits = null, smoothing = 30, invertY = false, swallowLockClick = true } = {}) {
     Object.assign(this, { swallowLockClick, engine, height, sensitivity, headBob, bobFrequency, hideTarget, hideLayer, pointerLock, yaw, pitch, minPitch, maxPitch, yawLimits, smoothing, invertY });
+    inRange(this, 'firstPersonCamera', 'firstPersonCamera()', 'pitch', pitch, ['minPitch', 'maxPitch']);   // update keeps pitch in range from the first frame
     this.target = null;
     this.eye = new THREE.Vector3();
     this._bob = 0; this._bobAmp = 0; this._last = null; this._hidden = [];

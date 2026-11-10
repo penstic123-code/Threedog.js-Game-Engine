@@ -2,7 +2,7 @@
 // and the transform snapshots the per-frame check compares. B is the Batching instance; g a group (one cell + geometry + material + shadow flags);
 // e an entry (one mesh of one placed object). Hidden instances are swap-removed, not zero-scaled (vegetation's way), so batch bounds stay tight.
 import * as THREE from 'three';
-import { copyPatches } from '../../render/patches.js';
+import { cloneMaterial } from '../../render/patches.js';
 import { RESERVED_LAYERS } from '../../render/layers.js';
 import { noRaycast } from '../../render/occlusion.js';
 
@@ -93,7 +93,7 @@ export function localTint(B, m) {
   const t = B.tints.get(m), base = B.orig.get(m) ?? m.material;
   if (!base || Array.isArray(base) || !base.color) return;
   if (t) {
-    if (!B.orig.has(m)) { B.orig.set(m, base); m.material = copyPatches(base, base.clone()); }
+    if (!B.orig.has(m)) { B.orig.set(m, base); m.material = cloneMaterial(base); }
     m.material.color.copy(base.color).multiply(t);
   } else if (B.orig.has(m)) { m.material.dispose(); m.material = base; B.orig.delete(m); }
 }

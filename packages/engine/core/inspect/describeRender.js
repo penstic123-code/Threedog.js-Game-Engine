@@ -11,6 +11,8 @@ import { slotHolders } from '../scene/pictureSlots.js';
 import { isShown } from '../base/util.js';
 import { backendFacts } from '../../render/backend.js';
 import { pixelSizeOn } from '../scene/pixelRatio.js';
+import { autoLowered } from '../scene/adaptive.js';
+import { pictureChecks } from './pictureChecks.js';
 
 const shadowName = v => Object.keys(SHADOW_TYPES).find(k => SHADOW_TYPES[k].three === v) ?? String(v);
 const TONE_NAMES = { [NoToneMapping]: 'none', [LinearToneMapping]: 'linear', [ReinhardToneMapping]: 'reinhard', [CineonToneMapping]: 'cineon',
@@ -19,12 +21,21 @@ const toneName = v => TONE_NAMES[v] ?? String(v);
 /** What a build without the dev server says for every picture value (core/inspect/pictureWriters.js stays out of it) */
 export const NO_WRITERS = 'not tracked: source lines are only known on the dev server (threedog dev or npm run dev); a bundled build has no file:line to give';
 
-/** scene.fog as data @param {any} f */
-const fogOf = f => (!f ? null : f.isFogExp2 ? { type: 'FogExp2', color: hex(f.color), density: f.density } : { type: 'Fog', color: hex(f.color), near: f.near, far: f.far });
+/**
+ * Whether the scene has fog / an environment: the classic field or its TSL node (WebGPU). The one reading, shared with the picture menu,
+ * so a catalog row saying "on" and describe() saying "none" cannot happen for the same scene
+ * @param {any} s scene
+ */
+export const sceneFog = s => s.fog || s.fogNode || null;
+export const sceneEnvironment = s => s.environment || s.environmentNode || null;
+const NODE = { type: 'Node' };   // a TSL node: its value is shader code, not data to print
+
+/** scene.fog as data @param {any} s scene */
+const fogOf = s => { const f = sceneFog(s); return !f ? null : !s.fog ? NODE : f.isFogExp2 ? { type: 'FogExp2', color: hex(f.color), density: f.density } : { type: 'Fog', color: hex(f.color), near: f.near, far: f.far }; };
 /** scene.background as data: a Color by value, a texture by kind @param {any} s */
 function backgroundOf(s) {
   const b = s.background;
-  if (!b) return null;
+  if (!b) return s.backgroundNode ? NODE : null;
   return b.isColor ? { type: 'Color', color: hex(b) } : { type: b.isCubeTexture ? 'CubeTexture' : 'Texture', name: b.name || null, intensity: s.backgroundIntensity };
 }
 /** Whether three draws with this light: every parent visible and on a layer the camera sees (the test three's renderer makes) */
@@ -39,7 +50,7 @@ const lightOf = (l, cam) => ({ type: l.type, name: l.name, color: hex(l.color), 
 export function describePicture(e) {
   const r = e.renderer, s = e.scene, lights = /** @type {any[]} */ ([]);
   s.traverse(o => { if (/** @type {any} */ (o).isLight && !(/** @type {any} */ (o).isLightProbeGrid)) lights.push(lightOf(o, e.camera)); });   // a probe grid has its own rows (probes)
-  return { toneMapping: toneName(r.toneMapping), exposure: r.toneMappingExposure, fog: fogOf(s.fog), environment: { present: !!s.environment, intensity: s.environmentIntensity },
+  return { toneMapping: toneName(r.toneMapping), exposure: r.toneMappingExposure, fog: fogOf(s), environment: { present: !!sceneEnvironment(s), intensity: s.environmentIntensity },
     background: backgroundOf(s), lights, shadows: { enabled: r.shadowMap.enabled, type: shadowName(r.shadowMap.type) }, slots: slotHolders(e), writers: e._picture?.list() ?? { tracked: false, note: NO_WRITERS } };
 }
 
@@ -67,7 +78,7 @@ function engineDefaults(e) {
   const r = e.renderer, s = e.scene, bg = s.background, rows = [];
   if (bg && bg === e.baseBackground && bg.getHex() === e.baseBackgroundHex) rows.push({ what: 'scene.background', value: `#${bg.getHexString()}`, off: 'scene.background = your color or texture' });
   for (const [name, l] of Object.entries(e.lights ?? {})) if (l.parent) rows.push({ what: `lights.${name}`, value: `${l.type} ${rv(l.intensity)}`, off: 'createEngine({ lights: false })' });
-  if (r.shadowMap.enabled) rows.push({ what: 'renderer.shadowMap', value: shadowName(r.shadowMap.type), off: 'renderer.shadowMap.enabled = false' });
+  if (r.shadowMap.enabled) rows.push({ what: 'renderer.shadowMap', value: shadowName(r.shadowMap.type), off: 'engine.shadows.enabled = false' });
   // render/postWebGL.js direct(): only once the game has picked a tone curve, so a Color background agrees with the effect chain's OutputPass
   if (r.toneMapping !== NoToneMapping && (bg?.isColor || bg == null) && !e.post?.active) rows.push({ what: 'background tone', value: 'drawn as a 1x1 tone-mapped texture during the render; scene.background itself is not changed', off: 'renderer.toneMapping = THREE.NoToneMapping' });
   return rows;
@@ -104,30 +115,28 @@ export function describeRender(e) {
     `renderer: ${tone.value}${by(tone)} exposure ${exposure.value} shadows ${shadows.enabled ? shadows.type : 'off'}${b.owned ? '' : ' [game-supplied renderer]'} output ${r.outputColorSpace}${srgb}`,
     `post: ${post.map(x => `${x.name}${x.held ? ` held off: ${x.held}` : x.on ? '' : ' off'}${Object.keys(x.params).length ? `{${kv(x.params)}}` : ''} (${x.writer})`).join(', ') || 'none'}${antialias.samples ? ` + MSAA x${antialias.samples}` : antialias.replacedBy ? ` + ${antialias.replacedBy} in place of MSAA` : ''}`,
     `lights: ${lights.map(l => `${l.name} ${l.type} ${l.intensity}${l.writer ? ` (${l.writer}${l.at ? ' ' + l.at : ''})` : ''}`).join(', ')}`,
-    `scene: background ${sceneWord(backgroundOf(e.scene))} fog ${sceneWord(fogOf(e.scene.fog))} environment ${e.scene.environment ? rv(e.scene.environmentIntensity) : 'none'}`,
+    `scene: background ${sceneWord(backgroundOf(e.scene))} fog ${sceneWord(fogOf(e.scene))} environment ${sceneEnvironment(e.scene) ? rv(e.scene.environmentIntensity) : 'none'}`,
     `engine defaults on the picture: ${defaults.map(d => d.what).join(', ') || 'none'}`,
   ].join('\n');
-  // probe sets (render/probes.js): how many, how dense, who made them, what they miss and what doubles them
+  // probe sets (render/probes.js): how many, how dense, who made them, what they miss (light counted twice is a picture check, below)
   const probes = [...(e._probeSets ?? [])].map(s => s.info());
   if (probes.length) text += `
 probes: ${probes.map(p => `${p.count} (${p.counts.join('x')}, step ${p.step.join('/')}) from ${p.source} by ${p.owner}`).join('; ')}`
     + (probes[0].outside.count ? `
-  outside the probe grid (no probe light): ${probes[0].outside.count} lit object(s), ${probes[0].outside.names.join(', ')}` : '')
-    + (probes[0].doubled.length ? `
-  counted twice with the probes: ${probes[0].doubled.join(', ')}` : '');
+  outside the probe grid (no probe light): ${probes[0].outside.count} lit object(s), ${probes[0].outside.names.join(', ')}` : '');
   const dv0 = e.debug?.viewState?.(), dv = dv0 && dv0.mode !== 'off' ? dv0 : null;
   if (dv) text = `DEBUG VIEW "${dv.mode}" (by ${dv.owner}) is ON: ${dv.what}. This is NOT the real picture; the debug view 'off' restores it.
 ` + text;
   // render scale: the canvas resolution against the display. auto: the adaptive resolution lowered it at some point (it raises it back when frames are fast)
   const dpr = (typeof devicePixelRatio === 'number' && devicePixelRatio) || 1, cur = r.getPixelRatio(), ad = e.adaptive;
-  const scale = { current: Math.round(cur * 100) / 100, devicePixelRatio: dpr, upscaled: cur < dpr - 0.01 && !pixelSizeOn(e), pixelSize: e._pixelSize, autoLowered: !!ad?.lowered && cur < (ad.max ?? cur) - 0.01,
+  const scale = { current: Math.round(cur * 100) / 100, devicePixelRatio: dpr, upscaled: cur < dpr - 0.01 && !pixelSizeOn(e), pixelSize: e._pixelSize, autoLowered: autoLowered(e),
     adaptive: !!ad?.on, floor: ad?.min ?? null, max: ad?.max ?? null };
   text += `
 render scale: ${scale.current} of device pixel ratio ${dpr}${scale.pixelSize ? ` (pixelSize ${scale.pixelSize}: one art pixel is ${scale.pixelSize} screen pixels)` : ''}${scale.upscaled ? ' (picture is upscaled, softer than the screen)' : ''}${scale.autoLowered ? ` (auto-lowered by adaptive resolution, floor ${scale.floor}; adaptiveResolution: false turns it off)` : ''}`;
   // the lightmap (render/lightmap.js): what is baked, and what no longer matches the bake
   const lightmap = e._lightmap?.info() ?? null;
   if (lightmap) text += `\nlightmap: ${lightmap.meshes} mesh(es), ${lightmap.size} map from ${lightmap.file}`
-    + ['skipped', 'missing', 'moved', 'doubled', 'shared'].map(k => (lightmap[k].length ? `, ${k}: ${lightmap[k].slice(0, 3).map(x => x.name ?? x).join(', ')}` : '')).join('');
+    + ['skipped', 'missing', 'moved', 'shared'].map(k => (lightmap[k].length ? `, ${k}: ${lightmap[k].slice(0, 3).map(x => x.name ?? x).join(', ')}` : '')).join('');
   // occlusion culling (render/occlusion.js): what it skipped this frame, so a game can see whether it pays
   const occlusion = e.occlusion?.enabled ? e.occlusion.stats : null;
   if (occlusion) text += `\nocclusion: ${occlusion.hidden} of ${occlusion.watched} big things hidden, ${occlusion.trianglesSkipped} triangles skipped`;
@@ -135,7 +144,10 @@ render scale: ${scale.current} of device pixel ratio ${dpr}${scale.pixelSize ? `
   let bundles = null;
   e.scene.traverse(o => { if (o.isBundleGroup) { bundles ??= { groups: 0, meshes: 0, replayed: !!r.backend?.beginBundle }; bundles.groups++; o.traverse(c => { if (c.isMesh) bundles.meshes++; }); } });
   if (bundles) text += `\nrender bundles: ${bundles.groups} BundleGroup(s), ${bundles.meshes} mesh(es), ${bundles.replayed ? 'replayed as recorded: after changing what is inside, set group.needsUpdate = true' : 'plain groups on this backend, no gain (only WebGPU has bundles)'}`;
-  return { debugView: dv, scale, toneMapping: tone, exposure, shadows, post, antialias, lights, defaults, probes, lightmap, occlusion, bundles, text };
+  // settings wrong together whatever the game wants (core/inspect/pictureChecks.js): one line each, last, so the fix is the last thing read
+  const checks = pictureChecks(e);
+  for (const c of checks) text += `\npicture ${c.kind === 'mistake' ? 'check' : 'note'} ${c.id}: ${c.text}`;
+  return { debugView: dv, scale, toneMapping: tone, exposure, shadows, post, antialias, lights, defaults, probes, lightmap, occlusion, bundles, checks, text };
 }
 
 /**

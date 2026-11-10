@@ -80,7 +80,9 @@ const CASES = {
   detailTriplanar: both({ detail: { noise: 'paper', projection: 'triplanar', scale: 2, strength: 0.9, mode: 'add', direction: 30, stretch: 2 } }),
   detailScreen: both({ detail: { noise: 'dabs', projection: 'screen', scale: 6, strength: 0.8, mode: 'mix', tint: 0xffd0a0 } }),
   detailTexture: both({ detail: { texture: checker(), scale: 1, strength: 0.7 } }),
-  detailBump: { ...both({ detail: { noise: 'stroke', scale: 1.2, strength: 0, normal: 3, roughness: 0.9 } }), type: 'standard' },
+  // bump at a scale where a stroke spans many pixels: finer, coarse vs fine screen derivatives (backend-chosen in WGSL) part the normals
+  // (real WebGPU at scale 1.2: 2.7% of pixels); tests/fx compares the bump function itself by normal angle
+  detailBump: { ...both({ detail: { noise: 'stroke', scale: 0.3, strength: 0, normal: 3, roughness: 0.9 } }), type: 'standard' },
   // lighting: wrap (direct light), shadowTint (ambient by the sun's shadow), rim (edge light); each alone, then all three
   lightWrap: { ...OFF, patches: () => [lightingPatch({ wrap: 0.8 })] },
   lightTint: { ...OFF, patches: () => [lightingPatch({ shadowTint: { color: 0x3050ff, strength: 0.9, soft: 0.4 } })] },

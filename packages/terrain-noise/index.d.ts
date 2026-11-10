@@ -2,7 +2,7 @@
 // (TypeScript does not read JS inside node_modules, so without this the import would be untyped).
 import type { TerrainNoise } from 'threedog';
 
-/** Biome condition: all optional; any: [cond, cond] matches if either holds */
+/** Biome condition: all optional; any: [cond, cond] must also hold (at least one of them) together with the rule's other conditions */
 export interface BiomeCondition {
   minHeight?: number; maxHeight?: number;
   /** Max height above the water surface */

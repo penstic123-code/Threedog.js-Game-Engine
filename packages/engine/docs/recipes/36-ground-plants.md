@@ -1,11 +1,16 @@
 # Ground color and plants
 
+> **Covers:** ground colors by height and slope, plants and their wind.
+> **Use when:** coloring terrain or covering it with plants.
+> **Shortest:** `terrain({ colors: { grass: 0x6a8a3a } })`.
+> **Sections:** Ground color terrain { · Plants and wind
+
 ```js
 import { terrainPreset } from '@threedog/terrain-noise';
 engine.use(terrain({ ...terrainPreset(), colors: { grass: 0x6a8a3a, rock: 0x777066 }, biomeColors: { meadow: ['grass'], cliff: ['rock'] } }));
-engine.terrain.material.flatShading = true;                                        // the ground's picture is a plain three.js material
-engine.terrain.recolor({ colors: { grass: 0xa8a050, rock: 0x777066 } });           // what the workers baked in, changed at run time
-engine.terrain.material = applyEffects(new THREE.MeshToonMaterial({ vertexColors: true }), { patches: engine.terrain.patches });   // your own, effects kept
+engine.terrain.material.flatShading = true;  // the ground's picture is a plain three.js material
+engine.terrain.recolor({ colors: { grass: 0xa8a050, rock: 0x777066 } });  // what the workers baked in, changed at run time
+engine.terrain.material = applyEffects(new THREE.MeshToonMaterial({ vertexColors: true }), { patches: engine.terrain.patches });  // your own, effects kept
 engine.vegetation.material = applyEffects(new THREE.MeshToonMaterial({ vertexColors: true }), { patches: engine.vegetation.patches });
 ```
 
@@ -19,9 +24,9 @@ color is neutral gray. The `variation` defaults are shown (plain data, so it tra
 ```js fragment
 terrain({ colors: { ... }, biomeColors: { ... },
   variation: {
-    blend:   { size: 33, strength: 1 },          // wavelength in m of the two-color noise; strength > 1 = harder contrast, < 1 = flatter
-    jitter:  { size: 0.33, min: 0.92, range: 0.12 },   // grain cell in m; darkest multiplier; how much brighter it can get (0 range = no grain)
-    patches: { size: 90, strength: 0.15, levels: 0, tint: 0xb59a5a },   // optional (example values): a second, large layer of color blocks
+    blend:   { size: 33, strength: 1 },  // wavelength in m of the two-color noise; strength > 1 = harder contrast, < 1 = flatter
+    jitter:  { size: 0.33, min: 0.92, range: 0.12 },  // grain cell in m; darkest multiplier; how much brighter it can get (0 range = no grain)
+    patches: { size: 90, strength: 0.15, levels: 0, tint: 0xb59a5a },  // optional (example values): a second, large layer of color blocks
   } })
 ```
 `patches` is off unless given. It is a noise much larger than `blend`; `levels: 4` snaps it to 4 flat steps (hard-edged color blocks instead of a
@@ -31,8 +36,8 @@ interpolate across a chunk cell (4 m at the default resolution), so blocks small
 
 ### Changing it at run time: `engine.terrain.recolor`
 ```js fragment
-engine.terrain.recolor({ colors, biomeColors, steep, variation, shading, normals });   // every chunk is rebuilt; edits stay, collision does not change
-engine.terrain.recolor({ detail: { noise: 'paper', strength: 0.2 } });                 // only the material: no chunk is rebuilt
+engine.terrain.recolor({ colors, biomeColors, steep, variation, shading, normals });  // every chunk is rebuilt; edits stay, collision does not change
+engine.terrain.recolor({ detail: { noise: 'paper', strength: 0.2 } });  // only the material: no chunk is rebuilt
 ```
 Each value is given whole, not merged, and `null` takes it out (`shading: null` goes back to what `terrain({...})` was given). Keys left out stay.
 `recolor` throws under a picture that replaced `'terrain-draw'`, which draws the ground its own way.
@@ -48,7 +53,7 @@ Chunk geometry has `position`, `normal`, `color` and `uv = world xz / chunk size
 UVs (steep sides stretch a top-down map), project from the world position in a patch instead (`needs.patches: ['world']` gives `vThreedogWorld`):
 ```js fragment
 engine.terrain.material = applyEffects(new THREE.MeshLambertMaterial({ vertexColors: true }), { clouds: false, patches: [{
-  name: 'triplanar', needs: { patches: ['world'] }, uniforms: { uTex: { value: groundTexture }, uTexScale: { value: 0.1 } },   // groundTexture: repeat wrapping
+  name: 'triplanar', needs: { patches: ['world'] }, uniforms: { uTex: { value: groundTexture }, uTexScale: { value: 0.1 } },  // groundTexture: repeat wrapping
   glsl: { fragment: { pars: 'uniform sampler2D uTex; uniform float uTexScale;',
     color_fragment: `vec3 n = abs(normalize(cross(dFdx(vThreedogWorld), dFdy(vThreedogWorld)))); n /= n.x + n.y + n.z;
       diffuseColor.rgb *= texture2D(uTex, vThreedogWorld.zy * uTexScale).rgb * n.x + texture2D(uTex, vThreedogWorld.xz * uTexScale).rgb * n.y
@@ -64,15 +69,14 @@ The lighter alternative, with no material of your own: `terrain({ detail })`, or
 `vegetation.define` works at any time after `engine.use`, before or after `content.load` and `engine.start`. A species named by a model (`model: 'oak'`) appears when its promise settles, so `vegetation.list()` right after
 that call does not show it yet. To keep plants off a road or a yard, give the species a `densityMap: (x, z) => 0..1`, or a ground type of its own that the species' `biomes` leave out. Per-species options are in `../api/vegetation.md`; `castShadow` defaults to not `nearOnly`.
 ```js fragment
-engine.vegetation.define('oak', { model: await engine.assets.model('oak'), wind: 0.02 });            // per species: its own material, wind, fade
+engine.vegetation.define('oak', { model: await engine.assets.model('oak'), wind: 0.02 });  // per species: its own material, wind, fade
 engine.vegetation.define('fern', { geometry, material: new THREE.MeshToonMaterial({ vertexColors: true }), wind: 0.08 });
-engine.vegetation.material = applyEffects(new THREE.MeshToonMaterial({ vertexColors: true }), { patches: engine.vegetation.patches });   // the shared default
-engine.uniforms.uWindAmp.value = 0.5; engine.uniforms.uWindFreq.value = 2;                            // how hard and how fast: plain signals, live (uWindAmp 0 = plants stand still)
+engine.vegetation.material = applyEffects(new THREE.MeshToonMaterial({ vertexColors: true }), { patches: engine.vegetation.patches });  // the shared default
+engine.uniforms.uWindAmp.value = 0.5; engine.uniforms.uWindFreq.value = 2;  // how hard and how fast: plain signals, live (uWindAmp 0 = plants stand still)
 ```
-`engine.vegetation.material` is what every species with no material or model of its own draws. Set it and it is drawn as given, on plants already
-planted too: nothing is added behind it, so hand it `engine.vegetation.patches` (season tint, sway at one amplitude, the `color()` code) to keep those.
-`null` gives the neutral default back. A species' own amplitude and near fade need a material of its own: `define(name, { material })` adds wind, cloud
-shadows, season tint and the fade to it unless `effects: false`. Each species' live material is `engine.vegetationDraw.kind(name).material`.
+`engine.vegetation.material` (species with no material or model of their own) is drawn as given, planted ones too: hand it `engine.vegetation.patches`
+to keep the season tint, sway and `color()` code; `null` restores the default. A species' own amplitude and near fade need `define(name, { material })`,
+which gets wind, cloud shadows, season tint and the fade unless `effects: false`; its live material is `engine.vegetationDraw.kind(name).material`.
 
 The placement, rings and instancing are mechanism and stay (the whole picture is replaceable: recipe 28 section 6). The picture has three entries:
 - **Sway shape**: built in, two sines with a phase from each plant's origin, weighted by height, leaning with wind strength. `engine.vegetation.sway(glsl)` replaces it (below).
@@ -80,7 +84,7 @@ The placement, rings and instancing are mechanism and stay (the whole picture is
 - **Season tint**: `engine.sky.seasonTints = { mode: 'multiply' | 'mix', strength, autumn: { foliage: 0xffb070, ground: 0xc8a060 } }`, plain data read every frame, blended to the next season over the last fifth of a season. `'multiply'` (default) multiplies the surface; `'mix'` moves it `strength` (default 0.5) of the way to the color, so orange on green leaves stays orange instead of turning muddy.
 
 ```js
-engine.vegetation.sway({ uniforms: { uSteps: 3 },    // stepped sway: plants snap between 3 poses instead of a smooth sine
+engine.vegetation.sway({ uniforms: { uSteps: 3 },  // stepped sway: plants snap between 3 poses instead of a smooth sine
   glsl: `void threedogWind(inout vec3 transformed, vec3 ip, vec3 position){
     float s = floor(sin(uTime * uWindFreq + ip.x * 0.3 + ip.z * 0.2) * uSteps) / uSteps;
     transformed.x += s * max(position.y, 0.0) * THREEDOG_WIND_AMP * uWind;
@@ -92,11 +96,13 @@ engine.vegetation.sway({ uniforms: { uSteps: 3 },    // stepped sway: plants sna
 `sway(null)` gives the built-in sway back. A shared material the game set keeps what it was built with: apply the new `engine.vegetation.patches` to it. The same object works in code:
 `applyEffects(mat, { wind: { amplitude: 0.03, glsl, uniforms } })`.
 
-Two entries, two scopes: `sway()` is the default shape for all plants, and `vegetation.define(name, { wind: { amplitude, glsl, tsl, uniforms } })` is one species' own
-sway. When both are set the species' own wins, and `sway()` and `sway(null)` leave it as it is. Use one `sway()` for the world and a `wind` object for the plant that moves differently.
+`sway()` is the world's default shape; one species' own `define(name, { wind: { amplitude, glsl, tsl, uniforms } })` wins over it, and `sway()` / `sway(null)` leave that one as it is.
 
-The sway function is not where grass time goes (vertex count and fill are): reduce grass cost with `rule.perChunk`, `maxRing` and `nearOnly`, not the wind.
-Grass has no billboard or blade-shape setting: give `vegetation.define` your own `geometry` or `model`.
+Grass costs vertex count and fill, not sway: lower `rule.perChunk` or `maxRing`, or use `nearOnly`.
+Grass has no blade-shape setting: give `vegetation.define` your own `geometry` or `model`.
+
+### Far trees as cards: `impostor`
+`define('pine', { model, impostor: true })` (or `{ views, size }`, default 8 x 128 px), instead of `lodGeometry`: beyond `lodRing` each plant is a camera-facing card baked from its own model and materials, lit through baked normals, one draw per species. No shadow or sway there. WebGPU only (WebGL draws the mesh and warns).
 
 ### Near-only plants fade out by distance
 Any `nearOnly` species (grass, flowers, pebbles, twigs, snow tufts, debris ...) is placed per chunk ring

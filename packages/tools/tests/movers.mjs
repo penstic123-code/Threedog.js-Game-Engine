@@ -6,6 +6,7 @@
 //   - falling below belowY: character:fall once, back on safe ground
 // The "no way around it" check: move() takes exactly (x, z, run, dt), so speed only changes through engine.mod('move.speed'), and the jump state
 // lives in the mover (no _coyote / _jumpBuffer field on the character to poke).
+import { fakeSaves } from './fixtures/fake-saves.mjs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { ENGINE } from '../paths.mjs';
@@ -26,7 +27,7 @@ export const name = 'movers: move.* stats via engine.mod, jump API, moving platf
 function fake({ ground = () => 0 } = {}) {
   const events = [], on = {};
   const e = Object.defineProperties({ elapsed: 0, disposed: false, halted: false, _loop() { e.loops = (e.loops ?? 0) + 1; }, page: { _sync() {} }, style: {},
-    movement: { radius: 0.3, stepHeight: 0.4, slopeRatio: 1 }, saves: { register() {} }, ops: { allow: f => f() }, _poses: { add() {}, remove() {} }, clock: { rate: 1, _advance() {} }, world: { set() {}, recs: {}, get(id) { return this.recs[id] ??= {}; }, move() {} },
+    movement: { radius: 0.3, stepHeight: 0.4, slopeRatio: 1 }, saves: fakeSaves(), ops: { allow: f => f() }, _poses: { add: () => ({ remove() {} }) }, clock: { rate: 1, _advance() {} }, world: { set() {}, recs: {}, get(id) { return this.recs[id] ??= {}; }, move() {} },
     surface: (x, z) => ground(x, z), waterAt: () => -Infinity, slope: () => 0, groundType: () => 'grass',
     events: { emit: (n, d) => { events.push([n, d]); for (const f of on[n] ?? []) f(d); }, on: (n, f) => { (on[n] ??= []).push(f); return { remove() {} }; } },
   }, Object.getOwnPropertyDescriptors(holdMethods));

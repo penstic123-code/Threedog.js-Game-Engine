@@ -52,7 +52,7 @@ export const specs = [
         g.add(b); b.name = 'spin';
         g.animations = [new T.AnimationClip('tumble', 1, [new T.NumberKeyframeTrack('spin.rotation[y]', [0, 1], [0, 3])])];
         e.haltLoop();
-        const c = e.characters.createPlayer({ ...presets.player.thirdPerson, spawn: [0, 0, 0], model: g, animation: { states: { idle: { clip: 'tumble' } } } });
+        const c = e.characters.addPlayer({ ...presets.player.thirdPerson, spawn: [0, 0, 0], model: g, animation: { states: { idle: { clip: 'tumble' } } } });
         for (let i = 0; i < 30; i++) e.step(1 / 60);
         o.has = !!c.anim; o.rot = c.root.getObjectByName('spin')?.rotation.y ?? null;
         return o;
@@ -149,7 +149,7 @@ export const specs = [
     },
   },
   {
-    ...base, name: 'shapes native objects: a scene.add mesh and own camera are picked, shadowed, posted and freed',
+    ...base, name: 'shapes native objects: a scene.add mesh and own camera are picked, shadowed, posted, and left to the game to free',
     url: PAGE + 'bare',
     async run({ check, ev }) {
       check('starts', await ev(boot));
@@ -177,7 +177,8 @@ export const specs = [
       check('a registered mesh picks', r.pickRegistered, JSON.stringify(r));
       check('its shadow falls through the engine shadow map', r.shadowed[0] < r.open[0] - 40, JSON.stringify(r));
       check('post runs over it, through the own camera', r.posted[0] < r.corner[0] - 5, JSON.stringify(r));
-      check('dispose frees it', r.freed === 2, r.freed);
+      // whoever made a resource frees it (docs/plans/2026-11-09-resource-lifetime.md, design 6.2): engine.dispose() lets go of the game's mesh and frees none of it
+      check('dispose leaves its geometry and material to the game', r.freed === 0, String(r.freed));
     },
   },
   // the game's own renderer is the one route to a transparent canvas (recipes/50-own-renderer.md): both backends, with and without a post effect

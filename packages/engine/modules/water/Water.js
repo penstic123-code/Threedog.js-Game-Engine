@@ -20,6 +20,7 @@ import { readParams, keysSchema } from '../../core/base/params.js';
 import { waterShader, wavesPatch, surfacePatch } from './surface.js';
 import { codedError } from '../../core/base/errorHints.js';
 import { glslFloat, FRESNEL_POWER } from '../../render/fxNumbers.js';
+import { fogLook } from '../../render/fogLook.js';
 import { needMaterial } from '../../core/base/validate.js';
 
 const GREY = new THREE.Color(0xcccccc);
@@ -28,7 +29,8 @@ const GREY = new THREE.Color(0xcccccc);
 /** @import { WaterBody, WaterOptions, WaterShaderOptions } from '../../types/world' */
 // Options accepted by water(): the structural choices only
 const WATER_OPTIONS = ['sea', 'level', 'flat', 'size', 'segments'];
-const WATER_PARAMS = keysSchema(WATER_OPTIONS);
+// size / segments divide each other (cell) and the sea snap: zero or non-finite would make NaN coordinates (size is meters, so a sub-meter plane is valid: > 0)
+const WATER_PARAMS = keysSchema(WATER_OPTIONS, {}, { size: { type: 'number', min: Number.MIN_VALUE, optional: true }, segments: { type: 'int', min: 1, optional: true } });
 const SHADER_PARAMS = keysSchema(['wave', 'surface', 'depthColor', 'foam', 'uniforms']);
 const NORMAL_PARAMS = { scale: { type: 'number', min: 0, optional: true, desc: 'normal map strength' }, repeat: { type: 'number', min: 0, optional: true, desc: 'tiles per meter' },
   speed: { type: 'position', optional: true, desc: 'scroll [x, z] per second' } };
@@ -163,9 +165,10 @@ export class Water {
   /** Scale a mesh's UVs to size * repeat (the normal map tiles in meters); a no-op without a normal map or when already at that factor @internal */
   _tile(mesh) {
     const u = this._uv.get(mesh); if (!this.normalTexture || !u) return;
-    const f = u.size * this._normal.repeat, k = f / u.f; if (k === 1) return;
-    const uv = mesh.geometry.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * k, uv.getY(i) * k);
-    uv.needsUpdate = true; u.f = f;
+    const f = u.sx * this._normal.repeat, g = u.sz * this._normal.repeat; if (f === u.f && g === u.g) return;
+    // always from the UVs the mesh was made with: scaling the current ones by f / u.f would divide by zero after repeat 0 and lose them for good
+    const uv = mesh.geometry.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, u.base[i * 2] * f, u.base[i * 2 + 1] * g);
+    uv.needsUpdate = true; u.f = f; u.g = g;
   }
   /** The patches and uniforms for what shader() was given @internal */
   _build(given) {
@@ -184,11 +187,11 @@ export class Water {
     return { patches: surface ? [waves, surface, fresnel] : [waves, fresnel], uniforms: { ...waves.uniforms, ...surface?.uniforms, uFresnel } };
   }
   /** What grazing angles reflect: the fog color; with no fog the sky's horizon, because a fixed gray glows on dark water at night; with no sky a neutral gray @internal */
-  _reflects() { const e = this.engine; return e.scene.fog?.color ?? (e.sky ? e.uniforms.uSkyHorizon.value : GREY); }
+  _reflects() { const e = this.engine; return fogLook(e.scene, e.renderer)?.color ?? (e.sky ? e.uniforms.uSkyHorizon.value : GREY); }
   /** @internal */
-  _prep(mesh, size) {
+  _prep(mesh, sx, sz = sx) {
     mesh.receiveShadow = true; mesh.renderOrder = 1;
-    this._uv.set(mesh, { size, f: 1 }); this._tile(mesh);
+    this._uv.set(mesh, { sx, sz, f: 1, g: 1, base: Float32Array.from(mesh.geometry.attributes.uv.array) }); this._tile(mesh);
   }
   /** @internal */
   _addBody(b) {
@@ -197,7 +200,7 @@ export class Water {
     const geo = b.radius ? new THREE.CircleGeometry(b.radius, Math.max(16, seg * 2)).rotateX(-Math.PI / 2) : new THREE.PlaneGeometry(b.hw * 2, b.hd * 2, seg, seg).rotateX(-Math.PI / 2);
     const m = new THREE.Mesh(geo, this._material);
     m.position.set(b.x, b.level - 0.1, b.z);
-    this._prep(m, b.radius ? b.radius * 2 : Math.max(b.hw, b.hd) * 2);
+    this._prep(m, b.radius ? b.radius * 2 : b.hw * 2, b.radius ? b.radius * 2 : b.hd * 2);   // a rectangle tiles per meter on each axis
     this.engine.add(m, { owner: 'engine:water' });
     this.bodies.set(b, m);
   }

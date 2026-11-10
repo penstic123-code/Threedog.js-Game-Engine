@@ -2,7 +2,7 @@
 // Why a unit test: the copy is only useful if the copied files run where they land. A relative import that still points at the old layout, or a texture
 // left behind, breaks the game silently at load time; and overwriting a file the game already edited would destroy its work.
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { listArt, copyArt, exportsOf } from '../art.mjs';
 
@@ -71,5 +71,26 @@ export async function run({ check }) {
     let err = '';
     try { copyArt('../old-game', ['nothing-here'], { cwd: now }); } catch (e) { err = e.message; }
     check('an unknown name is an error that names art list', /art list/.test(err), err);
+    // a dependency far above the source folder must not be written outside the destination project
+    const deep = join(tmp, 'a', 'b', 'src-game'), dst = join(tmp, 'dst-game');
+    put(join(deep, 'package.json'), '{"name":"src-game"}');
+    put(join(deep, 'art', 'deep.js'), "import { o } from '../../../../outside.js';\nexport function deepArt() { return o; }\n");
+    put(join(tmp, 'outside.js'), 'export const o = 1;\n');
+    put(join(dst, 'package.json'), '{"name":"dst-game"}');
+    const esc = copyArt(deep, ['deepArt'], { cwd: dst });
+    check('[guard] a dependency above the source is remapped inside the destination, never outside the project',
+      esc.writes.every(w => w.to.startsWith(dst + sep)) && existsSync(join(dst, 'art', 'shared', 'up', 'up', 'up', 'outside.js')), JSON.stringify(esc.writes.map(w => w.to)));
+    // two outside files at different levels stay apart (one 'up' folder per level), and a real clash is an error, never a silent overwrite
+    put(join(deep, 'art', 'two.js'), "import { s1 } from '../../shared/x.js';\nimport { s2 } from '../../../shared/x.js';\nexport function twoArt() { return [s1, s2]; }\n");
+    put(join(tmp, 'a', 'b', 'shared', 'x.js'), 'export const s1 = 1;\n');
+    put(join(tmp, 'a', 'shared', 'x.js'), 'export const s2 = 2;\n');
+    const two = copyArt(deep, ['twoArt'], { cwd: dst, dry: true });
+    check('[guard] same file name one level apart lands on two different targets', new Set(two.writes.map(w => w.to)).size === two.writes.length && two.writes.length === 3, JSON.stringify(two.writes.map(w => w.to)));
+    put(join(deep, 'art', 'shared', 'y.js'), 'export const y = 1;\n');
+    put(join(deep, 'y.js'), 'export const y = 2;\n');
+    put(join(deep, 'art', 'clash.js'), "import { y } from './shared/y.js';\nimport { y as z } from '../y.js';\nexport function clashArt() { return [y, z]; }\n");
+    let clash = '';
+    try { copyArt(deep, ['clashArt'], { cwd: dst, dry: true }); } catch (e) { clash = e.message; }
+    check('two sources for one target is an error naming both', /y\.js.*y\.js.*would both be copied/.test(clash), clash);
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 }

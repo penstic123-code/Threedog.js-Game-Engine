@@ -3,6 +3,7 @@
 //   - frozen: no channel moves and no `for` runs down; a plain onFixed dt is always 1 / 60
 //   - bullet time with 1.2 s left survives save -> load with 1.2 s left; skip across the end points ends them in the same order as stepping
 // The "no way around it" check: clock.rate has no setter (engine.mod('clock.rate') is the one way); writing clock.now warns once.
+import { fakeSaves } from './fixtures/fake-saves.mjs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { ENGINE } from '../paths.mjs';
@@ -26,7 +27,7 @@ function fake() {
   const parts = {}, events = [];
   const e = Object.defineProperties({ movement: { stepHeight: 0.45 }, get tick() { return this.time._tick; }, ready: false, _hookErrors: new Set(), _fixed: [], _fixedLate: [], _hooks: { fixed: [], skip: [] }, disposed: false, _loop() {},
     uniforms: { uTime: { value: 0 } }, input: { beginFixed() {}, endFixed() {}, endFrame() {} },
-    saves: { register: (k, p) => { parts[k] = p; } },
+    saves: fakeSaves((k, p) => { parts[k] = p; }),
     events: { emit: (n, d) => events.push([n, d]), on: () => ({ remove() {} }) },
     ops: { defs: new Map(), define: (n, d) => { e.ops.defs.set(n, d); if (n === 'time.skip') e._skipOp = d; } } }, { ...Object.getOwnPropertyDescriptors(loopMethods), ...Object.getOwnPropertyDescriptors(holdMethods) });   // descriptors: spreading holdMethods itself would run its getters
   e.stacks = new Stacks(e); e.stacks._hook(); e.mod = (n, o) => e.stacks.mod(n, o);

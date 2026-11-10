@@ -56,7 +56,7 @@ export const specs = [
           const id = im.userData.plants.ids[0];
           engine.vegetation.removeInstance('artMulti', c.cx, c.cz, id);
           const m = im.instanceMatrix.array.slice(0, 16);
-          return { draws: Array.isArray(im.material) && im.material.length, hidden: m.every(v => v === 0), depth: !!im.customDepthMaterial?.isMeshDepthMaterial };
+          return { draws: Array.isArray(im.material) && im.material.length, hidden: m.slice(0, 12).every(v => v === 0) && m[15] === 1, depth: !!im.customDepthMaterial?.isMeshDepthMaterial };
         }
         return null;
       });

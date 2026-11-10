@@ -143,6 +143,24 @@ window.occlusionOutline = async () => {
   engine.occlusion.enabled = false; line.remove();
   return out;
 };
+// cascades built while culling hides things (a shadow setting or tier change does this): every fresh cascade light's camera must see the hidden layer within two frames,
+// not at the next timed walk (LIGHT_WALK, ~1 s), or the hidden casters' shadows vanish meanwhile. Frames counted up to 70, past one timed walk
+window.occlusionCascades = async () => {
+  place(0);
+  engine.occlusion.enabled = true;
+  for (let i = 0; i < 40 && engine.occlusion.stats.hidden < 21; i++) await tick();
+  const own = engine.lights?.sun, casts = own?.castShadow; if (own) own.castShadow = false;   // one shadow-casting directional light: cascades take the page's sun
+  const hidden = engine.occlusion.stats.hidden, set = engine.shadows.cascades(sun, { count: 2, maxFar: 30, low: { count: 2 } });   // low: the headless tier would draw one map
+  const cams = () => { const out = []; engine.scene.traverse(o => { if (o.isLight && o.castShadow) { out.push(o.shadow.camera); o.shadow.shadowNode?.lights?.forEach(l => out.push(l.shadow.camera)); } }); return out; };
+  let frames = -1, lights = 0;
+  for (let i = 1; i <= 70 && frames < 0; i++) {
+    await tick();
+    const c = cams(); lights = c.length;
+    if (c.length >= 2 && c.every(x => x.layers.isEnabled(HIDDEN_LAYER))) frames = i;
+  }
+  set.remove(); if (own) own.castShadow = casts; engine.occlusion.enabled = false; await tick();
+  return { hidden, lights, frames };
+};
 // start() falling back to WebGLRenderer with culling already on: the boxes must get WebGL's query hooks, or every frame throws
 window.occlusionFallback = async () => {
   const failing = { requestAdapter: async () => ({ features: new Set(), limits: {}, requestDevice: async () => { throw new Error('test: no device'); } }) };

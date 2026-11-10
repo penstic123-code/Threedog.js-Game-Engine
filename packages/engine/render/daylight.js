@@ -5,6 +5,7 @@
 // each lightPool source may pass its own `dusk`, and a game's own fade reads uDaylight with its own edge
 import { DEV, warnOnce } from '../core/base/validate.js';
 import { coded } from '../core/base/errorHints.js';
+import { resetSignals } from './effects.js';
 export const DUSK = 0.3;
 
 /** Daylight 0..1 from the 'daylight' measure (engine.audio.measure): the calendar registers it (gameplay day / night), the sky only when no
@@ -36,9 +37,14 @@ const timeOfDayOf = e => { const t = e.audio?.measures.get('timeOfDay')?.(e); re
 export function writeDaylight(e) {
   const d = daylightOf(e), t = timeOfDayOf(e), w = e._daySignals ??= signalWatch(e, { uDaylight: "engine.audio.measure('daylight', () => value)", uTimeOfDay: "engine.audio.measure('timeOfDay', () => value)" });
   w.check();
-  e.uniforms.uNight.value = nightOf(d, DUSK);
+  if (d !== null || !e._daySeen) e.uniforms.uNight.value = nightOf(d, DUSK);   // a source seen and gone for one write: held with the others until the reset below moves all three
   if (d !== null) e.uniforms.uDaylight.value = d;
   if (t !== null) e.uniforms.uTimeOfDay.value = t;
+  // the last day / night source went (calendar and sky removed): all three go back to the neutral day together, or uNight 0 would sit beside a
+  // midnight uDaylight and two readers would see two times of day. Gone means no source at two writes in a row: the first write of a frame runs before
+  // the sky's frame hook has taken a removed calendar's measure over, so one null alone is a swap in progress, and a reset there would show noon for a frame.
+  // A game with no source from the start may write the signals itself: nothing is reset until a source has been seen
+  if (d !== null) { e._daySeen = true; e._dayGone = 0; } else if (e._daySeen && ++e._dayGone >= 2) { resetSignals(e, ['uNight', 'uDaylight', 'uTimeOfDay']); e._daySeen = false; }
   w.mark();
 }
 

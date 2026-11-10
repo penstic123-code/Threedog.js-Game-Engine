@@ -23,7 +23,7 @@ export interface CollisionOptions {
   cameraOcclusion?: 'colliders' | 'meshes' | 'both';
 }
 /** Circle collider: center x/z, radius r, height h (meters), occ false when added with occluder: false */
-export interface CircleCollider { x: number; z: number; r: number; h: number; occ: boolean }
+export interface CircleCollider { x: number; z: number; r: number; h: number; occ: boolean; /** its layer option */ ly?: string }
 /** Box collider: center x/z, half width hw, half depth hd, rotation around Y rot (radians), height h, bottom height y (meters), occ as in CircleCollider */
 export interface BoxCollider { x: number; z: number; hw: number; hd: number; rot: number; h: number; y?: number; occ: boolean; [k: string]: any }
 
@@ -35,6 +35,8 @@ export interface CircleColliderOptions {
   height?: number;
   /** false: walkers are still stopped but the follow camera's occlusion check ignores it (forest trunks the camera may pass through). Default true */
   occluder?: boolean;
+  /** A name: movers whose passes list names it go through it (walking, paths, navmesh), every other mover is stopped, e.g. a gate only some characters use. Omitted: it stops every mover. Sight lines and the camera ignore it */
+  layer?: string;
 }
 /** Parameters of addBox() (meters, radians) */
 export interface BoxColliderOptions {
@@ -50,6 +52,8 @@ export interface BoxColliderOptions {
   y?: number;
   /** false: walkers are still stopped but the follow camera's occlusion check ignores it (forest trunks the camera may pass through). Default true */
   occluder?: boolean;
+  /** A name: movers whose passes list names it go through it (walking, paths, navmesh), every other mover is stopped, e.g. a gate only some characters use. Omitted: it stops every mover. Sight lines and the camera ignore it */
+  layer?: string;
 }
 
 /** engine.collision (lightweight collision: no walking through things, the camera is not blocked). Real physics is a separate module, engine.rigid */
@@ -67,22 +71,22 @@ export interface Collision {
   addCircle(position: PositionLike, opts?: CircleColliderOptions): Handle;
   /** Add a box collider (house, fence): position is the center, e.g. addBox(house, { halfWidth: 3, halfDepth: 2, rotation: 0.3 }). Returns a handle { remove() } */
   addBox(position: PositionLike, opts?: BoxColliderOptions): Handle;
-  /** Add a thin wall along a -> b (fence). Options: thickness (default 0.3), height, y, occluder (as in addBox). A gap between segments is a gate. Returns a handle { remove() } */
-  addSegment(a: PositionLike, b: PositionLike, opts?: { thickness?: number; height?: number; y?: number; occluder?: boolean }): Handle;
+  /** Add a thin wall along a -> b (fence). Options: thickness (default 0.3), height, y, occluder, layer (as in addBox). A gap between segments is a gate. Returns a handle { remove() } */
+  addSegment(a: PositionLike, b: PositionLike, opts?: { thickness?: number; height?: number; y?: number; occluder?: boolean; layer?: string }): Handle;
   /** Mark ground impassable where fn(x, z) is true (river, lava); fn must be pure (no side effects, same answer for the same (x, z)); reading engine.ground in it is fine. findPathAsync caches the answers, so after the ground or your own state changes, remove() and add the field again. bounds { minX, maxX, minZ, maxZ } (world metres, the field's x / z extent) skips fn outside it; give it to keep findPathAsync's ground sampling cheap. Returns a handle { remove() } */
   addBlocked(fn: (x: number, z: number) => boolean, opts?: { bounds?: { minX: number; maxX: number; minZ: number; maxZ: number } }): Handle;
   /** Is a character of this radius touching addBlocked ground at (x, z) @experimental */
   blockedAt(x: number, z: number, radius?: number): boolean;
-  /** Add a collider from an object's bounding box, pad expands outward (meters), occluder as in addBox. Returns a handle { remove() } */
-  addObject(obj: Object3D, opts?: { pad?: number; occluder?: boolean }): Handle;
+  /** Add a collider from an object's bounding box, pad expands outward (meters), occluder and layer as in addBox. Returns a handle { remove() } */
+  addObject(obj: Object3D, opts?: { pad?: number; occluder?: boolean; layer?: string }): Handle;
   /** Iterate all static colliders added by hand @experimental */
   forEachStatic(fn: (type: 'box' | 'circle', data: any) => void): void;
   /** Keep an outside copy of the static colliders in step (physics colliders, navmesh obstacles): add builds one piece, remove drops one; sync() diffs only when colliders changed and returns whether it compared; clear() forgets every piece without remove (the outside world was thrown away) @experimental */
   mirror<P>(fns: { add(type: 'box' | 'circle', data: any): P; remove(piece: P, data: any): void }): { sync(): boolean; clear(): void; readonly size: number };
-  /** Whether someone can stand at this position (for pathfinding): not in water, not too steep, not inside an obstacle. radius is the character radius (meters, default engine.movement.radius) */
-  walkable(position: PositionLike, opts?: { radius?: number }): boolean;
-  /** walkable with plain numbers, allocating nothing (A* inner loops); radius defaults to engine.movement.radius */
-  walkableAt(x: number, z: number, radius?: number): boolean;
+  /** Whether someone can stand at this position (for pathfinding): not in water, not too steep, not inside an obstacle. radius is the character radius (meters, default engine.movement.radius), passes the collider layers it goes through */
+  walkable(position: PositionLike, opts?: { radius?: number; passes?: string[] }): boolean;
+  /** walkable with plain numbers, allocating nothing (A* inner loops); radius defaults to engine.movement.radius; y picks the floor; passes as in walkable */
+  walkableAt(x: number, z: number, radius?: number, y?: number, passes?: readonly string[]): boolean;
   /** Line of sight with height: is the 3D segment a -> b free of boxes, circles and terrain trees? radius fattens the line; addBlocked water is ignored. Give eye heights in a / b */
   lineClear(a: PositionLike, b: PositionLike, opts?: { radius?: number; /** who is looking (names the line in the event trace) */ who?: string }): boolean;
 }
@@ -414,6 +418,22 @@ export interface AnimatorOptions {
   /** Initial parameter values */
   params?: Record<string, number>;
 }
+/** Where a look-at layer looks: an object, a point, [x, y, z] (exactly three numbers, as ik.js checks), or null to look ahead */
+export type AimTarget = Object3D | Vector3 | [number, number, number] | null;
+/** What an IK layer reports (anim.addAim / addFeet handles) */
+export interface IkLayerInfo { kind: string; bones: string[]; weight: number }
+/** A look-at layer (anim.addAim): set() takes what addAim took except bones and forward, which are fixed when it is made; remove() puts the pose back at once */
+export interface AimLayer {
+  set(opts: { target?: AimTarget; limit?: number; speed?: number; weight?: number; fade?: number }): AimLayer;
+  remove(): void;
+  describe(): IkLayerInfo;
+}
+/** A feet layer (anim.addFeet): set() takes what addFeet took except legs and hips, which are fixed when it is made; remove() puts the pose back at once */
+export interface FeetLayer {
+  set(opts: { reach?: number; far?: number; speed?: number; weight?: number; fade?: number; ground?: (x: number, z: number, y: number) => number }): FeetLayer;
+  remove(): void;
+  describe(): IkLayerInfo;
+}
 /** Skeletal animation state machine (returned by engine.assets.animate(model, config)) */
 export declare class Animator {
   constructor(engine: Engine, root: Object3D, opts?: AnimatorOptions);
@@ -447,6 +467,18 @@ export declare class Animator {
    * @example anim.check(['idle', 'walk', 'attack', 'hurt'])
    */
   check(actions?: string[]): string[];
+  /**
+   * Look-at IK, the last layer on the clips: a bone or a chain from the body out turns toward target, within limit degrees of the animated pose.
+   * Weight 0 leaves the pose exactly; target null looks ahead; forward: the last bone's own front axis when the bind pose does not say (recipe 13 §3e)
+   * @example const look = npc.anim.addAim({ bones: ['Neck', 'Head'], target: engine.player.root, limit: 70 });
+   */
+  addAim(opts: { bones: string | string[]; target?: AimTarget; limit?: number; speed?: number; weight?: number; fade?: number; forward?: [number, number, number] }): AimLayer;
+  /**
+   * Feet on the ground: each [upper, lower, foot] leg bends onto the model's own ground (a Character's includes platforms; off while it jumps or swims,
+   * beyond far from the camera, while hidden); the hips lower for the foot that reaches down. legs: bone names when they are not recognised
+   * @example const feet = engine.player.anim.addFeet();
+   */
+  addFeet(opts?: { legs?: string[][]; hips?: string; reach?: number; far?: number; speed?: number; weight?: number; fade?: number; ground?: (x: number, z: number, y: number) => number }): FeetLayer;
   /** Stop the per-frame update when no longer needed */
   dispose(): void;
 }

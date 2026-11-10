@@ -1,11 +1,16 @@
 # Writing a game system module (a smelter, a recharging turret, growing crops) that plugs into the engine's contracts
 
+> **Covers:** the five contracts of a game system module (saves, skip, describe, ops, time).
+> **Use when:** a system of your own that must save and skip time like the built-in ones.
+> **Shortest:** a module `{ name, install }` that keeps the five contracts.
+> **Sections:** The five contracts · Declaring stage and dependencies · One copyable module something · Check "advance 10h normally · Checking it a contract · What the engine does
+
 A game system is a module (`{ name, install, ... }`) given to `engine.use(...)`. If it follows the five contracts below it saves, loads, skips time,
 shows in `describe()` and the dev bridge, and can be driven by ops, without special cases. Read recipe 14 (template, hook cheat sheet), 06 (clock, skip), 18 (world records), 23 (ops).
 
 ## The five contracts
 1. **State.** Prefer world records (`engine.world.add({ kind, ... })`, recipe 18): saved, streamed and far-simulated for you. State that is not a
-   record (a counter, a machine's queue) goes in `engine.saves.register(key, { save, load, version?, migrate? })`. Raise `version` by 1 whenever the
+   record (a counter, a machine's queue) goes in `engine.saves.define(key, { save, load, version?, migrate? })`. Raise `version` by 1 whenever the
    saved shape changes and add `migrate: { oldVersion: d => newData }`. Never keep game state only in a closure or module variable.
 2. **Time, normal play.** Store *when* something happened in calendar seconds (`engine.clock.now`), and derive the state from `now - startedAt`. Never use
    `Date.now`, `performance.now` or `setTimeout` for game time: they ignore pause, time channels, `step` and saves. If you must accumulate, do it in
@@ -31,15 +36,15 @@ modules. The module `name` must not clash with an existing engine property.
 ## One copyable module: something that finishes after a delay (a smelter, a turret recharge, a crop)
 ```js
 export const machines = () => {
-  const started = new Map();                                 // id -> startedAt (calendar seconds)
+  const started = new Map();  // id -> startedAt (calendar seconds)
   return {
     name: 'machines', type: 'rules', stage: 'gameplay', requires: ['inventory'],
     install(e) {
-      e.saves.register('machines', { version: 1,                // contract 1: saved and restored
+      e.saves.define('machines', { version: 1,  // contract 1: saved and restored
         save: () => [...started],
         load: d => { started.clear(); for (const [id, t] of d) started.set(id, t); } });
-      const progress = id => Math.min(1, (e.clock.now - started.get(id)) / 120);   // contracts 2+3: derived from clock.now, so normal == skipped
-      e.ops.define('job.start', { args: { id: 'string' }, desc: 'Start a job on a machine',   // contract 5
+      const progress = id => Math.min(1, (e.clock.now - started.get(id)) / 120);  // contracts 2+3: derived from clock.now, so normal == skipped
+      e.ops.define('job.start', { args: { id: 'string' }, desc: 'Start a job on a machine',  // contract 5
         can: (_, { id }) => (started.has(id) ? 'busy' : true),
         run: (_, { id }) => { started.set(id, e.clock.now); return id; }, reasons: { busy: 'Already running' } });
       e.ops.define('job.collect', { args: { id: 'string' }, desc: 'Collect a finished job',
@@ -47,9 +52,9 @@ export const machines = () => {
         offers: () => [...started.keys()].filter(id => progress(id) >= 1).map(id => ({ id })),
         run: (_, { id }) => { started.delete(id); e.inventory.add('item', 2); return id; },
         reasons: { idle: 'Nothing running', notDone: 'Not done yet' } });
-      return { progress };                                    // becomes engine.machines (engine.jobs is the engine's own job queue)
+      return { progress };  // becomes engine.machines (engine.jobs is the engine's own job queue)
     },
-    describe: e => ({ running: started.size, done: [...started.keys()].filter(id => e.machines.progress(id) >= 1) }),   // contract 4
+    describe: e => ({ running: started.size, done: [...started.keys()].filter(id => e.machines.progress(id) >= 1) }),  // contract 4
   };
 };
 ```
@@ -69,7 +74,7 @@ Write the five points down as data in `contract.js` (`{ name, api, ops, events, 
 `modules/gameplay/inventory.contract.js`) and run it from your tests (works in a game installed from npm):
 ```js fragment
 import { runContract } from '@threedog/tools/contract';
-runContract(contract, () => myModule(contract.options), { check });   // check(label, ok, detail?)
+await runContract(contract, () => myModule(contract.options), { check });  // check(label, ok, detail?)
 ```
 It installs the module, checks the api / ops / save versions / probe events / describe, and that the probed
 value survives save -> fresh install -> load. `props` lists fields that must exist (`dialogue.active`), `probe.state.map` turns a non-number read

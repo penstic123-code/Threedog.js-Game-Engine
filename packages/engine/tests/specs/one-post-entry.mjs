@@ -99,7 +99,7 @@ export const specs = [
       });
       const j = JSON.stringify({ ...r, source: undefined });
       check('two fuse effects added with add() share one full-screen pass', r.fused.join() === 'gateA+gateB', j);
-      check('the shared pass carries fxHash and uResolution; set() writes the uniform in place', r.source.includes('float fxHash') && r.source.includes('uniform vec2 uResolution') && Math.abs(r.uniform - 0.25) < 1e-6, j);
+      check('the shared pass carries fxHash and uResolution; set() writes the uniform in place', r.source.includes('#define fxHash threedogHash') && r.source.includes('uniform vec2 uResolution') && Math.abs(r.uniform - 0.25) < 1e-6, j);
       check('add() and get() give the same handle', r.same, j);
       check('a wrong shape, an unknown option and a failing create throw and add nothing', r.wrong.every(Boolean) && r.wrong[0].includes('[post-effect]') && r.wrong[1].includes('owner') && r.rolled, j);
       check("a settings restriction holds the effect off over the handle's enabled = true, and ending it shows the game's choice", r.held === false && r.stillHeld === false && r.released === true && r.gameEntry === 'game:game', j);

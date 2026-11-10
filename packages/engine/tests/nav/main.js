@@ -13,9 +13,9 @@ const spawn = new THREE.Object3D(); spawn.name = 'spawn'; spawn.position.set(-6,
 
 const engine = window.engine = createEngine({ bindings: { ...presets.bindings.walk }, canvas: document.getElementById('view'), ui: { loading: { title: 'Nav test' } }, adaptiveResolution: false,
   movement: new URLSearchParams(location.search).has('radius') ? { radius: +new URLSearchParams(location.search).get('radius') } : undefined });   // ?radius=0.6：tests the unified movement parameters
-engine.use(world(), collision(), followCamera(), characters(), level({ scene: root }), nav({ debug: true }));
+engine.use(world(), collision(), followCamera(), characters(), level({ scene: root }), nav({ debug: true, crowd: new URLSearchParams(location.search).has('crowd') }));
 engine.events.on('engine:ready', () => {
-  engine.characters.createPlayer({ ...presets.player.thirdPerson, spawn: { x: -6, z: -8 } });
+  engine.characters.addPlayer({ ...presets.player.thirdPerson, spawn: { x: -6, z: -8 } });
   engine.npcs.add({ name: '信使', position: { x: 4, z: -5 }, schedule: [{ at: 0, position: { x: 4, z: 5 } }] });
 });
 window.Character = Character;

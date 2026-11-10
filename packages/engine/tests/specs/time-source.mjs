@@ -2,7 +2,7 @@
 //   1. 跳过（skip）和一步步推（step）在所有时间视图上结果一样（tick、real、ambient、各通道、日历），定时也按同样顺序触发；
 //   2. 新一局把所有视图一起清零（tick 也清，以前漏了）；
 //   3. 同一步里被取消的定时不再触发（以前同一帧还会触发）；
-//   4. 没有第二个计数器：静态检查 core/、modules/、render/ 里只有 time.js 在累加时间。
+//   4. 没有第二个计数器：静态检查 core/、modules/、render/ 和 packages/post-effects 里只有 time.js 在累加时间（后期效果的时间也读 engine.time）。
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,8 +11,8 @@ const ENGINE = fileURLToPath(new URL('../..', import.meta.url));
 // Each pattern is one way a second counter came back before: tick++ outside time.js, uTime written by hand, a clock view written, `+= STEP` on a field
 const BAD = [/\.tick\s*(\+\+|\+=)/, /\+\+\s*[\w.]*\.tick\b/, /uTime\.value\s*\+?=[^=]/, /\b(clock|time)\.\w*(now|real|elapsed|ambient)\s*\+?=[^=]/, /\.\w+\s*\+=\s*STEP\b/];
 
-// Not game time: the film-grain phase of the post pass is frame-driven noise that wraps at 64 (render/fuse.js), like the UI page clock
-const EXEMPT = [join('render', 'fuse.js')];
+// Not game time: the film-grain phase of the post pass and the outline's wobble phase are frame-driven noise that wraps at 64 (render/fuse.js, post-effects/outline.js), like the UI page clock
+const EXEMPT = [join('render', 'fuse.js'), join('post-effects', 'outline.js')];
 
 function sources(dir, out = []) {
   for (const n of readdirSync(dir)) {
@@ -93,7 +93,7 @@ export const specs = [
     url: '/?threedog-headless',
     async run({ check }) {
       const hits = [];
-      for (const dir of ['core', 'modules', 'render']) {
+      for (const dir of ['core', 'modules', 'render', join('..', 'post-effects')]) {
         for (const f of sources(join(ENGINE, dir))) {
           if (f.endsWith(join('core', 'time', 'time.js')) || EXEMPT.some(x => f.endsWith(x))) continue;
           readFileSync(f, 'utf8').split('\n').forEach((line, i) => {

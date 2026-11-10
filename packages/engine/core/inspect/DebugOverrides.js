@@ -32,6 +32,8 @@ export class DebugOverrides {
     /** @internal */ this.e = e;
     /** @internal the override chain, in apply order */ this._l = [];
     /** @internal material -> { kind: stand-in } */ this._stands = new WeakMap();
+    /** @internal object -> key -> { was, vals }: the game's value under the stack of overrides on that key (_value) */ this._held = new WeakMap();
+    /** @internal every stand-in made and not yet freed: stand-in -> [original, kind]. Whoever makes a GPU part frees it (design 6.2) */ this._made = new Map();
     /** @internal */ this._view = new DebugView(e, this);
     /** The F3 debug panel (the debug() module), or null when it is not installed @type {any} */
     this.panel = null;
@@ -139,17 +141,31 @@ export class DebugOverrides {
     const apply = o => {
       // allowed: a diagnostic is no game write, so the engine keeps driving an owned value (camera.far, tone) once the override ends
       // put is the exemption's owner: one per override, so two overrides of one key on two objects do not end each other's
-      const was = o[key], put = () => { o[key] = value; };
+      // The diagnostic wins while it is on, so a game write meanwhile is overwritten before the next draw. `was` is therefore the game's LATEST value, not the one at the
+      // start: whatever stands there that is not ours is a game write, read before each re-write and once more at the end, and that is what comes back
+      // One record per object and key, shared by every override on it: the game's value under the whole stack, and the values the stack writes (so one override does not take
+      // another's value for a game write). Only the last release puts the game's value back; an earlier one shows the override that is left
+      let rec = this._held.get(o)?.get(key);
+      if (!rec) { rec = { was: o[key], vals: [] }; if (!this._held.has(o)) this._held.set(o, new Map()); this._held.get(o).set(key, rec); }
+      const put = () => { o[key] = value; }, seen = () => { if (!rec.vals.includes(o[key])) rec.was = o[key]; };
+      seen();   // a game write since the last frame (before this override joins the stack) is the game's value too
+      rec.vals.push(value);
       allowOwned(put, [o]);
       put();
-      const h = this.e.onRender(put);
-      return () => { h.remove(); o[key] = was; allowOwned(put, false); };
+      const h = this.e.onRender(() => { seen(); put(); });
+      return () => {
+        h.remove(); seen();
+        rec.vals.splice(rec.vals.indexOf(value), 1);
+        if (rec.vals.length) o[key] = rec.vals[rec.vals.length - 1];
+        else { o[key] = rec.was; this._held.get(o)?.delete(key); }
+        allowOwned(put, false);
+      };
     };
     return this._add({ owner, id: `${label}.${key}`, byId: false, obj, patch: { key, value: plain(value), apply }, undo: null });
   }
   /** Active overrides on one object, for engine.explain({ thing: id }) */
   overridesOn(obj) { this._prune(); return this._l.filter(o => o.obj === obj && !o.view).map(o => ({ owner: o.owner, ...patchInfo(o.patch) })); }
-  /** Undo everything, drop / restore what the views put back, re-apply */
+  /** @internal Undo everything, drop / restore what the views put back, re-apply (the engine calls it on dispose) */
   dispose() { this._rebuild(() => { this._l = []; }); this._view.active = null; }
 
   /** @internal Add one entry at the end of the chain: applied all-or-nothing, pushed only once it applied */
@@ -167,6 +183,13 @@ export class DebugOverrides {
     const keep = [];
     for (const x of this._l) { try { this._apply(x); keep.push(x); } catch { /* an apply that throws now (its object was disposed) is dropped */ } }
     this._l = keep;
+    this._freeStands();
+  }
+  /** @internal Dispose the stand-ins no active entry puts on a mesh any more (the next use makes a new one), so a closed diagnostic leaves no compiled program behind */
+  _freeStands() {
+    const live = new Set();
+    for (const x of this._l) if (x.patch?.material) for (const m of meshes(x.obj)) for (const s of [].concat(m.material)) live.add(s);
+    for (const [s, [orig, kind]] of this._made) if (!live.has(s)) { s.dispose(); this._made.delete(s); delete this._stands.get(orig)?.[kind]; }
   }
   /** @internal Drop overrides set by thing id whose thing is gone: removed (detached from the scene) or the id now names another object (a load rebuilt it) */
   _prune() {
@@ -210,6 +233,7 @@ export class DebugOverrides {
       transparent: !!m.transparent, opacity: m.opacity ?? 1, side: m.side, alphaTest: m.alphaTest ?? 0, wireframe: kind === 'wire', fog: false });
     if (Node) { s.positionNode = m.positionNode ?? null; s.vertexNode = m.vertexNode ?? null; if (!colorOf) s.colorNode = m.colorNode ?? null; }
     s.name = `debug:${kind}:${m.name || ''}`; s.userData._dbgOf = m;
+    this._made.set(s, [m, kind]);
     return cache[kind] = s;
   }
 }

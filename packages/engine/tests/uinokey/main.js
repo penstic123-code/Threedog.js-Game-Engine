@@ -3,6 +3,6 @@ import { createEngine, presets, world, collision, followCamera, characters, inte
 
 const engine = createEngine({ canvas: document.getElementById('view'), saveKey: 'test-uinokey', adaptiveResolution: false });
 engine.use(world(), collision(), followCamera(), characters(), interactions({ ...presets.interactions.nearest }));
-engine.characters.createPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 0 } });
+engine.characters.addPlayer({ ...presets.player.thirdPerson, spawn: { x: 0, z: 0 } });
 Object.assign(window, { engine, THREE });
 await engine.start();

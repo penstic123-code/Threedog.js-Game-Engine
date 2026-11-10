@@ -27,7 +27,7 @@ export async function run({ check }) {
     && lands(`import '../nav/x.js';`) === 'nav/x.js' && lands(`import { y } from './y.js';`) === 'a/y.js' && lands(`import { v } from '../../core/base/math.js';`) === '');
   // [guard] one owner scope: a built-in module registers through ctx, so its unload, rollback and failed init take it along. engine.net stays as it is (decision 2026-11-04)
   const { walk, read } = await import(pathToFileURL(join(TOOLS, 'rules', '_lib.mjs')).href);
-  const raw = /\b(?:e|engine|eng|this\.e|this\.engine)\.(ops\.define|saves\.register|ui\.define|stream\.addReadyCheck|budget\.metric|addGroundColliders|setGround|explainWith|_things\.addSource)\(/;
+  const raw = /\b(?:e|engine|eng|this\.e|this\.engine)\.(ops\.define|saves\.(?:define|register)|ui\.define|stream\.addReadyCheck|budget\.metric|addGroundColliders|setGround|explainWith|_things\.addSource)\(/;
   const bypass = walk(P.MODULES_REL).filter(f => !f.includes('/net/')).flatMap(f => read(f).split('\n').flatMap((l, i) =>
     raw.test(l) && !/^\s*(\/\/|\*|\+ ")/.test(l) && !/^\s*export const \w+ = "/.test(l) ? [`${f}:${i + 1}`] : []));
   check('built-in modules register ops, save parts, ui, ready checks, metrics, sources and ground through ctx, never straight on the engine', !bypass.length, bypass.slice(0, 8).join(' '));

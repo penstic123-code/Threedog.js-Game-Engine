@@ -40,7 +40,7 @@ export class Inventory {
     this._seq = 0;              // entry key counter ('sword#7'), saved so keys never repeat
     engine.i18n.add(INVENTORY_STRINGS);
     // declared only: the game binds the key (presets.bindings.inventory or its own; [] = no key), so every key in a game comes from one bindings table
-    track(engine.input.action(action, { label: 'inventory.action', owner: 'inventory' }));
+    track(engine.input.define(action, { label: 'inventory.action', owner: 'inventory' }));
     if (engine.input.keysOf(action).length) track(engine.input.touchButton(action, 'inventory.action'));
     ctx.ui.define('inventory', inventoryWindow, { modal: { cancel: e => e.ui.close('inventory'), freeze: () => this.pauseGame, data: () => windowData(this) } });
     for (const ev of ['i18n:change', 'input:rebind']) track(engine.events.on(ev, () => this._refresh()));
@@ -49,7 +49,7 @@ export class Inventory {
     track(engine.events.on('session:end', () => engine.ui.close('inventory')));   // it shows the playthrough that ended, and its freeze must not reach the next one
     // version 1 is the current shape; raise it with a migrate step when it changes. seq: the numbering of entry keys (sword#3); a save without it continues
     // after the highest key it holds
-    ctx.saves.register('inventory', { atomic: true, version: 1, save: () => ({ seq: this._seq, items: this.home._save() }), load: d => {
+    ctx.saves.define('inventory', { atomic: true, version: 1, save: () => ({ seq: this._seq, items: this.home._save() }), load: d => {
       if (d != null && !(isPlainObject(d) && (d.items == null || Array.isArray(d.items)))) refuseSave('inventory', 'the part', 'must be { seq, items: [{ id, count }] }', d);
       this.home._load(d?.items);
       const top = Math.max(0, ...this.home._entries.map(x => Number(x.key.split('#')[1]) || 0));
@@ -57,7 +57,7 @@ export class Inventory {
       this._refresh();
     } });
     // version 2: container ids that are runtime record ids (a spawned chest) follow the world part's `kind-n` -> `kind#n` rename (world/persist.js)
-    ctx.saves.register('containers', { atomic: true, version: 2, migrate: { 1: followRuntimeIds }, save: () => this._containers.save(), load: d => this._containers.load(d) });
+    ctx.saves.define('containers', { atomic: true, version: 2, migrate: { 1: followRuntimeIds }, save: () => this._containers.save(), load: d => this._containers.load(d) });
   }
 
   /**

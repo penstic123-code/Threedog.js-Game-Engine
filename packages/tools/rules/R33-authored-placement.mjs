@@ -11,7 +11,7 @@
 //   error: world.add(…, { initial: true }) anywhere: authored records come only from content loaders (saves diff against that baseline).
 //   warn: a world.view(…) result (directly or through a const) handed to engine.add / scene.add, or its position / rotation / scale written
 //     (assignment or .set / .copy…). present's update gets the model as its argument, so writes there are not flagged.
-//   warn: a saves.register part whose literal load takes two or more required parameters: the engine calls load(data), so the data lands in the first
+//   warn: a saves.define part whose literal load takes two or more required parameters: the engine calls load(data), so the data lands in the first
 //     parameter, the second is undefined and the state silently does not come back. A save part as a variable is not followed.
 //   Not flagged: any other callback (ops.define run, onFixed, onFrame, world.simulate / present, clock, sky, timeline, input, other events) and a
 //   line tagged `// runtime: <reason>` (the reason is required).
@@ -100,27 +100,33 @@ function contextOf(n, sf, depth = 1) {
   return setup ? 'setup' : 'runtime';
 }
 
-/** Names bound in this file to a world.view(…) result: const m = engine.world.view(id) */
-function viewNames(sf) {
-  const out = new Set();
-  (function go(n) {
-    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer && isView(n.initializer, null)) out.add(n.name.text);
-    ts.forEachChild(n, go);
-  })(sf);
-  return out;
+/** The initializer of the nearest declaration of identifier id (block scope, then outward), or undefined when the name is not a const / let bound here
+ *  (a parameter, a loop variable or an unknown name shadows outer ones too: only the nearest binding counts, so `const m = world.view(…)` in one function
+ *  does not make an unrelated `m` of another function a world model) */
+function bindingOf(id) {
+  for (let n = id.parent; n; n = n.parent) {
+    if (isFn(n)) { if (n.parameters.some(p => p.name.getText() === id.text)) return undefined; continue; }
+    const decls = ts.isBlock(n) || ts.isSourceFile(n) || ts.isCaseClause(n) ? n.statements.filter(ts.isVariableStatement).flatMap(st => st.declarationList.declarations) : [];
+    const hit = decls.find(d => ts.isIdentifier(d.name) && d.name.text === id.text);
+    if (hit) return hit.initializer;
+    if ((ts.isForStatement(n) || ts.isForOfStatement(n) || ts.isForInStatement(n)) && n.initializer && ts.isVariableDeclarationList(n.initializer)
+      && n.initializer.declarations.some(d => d.name.getText() === id.text)) return n.initializer.declarations.find(d => d.name.getText() === id.text).initializer;
+  }
+  return undefined;
 }
-/** Is expr a world model: a world.view(…) call, or a name bound to one */
-function isView(expr, names) {
+/** Is expr a world model: a world.view(…) call, or a name whose nearest binding is one */
+function isView(expr, depth = 3) {
   while (expr && (ts.isParenthesizedExpression(expr) || ts.isNonNullExpression(expr))) expr = expr.expression;
   if (ts.isCallExpression(expr)) return VIEW.test(calleeText(expr));
-  return !!names && ts.isIdentifier(expr) && names.has(expr.text);
+  const init = depth > 0 && ts.isIdentifier(expr) ? bindingOf(expr) : undefined;
+  return !!init && isView(init, depth - 1);
 }
 /** model.position.x / model.rotation / model.scale.set: true when this access reaches a world model's transform */
-function viewTransform(expr, names) {
-  for (let x = expr; ts.isPropertyAccessExpression(x); x = x.expression) if (XFORM.has(x.name.text) && isView(x.expression, names)) return true;
+function viewTransform(expr) {
+  for (let x = expr; ts.isPropertyAccessExpression(x); x = x.expression) if (XFORM.has(x.name.text) && isView(x.expression)) return true;
   return false;
 }
-/** The load of a saves.register(key, { load }) call when it takes more than the one argument the engine hands it */
+/** The load of a saves.define(key, { load }) call when it takes more than the one argument the engine hands it */
 function wideLoad(call) {
   const part = call.arguments[1];
   const load = part && ts.isObjectLiteralExpression(part) ? part.properties.find(p => p.name?.getText() === 'load') : null;
@@ -133,7 +139,7 @@ const WRITE_CALLS = new Set(['set', 'copy', 'add', 'sub', 'setScalar', 'multiply
 
 /** Findings for one source text: [{ line, level, msg, fix }] (exported for the rule test) */
 export function scan(sf) {
-  const out = [], names = viewNames(sf);
+  const out = [];
   const warn = (n, msg) => out.push({ line: lineOf(n), level: 'warn', msg, fix: VIEW_FIX });
   (function go(n) {
     if (ts.isCallExpression(n)) {
@@ -145,15 +151,15 @@ export function scan(sf) {
           : `${text}() creates ${hit[1]} at setup (module top level or a startup event)`,
         fix: initial ? 'write the record in content (content/props.js with an id); content.load adds it as authored' : `${worldAdd ? SAVE_FALSE : ''}${CONTENT_HINT}; ${hit[2]}`,
       });
-      if (ADD.test(text) && n.arguments.some(a => isView(a, names))) warn(n, `${text}() of a world.view() model: world already adds, places and tears down its models`);
-      if (/\bsaves\.register$/.test(text) && wideLoad(n)) out.push({ line: lineOf(n), level: 'warn',
+      if (ADD.test(text) && n.arguments.some(a => isView(a))) warn(n, `${text}() of a world.view() model: world already adds, places and tears down its models`);
+      if (/\bsaves\.(?:define|register)$/.test(text) && wideLoad(n)) out.push({ line: lineOf(n), level: 'warn',
         msg: `${text}(…) has a load with ${wideLoad(n).parameters.length} parameters: the engine calls load(data), so the state silently does not restore`,
         fix: 'take the data as the only parameter: load: data => { … }; the engine is already in scope where the part is registered' });
       const callee = n.expression;
-      if (ts.isPropertyAccessExpression(callee) && WRITE_CALLS.has(callee.name.text) && viewTransform(callee.expression, names))
+      if (ts.isPropertyAccessExpression(callee) && WRITE_CALLS.has(callee.name.text) && viewTransform(callee.expression))
         warn(n, `${callee.expression.getText()}.${callee.name.text}(…) writes the transform of a world model`);
     }
-    if (ts.isBinaryExpression(n) && WRITE_OPS.has(n.operatorToken.kind) && viewTransform(n.left, names))
+    if (ts.isBinaryExpression(n) && WRITE_OPS.has(n.operatorToken.kind) && viewTransform(n.left))
       warn(n, `${n.left.getText()} = … writes the transform of a world model`);
     ts.forEachChild(n, go);
   })(sf);

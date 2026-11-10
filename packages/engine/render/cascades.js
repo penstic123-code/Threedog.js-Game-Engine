@@ -27,6 +27,7 @@ import { patchMaterial, unpatchMaterial, isEngineMade } from './patches.js';
 import { warnOnce } from '../core/base/validate.js';
 import { sceneVisitor } from '../core/scene/sceneDelta.js';
 import { engineOwned } from '../core/scene/things.js';
+import { drawOnly } from '../core/scene/drawOnly.js';
 import { codedError } from '../core/base/errorHints.js';
 import { setShadowUpdate, shadowUpdatePending, shadowsOn, isWebGPU, webgpuPart, projectionKey } from './backend.js';
 
@@ -74,7 +75,7 @@ class LightCSM extends CSM {
     this.parent = e.scene;
     this.lights[0].dispose();
     this.lights[0] = light;
-    for (const l of this.lights) if (l !== light) { engineOwned('shadows', l, l.target); e.scene.add(l, l.target); }
+    for (const l of this.lights) if (l !== light) { engineOwned('shadows', l, l.target); drawOnly('', l); e.scene.add(l, l.target); }   // copies of the sun: a scene copy keeps the sun alone
     // uniforms shared by every patched material: one write here reaches all of them
     this.uniforms = { CSM_cascades: { value: [] }, cameraNear: { value: 0 }, shadowFar: { value: 0 } };
     this.fade = S.fade;
@@ -185,6 +186,7 @@ export function createCascades(e, light, S, who) {
   const c = isWebGPU(e.renderer) ? webgpuPart('cascades', `[shadows] cascaded shadows (${who})`).create(e, light, S) : new LightCSM(e, light, S);
   c._box = box;
   c.shadowParams();
+  e.occlusion?.shadowLightsAdded();   // fresh shadow cameras: culling adds its layers to them now, or what it hides casts no shadow for a second
   return (e._cascades = c);
 }
 

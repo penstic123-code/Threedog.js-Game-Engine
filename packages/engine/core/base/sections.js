@@ -39,7 +39,7 @@ export function sectionsOf(e) {
     const bad = Object.keys(s).find(k => !KEYS.includes(k));
     if (bad) throw codedError('content-misuse', `content section "${name}" of module ${m.name}: unknown key "${bad}". Keys: ${KEYS.join(', ')}`);
     if (typeof s.commit !== 'function') throw codedError('content-misuse', `content section "${name}" of module ${m.name} needs commit(prepared, c)`);
-    out.set(name, { owner: m.name, ...s });
+    out.set(name, { owner: m.name, name, ...s });
   }
   return out;
 }
@@ -70,9 +70,9 @@ export function runSections(list, c, { after = null, around = fn => fn() } = {})
     const undos = [];
     const takeBack = cause => {
       const lost = [], waits = [];
-      const told = err => { lost.push(err); warnOnce(coded('content-misuse', `content: an undo failed, so part of a failed load may remain: ${err.message}`)); };
-      for (const fn of undos.reverse()) {
-        try { const r = fn(); if (typeof r?.then === 'function') waits.push(r.catch(told)); } catch (err) { told(err); }   // the rest still goes back
+      const told = (err, s) => { lost.push(err); warnOnce(coded('rollback-incomplete', `content: undo for section '${s.name ?? '?'}' owned by module '${s.owner ?? '?'}' failed: ${err.message}. Fix the undo its commit step returns, then reload the page before retrying; the state was only partly restored.`)); };
+      for (const { fn, s } of undos.reverse()) {
+        try { const r = fn(); if (typeof r?.then === 'function') waits.push(r.catch(err => told(err, s))); } catch (err) { told(err, s); }   // the rest still goes back
       }
       const fail = () => { if (lost.length) cause.notRestored = lost; throw cause; };
       if (waits.length) return Promise.all(waits).then(fail);
@@ -82,7 +82,7 @@ export function runSections(list, c, { after = null, around = fn => fn() } = {})
     try {
       for (; i < list.length; i++) {
         const undo = list[i].s.undo?.(values[i], c);
-        if (undo) undos.push(undo);
+        if (undo) undos.push({ fn: undo, s: list[i].s });
         const r = list[i].s.commit(values[i], c);
         if (r === DROPPED) { if (undo) undos.pop(); list[i].gaveWay?.(); } else list[i].done?.(r);
       }

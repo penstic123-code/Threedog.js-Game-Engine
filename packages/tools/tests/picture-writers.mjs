@@ -35,6 +35,9 @@ export async function run({ check }) {
     check('[guard] a value set before tracking and a name outside the list both say not tracked, never a guess', /not tracked: set before/.test(before0.a.text) && !before0.a.ok && /not tracked/.test(before0.b.text) && !before0.b.ok, JSON.stringify([before0.a.text, before0.b.text]));
     check('a write made from the console has no source file and says so, and the write goes through', !before0.c.ok && /no source file/.test(before0.c.text) && before0.d === 0xff0000, before0.c.text);
     check('explain names the line for a tracked value', before0.e.ok && /picture\/lights\.js:9/.test(before0.e.text), before0.e.text);
+    // group P2 item 2: a direct renderer.shadowMap.enabled write (what describe() used to suggest) is watched like toneMapping: the writers tool sees it
+    const shadowWrite = await page.evaluate(() => { const e = window.engine; e.renderer.shadowMap.enabled = false; const x = e.explain({ value: 'renderer.shadowMap.enabled' }); e.renderer.shadowMap.enabled = true; return x; });
+    check('[guard] group P2 2b: a direct renderer.shadowMap.enabled write is seen (not "nothing is known")', /no source file/.test(shadowWrite.text), shadowWrite.text);
     check('[guard] steps in one function are no fight (copy then lerp on fog.color)', warnings.length === 0 && (await values()).conflicts.length === 0, warnings.join(' | '));
 
     for (const mode of ['nightOnly', 'dayOnly', 'nightOnly']) { await page.evaluate(m => { window.mode = m; }, mode); await step(2); }
@@ -89,6 +92,25 @@ export async function run({ check }) {
     check('[guard] an unknown name says nothing is known, and how to watch it', !none.ok && /nothing is known/.test(none.text) && /engine\.debug\.watch/.test(none.text), none.text);
     const taken = await page.evaluate(() => window.engine.debug.watch('fog.far', {}, 'x').watching);
     check('[guard] a name already answering is refused', taken === false);
+    // a removed watch stops tracking: its setter stays (others may answer through it) but takes no more stacks
+    const stopped = await page.evaluate(() => {
+      const E = window.engine, o = { v: 0 }, h = E.debug.watch('gi.removed', o, 'v');
+      o.v = 1; const n = E._picture.stacks; h.remove();
+      for (let i = 2; i < 40; i++) o.v = i;
+      return E._picture.stacks === n;
+    });
+    check('[guard] a removed watch takes no more stacks', stopped === true);
+    // the accessor outlives the first record: a watch again on the same property records, and removing one of two records leaves the other recording
+    const again = await page.evaluate(() => {
+      const E = window.engine, o = { v: 0 }, o2 = { v: 0 }, P = E._picture;
+      E.debug.watch('gi.a', o, 'v').remove();
+      const h = E.debug.watch('gi.a2', o, 'v'); let n = P.stacks; o.v = 1; const reHook = P.stacks > n;
+      h.remove(); const plain = Object.getOwnPropertyDescriptor(o, 'v').value === 1;
+      const first = E.debug.watch('gi.b1', o2, 'v'), second = E.debug.watch('gi.b2', o2, 'v');
+      first.remove(); n = P.stacks; o2.v = 5; const other = P.stacks > n;
+      return { reHook, plain, other, second: second.watching };
+    });
+    check('[guard] a watch again after remove records; two records on one property, remove one, the other still records', again.reHook && again.plain && again.other, JSON.stringify(again));
     const w2 = await values();
     check('[guard] the list says its own limit', /not proof/.test(w2.limit), w2.limit);
 

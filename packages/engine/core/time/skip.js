@@ -14,12 +14,13 @@ import { asModule } from '../engine/moduleTypes.js';
 import { readParams, keysSchema } from '../base/params.js';
 import { reportError } from '../base/errors.js';
 import { codedError } from '../base/errorHints.js';
-import { fmt } from '../base/validate.js';
+import { fmt, warnOnce } from '../base/validate.js';
 import { fadeScreen } from '../../ui/UI.js';
 
 const NUDGE = 1e-6;   // calendar seconds past each mark: land just after it, so float error never leaves a mark uncrossed
 const STRINGS = {
   amount: 'engine.skip(): pass { to: "06:00" } (until the calendar clock next reads 06:00) or { seconds: 600 } (calendar seconds, > 0); got {got}',
+  noSkip: "engine.skip(): module '{name}' has a fixed hook but no skip hook and no skipKind, so the skipped time does not advance it (its own timers and cooldowns stay behind). Add skip(dt, e, done), or skipKind: 'none' if it should not move",
   noCalendar: 'engine.skip({ to }) needs the calendar module (it reads the calendar clock: engine.use(calendar({ dayLength: 360 }))); without one pass { seconds } (calendar seconds)',
   fixedDay: 'engine.skip({ to }): the calendar time of day never moves (calendar({ dayLength: Infinity })), so the clock never reads that time; pass { seconds } (calendar seconds)',
   hook: 'skip hook of module {name}',
@@ -44,6 +45,7 @@ function amount(e, o) {
 function jump(e, seconds) {
   const clock = e.clock, cal = e.calendar, time = e.time;   // clock: the calendar view of time (its timers are in time's one queue)
   let left = seconds, ended = false;
+  for (const h of e._hooks.fixed) if (!h.mod.skip && !h.mod.skipKind && !h.mod.noSkip) warnOnce(fmt(STRINGS.noSkip, { name: h.name }));   // said at skip time, once per module: a skip that silently leaves a module behind
   const off = e.events.on('session:end', () => { ended = true; });   // a timer callback ended the playthrough mid-skip: the new one must not be skipped
   try {
     while (left > 0 && !ended) {

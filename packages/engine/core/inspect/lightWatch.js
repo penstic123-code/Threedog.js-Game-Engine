@@ -15,7 +15,7 @@ const STRINGS = {
   changed: 'Shader programs were compiled during play ({from} -> {to}) and, compared with the last observation, the light layout also changed ({was} -> {now}). ' +
     'three.js compiles every material again for a new light setup, so adding, removing or hiding a light mid-game freezes a frame. ' +
     'Use engine.use(lightPool({ point: 8 })) and engine.lightPool.add(torch, {...}) for many lights, or fade a fixed set with intensity ' +
-    '(recipes/09-materials-lights-models.md "Lights and stalls")',
+    '(recipes/09-materials-lights-models.md §1b)',
 };
 
 /** Visible lights by the kinds three.js counts in its light setup (ambient and probes do not change programs), as one comparable string */

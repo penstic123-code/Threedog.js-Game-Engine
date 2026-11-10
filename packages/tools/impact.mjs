@@ -15,7 +15,7 @@ import { relatedTests } from './threedog/verify.mjs';
 const SHOWN = 3;
 const TESTS_MAX = 20;
 /** Calls that take a name, written with something other than a plain string: impact cannot follow those */
-const COMPUTED = /\b(?:ops\.(?:run|can)|world\.(?:get|remove|move)|inventory\.(?:add|remove|has|count)|saves\.register|input\.(?:pressed|down|bind|action)|interactions\.add|pickups\.spawn|thing\.\w+)\(\s*(?:`[^`]*\$\{|[A-Za-z_$])/;
+const COMPUTED = /\b(?:ops\.(?:run|can)|world\.(?:get|remove|move)|inventory\.(?:add|remove|has|count)|saves\.(?:define|register)|input\.(?:pressed|down|bind|define|action)|interactions\.add|pickups\.spawn|thing\.\w+)\(\s*(?:`[^`]*\$\{|[A-Za-z_$])/;
 /** Every place in a section's data that holds the name, as a key or a whole string value: ['pickups[0].item', ...] */
 function holds(value, path, target, out) {
   if (value === target) out.push(path);
@@ -27,7 +27,7 @@ function holds(value, path, target, out) {
 }
 
 /** Save parts a module's source registers */
-const savePartsOf = file => [...read(engineFile(file)).matchAll(/saves\.register\(\s*['"]([\w.-]+)['"]/g)].map(m => m[1]);
+const savePartsOf = file => [...read(engineFile(file)).matchAll(/saves\.(?:define|register)\(\s*['"]([\w.-]+)['"]/g)].map(m => m[1]);
 
 /** What the generated metadata says about the name: lines, and the modules it belongs to */
 function engineFacts(t) {
@@ -72,7 +72,7 @@ export async function impact(dir, target, { full = false } = {}) {
     const at = `${g(f)}:${i + 1}`;
     if (COMPUTED.test(l)) computed.push(at);
     if (!quoted.test(l)) return;
-    (/saves\.register\(/.test(l) ? saved : calls).push(`${at} ${l.trim().slice(0, 90)}`);
+    (/saves\.(?:define|register)\(/.test(l) ? saved : calls).push(`${at} ${l.trim().slice(0, 90)}`);
   });
   for (const id of new Set([...facts.owners, ...[...sections].map(s => metadata.sections[s]?.owner).filter(Boolean)])) {
     const parts = metadata.modules[id] ? savePartsOf(metadata.modules[id].file) : [];

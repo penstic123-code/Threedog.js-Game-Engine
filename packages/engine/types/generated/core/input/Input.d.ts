@@ -29,7 +29,7 @@ export class Input {
     /** Is this a touch device? @experimental */
     touch: boolean;
     /**
-     * Declare an action: its context and display name, never its keys (the game binds those). Modules call ctx.input.action (owned by the module,
+     * Declare an action: its context and display name, never its keys (the game binds those). Modules call ctx.input.define (owned by the module,
      * removed with it); a game's own action can pass keys to declare and bind in one line.
      * context: the input context it is read in (default 'walk'); readable only while that context is on the stack and not shadowed, see push().
      * optional: true = the module works without it (number keys for dialogue choices), so reading it unbound is silent.
@@ -37,10 +37,10 @@ export class Input {
      * @param {string} name
      * @param {{ context?: string, label?: string, optional?: boolean, keys?: string | string[], owner?: string }} [o]
      * @returns {{ name: string, remove(): void }} remove() takes the declaration (and keys given here) away
-     * @example ctx.input.action('choice1', { context: 'dialog', label: 'dialogue.choice', optional: true });   // in a module: no keys
-     * @example engine.input.action('brake', { context: 'vehicle', keys: ['KeyB', 'PadLT'] });                     // a game's own action, bound at once
+     * @example ctx.input.define('choice1', { context: 'dialog', label: 'dialogue.choice', optional: true });   // in a module: no keys
+     * @example engine.input.define('brake', { context: 'vehicle', keys: ['KeyB', 'PadLT'] });                     // a game's own action, bound at once
      */
-    action(name: string, o?: {
+    define(name: string, o?: {
         context?: string;
         label?: string;
         optional?: boolean;
@@ -84,7 +84,7 @@ export class Input {
      */
     simulate(action: string, down?: boolean): void;
     /**
-     * A local player's share of the input on a shared screen: its own keys and gamepad, read like engine.input (axis, down, pressed, released). Pass it to createPlayer({ id, input }).
+     * A local player's share of the input on a shared screen: its own keys and gamepad, read like engine.input (axis, down, pressed, released). Pass it to addPlayer({ id, input }).
      * pad: gamepad index; that pad leaves engine.input and answers the game's pad bindings here. keys: { action: keys } for this seat alone. Two seats on one pad or key throw `input-seat`.
      * @example const two = engine.input.seat({ pad: 1, keys: { moveForward: 'KeyI', moveBack: 'KeyK', moveLeft: 'KeyJ', moveRight: 'KeyL', jump: 'KeyU' } });
      * @param {{ pad?: number, keys?: Record<string, string | string[]> }} [opts] @returns {Seat}
@@ -106,7 +106,6 @@ export class Input {
     /**
      * All keys bound to an action: the player's rebinding, else the game's bind, else the default preset (basics only); plus its touch button
      * @param {string} action @returns {readonly string[]}
-     * @experimental
      */
     keysOf(action: string): readonly string[];
     /**
@@ -131,7 +130,6 @@ export class Input {
     /**
      * Just released (which copy is read is the same as pressed; for things like release-to-fire after charging) @param {string} action @returns {boolean}
      * @example if (engine.input.released('fire')) shoot(charge);
-     * @experimental
      */
     released(action: string): boolean;
     /**
@@ -143,7 +141,7 @@ export class Input {
      * Push an input context (an action group, like a Unity Action Map). The top context shadows lower actions bound to the same key.
      * Opaque by default (nothing below is readable: menus, dialogue, cutscenes); { pass: true } lets unrelated lower actions keep working (vehicle, build mode).
      * Applies at the start of the next fixed step; actions it blocks lose their held state (no stuck keys after a menu closes). Join a context with
-     * input.action(name, { context }); menu keys: pressedRaw.
+     * input.define(name, { context }); menu keys: pressedRaw.
      * @param {string} name e.g. 'vehicle', 'dialog', 'menu', 'cutscene', 'build' (the base context is 'walk')
      * owner (default the name) is who pushed it, listed in describe().holds.input
      * @param {{ pass?: boolean, owner?: string }} [opts]

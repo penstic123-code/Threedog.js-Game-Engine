@@ -21,7 +21,7 @@
 // Plain JS stays first-class: a game's own fields and onFixed logic never need this; it is for things several owners write.
 // The registry (engine.stacks: define / get / mod, save, timers, describe().shared) is core/ops/stacks.js.
 import { codedError } from '../base/errorHints.js';
-import { DEV, note } from '../base/validate.js';
+import { DEV, note, warnOnce } from '../base/validate.js';
 import { callerAt } from './stackFrames.js';
 
 /** The one layer table, lowest first. Who uses which: engine = the engine's own defaults and drivers, game = game code and
@@ -63,13 +63,21 @@ export function ownerArgs(a, b, fallback = 'game') {
 /** 'sky.flash' or 'move.speed[player]': the name a message and describe().shared use */
 const label = (name, id) => (id == null ? name : `${name}[${id}]`);
 
+/** a value as describe / how-strings / the changed line print it (a rule's value may be a function; JSON.stringify(undefined) is undefined) */
+export const showValue = v => (typeof v === 'number' ? String(+v.toFixed(4)) : typeof v === 'function' ? 'function' : JSON.stringify(v) ?? String(v));
+
 /** One shared point. Made by engine.stacks.define; games normally only call engine.mod(name, ...) and read value(). */
 export class Stack {
   /** @param {any} all the registry @param {string} name @param {any} o */
-  constructor(all, name, { kind = 'number', base, min = -Infinity, max = Infinity, save = true, onChange = null, per = false, manual = null, settingsSet = false }) {
+  constructor(all, name, { kind = 'number', base, min = -Infinity, max = Infinity, save = true, onChange = null, per = false, manual = null, settingsSet = false, important = false }) {
     if (!KINDS.includes(kind)) throw fail(`engine.stacks.define('${name}', { kind }): kind is ${KINDS.join(' / ')}, got ${JSON.stringify(kind)}`);
+    if (typeof important !== 'boolean') throw codedError('shared-value', `engine.stacks.define('${name}', { important }): important is true or false, got ${shown(important)}. Fix: { important: true }`);
     this.all = all; this.name = name; this.kind = kind;
+    /** stays on the "values being changed now" line (stacks.changed) even at its base */
+    this.important = important;
     this.base = base ?? (kind === 'number' ? 1 : kind === 'any' ? false : null);
+    // a number point's base is validated like min / max: NaN would pass the nullish default and every read would stay NaN whatever the bounds are
+    if (kind === 'number' && !Number.isFinite(this.base)) throw codedError('shared-value', `engine.stacks.define('${name}', { base }): base is a finite number, got ${shown(this.base)}. Fix: { base: 1 }`);
     for (const [k, b] of [['min', min], ['max', max]]) if (typeof b !== 'number' || Number.isNaN(b)) throw codedError('shared-value', `engine.stacks.define('${name}', { ${k} }): ${k} is a number (leave it out for no bound), got ${shown(b)}`);
     if (min > max) throw codedError('shared-value', `engine.stacks.define('${name}', { min, max }): min must be <= max, got min ${min} > max ${max}. Fix: { min: ${max}, max: ${min} }`);
     this.min = min; this.max = max; this.save = save; this.per = per; this.onChange = onChange;
@@ -90,6 +98,28 @@ export class Stack {
    * @returns {{ owner: string, remove(): void, change(value: any): boolean }}
    */
   take(o) {
+    const { owner, layer, op, value, clock, at } = this._entry(o);
+    const m = this._map(o.id, true), old = m.get(owner);
+    this._clash(m, owner, op, layer, at);
+    // the clock is asked before the old entry goes: an unknown channel throws, and the entry that was there must still be there then
+    const until = o.for != null ? this.all._nowOf(clock) + o.for : null;
+    // Taking again: delete the old entry and put a new object at the end. Why not edit in place: the Map order would not change, so neither the
+    // 'top' latest nor the latest set would be it; and the old handle would then remove the new value. A new object makes a stale handle's _drop miss.
+    m.delete(owner);
+    // where: the code line of the first take (dev only). Kept on rewrites, so a weather module re-taking every frame costs no stack walk
+    const ent = { owner, id: o.id ?? null, since: this.all._at(), where: old ? old.where : callerAt(), op, value, layer, clock, until };
+    m.set(owner, ent);
+    this.all.engine._picture?.sharedTook(this.name, ent);   // dev server only: the point's history for explain({ value })
+    if (ent.until != null) this.all._timedDirty = true;
+    this._changed(o.id);
+    return { owner, remove: () => { this._drop(owner, o.id, ent); }, change: v => this._rewrite(ent, v, at) };
+  }
+  /**
+   * @internal The one check of an entry (owner, layer, the op and its value, per id, for), the same for engine.mod and for a save putting entries back (_fromSave):
+   * a load that skipped it let a damaged save make a point NaN. Throws naming the call; touches nothing.
+   * @returns {{ owner: string, layer: string, op: string | null, value: any, clock: string, at: string }}
+   */
+  _entry(o) {
     const { owner } = o, at = label(this.name, o.id);
     if (!owner || typeof owner !== 'string') throw fail(`engine.mod('${at}', { owner }): owner is a non-empty string naming who changes it, e.g. 'my-menu', got ${JSON.stringify(owner)}`);
     const layer = o.layer ?? 'game';
@@ -108,18 +138,27 @@ export class Stack {
     if (this.per === true && o.id == null) throw fail(`engine.mod('${this.name}'): this point is per record, pass { id }, e.g. { owner: '${owner}', id: 'slime_3', ... }`);
     const clock = o.clock ?? 'real';
     if (o.for != null && !(o.for >= 0 && Number.isFinite(o.for))) throw fail(`engine.mod('${at}', { for }): for is seconds >= 0 on clock '${clock}', got ${JSON.stringify(o.for)}`);
-    const m = this._map(o.id, true), old = m.get(owner);
-    this._clash(m, owner, op, layer, at);
-    // Taking again: delete the old entry and put a new object at the end. Why not edit in place: the Map order would not change, so neither the
-    // 'top' latest nor the latest set would be it; and the old handle would then remove the new value. A new object makes a stale handle's _drop miss.
-    m.delete(owner);
-    // where: the code line of the first take (dev only). Kept on rewrites, so a weather module re-taking every frame costs no stack walk
-    const ent = { owner, id: o.id ?? null, since: this.all._at(), where: old ? old.where : callerAt(), op, value, layer, clock, until: o.for != null ? this.all._nowOf(clock) + o.for : null };
-    m.set(owner, ent);
-    this.all.engine._picture?.sharedTook(this.name, ent);   // dev server only: the point's history for explain({ value })
-    if (ent.until != null) this.all._timedDirty = true;
-    this._changed(o.id);
-    return { owner, remove: () => { this._drop(owner, o.id, ent); }, change: v => this._rewrite(ent, v, at) };
+    return { owner, layer, op, value, clock, at };
+  }
+  /**
+   * @internal A saved list of entries ({ owner, id, op, value, layer, clock, left }) checked as engine.mod would take them, one after another: each entry by _entry,
+   * and the list by the conflict rule (two owners setting one layer). Why the list on its own: the entries a load keeps (system / settings / debug) are on other
+   * layers than the saved ones, so they cannot clash with them. Throws on the first bad entry and touches nothing (the caller keeps what the point had).
+   * @param {any} list @param {(layer: any) => string} layerOf how the registry files a saved layer @returns {any[]} the entries, normalized
+   */
+  _fromSave(list, layerOf) {
+    if (!Array.isArray(list)) throw fail(`'${this.name}': a list of entries, got ${shown(list)}`);
+    const seen = new Map();   // id -> owner -> entry: the list's own conflict check
+    return list.map(e => {
+      if (!e || typeof e !== 'object') throw fail(`'${this.name}': an entry is an object, got ${shown(e)}`);
+      const op = e.op, left = e.left == null ? undefined : Math.max(0, e.left);   // a timer already due loads as due
+      const o = { owner: e.owner, id: e.id ?? undefined, layer: layerOf(e.layer), clock: e.clock ?? 'real', for: left, ...(NUM_OPS.includes(op) ? { [op]: e.value } : {}) };
+      const c = this._entry(o), m = seen.get(o.id ?? '') ?? new Map();
+      seen.set(o.id ?? '', m);
+      this._clash(m, c.owner, c.op, c.layer, c.at);
+      m.set(c.owner, { owner: c.owner, op: c.op, layer: c.layer, where: null });
+      return { owner: c.owner, id: o.id ?? null, op: c.op, value: c.value, layer: c.layer, clock: c.clock, left: left ?? null };
+    });
   }
   /** @internal the settings layer only restricts: a number goes down (mul 0..1, clamp with only a max), a value point goes off (set false).
    *  Checked on take and on handle.change, so a settings entry cannot be raised afterwards either */
@@ -213,10 +252,19 @@ export class Stack {
     return v;
   }
   /** @internal dev, once per point and owner: a game-layer set is shown as another number because effects above changed it. Not a warning
-   *  (that is the rule: effects apply on top of what the game set); it says why the screen differs and how to lock the number. */
+   *  (that is the rule: effects apply on top of what the game set); it says why the screen differs and how to lock the number.
+   *  A switch is a warning instead: the lower layer's set loses outright, so it names the holder and its layer. */
   _hint(list, v, id) {
     let lead = null;
     for (const e of list) if (e.op === 'set' && (!lead || LAYERS[e.layer] >= LAYERS[lead.layer])) lead = e;
+    // a switch: the set in charge wins, and a lower-layer set that said the other thing gets nothing on screen, so say who holds it (a warning: the writer's intent is lost)
+    if (typeof v === 'boolean') {
+      if (lead) for (const e of list) if (e.op === 'set' && e.value !== v && LAYERS[e.layer] < LAYERS[lead.layer]) {
+        warnOnce(`'${e.owner}' set ${label(this.name, id)} ${e.value} (${e.layer} layer), but '${lead.owner}' holds it ${lead.value} on the ${lead.layer} layer, which wins; the shown value is ${v}. `
+          + `Lift that hold, or set it from a layer above ${lead.layer}, if ${e.value} is wanted.`, `shared-hint:${this.name}:${e.owner}`);
+      }
+      return;
+    }
     if (!lead || lead.layer !== 'game' || typeof v !== 'number' || Math.abs(v - lead.value) < 1e-9) return;
     const above = list.filter(e => LAYERS[e.layer] > LAYERS.game);
     if (!above.length) return;
@@ -265,8 +313,11 @@ export class Stack {
     let lead = null;
     if (LAYERED.has(this.kind)) { for (const e of list) if (e.op === 'set' && (!lead || LAYERS[e.layer] >= LAYERS[lead.layer])) lead = e; }
     else lead = this.kind === 'any' ? list[0] : list.at(-1);
-    /** @type {{ value: any, writer: string, layer?: string, at?: string, also?: object[], how?: string }} */
-    const r = { value: this.value(id ?? undefined), writer: lead ? lead.owner : 'default' };
+    // the base this record is read with: a mover passes the character's own speed to value(id, base), the memo keeps the last one read; the
+    // define-time base is only the fallback (a point nobody has read yet)
+    const base = this._memo.has(id ?? '') ? this._memo.get(id ?? '').base : this.base;
+    /** @type {{ value: any, base: any, writer: string, layer?: string, at?: string, also?: object[], how?: string }} */
+    const r = { value: this.value(id ?? undefined, base), base, writer: lead ? lead.owner : 'default' };
     if (lead?.layer && LAYERED.has(this.kind)) r.layer = lead.layer;
     if (lead?.where) r.at = lead.where;
     const hiddenBelow = lead && LAYERED.has(this.kind) ? LAYERS[lead.layer] : -Infinity;
@@ -275,13 +326,13 @@ export class Stack {
       if (LAYERED.has(this.kind) ? LAYERS[e.layer] < hiddenBelow : this.kind === 'top') h.hidden = true;
       return h;
     });
-    if (LAYERED.has(this.kind)) r.how = this._how(list, lead, hiddenBelow);
+    if (LAYERED.has(this.kind)) r.how = this._how(list, lead, hiddenBelow, base);
     return r;
   }
   /** @internal how the value was combined, in the order it was: "cave 180 × storm 0.6" (layer order, then set / add / mul / clamp) */
-  _how(list, lead, from) {
-    const show = v => (typeof v === 'number' ? String(+v.toFixed(4)) : typeof v === 'function' ? 'function' : JSON.stringify(v));   // a rule's value may be a function
-    const parts = lead ? [] : [`default ${show(this.base)}`];
+  _how(list, lead, from, base = this.base) {
+    const show = showValue;
+    const parts = lead ? [] : [`default ${show(base)}`];
     for (const L of Object.values(LAYERS)) {
       if (L < from) continue;
       const es = list.filter(e => LAYERS[e.layer] === L);

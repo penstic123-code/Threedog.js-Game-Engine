@@ -172,6 +172,7 @@ export class Views {
       v.obj = obj; v.pending = false; this.byObj.set(obj, rec.id);
       if (p.positionFrom === 'view') { this.moving.add(rec.id); v.at = { ...rec.position }; }   // at: the record as pull last left it
       obj.position.copy(rec.position);
+      // only the position: rot / scale are the build's to read (its own units, a turned child, a baked size), as in 1.1; engine presenters place them in their build
       if (!obj.parent) e.add(obj, { owner: 'world', id: rec.id });   // the registry knows it as the record (engine.thing / hit.thing)
     };
     let out;
@@ -179,11 +180,12 @@ export class Views {
     try { out = p.build(rec); if (typeof out?.then !== 'function') { done(out); return; } } catch (err) { fail(err); return; } finally { this.w._building = null; }
     out.then(done).catch(fail).then(() => this.wake());   // an async build settled: waiters of a paused engine resolve here (see wake)
   }
-  unview(id) {
+  /** @param {string} id @param {any} [rec]  the record the model was built from, when the world no longer holds it (keepSame) */
+  unview(id, rec = this.w.records.get(id)) {
     const v = this.map.get(id); if (!v) return;
     this.map.delete(id); this.moving.delete(id);
     if (v.obj) this.byObj.delete(v.obj);
-    if (v.obj) this.drop(this.w.records.get(id), v.p, v.obj);
+    if (v.obj) this.drop(rec, v.p, v.obj);
   }
   /**
    * Tear down a model. A dispose error is reported on its own (naming the kind's dispose) and not thrown outward — otherwise loading a save would report it as
@@ -194,4 +196,15 @@ export class Views {
     try { p.dispose(rec, obj); } catch (err) { reportError(this.w.engine, err, say(STRINGS.disposeFailed, rec.kind), { soft: true }); }
   }
   clear() { for (const id of [...this.map.keys()]) this.unview(id); this.dirty = true; }
+  /**
+   * A load replaced the records (built: the ones the models were built from). A model whose record came back the same stays; the rest go and rebuild nearby.
+   * Tearing down every model would leave an atomic op's rollback, which puts most of the world back unchanged and runs no afterLoad, without the scene
+   * and its colliders for frames (review l2 #2). Same means the same data: a record that cannot be compared counts as changed.
+   * @param {Map<string, any>} built
+   */
+  keepSame(built) {
+    const same = (a, b) => { try { return JSON.stringify(a) === JSON.stringify(b); } catch { return false; } };
+    for (const id of [...this.map.keys()]) { const was = built.get(id), now = this.w.records.get(id); if (!now || !was || !same(was, now)) this.unview(id, was); }
+    this.dirty = true;
+  }
 }

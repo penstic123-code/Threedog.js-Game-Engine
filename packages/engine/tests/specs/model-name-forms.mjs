@@ -15,7 +15,7 @@ export const specs = [{
     check('the name stays plain data in the save', JSON.stringify(r.look) === '["formBody",7]', JSON.stringify(r.look));
     const refused = await ev(() => {
       engine.assets.manifest({ models: { formFile: '/models/form.glb' } });
-      try { engine.characters.createPlayer({ control: 'camera', model: ['formFile', 1] }); return 'no error'; } catch (err) { return err.message; }
+      try { engine.characters.addPlayer({ control: 'camera', model: ['formFile', 1] }); return 'no error'; } catch (err) { return err.message; }
     });
     check('a file model with arguments stops and says why', refused.includes('arguments work on a generator'), refused);
   },

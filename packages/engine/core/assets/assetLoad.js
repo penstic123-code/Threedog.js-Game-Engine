@@ -3,6 +3,7 @@
 // (a texture / .bin that 404s), so "the model looks gray" is traceable to one path instead of a bare "failed".
 import { coded } from '../base/errorHints.js';
 import * as THREE from 'three';
+import { texturesOf } from '../stream/prepare.js';
 import { restoreBaked, toGLB, fromGLTF } from './Baked.js';
 import { warnOnce, DEV_SERVER, BASE_URL, fmt } from '../base/validate.js';
 import { neutralMaterial } from '../../render/neutral.js';
@@ -88,9 +89,7 @@ export async function loadGltf(assets, url, task) {
   if (task.signal.aborted) return gltf;
   await noteFailedTextures(gltf, missing);
   task.source.animations = gltf.animations.map(a => a.name);
-  const tex = new Set();
-  gltf.scene.traverse(o => { for (const m of [].concat(o.material || [])) for (const k in m) if (m[k]?.isTexture) tex.add(m[k]); });
-  upload(assets, tex, task);
+  upload(assets, texturesOf(gltf.scene), task);
   return gltf;
 }
 
@@ -248,7 +247,8 @@ export async function generated(assets, name, build, params, task) {
     toGLB(v, name).then(buf => fetch(CACHE + info.key + '.glb', { method: 'PUT', body: buf })).catch(err => warnOnce(coded('asset-cache', '[cache] could not store a built model in .threedog/cache (' + err.message + '); it is built again next time')));
   return wrap(v);
 }
-/** Bake manifest public/models/baked/index.json (empty if missing) */
-function bakedIndex(assets) {
-  return assets._baked ||= fetch(BASE + 'models/baked/index.json').then(r => (r.ok ? r.text() : '{}')).then(t => { try { return JSON.parse(t); } catch { return {}; } }, () => ({}));
+/** Bake manifest public/models/baked/index.json (empty if missing: a 404 means nothing was baked; any other failure or a malformed file is said once) */
+export function bakedIndex(assets) {
+  const bad = why => { warnOnce(coded('asset-cache', `[assets] the bake manifest models/baked/index.json could not be used (${why}); baked models are ignored and built again`)); return {}; };
+  return assets._baked ||= fetch(BASE + 'models/baked/index.json').then(r => (r.ok ? r.text() : r.status === 404 ? '{}' : bad('HTTP ' + r.status))).then(t => { try { const m = typeof t === 'string' ? JSON.parse(t) : t; return m && typeof m === 'object' && !Array.isArray(m) ? m : bad('the top level is not an object: ' + String(t).slice(0, 20)); } catch (e) { return bad(e.message); } }, e => bad(e.message));
 }

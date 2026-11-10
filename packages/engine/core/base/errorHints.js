@@ -13,6 +13,8 @@
 // Doc paths are relative to the package docs (recipes/..., api/..., CONVENTIONS.md), same as the shipped docs.
 // Plain data (it imports only errorCodes.js, also plain data), so node tools can load it too. First pattern match wins, so put specific ones first.
 import { ERROR_CODES } from './errorCodes.js';
+import { docRefsLine } from './docRef.js';
+export { docRef, parseDocRef, docRefsLine, docReadCommand, docSlug } from './docRef.js';
 
 
 /** @typedef {{ id: string, match: RegExp, cause: string, docs: string[] }} ErrorHint */
@@ -27,7 +29,7 @@ export const ERROR_HINTS = [
     match: /Cannot (assign to read only property '[^']*' of object '(#<Object>|\[object Array\])'|add property [^,]*, object is not extensible|delete property '[^']*' of (#<Object>|\[object Array\]))/,
     cause: 'Definitions (content templates, items, entity types) are shared by every instance and frozen. Keep per-instance ' +
       'state on the world record (engine.world.set(id, { opened: true })) or in its container; define another template for a different kind of thing.',
-    docs: ['recipes/30-templates.md', 'recipes/18-world.md'] },
+    docs: ['recipes/30-templates.md §3', 'recipes/18-world.md §2'] },
   // undefined only: a module that is not installed is undefined, never null. A read on null is another cause (null-value below), and
   // calling it "not installed" sent a reader after engine.use() when three.js mergeGeometries had returned null.
   { id: 'not-installed', match: /Cannot read properties of undefined \(reading '[\w$]+'\)|engine\.[\w$]+(\.[\w$]+)* is undefined/,
@@ -43,21 +45,21 @@ export const ERROR_HINTS = [
   // A guessed pause method (the engine has one answer: engine.freeze; `threedog check` asks this entry too, tools/types.mjs)
   { id: 'fall-prevent', match: /\bpreventDefault is not a function/,
     cause: "The character:fall event can no longer be cancelled: falling is the rule 'fall'. To leave a fall to the game: engine.mod('fall', { owner: 'game', id: 'player', set: false }).",
-    docs: ['MIGRATING-1.0.md', 'recipes/55-mods-time-wrap.md'] },
+    docs: ['MIGRATING-1.0.md', 'recipes/55-mods-time-wrap.md §"The rules in full"'] },
   { id: 'thing-explain', match: /\.explain is not a function/,
     cause: 'engine.explain is the one way to ask why: what engine.thing(id).explain() gave is engine.explain({ thing: id }).detail.',
-    docs: ['MIGRATING-1.0.md', 'recipes/40-scene.md'] },
+    docs: ['MIGRATING-1.0.md', 'recipes/40-scene.md §9'] },
   { id: 'pause-guess', match: /\b(?:time\.(?:pause|stop|resume)|engine\.(?:pause|resume|stop)) is not a function/,
     cause: 'The engine has no pause method of that name. To pause the world call engine.freeze(owner): it returns the handle that releases it ' +
-      '(handle.release()); settings({ freezeWorld: true }) does it for a menu.',
-    docs: ['recipes/07-flow-scenes-pause.md', 'api/engine.md'] },
+      '(handle.remove()); settings({ freezeWorld: true }) does it for a menu.',
+    docs: ['recipes/07-flow-scenes-pause.md §1', 'api/engine.md'] },
   { id: 'not-function', match: /[\w$.]+ is not a function/,
     cause: 'The method name is wrong, or the module is not installed (the property is then undefined). Check spelling against api/<module>.md.',
     docs: ['api/engine.md', 'CODEMAP.md'] },
   { id: 'resource-load', match: /Failed to load <(img|script|link|audio)/,
     cause: 'The browser could not load a file the page references (404 or wrong type). Check the path (files under public/ are served ' +
       'from /), the extension and the case of the name.',
-    docs: ['api/assets.md', 'recipes/05-props-bake.md'] },
+    docs: ['api/assets.md', 'recipes/05-props-bake.md §2d'] },
 ];
 
 
@@ -110,5 +112,5 @@ export function coded(code, message) { return `${message} [${code}]`; }
 export function hintText(message) {
   const h = hintFor(message);
   if (!h || ERROR_CODES[h.id]?.brief) return '';
-  return (tagOf(String(message)) ? '' : `\n  Code: ${h.id}`) + `\n  Possible cause: ${h.cause}\n  Read: ${h.docs.join(', ')}`;
+  return (tagOf(String(message)) ? '' : `\n  Code: ${h.id}`) + `\n  Possible cause: ${h.cause}\n  Read: ${docRefsLine(h.docs)}`;
 }

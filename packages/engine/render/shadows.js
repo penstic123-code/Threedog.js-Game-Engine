@@ -14,6 +14,7 @@ import { warnOnce, fmt } from '../core/base/validate.js';
 import { readParams } from '../core/base/params.js';
 import { defineOwned, dropOwned, ownedRow } from '../core/ops/owned.js';
 import { isWebGPU, onRendererSwap, setShadowUpdate, shadowsOn, webgpuPart } from './backend.js';
+import { onTierChange } from '../core/scene/tier.js';
 import { CASCADE_DEFAULTS, CASCADE_SPLITS, createCascades, dropCascades, includeInCascades } from './cascades.js';
 
 const WHERE = 'engine.shadows.cascades';
@@ -196,15 +197,14 @@ function ownBudget(e, light, first) {
  * @param {any} e @param {boolean} on
  */
 function switchShadows(e, on) {
-  if (shadowsOn(e) === on) return;   // nothing changed: no scene walk, no recompile
   e.renderer.shadowMap.enabled = on;
   e.scene.traverse(o => { if (o.material) [].concat(o.material).forEach(m => { m.needsUpdate = true; }); });
   e.events.emit('settings:shadows', on);
 }
 
 /** The running handle's cascades. The WebGL half keeps what the game wrote apart from the placement; see the header */
-function ownCascades(e, light, first) {
-  let o = readOptions(first), c = null, key = '', own = null, box = null;
+function ownCascades(e, light, first, gameExtent = () => undefined) {
+  let o = readOptions(first), c = null, key = '', own = null, box = null, sunSize = null;   // sunSize: puts the engine sun's box size back
   const proxy = new THREE.Object3D(), placed = new THREE.Vector3(), dir = new THREE.Vector3();
   const readGame = () => {
     if (light.target !== proxy) { own.target = light.target; light.target = proxy; }
@@ -212,6 +212,7 @@ function ownCascades(e, light, first) {
   };
   const off = () => {
     box?.remove(); box = null;
+    sunSize?.(); sunSize = null;
     if (!c) return;
     if (own) { readGame(); light.position.copy(own.position); light.target = own.target; own = null; }
     dropCascades(e);
@@ -225,8 +226,15 @@ function ownCascades(e, light, first) {
     key = want;
     if (n <= 1) {
       // one map still has to cover what the cascades would: left alone it stays three's default 10 m box where the game put the light. Centered on the camera, as far
-      // as maxFar each way and lightMargin behind, as the cascades reach. The engine sun needs none: a sky's box or the baseline follow (render/lights.js) moves it
+      // as maxFar each way and lightMargin behind, as the cascades reach. The engine sun is placed by a sky's box or the baseline follow (render/lights.js), so it only gets the size
       if (light !== e.lights?.sun) box = gameBox(e, light, { follow: 'camera', extent: o.maxFar, snap: 'texel' }, o.lightMargin + o.maxFar);
+      else if (gameExtent() === undefined) {
+        // the engine sun gets the same reach: its placement stays with the sky or the baseline follow, only the box grows from the 30 m baseline to maxFar (and goes back with remove).
+        // Like gameBox: an extent the game set with engine.shadows.box(sun, { extent }) wins, and if it sets one meanwhile, remove leaves it as the game left it
+        const sc = light.shadow.camera, was = { left: sc.left, right: sc.right, top: sc.top, bottom: sc.bottom }, ext = o.maxFar;
+        setExtent(light, ext);
+        sunSize = () => { if (sc.right !== ext) return; Object.assign(sc, was); sc.updateProjectionMatrix(); };
+      }
       return;
     }
     c = createCascades(e, light, { ...o, cascades: n }, WHERE);
@@ -239,8 +247,9 @@ function ownCascades(e, light, first) {
       if (l.isDirectionalLight && l.castShadow && l.visible && !c.lights.includes(l)) warnOnce(`${WHERE}: DirectionalLight '${l.name || l.uuid.slice(0, 8)}' casts shadows too, which breaks the cascade order; set castShadow = false on it`);
     });
   };
+  sync();   // first, so a request that throws (a bad split callback) returns no handle and leaves no listener behind
   const swap = onRendererSwap(e, () => { if (c?.isCascadeNode) { off(); sync(); } });   // fallback 'webgl': the shadow node has no meaning on the new renderer
-  sync();
+  const tier = onTierChange(e, sync);   // the map count reads engine.tier: a preset switched while running rebuilds once (sync's key skips the rest)
   return {
     frame() {
       box?.frame();
@@ -255,7 +264,7 @@ function ownCascades(e, light, first) {
       proxy.updateMatrixWorld();   // not in the scene: nothing else refreshes it
     },
     set(next) { o = readOptions({ ...o, ...next }); sync(); },
-    remove() { off(); swap.remove(); },
+    remove() { off(); swap.remove(); tier.remove(); },
     get csm() { return c; },
     /** the light while one map's box places it, else null */
     get boxed() { return box ? light : null; },
@@ -299,8 +308,10 @@ export function defineShadows(e, { owned }) {
   const boxes = new Map(), budgets = new Map(), caches = new Map();
   if (owned) e.renderer.shadowMap.enabled = true;   // the placeholder sun casts, so things read as standing on the ground; the switch below turns it off
   // one point, because separate switches (an option, a method, the settings menu) each decided on their own and disagreed about what is on
-  const point = e.stacks.define('shadows.enabled', { kind: 'value', base: shadowsOn(e), save: false, manual: "engine.mod('shadows.enabled', { owner, layer: 'system', set })",
-    onChange: () => switchShadows(e, !!point.value()) });
+  // `shown` = the value this switch last applied, compared instead of the renderer's flag: a direct write to renderer.shadowMap.enabled (the picture writers report it) is not undone by a change that left the shared value as it was; no change: no scene walk, no recompile
+  let shown = shadowsOn(e);
+  const point = e.stacks.define('shadows.enabled', { kind: 'value', base: shown, save: false, manual: "engine.mod('shadows.enabled', { owner, layer: 'system', set })",
+    onChange: () => { const on = !!point.value(); if (on !== shown) switchShadows(e, shown = on); } });
   const hold = (map, light, h) => {
     const remove = () => { e.signal.removeEventListener('abort', remove); if (map.get(light) !== h) return; h.remove(); map.delete(light); };
     map.set(light, h);
@@ -337,7 +348,7 @@ export function defineShadows(e, { owned }) {
       if (live) fail('twice');
       if (caches.has(light)) refuse(`${WHERE}(light): this light keeps a cached shadow, which works on one plain map; call the cache handle's remove() first`);
       if (boxes.has(light) && light !== e.lights.sun) fail('boxed');
-      const set = ownCascades(e, light, options);
+      const set = ownCascades(e, light, options, () => boxes.get(light)?.options?.extent);
       live = set;
       const remove = () => { e.signal.removeEventListener('abort', remove); if (live !== set) return; set.remove(); live = null; };
       e.signal.addEventListener('abort', remove, { once: true });

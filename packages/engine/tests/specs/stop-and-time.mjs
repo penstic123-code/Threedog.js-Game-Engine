@@ -111,14 +111,14 @@ export const specs = [
     },
   },
   {
-    name: '[guard] freeze { ambient: true } is a still: animation stops, a plain freeze keeps it moving',
+    name: '[guard] freeze { still: true } is a still: animation stops, a plain freeze keeps it moving',
     url: '/tests/anim/index.html',
     async run({ page, check, ev }) {
       await page.waitForFunction(() => window.ready === true, null, { timeout: 20000 });
       const r = await ev(async () => {
         engine.haltLoop();
         const m = engine.player.anim.mixer, moved = () => { const t = m.time; engine.step(0.5, { render: false }); return m.time - t; };
-        const still = engine.freeze('t-still', { ambient: true }), held = moved(); still.remove();
+        const still = engine.freeze('t-still', { still: true }), held = moved(); still.remove();
         const plain = engine.freeze('t-menu'), menu = moved(); plain.remove();
         return { held, menu };
       });
@@ -127,7 +127,7 @@ export const specs = [
     },
   },
   {
-    name: '[guard] freeze { ambient: true } is a still: particles hold in the air',
+    name: '[guard] freeze { still: true } is a still: particles hold in the air',
     url: '/',
     async run({ check, ev }) {
       const r = await ev(async () => {
@@ -135,7 +135,7 @@ export const specs = [
         engine.particles.define('t-still', { max: 50, lifetime: [1, 1] });
         engine.particles.emit('t-still', [0, 1, 0], { count: 20 });
         const alive = () => engine.particles.effects.get('t-still').alive;
-        const still = engine.freeze('t-still', { ambient: true });
+        const still = engine.freeze('t-still', { still: true });
         const before = alive(); engine.step(3, { render: false }); const held = alive();
         still.remove(); engine.step(3, { render: false });
         return { before, held, after: alive() };

@@ -17,7 +17,7 @@
 //
 // When the engine's public API changes (new export, changed parameter), update this file too; `npm run types` checks that every export of index.js is declared.
 
-import type { Engine, EngineOptions, ModuleDef, ModuleInput, PictureSlot, Ground } from './types/core';
+import type { Engine, EngineOptions, ModuleDef, ModuleInput, PictureSlot, Ground, GroundProvider } from './types/core';
 import type { Ease, EaseName, BufferGeometry, ColorLike, Material, Vector3, PositionLike } from './types/common';
 import type {
   TerrainOptions, TerrainConfig, TerrainGen, Terrain, Vegetation, VegetationModuleOptions, Sky, SkyOptions, Calendar, CalendarOptions, Weather, WeatherOptions, WeatherPreset,
@@ -118,7 +118,7 @@ export function openWorld(opts: OpenWorldOptions): ModuleDef[];
 /** Procedural terrain -> engine.terrain, and engine.terrainDraw for its drawing */
 export function terrain(opts?: TerrainOptions): [ModuleDef<Terrain>, ModuleDef<TerrainDraw>];
 /** One ground slot over several providers: terrain({ part: true }) / level({ part: true }) answer inside their region, higher priority wins where regions overlap. region: (x, z) => boolean | { volume } (asked at y 0); omitted = everywhere */
-export function compositeGround(opts: { parts: Array<{ of?: 'terrain' | 'level'; ground?: Ground; region?: ((x: number, z: number) => boolean) | { volume: { contains(p: { x: number; y: number; z: number }): boolean } }; priority?: number }> }): ModuleDef<void>;
+export function compositeGround(opts: { parts: Array<{ of?: 'terrain' | 'level'; ground?: Partial<GroundProvider>; region?: ((x: number, z: number) => boolean) | { volume: { contains(p: { x: number; y: number; z: number }): boolean } }; priority?: number }> }): ModuleDef<void>;
 /** Vegetation -> engine.vegetation: on terrain chunks when terrain() is installed first (no options), else on its own chunks over any ground (a level, setGround) */
 export function vegetation(opts?: VegetationModuleOptions): [ModuleDef<Vegetation>, ModuleDef<VegetationDraw>];
 // Migrated: sky() is generated from the JSDoc in modules/sky/skyModule.js

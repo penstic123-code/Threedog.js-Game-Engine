@@ -52,10 +52,10 @@ export class Quests {
     this.notify = notify;   // true toast (kind 'quest') · false silent · function ({ type, id, text }) => void
     engine.i18n.add(STRINGS);
     // declared only: the game binds the key (presets.bindings.quests or its own; [] = no key), so every key in a game comes from one bindings table
-    track(engine.input.action(action, { label: 'quests.action', owner: 'quests' }));
+    track(engine.input.define(action, { label: 'quests.action', owner: 'quests' }));
     this.win = questLogWindow(engine, this, ctx);   // { open, toggle, refresh } over engine.ui
     // saved by stable step ids (questSave.js); version 1 saved positions
-    ctx.saves.register('quests', { atomic: true, version: 3, migrate: { 1: d => migrateV1(this.defs, d), 2: d => d }, save: () => this._save(), load: d => this._load(d) });
+    ctx.saves.define('quests', { atomic: true, version: 3, migrate: { 1: d => migrateV1(this.defs, d), 2: d => d }, save: () => this._save(), load: d => this._load(d) });
   }
 
   /**
@@ -201,7 +201,7 @@ export class Quests {
    */
   _pay(id, s, d, answer) {
     if (!isRunFailure(answer)) return;
-    const failed = answer.facts.failed ?? [{ word: 'reward', code: answer.code, facts: answer.facts }];
+    const failed = answer.facts?.failed ?? [{ word: 'reward', code: answer.code, facts: answer.facts }]   // a reward function may answer a plain { ok: false, code } with no facts;
     if (d.onUnpaid) this._ask(id, 'onUnpaid', d.onUnpaid, answer);
     else {
       for (const f of failed) for (const [item, n] of Object.entries(f.word === 'give' ? f.facts.left : {})) (s.owed ??= {})[item] = (s.owed?.[item] ?? 0) + n;
@@ -241,15 +241,17 @@ export class Quests {
   /** @internal Plain step: its condition. Parallel step: tick off parts as they are met (each stays done); done when no required part is left */
   _stepDone(id, s, st) {
     if (!st.all) return st.done(this.engine);
-    s.parts ??= st.all.map(() => false);
+    const parts = s.parts ??= st.all.map(() => false);
     let left = false;
-    st.all.forEach((p, k) => {
-      if (!s.parts[k] && p.done(this.engine)) {
+    for (let k = 0; k < st.all.length; k++) {
+      const p = st.all[k];
+      if (!parts[k] && p.done(this.engine)) {
         DEV && this.engine.ops.guard('quests.advance');
-        s.parts[k] = true; this.engine.events.emit('quest:part', { id, step: s.step, part: k }); this.win.refresh();
+        parts[k] = true; this.engine.events.emit('quest:part', { id, step: s.step, part: k }); this.win.refresh();
+        if (s.parts !== parts) return false;   // a quest:part listener advanced / failed the quest: this step's parts are gone, and the check must not read them or judge the new step by them
       }
-      if (!s.parts[k] && !p.optional) left = true;
-    });
+      if (!parts[k] && !p.optional) left = true;
+    }
     if (!left && s.parts.some((x, k) => x && st.all[k].optional)) (s.got ??= {})[s.step] = s.parts;   // optional goals met stay visible in list()
     return !left;
   }
@@ -354,4 +356,4 @@ export function quests(opts = {}) {
   };
 }
 
-export const handRolled = [{ kind: 'quests', seen: 'a quest list of its own', use: 'the quests module: steps, rewards, markers and the log, saved with the game (recipe 04)', quiet: /\b(engine|e|eng|ctx)\.quests\b|\bquests\(\s*[{)]/, code: /(?:\b(?:const|let|var)\s+|\bthis\.)(?:quests?|questLog|missions?|objectives?)(?:List|Log|Data|s)?\s*=\s*(?:\[\s*\]|\{\s*\}|new Map\b)/i }];
+export const handRolled = [{ kind: 'quests', seen: 'a quest list of its own', use: 'engine.quests (quests()): steps, rewards, markers and the log, saved with the game (recipe 04)', quiet: /\b(engine|e|eng|ctx)\.quests\b|\bquests\(\s*[{)]/, code: /(?:\b(?:const|let|var)\s+|\bthis\.)(?:quests?|questLog|missions?|objectives?)(?:List|Log|Data|s)?\s*=\s*(?:\[\s*\]|\{\s*\}|new Map\b)/i }];

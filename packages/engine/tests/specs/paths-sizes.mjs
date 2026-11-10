@@ -53,7 +53,7 @@ const run = async ({ threads }) => {
   plug.remove(); step();
   out.open = via(0.2);
   // bodies follow their own radius
-  const P = E.characters.createPlayer({ control: 'camera', spawn: { x: -8, z: -6 }, radius: 0.2 });
+  const P = E.characters.addPlayer({ control: 'camera', spawn: { x: -8, z: -6 }, radius: 0.2 });
   let res = null; P.walkTo([-8, 0, 6]).then(v => { res = v; });
   for (let i = 0; i < 1500 && !res; i++) { step(); if (i % 200 === 0) await new Promise(r => setTimeout(r, 0)); }
   out.walk = [res?.status, +P.position.z.toFixed(1)];

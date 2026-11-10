@@ -81,7 +81,7 @@ export const specs = [
         await E.start(); E.haltLoop();
         out.type = [E.groundType(9, 0), E.groundType(9, 0, 3), E.groundType(9, 0, 0)];
         out.slope = [E.slope(9, 0), E.slope(9, 0, 3), E.slope(9, 0, 0)];
-        const p = E.characters.createPlayer({ control: 'camera', spawn: { x: 9, y: 0, z: 0 } });
+        const p = E.characters.addPlayer({ control: 'camera', spawn: { x: 9, y: 0, z: 0 } });
         p.placeAt([9, 0, 0]);
         out.feet = [p.position.y, p.groundType()];
         E.dispose();
