@@ -63,10 +63,11 @@ function stageLogs(gl, vs, fs) {
  * Hook renderer.debug.onShaderError (when nothing else holds it) so compile errors name the patch and slot.
  * @internal core/engine/Engine.js
  * @param {import('three').WebGLRenderer} renderer
+ * @param {(materialId: number) => string} [onFail] WebGPU: called when the device refused a pipeline of that material; returns what was done about it ('' = nothing)
  */
-export function nameShaderErrors(renderer) {
+export function nameShaderErrors(renderer, onFail) {
   const d = /** @type {any} */ (renderer).debug;
-  if (isWebGPU(renderer)) { nameNodeErrors(renderer); return; }
+  if (isWebGPU(renderer)) { if (onFail) ON_FAIL.set(renderer, onFail); nameNodeErrors(renderer); watchInvalidPipelines(renderer); return; }
   if (!d || d.onShaderError) return;
   d.onShaderError = (gl, program, vs, fs) => {
     const parts = [];
@@ -104,9 +105,31 @@ function nodeOwner(ro) {
  */
 function explainPipelineError(message) {
   const m = /Render pipeline creation failed \(renderPipeline_.*_(\d+)\)/.exec(message);
-  if (!m) return '';
-  const ro = findNodeBuild(x => x.material?.id === +m[1]);
-  return `[threedog] WebGPU pipeline failed for ${ro ? nodeOwner(ro) : `material #${m[1]} (not among the recent builds)`}: ${NODE_HINT}. three's WGSL lines follow.`;
+  return m ? `${pipelineFailed(+m[1])} three's WGSL lines follow.` : '';
+}
+
+// renderer -> what the engine does about a pipeline that failed for one material (core/engine/Engine.js gives it): the post chain holds the effect
+// that draws with it. Why here: the device reports a failed pipeline by its label only, and this file is where a label becomes a material and its owner.
+const ON_FAIL = new WeakMap();
+/** "[threedog] WebGPU pipeline failed for <owner>: <what the engine did about it, or how to find the cause>." @param {number} id material id @param {any} [r] the renderer, when the report came with one */
+function pipelineFailed(id, r) {
+  const ro = findNodeBuild(x => x.material?.id === id), did = ON_FAIL.get(r ?? ro?.renderer)?.(id);
+  return `[threedog] WebGPU pipeline failed for ${ro ? nodeOwner(ro) : `material #${id} (not among the recent builds)`}: ${did || NODE_HINT}.`;
+}
+
+// What three's own scope misses: it wraps pipeline creation in a 'validation' error scope, and a shader the driver's compiler refuses (FXC on D3D:
+// GPUInternalError) is no validation error. The pipeline stays invalid, three keeps drawing with it, and the device answers every frame with
+// `[Invalid RenderPipeline "renderPipeline_<name>_<id>"] is invalid`, which reaches renderer.onError. Said once per material; a game's own onError still runs first.
+const INVALID = /\[Invalid RenderPipeline "renderPipeline_.*_(\d+)"\]/, told = new WeakMap();
+/** @param {any} r a WebGPURenderer */
+function watchInvalidPipelines(r) {
+  if (typeof r.onError !== 'function' || told.has(r)) return;
+  const prev = r.onError, said = new Set(); told.set(r, said);
+  r.onError = function (info) {
+    prev.call(this, info);
+    const m = INVALID.exec(String(info?.message));
+    if (m && !said.has(m[1])) { said.add(m[1]); console.error(pipelineFailed(+m[1], r)); }
+  };
 }
 
 /** The explanation for three's node build-error log ('THREE.TSL: TypeError: ...', NodeManager), or '' (another message) @param {string} message */

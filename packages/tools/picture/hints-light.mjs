@@ -119,9 +119,12 @@ export function overBudget({ probe, add }) {
   const bg = probe?.budget;
   for (const o of bg?.over ?? []) {
     const whose = o.own ? `your engine.budget limit ${o.limit}` : `the engine's default guide ${o.limit} (${BUDGET_WHY[o.category]}; nothing is cut at it, measure with threedog perf; engine.budget.enable({ ${o.category}: n }) sets yours)`;
-    // brief: value, limit and the way out; the full sentence runs past LINE_MAX and clipLine would cut the usage first
-    add(o.own ? 'intent' : 'fact', 'over-budget', `${o.value} ${BUDGET_WORDS[o.category]}, over ${whose}; tier ${bg.tier}. ${budgetNext(o.category, bg)}.`, Math.min(1, o.value / o.limit - 1),
-      `${o.category} ${o.value} over ${o.own ? `${o.limit} (tier ${bg.tier})` : `default ${o.limit} (a guide: ${BUDGET_WHY[o.category]}; tier ${bg.tier})`}: ${budgetNext(o.category, bg)}.`);
+    // size: shadow maps by their share of the frame's passes over the scene (13 maps beside the one main pass: 0.93), the rest by how far over the limit.
+    // Why: two point lights with shadows tripled the frame's triangles and this line, ranked by "13 over 12", was folded into "2 more" behind "9 lights over 8"
+    const maps = o.category === 'shadowMaps', cost = maps && bg.triangles ? `${(bg.triangles / 1e6).toFixed(1)} M triangles a frame with them` : '';
+    // brief: value, limit and the way out; the full sentence runs past LINE_MAX and clipLine would cut the usage first. The measured cost stands in for the general reason
+    add(o.own ? 'intent' : 'fact', 'over-budget', `${o.value} ${BUDGET_WORDS[o.category]}, over ${whose}; tier ${bg.tier}${cost && `; ${cost}`}. ${budgetNext(o.category, bg)}.`, maps ? o.value / (o.value + 1) : Math.min(1, o.value / o.limit - 1),
+      `${o.category} ${o.value} over ${o.own ? `${o.limit} (tier ${bg.tier}${cost && `; ${cost}`})` : `default ${o.limit} (a guide: ${cost || BUDGET_WHY[o.category]}; tier ${bg.tier})`}: ${budgetNext(o.category, bg)}.`);
   }
 }
 

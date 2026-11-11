@@ -280,6 +280,20 @@ window.shaderErrorCases = async () => {
     // the WebGPU backend's only report path, called the way three's popErrorScope handler calls it (headless runs the WebGL2 backend)
     threeError(`WebGPURenderer: Render pipeline creation failed (renderPipeline_${bad.name}_${bad.id}): test validation error`);
     out.pipeline = errs.splice(0).join('\n');
+    // a pipeline the driver's compiler refused (FXC: no validation error, so three's scope misses it): the device then names it invalid on every frame.
+    // The material belongs to a post effect's own pass, kept on its display node as three's nodes keep theirs
+    const passMat = new TG.NodeMaterial(), invalid = () => g.renderer.onError({ api: 'WebGPU', type: 'GPUValidationError', message: `[Invalid RenderPipeline "renderPipeline_Godrays_${passMat.id}"] is invalid.` });
+    g.post.add({ name: 'brokenFx', slot: 'hdr', order: 10, node: (input, { display }) => { display.own({ _material: passMat, dispose() {} }); return input.mul(1); } });
+    g.post.add({ name: 'fineFx', slot: 'hdr', order: 20, node: input => input.mul(1) });
+    g.post.render(0.016);
+    const row = () => g.describe().render.post.find(p => p.name === 'brokenFx');
+    const before = { on: row().on, order: [...g.post._pipe.order] };
+    invalid(); invalid();
+    g.post.render(0.016);
+    out.failed = { before, text: errs.splice(0), row: row(), order: [...g.post._pipe.order], gameOn: g.post.get('brokenFx')._on(), fine: g.describe().render.post.find(p => p.name === 'fineFx').on };
+    g.post.get('brokenFx').remove();
+    g.post.add({ name: 'brokenFx', slot: 'hdr', order: 10, node: input => input.mul(1) });
+    out.failed.again = row().on;
   } finally { console.error = orig; g.dispose(); }
   return out;
 };

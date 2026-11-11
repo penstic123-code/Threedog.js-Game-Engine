@@ -73,6 +73,7 @@ Open the address the terminal prints. The default template is an empty scene wit
 |---|---|
 | `--open-world` | Ground, sky, a follow camera and a player |
 | `--pixel` | A pixel-picture template |
+| `--scene-only` | A scene and a camera, no `content/` and no `assets.js` |
 | `--webgl` | WebGL and GLSL shaders instead of the default WebGPU and TSL |
 
 The two render routes use different picture code, so the choice is made when the project is created. `createEngine()` itself defaults to WebGL, and the project template sets WebGPU.

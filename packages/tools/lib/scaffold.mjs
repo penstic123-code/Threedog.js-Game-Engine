@@ -1,6 +1,7 @@
 // Shared by new-game and init: read the flags, copy the template layers, fill the placeholders.
 //   templates/game       the base: a blank scene with a camera, empty content files, a gray picture/ folder (no gameplay, no genre assumed)
 //   templates/openworld  an overlay for --open-world: generated terrain, day/night sky, follow camera, a player (a main.js only)
+//   templates/sceneonly  an overlay for --scene-only: a main.js with no content/ and no assets.js (copyTemplates leaves those two out of the base): a showcase scene, nothing placed
 //   templates/pixel      an overlay for --pixel: a sprite character in a pixel-snapped orthographic view, input, interaction, dialogue, saves (main.js + picture/sprites.js)
 // Why blank by default: an open world is one genre among many (a puzzle, a card table, a side-scroller start from nothing), and a default that has
 // to be deleted first steers every new game toward the same shape. Overlays are copied FIRST so their files win over the base.
@@ -41,6 +42,7 @@ export function gameName(folder) {
 const GAMEPLAY = {
   clean: 'This game starts blank (a scene, a camera, a start screen, autosave, an Esc menu) and has no gameplay yet; build what DESIGN.md describes. `npx threedog init --open-world` in a new folder starts on generated ground with a player.',
   pixel: 'This game starts from `--pixel`: a gray floor, a placeholder sprite character in a pixel-snapped orthographic view (`pixelSize`, `pixelSprite`, `pixelSnap`), an NPC with dialogue, a pickup, a start screen, autosave and an Esc menu, no gameplay yet; build what DESIGN.md describes and replace the placeholder sprite sheet in picture/sprites.js with real art.',
+  sceneOnly: 'This game starts from `--scene-only`: a scene, a camera, picture/, a start screen, autosave and an Esc menu; it has no `content/` and no `assets.js` (add them with `engine.use(content())` when something must be placed and saved); build what DESIGN.md describes.',
   openWorld: 'This game starts from `--open-world`: generated ground, a day/night sky, a follow camera, a player, a start screen, autosave and an Esc menu, no gameplay yet; build what DESIGN.md describes and remove what it does not need.',
 };
 
@@ -66,17 +68,18 @@ const ROUTE = {
   },
 };
 
-/** Read flags: --open-world, --pixel (not both: one overlay), --webgl; the name is the first other argument. Unknown flags are an error (a typo
+/** Read flags: --open-world, --pixel, --scene-only (one of them: one overlay), --webgl; the name is the first other argument. Unknown flags are an error (a typo
  *  silently making the wrong game is worse). env = process.env (npm eats flags: npm_config_* fallback) */
 export function parseArgs(argv, env = {}) {
   let p;
-  try { p = parseOptions(argv, { flags: ['open-world', 'pixel', 'webgl'], positional: true }); } catch (e) { return { error: e.message }; }
+  try { p = parseOptions(argv, { flags: ['open-world', 'pixel', 'scene-only', 'webgl'], positional: true }); } catch (e) { return { error: e.message }; }
   if (p.rest.length > 1) return { error: `one name or folder only, got ${p.rest.join(' ')}` };
   const openWorld = !!p.opt['open-world'] || env.npm_config_open_world === 'true';
   const pixel = !!p.opt.pixel || env.npm_config_pixel === 'true';
-  if (openWorld && pixel) return { error: '--open-world and --pixel are two different starting points: pick one' };
+  const sceneOnly = !!p.opt['scene-only'] || env.npm_config_scene_only === 'true';
+  if (openWorld + pixel + sceneOnly > 1) return { error: '--open-world, --pixel and --scene-only are different starting points: pick one' };
   const webgl = !!p.opt.webgl || env.npm_config_webgl === 'true';
-  return { name: p.rest[0], openWorld, pixel, webgl };
+  return { name: p.rest[0], openWorld, pixel, sceneOnly, webgl };
 }
 
 /** The "Already here" table: rows of the engine's AI.md (the one task table). Without the engine docs next to the tools: a pointer, not a stale copy */
@@ -86,9 +89,9 @@ function defaultLayerTable() {
 }
 
 /** Fill the placeholders of one text file */
-export function render(text, { name, openWorld, pixel, webgl }) {
+export function render(text, { name, openWorld, pixel, sceneOnly, webgl }) {
   const route = ROUTE[webgl ? 'webgl' : 'webgpu'];
-  let out = text.replaceAll('__NAME__', name).replaceAll('__GAMEPLAY_NOTE__', GAMEPLAY[pixel ? 'pixel' : openWorld ? 'openWorld' : 'clean']);
+  let out = text.replaceAll('__NAME__', name).replaceAll('__GAMEPLAY_NOTE__', GAMEPLAY[pixel ? 'pixel' : sceneOnly ? 'sceneOnly' : openWorld ? 'openWorld' : 'clean']);
   out = out.replace('__DEFAULT_LAYER__', () => defaultLayerTable());
   out = out.replace(/__TSL_IMPORT__\r?\n/g, route.__TSL_IMPORT__ && `${route.__TSL_IMPORT__}\n`);
   for (const [word, value] of Object.entries(route)) out = out.replaceAll(word, value);
@@ -105,11 +108,14 @@ export function applyDeps(deps, { openWorld }) {
 /** Copy the template layers (overlay first, base after) into dir. Existing files are kept (so the overlay wins and init never overwrites).
  *  skipPackage: leave package.json to the caller. Returns { made, kept }. */
 export function copyTemplates(dir, opts, { skipPackage = false } = {}) {
-  const layers = [...(opts.pixel ? ['pixel'] : opts.openWorld ? ['openworld'] : []), 'game'], made = [], kept = [];
+  const layers = [...(opts.pixel ? ['pixel'] : opts.sceneOnly ? ['sceneonly'] : opts.openWorld ? ['openworld'] : []), 'game'], made = [], kept = [];
+  // --scene-only: the base's content/ and assets.js are what main.js no longer imports, so they are not written at all
+  const left = e => opts.sceneOnly && (e.name === 'assets.js' || (e.isDirectory() && e.name === 'content'));
   const walk = (from, to, top) => {
     mkdirSync(to, { recursive: true });
     for (const e of readdirSync(from, { withFileTypes: true })) {
       // gitignore is stored without its dot: npm leaves a .gitignore out of a published package
+      if (top && left(e)) continue;
       const src = join(from, e.name), dst = join(to, top && e.name === 'gitignore' ? '.gitignore' : e.name);
       if (e.isDirectory()) { walk(src, dst, false); continue; }
       if (skipPackage && top && e.name === 'package.json') continue;

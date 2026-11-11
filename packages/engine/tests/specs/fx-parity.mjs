@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const ENGINE = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 // engine files threedog/tsl may import: plain data / plain functions with no three.js WebGL parts
-const SAFE = new Set(['core/base/spelling.js', 'core/base/errorHints.js', 'core/base/errorCodes.js', 'render/engineUniforms.js', 'render/backend.js', 'render/vertexInputs.js', 'render/slots.js', 'render/fxNumbers.js', 'core/scene/threePatches.js', 'core/base/validate.js', 'core/base/util.js', 'render/layers.js',
+const SAFE = new Set(['core/base/spelling.js', 'core/base/errorHints.js', 'core/base/errorCodes.js', 'render/engineUniforms.js', 'render/backend.js', 'render/vertexInputs.js', 'render/bindingLimits.js', 'render/slots.js', 'render/fxNumbers.js', 'core/scene/threePatches.js', 'core/base/validate.js', 'core/base/util.js', 'render/layers.js',
   'render/lit.js', 'core/base/docRef.js', 'render/postRuns.js', 'core/base/params.js']);   // lit.js and docRef.js import nothing; postRuns.js only backend.js;
 // params.js only validate.js / errorHints.js / util.js (lightShaft checks its options with the same readParams schema the catalog shows)
 const THREE_OK = new Set(['three/tsl', 'three/webgpu']);

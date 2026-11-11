@@ -12,6 +12,7 @@ import { warnOnce } from '../core/base/validate.js';
 import { notePatch, patchOn } from '../core/scene/threePatches.js';
 import { isShown } from '../core/base/util.js';
 import { checkVertexInputs } from './vertexInputs.js';
+import { checkBindingLimits } from './bindingLimits.js';
 
 /** Samples of the MSAA the post chain's targets use, on both renderers */
 export const MSAA_SAMPLES = 4;
@@ -54,9 +55,9 @@ export const programList = r => isWebGPU(r) ? [] : r.info.programs ?? [];
 // last render object built per material is kept (weakly: the material's lifetime) and its NodeBuilderState read on demand.
 // RECENT: the last builds in order, also weak, so a compile error (which three reports without its render object) can be matched back to one.
 const NODE_PROGRAMS = new WeakMap(), RECENT = [], RECENT_MAX = 256;
-notePatch('node-builder-hook', "renderer.debug.onNodeBuilderCreated of a WebGPURenderer: remembers the render object built per material and counts each program's vertex inputs " +
+notePatch('node-builder-hook', "renderer.debug.onNodeBuilderCreated of a WebGPURenderer: remembers the render object built per material and counts each program's vertex inputs, sampled textures and samplers " +
   "before its code is written (that builder's buildCode), a game's own hook still runs (render/backend.js)", () => {},
-  { scope: 'engine renderer', lost: "on WebGPU: shader errors no longer name the material, shaderCost and the program costs in inspect.perf stay empty, and a program over the device's vertex inputs fails with three's raw pipeline error" });
+  { scope: 'engine renderer', lost: "on WebGPU: shader errors no longer name the material, shaderCost and the program costs in inspect.perf stay empty, and a program over the device's vertex inputs or texture bindings fails with three's raw pipeline error" });
 /** @internal core/engine/Engine.js: on WebGPURenderer, remember the render object three builds per material (a game's own hook still runs) @param {any} r */
 export function watchNodePrograms(r) {
   const d = r?.debug;
@@ -67,7 +68,7 @@ export function watchNodePrograms(r) {
       NODE_PROGRAMS.set(ro.material, ro); RECENT.push(new WeakRef(ro)); if (RECENT.length > RECENT_MAX) RECENT.shift();
       const code = builder.buildCode;
       // the material's own build only: three's plain stand-in after a failed build gets the same render object, and must not fail again
-      builder.buildCode = function () { if (this.material === ro.material) checkVertexInputs(this, r); return code.call(this); };
+      builder.buildCode = function () { if (this.material === ro.material) { checkVertexInputs(this, r); checkBindingLimits(this, r); } return code.call(this); };
     }
     prev?.(builder, ro);
   };

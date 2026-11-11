@@ -161,6 +161,12 @@ export async function run({ check }) {
   const maps = ob({ category: 'shadowMaps', value: 13, limit: 4, own: true })[0], size = ob({ category: 'shadowMapSize', value: 4096, limit: 1024, own: true })[0];
   check('[guard] shadow maps and map size over budget name the casting light with its size and the three.js field to change',
     /13 shadow maps drawn/.test(maps?.text) && /castShadow = false/.test(maps.text) && /my-lamp \(PointLight, 2048\)/.test(maps.text) && /light\.shadow\.mapSize from engine\.tier/.test(size?.text), JSON.stringify([maps, size]));
+  // why a guard: two shadowed point lights tripled a frame's triangles, and the shadow map line was folded into "2 more" behind "9 lights over 8"
+  const costly = { params: {}, budget: { tier: 'high', pool: false, triangles: 42000000, casters: [{ name: 'pendant', type: 'PointLight', size: 1024 }],
+    over: [{ category: 'lights', value: 9, limit: 8, own: false }, { category: 'shadowLights', value: 3, limit: 2, own: false }, { category: 'shadowMaps', value: 13, limit: 12, own: false }] } };
+  const costlyH = pictureHints({ numbers: soft, probe: costly }).filter(h => h.id === 'over-budget');
+  check('[guard] shadow maps over budget rank by their share of the frame, before the light count, and print the triangles of the frame',
+    costlyH.length === 3 && [...costlyH].sort((a, b) => b.size - a.size)[0].text.includes('13 shadow maps') && /shadowMaps 13 over default 12 \(a guide: 42\.0 M triangles a frame with them; tier high\): set castShadow = false .*pendant \(PointLight, 1024\)/.test(formatPicture(soft, costly, costlyH, null)[1]), JSON.stringify(costlyH.map(h => [h.size, h.brief])));
   const deep = (depth, fill) => ({ params: {}, shadows: { casters: 4, receivers: 4, sunLit: true, area: 0.2, depth, intensity: 1, dark: { luma: 0.01, fill } } });
   const sb = p => pictureHints({ numbers: soft, probe: p }).find(h => h.id === 'shadow-black');
   check('[guard] near-black shadows with almost no fill: a fact pointing to engine.bakeProbes or a fill light, also in the printed line; not with fill there, not with shallow shadows',

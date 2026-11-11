@@ -1,6 +1,6 @@
 // threedog init [folder]: turn a folder into a game outside this repository (after `npm install threedog @threedog/tools ...`). The folder is the
 // argument (created when missing; the game is named after it) or, without one, the current folder.
-// Flags as new-game: --open-world (generated ground, sky, follow camera, player), --webgl (WebGL and GLSL shaders instead of WebGPU and TSL). Copies the new-game template (templates/game) without overwriting anything that exists, merges package.json (type, scripts, dependencies),
+// Flags as new-game: --open-world (generated ground, sky, follow camera, player), --scene-only (no content/ and no assets.js), --webgl (WebGL and GLSL shaders instead of WebGPU and TSL). Copies the new-game template (templates/game) without overwriting anything that exists, merges package.json (type, scripts, dependencies),
 // and writes .mcp.json so Claude Code opened in this folder finds the threedog MCP server by itself (plain node: no npx start-up, no `cmd /c`).
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, basename, resolve, relative, sep } from 'node:path';
@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { TOOLS, within } from './paths.mjs';
 import { parseArgs, applyDeps, copyTemplates, writeMcp, gameName } from './lib/scaffold.mjs';
 
-const USAGE = 'Usage: threedog init [folder] [--open-world | --pixel] [--webgl]   (folder: where the game goes, default the current folder)';
+const USAGE = 'Usage: threedog init [folder] [--open-world | --pixel | --scene-only] [--webgl]   (folder: where the game goes, default the current folder)';
 const parsed = parseArgs(process.argv.slice(2), process.env);
 if (parsed.error) { console.error(parsed.error + '\n' + USAGE); process.exit(1); }
 // Why the argument is a path: it used to be only a name, so `threedog init .demo/town-farm` wrote 18 files into the repo root and merged the root package.json

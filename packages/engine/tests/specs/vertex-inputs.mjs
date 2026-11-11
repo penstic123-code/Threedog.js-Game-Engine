@@ -31,4 +31,20 @@ export const specs = [
       check("three's raw location / pipeline error does not follow", !/Attribute location out of range|pipeline creation failed/i.test(text), text.slice(0, 400));
     },
   },
+  {
+    // 不许绕开: over 16 textures / samplers per stage the device only says `Invalid PipelineLayout`; the program is named before that
+    name: '[guard] texture bindings: a stage over the device limit of sampled textures or samplers is named with its material, counts and kinds',
+    url: '/tests/vertex-inputs/index.html',
+    software: true,
+    async run({ check, ev }) {
+      const r = await ev(() => window.textureBindings());
+      console.log('  texture bindings:', JSON.stringify(r));
+      check('the fragment stage counts the 4 textures three bound, one of them a shadow map', r.counts?.fragment.textures === 4 && r.counts.fragment.kinds['shadow maps'] === 1, JSON.stringify(r.counts));
+      check('within the limit, and on a backend without device limits, nothing is said', r.fits === null && r.headless === null, JSON.stringify([r.fits, r.headless]));
+      check('over the limit the message names material, mesh, stage, count, limit and the shadow maps, with its code',
+        /MeshBasicNodeMaterial 'ground'/.test(r.over) && /'floor'/.test(r.over) && r.over.includes('fragment stage binds 4 sampled textures, this device takes 2 (3 other maps, 1 shadow maps)') && r.over.includes('[texture-bindings]'), String(r.over));
+      check('it says what to do', /pack maps into one texture/.test(r.over), String(r.over));
+      check('samplers count apart from textures, a storage texture counts as neither', r.fakeCounts.fragment.samplers === 2 && r.fakeCounts.fragment.textures === 1 && r.samplers.includes('fragment stage binds 2 samplers, this device takes 1'), JSON.stringify([r.fakeCounts, r.samplers]));
+    },
+  },
 ];

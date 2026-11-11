@@ -197,6 +197,21 @@ const webgpuPost = {
     P.pipeline.outputNode = color; P.pipeline.needsUpdate = true;
     P.output = color; P.order = order; P.key = key;
   },
+  /**
+   * The effect whose own pass draws with this material, or null: a display node keeps its fullscreen materials as plain fields (three's GTAO, bloom,
+   * godrays, SSR ...). Stages in chain order, each read through the node it handed back: an effect's output contains the stages before it, so the
+   * first stage that has the material owns it. An effect that is only an expression is compiled into the next pass with its neighbors and owns none.
+   */
+  ownerOf(post, id) {
+    const is = m => m?.isMaterial && m.id === id, has = n => Object.values(n).some(v => (Array.isArray(v) ? v.some(is) : is(v)));
+    for (const s of post._pipe?.stages ?? []) {
+      if (typeof s.e === 'string') continue;
+      let found = !!s.impl?.nodes.some(has);
+      if (!found) s.out?.traverse?.(n => { found ||= has(n); });
+      if (found) return s.e;
+    }
+    return null;
+  },
   dispose(post) {
     if (post._pipeOut) { post._pipeOut.scenePass.dispose(); post._pipeOut.pipeline.dispose(); post._pipeOut = null; }
     const P = post._pipe;

@@ -7,8 +7,9 @@ import 'threedog/tsl';
 import { createEngine, vegetation, mergeColored } from '../../index.js';
 import { temporalAA } from '@threedog/post-effects/tsl';
 import { MeshBasicNodeMaterial } from 'three/webgpu';
-import { attribute, instancedBufferAttribute, vec4 } from 'three/tsl';
+import { attribute, instancedBufferAttribute, vec4, texture } from 'three/tsl';
 import { nodeProgram } from '../../render/backend.js';
+import { bindingCounts, checkBindingLimits } from '../../render/bindingLimits.js';
 
 const W = 160, H = 120;
 const errors = [];
@@ -68,4 +69,33 @@ window.overLimit = async () => {
   await new Promise(requestAnimationFrame);
   e.scene.remove(im);
   return { errors: errors.slice(before) };
+};
+
+/**
+ * Texture bindings: a material with 3 plain maps and a depth texture (what a shadow map is) is counted from the builder's real bindings; with a device that allows 2
+ * the check names the material, stage, counts and kinds. The headless backend (WebGL2) has no device limits, so the limit is faked; samplers come from a made-up builder
+ * (the WebGL2 builder binds none apart from its textures).
+ */
+window.textureBindings = async () => {
+  const maps = [0, 1, 2].map(() => new THREE.DataTexture(new Uint8Array([255, 0, 0, 255]), 1, 1)), depth = new THREE.DepthTexture(1, 1);
+  for (const t of [...maps, depth]) t.needsUpdate = true;
+  const m = new MeshBasicNodeMaterial({ name: 'ground' });
+  m.colorNode = maps.map(t => texture(t)).reduce((a, b) => a.add(b)).add(texture(depth).r);
+  let builder = null;
+  const prev = e.renderer.debug.onNodeBuilderCreated;
+  e.renderer.debug.onNodeBuilderCreated = (b, ro) => { if (ro?.material === m) builder = b; prev?.(b, ro); };
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), m);
+  mesh.name = 'floor';
+  e.scene.add(mesh);
+  for (let i = 0; i < 2; i++) e.step(1 / 60);
+  await new Promise(requestAnimationFrame);
+  e.scene.remove(mesh);
+  e.renderer.debug.onNodeBuilderCreated = prev;
+  const limited = n => ({ backend: { device: { limits: { maxSampledTexturesPerShaderStage: n, maxSamplersPerShaderStage: n } } } });
+  const ask = (b, r) => { try { checkBindingLimits(b, r); return null; } catch (err) { return String(err.message); } };
+  const fake = { bindings: { fragment: { g: [{ isSampler: true }, { isSampler: true }, { isSampler: true, isSampledTexture: true, texture: {} }, { isSampler: true, isSampledTexture: true, store: true }] } } };
+  return {
+    counts: builder && bindingCounts(builder), fits: ask(builder, limited(16)), headless: ask(builder, e.renderer), over: ask(builder, limited(2)),
+    samplers: ask(fake, limited(1)), fakeCounts: bindingCounts(fake),
+  };
 };

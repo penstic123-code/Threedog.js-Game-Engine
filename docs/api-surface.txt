@@ -137,6 +137,7 @@ CLI options | --rule |
 CLI options | --samples |
 CLI options | --save-baseline |
 CLI options | --scenario |
+CLI options | --scene-only |
 CLI options | --shading |
 CLI options | --shot-region |
 CLI options | --shots |
@@ -923,6 +924,7 @@ error codes | pixel-conflict |
 error codes | player-control |
 error codes | plugin-shape |
 error codes | post-effect |
+error codes | post-effect-failed |
 error codes | preset-option |
 error codes | probes-check |
 error codes | probes-data |
@@ -975,6 +977,7 @@ error codes | swarm-name |
 error codes | swarm-step |
 error codes | terrain-chunk-failed |
 error codes | terrain-option |
+error codes | texture-bindings |
 error codes | thing-id |
 error codes | thing-orphan |
 error codes | thing-owned |

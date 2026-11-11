@@ -10,8 +10,9 @@
 // and stays synchronous (a dynamic import would leave the first frames without post and make _sync async).
 import * as THREE from 'three';
 import { webglPost } from './postWebGL.js';
-import { codedError } from '../core/base/errorHints.js';
+import { codedError, coded } from '../core/base/errorHints.js';
 import { warnOnce } from '../core/base/validate.js';
+import { reportError } from '../core/base/errors.js';
 import { readParams, keysSchema } from '../core/base/params.js';
 import { isWebGPU, webgpuPart, ownMsaa } from './backend.js';
 import { MSAA_KEY, onTierChange } from '../core/scene/tier.js';
@@ -276,10 +277,26 @@ export class PostFX {
    */
   _held(h) {
     if (!h._on()) return null;
+    if (h._failed) return h._failed;
     const w = runsHere(h._def, this.engine);
     if (!w?.held) return null;   // a mistake (node-only effect on the game's WebGLRenderer) is not held: postWebGL's sync throws it by name
     warnOnce(`post effect '${h.name}' held off: ${w.why}`);
     return w.why;
+  }
+  /**
+   * The device refused a pipeline of this material (render/shaderErrors.js). When one effect's own pass draws with it, that effect is held and the chain
+   * rebuilt without it: an invalid pipeline fails every frame it is drawn in, the whole frame with it. It stays held until it is removed and added again
+   * (a new handle), since the same shader on the same device fails the same way.
+   * @param {number} id material id @returns {string} what was done, '' when no effect owns the material @internal
+   */
+  _pipelineFailed(id) {
+    const h = this._be.ownerOf?.(this, id);
+    if (!h) return '';
+    if (!h._failed) {
+      h._failed = 'the device refused its shader (the page error names it); held until it is removed and added again';
+      try { this._sync(); } catch (err) { reportError(this.engine, err, 'post chain', { soft: true }); }   // from a device callback: nothing above to catch it
+    }
+    return coded('post-effect-failed', `it draws post effect '${h.name}', which is now held off so the rest of the frame draws (describe().render.post says so)`);
   }
   /**
    * What antialiases the picture now: the samples really in effect, and the effect standing in for MSAA (asking for 'velocity' means a temporal resolve, so the scene pass runs without samples).

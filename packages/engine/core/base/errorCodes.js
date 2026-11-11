@@ -486,6 +486,11 @@ export const ERROR_CODES = {
     docs: ['api/post.md', 'recipes/52-around-the-picture.md §"Post effect chain"'],
     fix: 'A post effect is malformed or clashes: engine.post.add takes a three.js Pass, a node function (WebGPU) or { name, create | node | fuse }, ' +
       'with a unique name and a known slot. Change an existing effect with its handle (engine.post.get(name).set(params), .enabled); add one with engine.post.add (the one way).' },
+  'post-effect-failed': {
+    docs: ['recipes/52-around-the-picture.md §"Post effect chain"'],
+    fix: "The device could not build the shader of a post effect's own pass (a driver compiler error, or a device limit), so the engine holds that effect off and " +
+      'the frame draws without it. The error of the device itself is the page error just before this one. Same picture on other devices: nothing to do. ' +
+      'To run it here: change the option the error points at, then remove the effect and add it again.' },
   'own-frame': {
     docs: ['THREE.md', 'recipes/52-around-the-picture.md §"Post effect chain"'],
     fix: 'The game draws the canvas itself (its own composer.render() / renderer.render outside engine.onRender), so the engine yielded ' +
@@ -700,6 +705,10 @@ export const ERROR_CODES = {
     fix: "One program needs more vertex inputs than the device has (16 on most; WebGPU also 8 vertex buffers). The message counts what stacked up: geometry attributes the " +
       "material reads, the instance matrix (4) and color (1), last frame's matrix for temporalAA's velocity buffer (4), engine patches, your own attribute nodes. " +
       'Drop what is not read, pack per-instance values into one vec4, or move them to a storage buffer (instancedArray from three/tsl); temporalAA off frees 4.' },
+  'texture-bindings': {
+    docs: ['recipes/56-webgpu-tsl.md §"The engine\'s shader"'],
+    fix: "One shader stage binds more sampled textures or samplers than the device allows (16 each on most). The message names the material and counts them, with the shadow maps " +
+      "and environment / cube maps among them. Use fewer texture layers, pack maps into one texture's channels, or cast shadows from fewer lights." },
   'webgpu-needs-tsl': {
     docs: ['recipes/56-webgpu-tsl.md §"Turning it on"'],
     fix: "On WebGPURenderer the engine draws with node materials. Either threedog/tsl is not loaded (add import 'threedog/tsl' at the top of the entry), " +

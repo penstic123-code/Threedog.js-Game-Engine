@@ -102,7 +102,7 @@ engine.add(mesh);
 three's shadow pass draws with the material's `positionNode`, so the shadow moves too. On an `InstancedMesh` with rotated or scaled instances the offset must turn with each (`instanceOffset`, or the patch form below).
 
 A program takes 16 vertex inputs on most devices; past that the build stops with a `[vertex-inputs]` error that counts what stacked up and how to
-fit. `objectOrigin()` costs 1 per program, `instanceOffset()` 3 more.
+fit. `objectOrigin()` costs 1 per program, `instanceOffset()` 3 more. Textures, samplers: 16 a stage (`[texture-bindings]`).
 
 ## Patches with a `tsl` field (optional convenience)
 `applyEffects(mat, { wind, season, clouds, patches })` (recipe 43) works on node materials: the engine's own patches carry a TSL version, and a

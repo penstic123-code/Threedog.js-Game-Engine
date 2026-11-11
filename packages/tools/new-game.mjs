@@ -1,7 +1,8 @@
-// Create a new game in one step: npm run new-game -- name [--open-world | --pixel] [--webgl]
+// Create a new game in one step: npm run new-game -- name [--open-world | --pixel | --scene-only] [--webgl]
 // Default: the blank template (templates/game): an empty scene with a camera, empty content files, a gray picture/ folder, no gameplay, no genre.
 // --open-world: overlays templates/openworld (generated terrain, day/night sky, follow camera, a player).
 // --pixel: overlays templates/pixel (a sprite character, pixelSize, pixelSnap camera, input, interaction, dialogue, saves). Not together with --open-world.
+// --scene-only: overlays templates/sceneonly and leaves the base's content/ and assets.js out (a showcase scene with nothing placed). One start flag at a time.
 // The game runs on WebGPU with TSL shaders; --webgl: on WebGL with GLSL shaders (lib/scaffold.mjs says why it is chosen here).
 // Copies the template layers to games/<name>/, replacing __NAME__ in files with the name; links node_modules/<name>, generates GAMEMAP and runs check (scoped to the new game).
 // It does not build or touch package-lock.json: a smoke test built a ~10 MB dist/ into the new folder, and `npm install --package-lock-only` rewrote the

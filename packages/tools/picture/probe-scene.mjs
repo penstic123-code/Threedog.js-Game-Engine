@@ -11,7 +11,7 @@ export function probeBudget({ e, scene, out }) {
     if (over.length) {
       const cast = [];
       scene.traverse(o => { if (o.isLight && o.castShadow && o.visible && o.shadow) cast.push({ name: o.name || o.uuid.slice(0, 8), type: o.type, size: o.shadow.mapSize.x }); });
-      out.budget = { tier: e.tier, pool: !!e.lightPool, over, casters: cast.sort((a, b) => b.size - a.size).slice(0, 3) };
+      out.budget = { tier: e.tier, pool: !!e.lightPool, triangles: v.triangles, over, casters: cast.sort((a, b) => b.size - a.size).slice(0, 3) };
     }
   }
 }

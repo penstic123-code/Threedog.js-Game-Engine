@@ -163,6 +163,12 @@ export const specs = [
         who(r.compile) && (r.backend === 'webgpu' ? /WebGPU pipeline failed/.test(r.compile) : /node program .*WebGL2 backend/.test(r.compile) && /'nope' : undeclared identifier/.test(r.compile)), r.compile.slice(0, 500));
       check("a WebGPU pipeline failure (three's console report): three's line kept, then material, mesh and patches",
         r.pipeline.startsWith('THREE.WebGPURenderer: Render pipeline creation failed') && /\[threedog\] WebGPU pipeline failed for/.test(r.pipeline) && who(r.pipeline), r.pipeline.slice(0, 500));
+      // why a guard: sunShafts failed in the driver's compiler, describe() kept saying it was on, and every frame was lost to the invalid pipeline
+      const f = r.failed, mine = f.text.filter(t => t.startsWith('[threedog]'));
+      check("[guard] a post effect whose own pass the device refused is held: said once with the effect's name and a code, off in describe() with the reason, out of the chain; the others stay",
+        f.before.on && f.before.order.includes('brokenFx') && mine.length === 1 && /it draws post effect 'brokenFx', which is now held off .*\[post-effect-failed\]/.test(mine[0])
+        && f.row.on === false && /device refused its shader/.test(f.row.held) && !f.order.includes('brokenFx') && f.order.includes('fineFx') && f.fine && f.gameOn, JSON.stringify(f).slice(0, 700));
+      check('the held effect runs again once it is removed and added again', f.again === true, JSON.stringify(f.again));
     },
   },
 ];

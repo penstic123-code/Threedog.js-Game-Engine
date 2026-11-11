@@ -95,7 +95,7 @@ async function preview(dir, app, port) {
 }
 
 /** The starts of `threedog init` other than the open world the project above is made from */
-const STARTS = [['blank', []], ['blank --webgl', ['--webgl']], ['pixel', ['--pixel']], ['pixel --webgl', ['--pixel', '--webgl']], ['open world --webgl', ['--open-world', '--webgl']]];
+const STARTS = [['blank', []], ['blank --webgl', ['--webgl']], ['pixel', ['--pixel']], ['pixel --webgl', ['--pixel', '--webgl']], ['open world --webgl', ['--open-world', '--webgl']], ['scene only', ['--scene-only']]];
 
 /**
  * Build the game in dir, preview it and open the page: it must reach engine.ready, draw a few frames and load everything without a console error.

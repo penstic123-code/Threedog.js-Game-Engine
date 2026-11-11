@@ -1,7 +1,7 @@
 // Which renderer a new game starts on: WebGPU and TSL by default, WebGL and GLSL with --webgl, for the blank and the open-world template alike.
 // Why here: main.js is assembled from placeholders and an overlay, so a word left unfilled or a GLSL line in a TSL game would only show when someone builds that game.
 // Offline: writes the four combinations into a temp folder and reads them.
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { copyTemplates, parseArgs } from '../lib/scaffold.mjs';
@@ -51,6 +51,17 @@ export async function run({ check }) {
       check(`pixel ${webgl ? '--webgl' : 'default'}: engine path (pixelSize, pixelSnap, pixelSprite, input, interactions, dialogue, saves, start screen)`,
         ['pixelSize: 3', 'pixelSnap', 'pixelSprite', 'presets.bindings', 'interactions(', 'dialogue(', 'saves.autosave', 'ui: {'].every(w => main.includes(w)));
       check(`pixel ${webgl ? '--webgl' : 'default'}: the notes say it is a pixel start`, /--pixel/.test(readFileSync(join(dir, 'CLAUDE.md'), 'utf8')));
+    }
+    // --scene-only: the fourth starting point; the base's content/ and assets.js are not written and nothing imports them
+    check('--scene-only is read, and not together with another start', parseArgs(['g', '--scene-only'], {}).sceneOnly === true && !!parseArgs(['g', '--scene-only', '--pixel'], {}).error && !!parseArgs(['g', '--scene-only', '--open-world'], {}).error);
+    for (const webgl of [false, true]) {
+      const dir = join(tmp, `scene-${webgl}`);
+      copyTemplates(dir, { name: 'scenecheck', sceneOnly: true, webgl });
+      const label = `scene-only ${webgl ? '--webgl' : 'default'}`, main = readFileSync(join(dir, 'main.js'), 'utf8');
+      check(`${label}: every placeholder filled`, textFiles(dir).every(f => !/__[A-Z_]+__/.test(readFileSync(f, 'utf8'))));
+      check(`${label}: no content/ and no assets.js, picture/ kept`, !existsSync(join(dir, 'content')) && !existsSync(join(dir, 'assets.js')) && existsSync(join(dir, 'picture', 'index.js')));
+      check(`${label}: main.js does not reach content or assets, and keeps start screen, autosave, settings`,
+        !/content|assets/.test(main.replace(/^\/\/.*$/gm, '')) && ['title: {', 'saves.autosave', 'settings('].every(w => main.includes(w)));
     }
     const tpl = f => readFileSync(join(TOOLS, 'templates/game', f), 'utf8');
     // [guard] a project-local install (the README's) puts no threedog on the PATH: every command the entry names runs as npx threedog, one form

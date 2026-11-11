@@ -206,7 +206,7 @@ export const startupMethods = {
     r.toneMapping = old.toneMapping; r.toneMappingExposure = old.toneMappingExposure; r.outputColorSpace = old.outputColorSpace;
     r.setClearColor(old.getClearColor(new THREE.Color()), old.getClearAlpha());
     r.info.autoReset = false;
-    nameShaderErrors(r); bindUniforms(r, this.uniforms);
+    nameShaderErrors(r, id => this.post?._pipelineFailed(id) ?? ''); bindUniforms(r, this.uniforms);
     try { old.dispose(); } catch { /* never initialized: nothing of it reached the GPU */ }
     this.renderer = r;
     movedOwned(this, new Map([[old, r]]));   // owned rows name the renderer object they live on (tween exemptions, core/ops/owned.js)

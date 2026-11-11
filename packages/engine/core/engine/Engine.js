@@ -151,7 +151,7 @@ export class Engine {
     watchNodePrograms(r);                      // WebGPU: generated code per material, for debug.view('shaderCost') (render/backend.js)
     this._records = recordSweep(r);            // WebGPU: meshes that left the scene free their records (render/recordSweep.js)
     if (isWebGPU(r)) dressNodeTwins(r);        // WebGPU: classic materials get their patches as nodes (render/patches.js)
-    nameShaderErrors(r);                       // compile errors name the patch and slot (render/shaderErrors.js); a game's own handler stays
+    nameShaderErrors(r, id => this.post?._pipelineFailed(id) ?? '');                    // compile errors name the patch and slot (render/shaderErrors.js); a game's own handler stays
     this._deviceTier = tierFirst || detectTier(r);
     /** @internal real screen pixels per art pixel, null when off (core/scene/pixelRatio.js) @type {number | null} */ this._pixelSize = null;
     if (owned || pixelRatio != null) firstRatio(r, this._deviceTier, pixelRatio);
