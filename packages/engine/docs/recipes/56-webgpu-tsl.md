@@ -312,6 +312,7 @@ import { RenderPipeline } from 'three/webgpu';
 // wrong: new PostProcessing(renderer) from older three examples (three 0.187 names it RenderPipeline), and a second pipeline beside the engine's
 console.log(engine.post.object()?.pipeline instanceof RenderPipeline);  // the engine's own, once its chain is built; add effects with engine.post.add
 ```
+Vertex colors you compute are linear: `new THREE.Color().setHSL(h, s, l)` reads its numbers in the working (linear) space, so a color picked by eye comes out far too light; pass the color space, `new THREE.Color().setHSL(h, s, l, THREE.SRGBColorSpace)`, or write a hex value.
 Also: three's `uniform` takes a value, not a `{ value }` object, so passing it `engine.uniforms.uWind` throws; use `uniforms(engine).uWind`.
 A type mismatch never errors: look at the result (`engine.debug.view('lighting')`, `threedog shot`).
 WebGPURenderer builds one program per distinct set of patch uniform objects: the same `applyEffects` options, or one patch object passed to every material,

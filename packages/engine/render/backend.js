@@ -531,13 +531,17 @@ export async function whyNoWebGPU(limits, powerPreference) {
   let adapter;
   try { adapter = await gpu.requestAdapter({ featureLevel: 'compatibility', powerPreference }); } catch (err) { return `requestAdapter() failed: ${err?.message ?? err}`; }
   if (!adapter) return 'requestAdapter() returned no adapter';
-  // the post chain's merged scene targets (render/fx/postWebGPU.tsl.js) can pass WebGPU's default 32 bytes per pixel; asking what this adapter supports costs nothing and lifts it where the hardware can
-  if (limits) for (const k of ['maxColorAttachmentBytesPerSample', 'maxColorAttachments']) limits[k] ??= adapter.limits[k];
+  // WebGPU hands out its default limits unless a higher one is asked for, whatever the hardware can do; asking what this adapter supports costs nothing and lifts each where it can
+  if (limits) for (const k of ADAPTER_LIMITS) limits[k] ??= adapter.limits[k];
   if (deviceFrom === gpu) return null;
   try { (await adapter.requestDevice()).destroy?.(); } catch (err) { return `requestDevice() failed: ${err?.message ?? err}`; }
   deviceFrom = gpu;
   return null;
 }
+// The defaults a game's picture can pass, asked for at the adapter's own value in the one place the engine requests a device (a game's own renderer keeps the game's limits):
+// the post chain's merged scene targets pass 32 bytes per pixel (render/fx/postWebGPU.tsl.js); a material with several texture layers, plus the lights' shadow maps, passes
+// 16 textures and samplers per stage; voxelGI's triangle buffer (three's VXGIVolume, about 200 bytes a triangle) passes a 256 MB buffer and a 128 MB storage binding
+const ADAPTER_LIMITS = ['maxColorAttachmentBytesPerSample', 'maxColorAttachments', 'maxSampledTexturesPerShaderStage', 'maxSamplersPerShaderStage', 'maxBufferSize', 'maxStorageBufferBindingSize'];
 let deviceFrom = null;   // the navigator.gpu that gave a device (a page's stand-in for it is another object, so it is asked again)
 
 /** Each material on a scene object, once @param {any} scene @param {(m: any, o: any) => void} fn */

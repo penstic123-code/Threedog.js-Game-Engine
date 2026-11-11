@@ -2,6 +2,11 @@
 
 What changed in each version and how a game upgrades.
 
+## Unreleased
+
+- Fixed: on WebGPU the engine now asks the device for the adapter's own `maxBufferSize`, `maxStorageBufferBindingSize`, `maxSampledTexturesPerShaderStage` and `maxSamplersPerShaderStage` (as it already did for the color attachment limits) instead of WebGPU's defaults. Before, `voxelGI` on a scene of about a million triangles or more failed every frame with `Buffer size exceeds the max buffer size limit` (its triangle buffer passed the default 256 MB), and a material with more than 16 textures counting the lights' shadow maps failed with only `Invalid PipelineLayout`. Measured on one desktop GPU: buffer 256 MB to 2 GB, storage binding 128 MB to 2 GB, textures per stage 16 to 48; samplers stay where the adapter's own limit is 16. A game's own renderer keeps the limits the game gave it.
+- Docs: recipe 63 section 7 says `world()` stays in a scene with no content (the player is a record in it); recipe 56 "Mistakes" says computed vertex colors are linear.
+
 ## 1.2.0 (2026-11-10)
 
 - Fixed: shadows on tier 'low' no longer smear. With `engine.shadows.cascades(...)` the single low-tier map now covers `maxFar / count` (shifted toward the view), so its texels are as fine as one cascade's; a game's `count: 1` still covers all of `maxFar`. The engine sun's PCF radius follows its map size (2 on the low-tier 1024 map). A radius or map size the game set (any value other than the engine's default) is kept across tier changes. Trade-off: on tier 'low' far shadows end sooner (recipe 45).
