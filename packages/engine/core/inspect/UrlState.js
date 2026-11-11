@@ -23,6 +23,7 @@ import { warnMissing, warnOnce, DEV } from '../base/validate.js';
 import { xzOf, yOf } from '../base/math.js';
 import { unsettled } from '../engine/headlessLoad.js';
 import { codedError } from '../base/errorHints.js';
+import { Views } from '../scene/Views.js';
 
 // fresh deletes saves, so it acts only on a clear yes (a bare ?fresh reads as ''); anything that is neither a yes nor a no is refused in _expand, never ignored
 const FRESH_ON = [true, 1, '1', ''], FRESH_OFF = [false, 0, '0', 'false'];
@@ -152,7 +153,9 @@ export class UrlState {
       await new Promise(r => setTimeout(r, 0));   // main-loop: yield to the browser (background threads, Promise continuations) without advancing game time
     }
     await this._ask(p, this._moduleKeys(p), turn);        // advancing moves time and the day, so align them last
-    if (p.view && e.views.list().length && e.views.show(p.view)) {   // a page with its own ?view= (no engine.views declared) handles it itself
+    // a name of engine.views, or a pose (an object, or the text a URL carries); a page with its own ?view= names (no engine.views declared) handles those itself
+    const view = typeof p.view === 'string' ? Views.pose(p.view) ?? p.view : p.view;
+    if (view && (typeof view !== 'string' || e.views.list().length) && e.views.show(view)) {
       if (e.headless) e._frameHooks(0, true);   // one loading frame: the modules see the new focus, so _settle has something to wait for
       await this._settle();                     // a picture of the view must not be taken before the world around it has loaded
     }

@@ -405,7 +405,7 @@ engine sub-objects | audio.state | string
 engine sub-objects | audio.tone | (opts?: { freq?: number; to?: number | null; dur?: number; vol?: number; type?: string; bus?: string; out?: any; delay?: number; pan?: number; }) => void
 engine sub-objects | audio.value | (name: string) => number | undefined
 engine sub-objects | audio.volumeOf | (volume: AudioVolume | undefined, ...extra: any[]) => number @experimental
-engine sub-objects | autoView.manual | (key: "far" | "fov" | "pixelRatio" | "camera", on?: boolean) => { remove(): void; }
+engine sub-objects | autoView.manual | (key: "far" | "fov" | "aspect" | "pixelRatio" | "sunDir" | "camera", on?: boolean) => { remove(): void; }
 engine sub-objects | batching.batches | BatchInfo[]
 engine sub-objects | batching.cell | number
 engine sub-objects | batching.enabled | boolean
@@ -796,7 +796,7 @@ engine sub-objects | views.has | (name: string) => boolean
 engine sub-objects | views.list | () => string[]
 engine sub-objects | views.map | Map<any, any>
 engine sub-objects | views.release | () => void
-engine sub-objects | views.show | (name: string) => { remove(): void; } | null
+engine sub-objects | views.show | (view: string | { position: number[]; target?: number[]; fov?: number; }) => { remove(): void; } | null
 error codes | ambience-rule |
 error codes | asset-cache |
 error codes | asset-critical |

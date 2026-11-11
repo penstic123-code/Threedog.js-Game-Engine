@@ -1,6 +1,7 @@
 // Named fixed camera views declared by the game, so a screenshot of "the same place" can be taken again after any change:
 //   engine.views.define('gate', { position: [10, 4, 12], target: [0, 1, 0], fov: 50 });
 //   engine.views.show('gate');   // or the URL ?view=gate, or `npm run shot -- -w my-game --view gate`
+//   engine.views.show({ position: [0, 20, -300], target: [0, 15, -500] });   // a pose with no name: a look from outside nobody declared (?view=0,20,-300,0,15,-500, `threedog state view=...`, `shot --cam`)
 // A view takes over the camera with engine.takeCamera('views') (the same claim cutscenes use) until release() or the handle's remove(): a cutscene that
 // held the camera before gets it back, instead of the camera going to nobody. It is a diagnostic aid, not a camera mode.
 import { warnMissing } from '../base/validate.js';
@@ -9,6 +10,14 @@ import { codedError } from '../base/errorHints.js';
 import { holdFov, baseFov } from './view.js';
 
 const vec3 = a => Array.isArray(a) && a.length === 3 && a.every(Number.isFinite);
+
+/** A view as given, checked: { position, target, fov } @param {string} where @param {any} v */
+function checked(where, v) {
+  readParams(where, keysSchema(['position', 'target', 'fov']), v);
+  if (!vec3(v.position)) throw codedError('views-define', `${where}: position must be [x, y, z], got ${JSON.stringify(v.position)}`);
+  if (v.target !== undefined && !vec3(v.target)) throw codedError('views-define', `${where}: target must be [x, y, z], got ${JSON.stringify(v.target)}`);
+  return { position: v.position, target: v.target ?? [0, 0, 0], fov: v.fov };
+}
 
 export class Views {
   /** @param {any} engine */
@@ -23,10 +32,7 @@ export class Views {
    * @returns {{ remove(): void }}
    */
   define(name, v) {
-    readParams(`views.define('${name}')`, keysSchema(['position', 'target', 'fov']), v);
-    if (!vec3(v.position)) throw codedError('views-define', `views.define('${name}'): position must be [x, y, z], got ${JSON.stringify(v.position)}`);
-    if (v.target !== undefined && !vec3(v.target)) throw codedError('views-define', `views.define('${name}'): target must be [x, y, z], got ${JSON.stringify(v.target)}`);
-    const rec = { position: v.position, target: v.target ?? [0, 0, 0], fov: v.fov };
+    const rec = checked(`views.define('${name}')`, v);
     this.map.set(name, rec);
     return { remove: () => { if (this.map.get(name) === rec) { if (this.current === name) this.release(); this.map.delete(name); } } };
   }
@@ -35,11 +41,20 @@ export class Views {
   /** @returns {string[]} the declared view names */
   list() { return [...this.map.keys()]; }
   /**
-   * Put the camera on a view and keep it there (the camera rigs leave it alone) until release() or the returned handle's remove(); null for an unknown name
-   * @param {string} name @returns {{ remove(): void } | null}
+   * A pose written as text, 'x,y,z,targetX,targetY,targetZ[,fov]' (meters, fov in degrees): the form a URL's ?view= and `threedog state view=` carry. null when the text is not one
+   * @param {string} text @returns {{ position: number[], target: number[], fov?: number } | null}
    */
-  show(name) {
-    const v = this.map.get(name);
+  static pose(text) {
+    const n = String(text).split(',').map(s => (s.trim() === '' ? NaN : Number(s)));
+    return [6, 7].includes(n.length) && n.every(Number.isFinite) ? { position: n.slice(0, 3), target: n.slice(3, 6), ...(n.length === 7 && { fov: n[6] }) } : null;
+  }
+  /**
+   * Put the camera on a view and keep it there (the camera rigs leave it alone) until release() or the returned handle's remove(); null for an unknown name.
+   * A pose { position, target?, fov? } in place of a name shows that pose without declaring it (current reads '(pose)')
+   * @param {string | { position: number[], target?: number[], fov?: number }} view @returns {{ remove(): void } | null}
+   */
+  show(view) {
+    const name = typeof view === 'string' ? view : '(pose)', v = typeof view === 'string' ? this.map.get(view) : checked('views.show()', view);
     if (!v) { warnMissing('view', name, this.list()); return null; }
     const e = this.engine;
     // focus: the world loads around what the view looks at, not around a player far away (the view was an empty sheet of ground without it)

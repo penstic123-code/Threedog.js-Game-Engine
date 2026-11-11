@@ -90,5 +90,5 @@ engine.collision.addBlocked((x, z) => maze[Math.floor(z)]?.[Math.floor(x)] === '
 engine.collision.addBox([4, 0, -6], { halfWidth: 1, halfDepth: 0.2, height: 3 });   // one wall, crate or door frame
 engine.cameraRig.yaw = Math.PI;  // heading: yaw 0 looks toward -z, PI toward +z (recipe 21 §3)
 ```
-`world()` stays even in a scene with no content and no saves: the player is a record in it, and `addPlayer` throws `[module-needs]` without it (`content()`, `hud()` and `settings()` are the ones to drop).
+`world()` stays even with no content and no saves (the player is a record in it); `content()`, `hud()`, `settings()` can go.
 Walls from your own geometry are only picture until a collider (api/collision.md) says no. Later third-person: `engine.setCamera('follow')` (recipe 21 §1).

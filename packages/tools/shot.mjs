@@ -132,6 +132,7 @@ try {
   // Time, weather, position, skipping cutscenes and advancing are all left to the engine's URL parameters (engine.applyState, see packages/engine/core/inspect/UrlState.js)
   const q = new URLSearchParams({ 'threedog-tier': tier });
   for (const k of ['time', 'weather', 'pos', 'at', 'view']) if (opt[k]) q.set(k, opt[k]);
+  if (pose) q.set('view', String(opt.cam));   // --cam: the pose goes the way a view name does (?view=x,y,z,tx,ty,tz[,fov]); the engine shows it and loads the world around its target
   q.set('wait', String(wait));
   q.set('cutscene', opt['keep-cutscene'] ? 'keep' : 'skip');
   if (opt.play) q.set('play', '');
@@ -139,8 +140,6 @@ try {
   await waitEngine(page, { timeout: 60000, errors });
   await refuseState(page, ['time', 'weather', 'pos', 'at', 'view']);
   const ev = (fn, arg) => page.evaluate(fn, arg);
-  // --cam: a throwaway view through the engine's own views (the camera is taken over, and the world loads around the target), before waiting for loading
-  if (pose) await ev(p => { engine.views.define('shot-cam', p); engine.views.show('shot-cam'); }, pose);
   // A picture taken while terrain / models are still arriving shows a half-built world that looks like an art bug, so finish loading first.
   // Headless only advances on step, so step (no render) until engine.loading says nothing is pending; past the limit fail with what it is still waiting for
   // then the game's own code after `await engine.start()` (lamps added after a later await): a shot never shows the scene before it ran

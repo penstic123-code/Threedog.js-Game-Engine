@@ -57,6 +57,21 @@ export const specs = [
     },
   },
   {
+    // 不许绕开: asked of three's WGSL builder directly, so it runs with no WebGPU device. On D3D's FXC a compare sample with a screen derivative inside the ray march's loop
+    // failed to compile ('FXC compile failed'), and every frame with sunShafts was invalid
+    name: '[guard] a shadow map compare is written as textureSampleCompareLevel (no screen derivative), a mipmapped one and the patch switched off keep the call three writes',
+    url: '/tests/light-webgpu/index.html',
+    software: true,
+    async run({ page, check, ev }) {
+      await page.waitForFunction(() => window.ready, null, { timeout: 60000 });
+      const r = await ev(() => window.compareSnippets());
+      check('a one-level depth texture: textureSampleCompareLevel with the same arguments', r.on.shadowMap === 'textureSampleCompareLevel( map, map_sampler, uv, ref )', r.on.shadowMap);
+      check('a shadow map array (cascades) too', /^textureSampleCompareLevel\( map, map_sampler, uv, /.test(r.on.array), r.on.array);
+      check('a compare texture with mipmaps keeps the derivative', /^textureSampleCompare\(/.test(r.on.mipmapped), r.on.mipmapped);
+      check('listed in threePatches, and off() gives the call three writes back', r.listed && /^textureSampleCompare\(/.test(r.off), JSON.stringify([r.listed, r.off]));
+    },
+  },
+  {
     name: '[guard] sun shafts: a shaft stands out from the dark room',
     url: '/tests/light-webgpu/index.html',
     software: true,

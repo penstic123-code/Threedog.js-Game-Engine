@@ -8,6 +8,8 @@ export { uniforms } from './uniforms.tsl.js';
 export { lightShaft } from './lightShaft.tsl.js';
 // Registers what a patch's `tsl` field does on a NodeMaterial (render/patches.js looks it up; nothing to call)
 import './patchNodes.tsl.js';
+// Depth-compare samples without a screen derivative, so a shadow map can be compared inside a loop (three's GodraysNode) on every backend
+import './compareLevel.tsl.js';
 // Registers the node versions of the particle / weather shaders (modules/particles and modules/weather drawing them up on WebGPURenderer)
 import './particles.tsl.js';
 // Registers the WebGPU post chain (render/PostFX.js looks it up when the renderer is a WebGPURenderer; nothing to call)

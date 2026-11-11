@@ -6,6 +6,7 @@ import * as TSL from 'three/tsl';
 import 'threedog/tsl';
 import { createEngine } from '../../index.js';
 import { backendName } from '../../render/backend.js';
+import { threePatches } from '../../core/scene/threePatches.js';
 import { PostFX } from '../../render/PostFX.js';
 import { RESERVED_LAYERS } from '../../render/layers.js';
 import { voxelGI, temporalAA, sunShafts, lightVolumes, reflections, autoExposure } from '@threedog/post-effects/tsl';
@@ -129,6 +130,13 @@ window.lightRoom = async () => {
   return { backend: backendName(e.renderer), msg, kept };
 };
 // The two effects that need something the game may not have say so by name
+// The WGSL a depth-compare sample is written as, asked of three's builder itself: no GPU and no backend needed, so every run checks it (render/fx/compareLevel.tsl.js)
+window.compareSnippets = () => {
+  const write = texture => TG.WGSLNodeBuilder.prototype.generateTextureCompare.call({ shaderStage: 'fragment' }, texture, 'map', 'uv', 'ref', null, null, 'fragment');
+  const on = { shadowMap: write({ isDepthTexture: true }), array: write({ isDepthTexture: true, isArrayTexture: true }), mipmapped: write({ isDepthTexture: true, generateMipmaps: true }) };
+  threePatches.off('compare-sample-level');
+  return { on, off: write({ isDepthTexture: true }), listed: threePatches.list().some(p => p.id === 'compare-sample-level' && p.offable) };
+};
 window.lightMissing = async () => {
   const message = f => { try { f(); return null; } catch (err) { return err.message; } };
   const noBounds = message(() => lightVolumes());

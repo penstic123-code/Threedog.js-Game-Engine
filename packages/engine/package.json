@@ -83,6 +83,7 @@
     "./render/effects.js",
     "./render/fx/index.js",
     "./render/fx/particles.tsl.js",
+    "./render/fx/compareLevel.tsl.js",
     "./render/fx/patchNodes.tsl.js",
     "./render/fx/postWebGPU.tsl.js",
     "./render/fx/sky.tsl.js",

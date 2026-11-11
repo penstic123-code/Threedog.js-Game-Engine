@@ -54,7 +54,7 @@ colliders, template / id nodes, spawn / trigger_ / npc_ / marker_ points; warnin
 It needs `@gltf-transform/cli` (`npm i -D @gltf-transform/cli`); its current release pulls a `glob`/`minimatch` that `npm audit` flags (moderate, build time only), so add `"overrides": { "@donmccurdy/caporal": { "glob": "^14.0.4" } }` to your package.json. `--force` redoes unchanged files too.
 
 ### The same shot again, before and after
-Declare fixed views once: `engine.views.define('gate', { position: [10, 4, 12], target: [0, 1, 0], fov: 50 })` (`views.show(name)` also works in code). Then
+Declare fixed views once: `engine.views.define('gate', { position: [10, 4, 12], target: [0, 1, 0], fov: 50 })` (`views.show(name)` also works in code, a pose `{ position, target, fov }` too). Then
 `npm run shot -- -w my-game --view gate --keep` takes the picture from there in any game (the page's own `?view=` still wins where a page handles it, as
 in the picture test). After a change, `npm run shot -- -w my-game --view gate --compare .threedog/shots/<before>.png` prints both file names, one pixel-diff
 number (0 = identical) and the brightness / saturation / contrast / detail differences. A view holds the camera (`engine.takeCamera`) until `views.release()` or the handle `show()` returns is removed; a cutscene that held it before gets it back.

@@ -68,6 +68,8 @@ Read `.value` in JS, or share the object in a shader (`uniforms: { uDaylight: en
 picture, not physics: a styled game mixes them in only if it wants. Gameplay that changes the picture (a cutscene dims the world) goes through a signal
 of your own that the picture code reads.
 
+A sun on a path of your own: `engine.autoView.manual('sunDir')` once, then write `engine.uniforms.uSunDir.value` in the picture's `onRender` before the lights read it; the dome's sun follows.
+
 Written every frame: `uSkyTop` and `uSkyHorizon` take `engine.sky.top` / `engine.sky.horizon`, `uDaylight` and `uTimeOfDay` take a `daylight` / `timeOfDay` measure; a direct write is lost and warns once (`signal-overwritten`). `uSunDir` (the same vector as `engine.sky.sunDir`) and `camera.aspect` stay as written: `engine.autoView.manual('sunDir', false)` gives one back.
 
 ## 3. The hook: `engine.onRender`, not `onFrame`

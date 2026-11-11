@@ -1667,7 +1667,7 @@ export interface View {
    * warning). 'camera' hands the pose back after a direct write (take it with engine.takeCamera(owner)). Pass false to hand back; remove() does the same.
    * @example const mine = engine.autoView.manual('far'); engine.camera.far = 5000; mine.remove();
    */
-  manual(key: 'far' | 'fov' | 'pixelRatio' | 'camera', on?: boolean): { remove(): void };
+  manual(key: 'far' | 'fov' | 'aspect' | 'pixelRatio' | 'sunDir' | 'camera', on?: boolean): { remove(): void };
 }
 /** engine.shadows.cache options: an Object3D (its whole subtree), a list of them, or a test on each mesh (recipes/45) */
 export interface ShadowCacheOptions { static: import('three').Object3D | import('three').Object3D[] | ((mesh: import('three').Object3D) => boolean); }
