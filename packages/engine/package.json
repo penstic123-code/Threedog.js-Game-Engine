@@ -1,6 +1,6 @@
 {
   "name": "threedog",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Web 3D game engine on three.js: core + optional modules, no built-in art (the picture comes from your own style), built to be driven by an AI",
   "license": "MIT",
   "repository": {

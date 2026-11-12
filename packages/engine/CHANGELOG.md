@@ -2,7 +2,7 @@
 
 What changed in each version and how a game upgrades.
 
-## Unreleased
+## 1.3.0 (2026-11-12)
 
 - Fixed: on WebGPU the engine now asks the device for the adapter's own `maxBufferSize`, `maxStorageBufferBindingSize`, `maxSampledTexturesPerShaderStage` and `maxSamplersPerShaderStage` (as it already did for the color attachment limits) instead of WebGPU's defaults. Before, `voxelGI` on a scene of about a million triangles or more failed every frame with `Buffer size exceeds the max buffer size limit` (its triangle buffer passed the default 256 MB), and a material with more than 16 textures counting the lights' shadow maps failed with only `Invalid PipelineLayout`. Measured on one desktop GPU: buffer 256 MB to 2 GB, storage binding 128 MB to 2 GB, textures per stage 16 to 48; samplers stay where the adapter's own limit is 16. A game's own renderer keeps the limits the game gave it.
 - Fixed: `sunShafts` (and any shader that compares a shadow map inside a loop of varying length) now compiles on D3D backends that use FXC. Before, it failed with `FXC compile failed with error: E_FAIL` and every frame that drew it was invalid. three's WGSL builder writes each compare sample with a screen derivative, which a one-level shadow map never needs; the engine now writes those as `textureSampleCompareLevel` (same arguments, same picture), listed in `describe().threePatches` as `compare-sample-level` and undone with `threePatches.off('compare-sample-level')`. A compare texture with mipmaps keeps three's call.

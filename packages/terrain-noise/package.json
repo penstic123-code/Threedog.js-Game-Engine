@@ -1,6 +1,6 @@
 {
   "name": "@threedog/terrain-noise",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Optional terrain generator for threedog: noise hills, island, canyon or flat shapes, rivers and a biome rule table (world shape only, no colors)",
   "license": "MIT",
   "repository": {
@@ -27,6 +27,6 @@
     "*.d.ts"
   ],
   "peerDependencies": {
-    "threedog": "^1.2.0"
+    "threedog": "^1.3.0"
   }
 }
