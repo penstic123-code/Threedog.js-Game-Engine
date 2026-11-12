@@ -78,6 +78,7 @@ window.overLimit = async () => {
  */
 window.textureBindings = async () => {
   const maps = [0, 1, 2].map(() => new THREE.DataTexture(new Uint8Array([255, 0, 0, 255]), 1, 1)), depth = new THREE.DepthTexture(1, 1);
+  for (const t of maps) t.magFilter = t.minFilter = THREE.LinearFilter;   // filtered, as a game's maps are: three binds a sampler beside each (a nearest one is read with textureLoad, no sampler)
   for (const t of [...maps, depth]) t.needsUpdate = true;
   const m = new MeshBasicNodeMaterial({ name: 'ground' });
   m.colorNode = maps.map(t => texture(t)).reduce((a, b) => a.add(b)).add(texture(depth).r);
@@ -95,7 +96,7 @@ window.textureBindings = async () => {
   const ask = (b, r) => { try { checkBindingLimits(b, r); return null; } catch (err) { return String(err.message); } };
   const fake = { bindings: { fragment: { g: [{ isSampler: true }, { isSampler: true }, { isSampler: true, isSampledTexture: true, texture: {} }, { isSampler: true, isSampledTexture: true, store: true }] } } };
   return {
-    counts: builder && bindingCounts(builder), fits: ask(builder, limited(16)), headless: ask(builder, e.renderer), over: ask(builder, limited(2)),
+    backend: e.describe().renderer.backend, counts: builder && bindingCounts(builder), fits: ask(builder, limited(16)), headless: ask(builder, e.renderer), over: ask(builder, limited(2)),
     samplers: ask(fake, limited(1)), fakeCounts: bindingCounts(fake),
   };
 };

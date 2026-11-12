@@ -27,6 +27,7 @@ export const specs = [
       console.log('  over limit:', JSON.stringify(r.errors.map(x => x.slice(0, 700))));
       check('the error carries its code and the count against the device limit', /\[vertex-inputs\]/.test(text) && /17 vertex inputs/.test(text) && /takes 16/.test(text), text.slice(0, 400));
       check('it names every feature that stacked up', ['geometry', 'instance matrix', "last frame's instance matrix", 'temporalAA', 'instance color', "material's own"].every(w => text.includes(w)), text.slice(0, 700));
+      check('on real WebGPU the three filtered maps each bring a sampler (the limit a 16-texture ground hits first)', r.backend !== 'webgpu' || r.counts.fragment.samplers === 3, JSON.stringify([r.backend, r.counts?.fragment]));
       check('it says what to do', /storage buffer/.test(text) && /MSAA/.test(text), text.slice(0, 700));
       check("three's raw location / pipeline error does not follow", !/Attribute location out of range|pipeline creation failed/i.test(text), text.slice(0, 400));
     },
@@ -43,6 +44,7 @@ export const specs = [
       check('within the limit, and on a backend without device limits, nothing is said', r.fits === null && r.headless === null, JSON.stringify([r.fits, r.headless]));
       check('over the limit the message names material, mesh, stage, count, limit and the shadow maps, with its code',
         /MeshBasicNodeMaterial 'ground'/.test(r.over) && /'floor'/.test(r.over) && r.over.includes('fragment stage binds 4 sampled textures, this device takes 2 (3 other maps, 1 shadow maps)') && r.over.includes('[texture-bindings]'), String(r.over));
+      check('on real WebGPU the three filtered maps each bring a sampler (the limit a 16-texture ground hits first)', r.backend !== 'webgpu' || r.counts.fragment.samplers === 3, JSON.stringify([r.backend, r.counts?.fragment]));
       check('it says what to do', /pack maps into one texture/.test(r.over), String(r.over));
       check('samplers count apart from textures, a storage texture counts as neither', r.fakeCounts.fragment.samplers === 2 && r.fakeCounts.fragment.textures === 1 && r.samplers.includes('fragment stage binds 2 samplers, this device takes 1'), JSON.stringify([r.fakeCounts, r.samplers]));
     },
