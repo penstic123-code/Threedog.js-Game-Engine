@@ -166,9 +166,9 @@ export const specs = [
       // why a guard: sunShafts failed in the driver's compiler, describe() kept saying it was on, and every frame was lost to the invalid pipeline
       const f = r.failed, mine = f.text.filter(t => t.startsWith('[threedog]'));
       check("[guard] a post effect whose own pass the device refused is held: said once with the effect's name and a code, off in describe() with the reason, out of the chain; the others stay",
-        f.before.on && f.before.order.includes('brokenFx') && mine.length === 1 && /it draws post effect 'brokenFx', which is now held off .*\[post-effect-failed\]/.test(mine[0])
+        f.before.on && f.before.order.includes('brokenFx') && mine.length === 1 && f.made.length === 1 && f.depth === 0 && /The device said: FXC compile failed/.test(mine[0]) && /it draws post effect 'brokenFx', which is now held off .*\[post-effect-failed\]/.test(mine[0])
         && f.row.on === false && /device refused its shader/.test(f.row.held) && !f.order.includes('brokenFx') && f.order.includes('fineFx') && f.fine && f.gameOn, JSON.stringify(f).slice(0, 700));
-      check('the held effect runs again once it is removed and added again', f.again === true, JSON.stringify(f.again));
+      check('the held effect runs again once it is removed and added again; the scope on the device is listed in describe().threePatches', f.again === true && f.listed === true, JSON.stringify([f.again, f.listed]));
     },
   },
 ];

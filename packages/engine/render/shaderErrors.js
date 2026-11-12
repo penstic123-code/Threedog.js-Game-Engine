@@ -7,6 +7,7 @@
 import { setConsoleFunction, getConsoleFunction } from 'three';
 import { isWebGPU, findNodeBuild } from './backend.js';
 import { materialPatches } from './patches.js';
+import { notePatch, patchOn } from '../core/scene/threePatches.js';
 
 const BEGIN = /^\s*\/\/ threedog:begin patch=(\S+) slot=(\S+)/, END = /^\s*\/\/ threedog:end/;
 // a GLSL file served by the vite preset's threedog-live plugin (shader hot reload, render/hotGlsl.js): `// threedog:begin file=<path>`
@@ -67,7 +68,7 @@ function stageLogs(gl, vs, fs) {
  */
 export function nameShaderErrors(renderer, onFail) {
   const d = /** @type {any} */ (renderer).debug;
-  if (isWebGPU(renderer)) { if (onFail) ON_FAIL.set(renderer, onFail); nameNodeErrors(renderer); watchInvalidPipelines(renderer); return; }
+  if (isWebGPU(renderer)) { if (onFail) ON_FAIL.set(renderer, onFail); nameNodeErrors(renderer); return; }
   if (!d || d.onShaderError) return;
   d.onShaderError = (gl, program, vs, fs) => {
     const parts = [];
@@ -104,7 +105,7 @@ function nodeOwner(ro) {
  * @returns {string}
  */
 function explainPipelineError(message) {
-  const m = /Render pipeline creation failed \(renderPipeline_.*_(\d+)\)/.exec(message);
+  const m = /[Rr]ender pipeline creation failed \(renderPipeline_.*_(\d+)\)/.exec(message);   // 'Async render pipeline ...' from compileAsync too
   return m ? `${pipelineFailed(+m[1])} three's WGSL lines follow.` : '';
 }
 
@@ -117,18 +118,30 @@ function pipelineFailed(id, r) {
   return `[threedog] WebGPU pipeline failed for ${ro ? nodeOwner(ro) : `material #${id} (not among the recent builds)`}: ${did || NODE_HINT}.`;
 }
 
-// What three's own scope misses: it wraps pipeline creation in a 'validation' error scope, and a shader the driver's compiler refuses (FXC on D3D:
-// GPUInternalError) is no validation error. The pipeline stays invalid, three keeps drawing with it, and the device answers every frame with
-// `[Invalid RenderPipeline "renderPipeline_<name>_<id>"] is invalid`, which reaches renderer.onError. Said once per material; a game's own onError still runs first.
-const INVALID = /\[Invalid RenderPipeline "renderPipeline_.*_(\d+)"\]/, told = new WeakMap();
-/** @param {any} r a WebGPURenderer */
-function watchInvalidPipelines(r) {
-  if (typeof r.onError !== 'function' || told.has(r)) return;
-  const prev = r.onError, said = new Set(); told.set(r, said);
-  r.onError = function (info) {
-    prev.call(this, info);
-    const m = INVALID.exec(String(info?.message));
-    if (m && !said.has(m[1])) { said.add(m[1]); console.error(pipelineFailed(+m[1], r)); }
+// What three's own scope misses: it wraps pipeline creation in a 'validation' error scope, and a shader the driver's compiler refuses (FXC on D3D)
+// is a GPUInternalError, no validation error. The pipeline stays invalid, three keeps drawing with it, and every frame that does is lost. So the
+// device's createRenderPipeline gets an 'internal' scope of its own: the failure then arrives with the pipeline's label, whatever words the browser
+// uses for it. three's async path (compileAsync) reports such a failure itself, through the console line explainPipelineError reads.
+notePatch('pipeline-internal-scope', "createRenderPipeline of the WebGPURenderer's GPUDevice: an 'internal' error scope around three's call, so a pipeline the driver's compiler refuses is named with its material, and a post effect that owns it is held", () => {},
+  { scope: 'engine renderer', lost: 'a pipeline the driver refuses keeps failing every frame with no name, and its post effect stays on' });
+const scoped = new WeakSet();
+/** @internal core/engine/startup.js, once the renderer has its device @param {any} r a WebGPURenderer */
+export function watchPipelineBuilds(r) {
+  const device = r?.backend?.device;
+  if (!device?.pushErrorScope || scoped.has(device)) return;
+  scoped.add(device);
+  const create = device.createRenderPipeline;
+  device.createRenderPipeline = function (desc) {
+    if (!patchOn('pipeline-internal-scope')) return create.call(this, desc);
+    const label = String(desc?.label ?? '');   // read now: three reuses one descriptor object and resets it after the call
+    this.pushErrorScope('internal');
+    try { return create.call(this, desc); }
+    finally {
+      this.popErrorScope().then(err => {
+        const m = err && /^renderPipeline_.*_(\d+)$/.exec(label);
+        if (m) console.error(`${pipelineFailed(+m[1], r)} The device said: ${err.message}`);
+      }, () => { /* the device was lost: its own report covers it */ });
+    }
   };
 }
 

@@ -7,6 +7,7 @@ import * as TG from 'three/webgpu';
 import 'threedog/tsl';   // what a WebGPU game imports first: it brings three/webgpu for renderer: 'webgpu'
 import { createEngine, applyEffects, world, terrain, hlod } from '../../index.js';
 import { renderOnce, stats, whyNoWebGPU } from '../../render/backend.js';
+import { watchPipelineBuilds } from '../../render/shaderErrors.js';
 import { watchGeometries } from '../../core/inspect/geometryWatch.js';
 
 const W = 160, H = 120;
@@ -282,18 +283,25 @@ window.shaderErrorCases = async () => {
     out.pipeline = errs.splice(0).join('\n');
     // a pipeline the driver's compiler refused (FXC: no validation error, so three's scope misses it): the device then names it invalid on every frame.
     // The material belongs to a post effect's own pass, kept on its display node as three's nodes keep theirs
-    const passMat = new TG.NodeMaterial(), invalid = () => g.renderer.onError({ api: 'WebGPU', type: 'GPUValidationError', message: `[Invalid RenderPipeline "renderPipeline_Godrays_${passMat.id}"] is invalid.` });
+    // headless runs the WebGL2 backend, so the device is a stand-in with the three members the scope uses: it answers an 'internal' scope with an error
+    const passMat = new TG.NodeMaterial(), scopes = [], made = [];
+    const device = { pushErrorScope: f => scopes.push(f), popErrorScope: () => Promise.resolve(scopes.pop() === 'internal' ? { message: 'FXC compile failed' } : null), createRenderPipeline: d => { made.push(d.label); return {}; } };
+    g.renderer.backend.device = device;
+    watchPipelineBuilds(g.renderer); watchPipelineBuilds(g.renderer);   // twice: one scope, not two
+    delete g.renderer.backend.device;   // the wrapper keeps the renderer; nothing else here may take the stand-in for a real device
+    const invalid = async () => { const d = { label: `renderPipeline_Godrays_${passMat.id}` }; device.createRenderPipeline(d); d.label = ''; await new Promise(r => setTimeout(r, 20)); };
     g.post.add({ name: 'brokenFx', slot: 'hdr', order: 10, node: (input, { display }) => { display.own({ _material: passMat, dispose() {} }); return input.mul(1); } });
     g.post.add({ name: 'fineFx', slot: 'hdr', order: 20, node: input => input.mul(1) });
     g.post.render(0.016);
     const row = () => g.describe().render.post.find(p => p.name === 'brokenFx');
     const before = { on: row().on, order: [...g.post._pipe.order] };
-    invalid(); invalid();
+    await invalid(); const depth = scopes.length;
     g.post.render(0.016);
-    out.failed = { before, text: errs.splice(0), row: row(), order: [...g.post._pipe.order], gameOn: g.post.get('brokenFx')._on(), fine: g.describe().render.post.find(p => p.name === 'fineFx').on };
+    out.failed = { before, made, depth, text: errs.splice(0), row: row(), order: [...g.post._pipe.order], gameOn: g.post.get('brokenFx')._on(), fine: g.describe().render.post.find(p => p.name === 'fineFx').on };
     g.post.get('brokenFx').remove();
     g.post.add({ name: 'brokenFx', slot: 'hdr', order: 10, node: input => input.mul(1) });
     out.failed.again = row().on;
+    out.failed.listed = g.describe().threePatches.some(p => p.id === 'pipeline-internal-scope' && p.offable);
   } finally { console.error = orig; g.dispose(); }
   return out;
 };

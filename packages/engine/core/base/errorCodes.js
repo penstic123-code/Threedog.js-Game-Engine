@@ -489,7 +489,7 @@ export const ERROR_CODES = {
   'post-effect-failed': {
     docs: ['recipes/52-around-the-picture.md §"Post effect chain"'],
     fix: "The device could not build the shader of a post effect's own pass (a driver compiler error, or a device limit), so the engine holds that effect off and " +
-      'the frame draws without it. The error of the device itself is the page error just before this one. Same picture on other devices: nothing to do. ' +
+      'the frame draws without it. The message ends with what the device said. Same picture on other devices: nothing to do. ' +
       'To run it here: change the option the error points at, then remove the effect and add it again.' },
   'own-frame': {
     docs: ['THREE.md', 'recipes/52-around-the-picture.md §"Post effect chain"'],

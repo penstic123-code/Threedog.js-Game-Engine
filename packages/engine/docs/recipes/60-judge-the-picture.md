@@ -61,7 +61,7 @@ hard-edged or pitch-dark look may want exactly what was measured. All of them re
 | fog covers X% | how much of the picture is fog color; printed before a line about the night, since the fog comes first | `scene.fog` |
 
 Limits a game sets per device go through the same check: `engine.budget.enable(engine.tier === 'low' ? { lights: 4 } : { lights: 12 })`. A limit you wrote is
-reported as your own intent; the engine's default line for lights is only a fact.
+reported as your own intent; the engine's default line (lights 8, shadow maps 7) is only a fact.
 
 ## Same knob, different styles
 A knob is a direction, not a setting. Three styles, the same three knobs, moved different ways:

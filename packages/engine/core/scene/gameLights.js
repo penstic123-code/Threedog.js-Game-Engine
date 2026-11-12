@@ -84,7 +84,9 @@ export function watchGameLights(e) {
   e.budget.metric('lights', () => count(l => isShown(l) && l.intensity > 0), { limit: MANY });
   e.budget.metric('shadowLights', () => e.renderer.shadowMap.enabled ? count(l => isShown(l) && l.castShadow && l.intensity > 0) : 0);
   const maps = () => shadowMaps(e.renderer, e.scene);
-  e.budget.metric('shadowMaps', () => maps().reduce((n, m) => n + m.faces, 0));
+  // a guide like the one for lights (nothing is cut at it): the sun and one point light (six maps) fit; a second shadowed point light, or one beside cascades,
+  // is where the frame's triangles multiply (two of them took a 12 M triangle scene to 42 M) and nothing said so
+  e.budget.metric('shadowMaps', () => maps().reduce((n, m) => n + m.faces, 0), { limit: 7 });
   e.budget.metric('shadowMapSize', () => maps().reduce((n, m) => Math.max(n, m.shadow.mapSize.x, m.shadow.mapSize.y), 0));
   e._gameLights = {
     /** The game's own point / spot lights (not a module's, not a pool's) */

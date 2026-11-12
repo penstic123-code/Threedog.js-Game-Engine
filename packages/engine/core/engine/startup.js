@@ -15,7 +15,7 @@ import { startHeadlessLoad } from './headlessLoad.js';
 import * as THREE from 'three';
 import { isWebGPU, backendName, whyNoWebGPU, firstNodeMaterial, webglOnlyOn, tier as detectTier, timerContext, rendererSwapped, compileThrough, borrowRenderer } from '../../render/backend.js';
 import { bindUniforms } from '../../render/engineUniforms.js';
-import { nameShaderErrors } from '../../render/shaderErrors.js';
+import { nameShaderErrors, watchPipelineBuilds } from '../../render/shaderErrors.js';
 import { forcedTier } from '../scene/tier.js';
 import { GpuTimer } from '../scene/adaptive.js';
 import { tierRatio, carryRatio, pixelSizeOn } from '../scene/pixelRatio.js';
@@ -169,6 +169,7 @@ export const startupMethods = {
     }
     if (reason && want.fallback === 'webgl') this._swapToWebGL(r);
     else if (!r.initialized) { await r.init(); this._alive(); }
+    watchPipelineBuilds(this.renderer);   // the device exists now: a pipeline its compiler refuses is named (render/shaderErrors.js)
     const backend = backendName(this.renderer);
     // the probe said yes but three still fell back (a device lost in between): say so all the same
     if (!forced && backend === 'webgl2') reason ??= 'three fell back to its WebGL2 backend during init()';
