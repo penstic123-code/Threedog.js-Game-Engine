@@ -14,8 +14,8 @@ There is a single pathfinding entry point: `engine.characters.findPath(from, to)
 ## 1. Install (main.js)
 A level is a file or a `THREE.Object3D` built in code: `level({ scene: group })`, its meshes named as in `10-blender-level.md`.
 ```js fragment
-import { level, collision, followCamera, characters, nav } from 'threedog';
-engine.use(level({ url: '/models/town.glb' }), collision(), followCamera(), characters(),
+import { level, world, collision, followCamera, characters, nav } from 'threedog';
+engine.use(level({ url: '/models/town.glb' }), world(), collision(), followCamera(), characters(),
   nav({ agentRadius: 0.4, agentHeight: 1.8, maxClimb: 0.45, maxSlope: 45, debug: false }));  // debug: true draws the navmesh
 ```
 - Mesh source: the walkable meshes in the level (naming convention in `10-blender-level.md`). Walls = the level's `col_` boxes + every
@@ -56,7 +56,7 @@ engine.characters.pathsPerStep = 64;  // requests sent per fixed step (default 3
   if either changes while a batch is in flight, that batch is recomputed on the main thread on the new state.
 - With A*, ground shape (height, water, slope) is sampled on a 1 m raster cached 5 s, every floor of it, so what stands under a bridge or a storey counts as it does for `findPath` (colliders and terrain trees are tested exactly), and the search stays inside
   the start-goal box plus a margin, so an async path can differ slightly from `findPath`'s.
-- A save taken while a request is in flight does not keep it: the NPC asks again after loading. Tests: `threedog test "paths:"`.
+- A save taken while a request is in flight does not keep it: the NPC asks again after loading.
 
 ## 5. One source for "can walk there"
 `createEngine({ movement: { radius, height, maxSlope, stepHeight } })` sets it once; read it as `engine.movement`. Collision, the Rapier capsule, the

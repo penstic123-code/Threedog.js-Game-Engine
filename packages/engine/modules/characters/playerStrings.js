@@ -6,8 +6,7 @@ const CONTROL_FIX = "pick how the player moves: addPlayer({ ...presets.player.th
 export const DEV_STRINGS = { noControl: 'characters.addPlayer(): no control given; ' + CONTROL_FIX,
   badControl: "characters.addPlayer(): control {got} is not a control; " + CONTROL_FIX + ". (A function returning null stands still; a game-driven move takes control, see recipe 57)",
   noFollow: "characters.addPlayer(): a camera module is installed but cameraFollow was not given, so the camera does not follow the player. " +
-    'Pass cameraFollow: true (presets.player.* do), or cameraFollow: false if the game aims the camera itself',
-  noWorld: 'characters.addPlayer() needs world() installed first: the player is a record in world (position is saved, world splits near/far by it). Use engine.use(world(), …); openWorld() already installs it' };
+    'Pass cameraFollow: true (presets.player.* do), or cameraFollow: false if the game aims the camera itself' };
 export const STRINGS = { 'zh-CN': { 'npc.talk': '和{name}说话', 'input.brake': '刹车' }, en: { 'npc.talk': 'Talk to {name}', 'input.brake': 'Brake' } };
 
 export const validControl = c => c === 'camera' || typeof c === 'function';

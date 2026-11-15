@@ -180,6 +180,7 @@ export const specs = [
         const m = engine.autoView.manual('camera'); const mHolder = engine.cameraOverride?.owner; m.remove(); const freed = engine.cameraOverride;
         const w = [...during.warns, ...after.warns].filter(w => w.includes('camera was changed outside'));
         return { clean: during.warns.length, n: w.length, takeover: w.every(t => t.includes("engine.takeCamera('me')") && !t.includes("engine.autoView.manual('camera')")), stays, by,
+          nudgeHint: w.length > 0 && w.every(t => t.includes('onRender') && t.includes('recipe 21')),
           back: engine.describe().owned.camera.writer, moved: engine.camera.position.x !== x, holder: globalThis.__holder, mHolder, freed };
       });
       check('no warning when the camera is edited during an override', r.clean === 0, JSON.stringify(r));
@@ -189,6 +190,29 @@ export const specs = [
       check('engine.autoView.manual(camera, false) hands it back: the rig places the camera again', r.back === 'engine' && r.moved, JSON.stringify(r));
       // guard: one camera state. A direct write and engine.autoView.manual are takeCamera holds (cameraOverride names them); remove() frees the camera
       check('[guard] direct write / engine.autoView.manual(camera) show as the camera holder; hand-back clears it', r.holder === 'three' && r.mHolder === 'manual:game' && r.freed === null, JSON.stringify(r));
+      check('the warning names the nudge path (screen shake keeps the rig driving)', r.nudgeHint, JSON.stringify(r));
+    },
+  },
+  {
+    // The one additive path for a value the engine drives every frame (recipe 21 "Screen shake"): nudge it in onRender 'before', put it back in 'after'.
+    // Why a guard: the owned check runs in the rig's frame hook, so the put-back must land before it; if hooks ever moved, every game's shake would take the camera.
+    name: '[guard] Camera nudge: an offset added in onRender before and put back after is drawn, keeps the rig driving, and warns nothing',
+    url: '/tests/vehicle/index.html',
+    async run({ check, ev }) {
+      const r = await ev(async () => {
+        engine.haltLoop(); engine.autoView.manual('camera', false); engine.step(0.1);
+        const T = engine.camera.position.constructor, saved = new T(), drawn = [], rig = [];
+        const res = await __t.warns(() => {
+          const a = engine.onRender(({ camera }) => { saved.copy(camera.position); rig.push(camera.position.y); camera.position.y += 0.3; drawn.push(camera.position.y); });
+          const b = engine.onRender(({ camera }) => { camera.position.copy(saved); }, { when: 'after' });
+          for (let i = 0; i < 5; i++) engine.step(0.1);
+          a.remove(); b.remove(); engine.step(0.1);
+        });
+        return { warns: res.warns.filter(w => w.includes('camera was changed outside')).length, writer: engine.describe().owned.camera.writer,
+          offset: drawn.every((y, i) => Math.abs(y - rig[i] - 0.3) < 1e-9), frames: drawn.length };
+      });
+      check('the offset was there while the frame drew', r.offset && r.frames >= 5, JSON.stringify(r));
+      check('no takeover warning, the engine still writes the camera', r.warns === 0 && r.writer === 'engine', JSON.stringify(r));
     },
   },
   // ---------- Seams (review 6.8): vehicle saves, brake key, rigid-body shadows, fixed camera interrupting a blend, nav version, entity growth ----------

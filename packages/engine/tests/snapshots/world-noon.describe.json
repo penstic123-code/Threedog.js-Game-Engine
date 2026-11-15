@@ -10,22 +10,7 @@
  "ui": {
   "dialogue": null,
   "inputLocked": false,
-  "parts": {
-   "dialogue": "default",
-   "dialogue.bubble": "default",
-   "hud.bar": "default",
-   "hud.button": "default",
-   "hud.counter": "default",
-   "hud.hint": "default",
-   "hud.marker": "default",
-   "inventory": "default",
-   "loading": "default",
-   "prompt": "default",
-   "questLog": "default",
-   "title": "off",
-   "toast": "default",
-   "touch": "default"
-  },
+  "parts": {},
   "windows": []
  },
  "cutscene": null

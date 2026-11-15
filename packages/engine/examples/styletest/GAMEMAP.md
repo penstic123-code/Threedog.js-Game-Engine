@@ -31,7 +31,7 @@ None yet, write them in `DESIGN.md` (why it is designed this way, what not to ch
 - weather: `node_modules/threedog/docs/recipes/44-water-weather-hooks.md` · `node_modules/threedog/docs/api/weather.md`
 - water: `node_modules/threedog/docs/recipes/44-water-weather-hooks.md` · `node_modules/threedog/docs/api/water.md`
 - collision: `node_modules/threedog/docs/recipes/12-navmesh.md` · `node_modules/threedog/docs/api/collision.md`
-- rigid: `node_modules/threedog/docs/recipes/11-vehicles.md` · `node_modules/threedog/docs/api/rigid.md`
+- rigid: `node_modules/threedog/docs/recipes/11-physics.md` · `node_modules/threedog/docs/api/rigid.md`
 - characters: `node_modules/threedog/docs/recipes/66-common-tasks.md` · `node_modules/threedog/docs/api/characters.md`
 - …9 more modules: their pages are in `node_modules/threedog/docs/api/`
 

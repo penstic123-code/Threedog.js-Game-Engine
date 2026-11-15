@@ -3,7 +3,7 @@
 > **Covers:** the four cameras (follow, first person, strategy, fixed), switching, framing, limits.
 > **Use when:** choosing or tuning how the player sees the game.
 > **Shortest:** `openWorld({ camera: 'firstPerson' })`.
-> **Sections:** 1 Press V to · 2 What the engine · 3 Other common things · 4 Over the shoulder · 4b Looking up, ground · 4c Chase camera behind · 5 Take over the · 6 Orthographic view, and · 7 Your own camera
+> **Sections:** 1 Press V to · 2 What the engine · 3 Other common things · 4 Over the shoulder · 4b Looking up, ground · 4c Chase camera behind · 5 Take over the · 6 Orthographic view, and · 6b Screen shake and · 7 Your own camera
 
 Four cameras; the kind names are always: `'follow'` third-person follow · `'firstPerson'` first person · `'rts'` top-down strategy · `'fixed'` fixed shots.
 Pick one at the start: `openWorld({ camera: 'firstPerson' })`, or by hand `engine.use(followCamera({ distance: 10 }))` /
@@ -196,6 +196,16 @@ A camera module goes on placing the camera you assigned, and one assigned during
 ```js fragment
 engine.use(followCamera({ projection: 'orthographic', size: 15, yaw: 0, pitch: 0, lockPitch: true, distance: 40, ground: 'none', mouseLook: false }));
 ```
+
+## 6b. Screen shake and other camera offsets (the camera keeps following)
+
+A direct camera write takes the camera (recipe 52); a shake is an offset on the drawn frame only:
+```js fragment
+const pose = new THREE.Vector3(); let shake = 0;  // yours: raise it on a hit, let it fall in onFrame
+engine.onRender(({ camera }) => { pose.copy(camera.position); camera.position.y += (Math.random() - 0.5) * shake; });
+engine.onRender(({ camera }) => { camera.position.copy(pose); camera.updateMatrixWorld(); }, { when: 'after' });  // back: no warning, picking sees the real pose
+```
+Aim that should climb (recoil) is `cameraRig.pitch` (recipe 32).
 
 ## 7. Your own camera module
 Everything else in the engine reads only what `modules/camera/contract.js` lists from `engine.cameraRig`: `forward()` / `right()` (control: 'camera',

@@ -10,15 +10,7 @@
  "ui": {
   "dialogue": null,
   "inputLocked": false,
-  "parts": {
-   "dialogue": "default",
-   "dialogue.bubble": "default",
-   "loading": "default",
-   "prompt": "default",
-   "title": "off",
-   "toast": "default",
-   "touch": "default"
-  },
+  "parts": {},
   "windows": []
  },
  "modules": [
@@ -80,6 +72,9 @@
    "name": "characters",
    "provides": [
     "characters"
+   ],
+   "requires": [
+    "world"
    ],
    "type": "actor"
   },

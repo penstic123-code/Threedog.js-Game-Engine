@@ -135,7 +135,7 @@ The shape of an item on the ground is a model name from an asset pack, built thr
 else a model named `pickup:<item id>`, else one named `pickup`, else a neutral gray box. A generator that returns bare geometry is drawn with
 `engine.pickups.material` in the item's own `color`.
 ```js
-engine.use(pickups({ color: 0xd8c070, size: 0.3, lift: 0.5 }));  // default color, placeholder box, height above the ground
+engine.use(world(), pickups({ color: 0xd8c070, size: 0.3, lift: 0.5 }));  // default color, placeholder box, height above the ground
 engine.pickups.material = new THREE.MeshStandardMaterial({ metalness: 0.8, roughness: 0.3 });  // swaps every box and geometry-only model; used as given
 ```
 A pickup or item with its own `color`, and a vertex-colored geometry, draw with a copy of that material carrying the color. For one object of the game's own pass

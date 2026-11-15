@@ -101,8 +101,8 @@ A module that does two kinds of thing is two definitions returned together (`wea
   `engine.use` of the same module works; a save part's data stays in the save and goes back to the part when it registers again.
 - Listeners and timers the module adds go through `ctx.track(...)`: `ctx.track(e.events.on('item:add', fn))`, also `onFixed` / `onFrame` /
   `clock.after` / `audio.measure` / a `makeWindow` window, anything with `remove()`. They leave with the module: when its `engine.use(...)` batch
-  rolls back, when its `init` fails, and on `engine.dispose()` before its `dispose` hook (the spec `threedog test "Lifecycle: every built-in"`
-  checks every engine module). A class the module builds takes `ctx` as a constructor argument. DOM listeners use
+  rolls back, when its `init` fails, and on `engine.dispose()` before its `dispose` hook.
+  A class the module builds takes `ctx` as a constructor argument. DOM listeners use
   `addEventListener(type, fn, { signal: engine.signal })`, and UI elements attach to `engine.uiRoot` (not `document.body`); jobs and stream
   entries are collected by `engine.dispose()`; scene GPU memory is its creator's: `engine.dispose()` does not free the meshes, materials and textures you made, so track their removal: `ctx.track({ remove: () => engine.remove(mesh) })` (`engine.remove` disposes geometry and materials, not their textures: three's `material.dispose()` leaves its maps, so dispose a texture you made when nothing uses it). The `dispose(e)`
   hook frees the rest (Workers, the physics world, WASM objects, real-time timers), in reverse install order.

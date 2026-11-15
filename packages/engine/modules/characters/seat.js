@@ -28,7 +28,7 @@ export function seatFromRecord(c, v, seat) {
 }
 
 /** The records that name this vehicle. A far NPC has no model, so only its record knows */
-const ridersOf = (e, v) => (v.id == null ? [] : e.world?.query({}).filter(r => r.vehicle === v.id) ?? []);
+const ridersOf = (e, v) => (v.id == null ? [] : e.world.query({}).filter(r => r.vehicle === v.id));
 
 /** characters.addVehicle: join the registry, and seat the riders whose record is waiting for this id. A far NPC is seated by its next build (npcView.js). A vehicle gone for good answers those records too: nothing will come for them */
 export function addVehicle(e, v) {

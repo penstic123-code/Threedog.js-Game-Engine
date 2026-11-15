@@ -24,7 +24,7 @@ import { ts, walk, read, abs, dtsFiles, P } from './_lib.mjs';
 
 // Allowlist: [doc file, block number (from 1), fragment of the original error text (null = skip the whole block), reason]
 const ALLOW = [
-  [`${P.RECIPES_REL}/11-vehicles.md`, 1, "'number | boolean'", 'in JS, [[x, z, true, false]].map(([x, z, steer, drive]) => …) destructuring is inferred as (number|boolean), a TypeScript inference limit, not a doc mistake'],
+  [`${P.RECIPES_REL}/11-physics.md`, 1, "'number | boolean'", 'in JS, [[x, z, true, false]].map(([x, z, steer, drive]) => …) destructuring is inferred as (number|boolean), a TypeScript inference limit, not a doc mistake'],
 ];
 // the folders of templates/game
 const TEMPLATE_DIRS = new Set(readdirSync(abs(`${P.TOOLS_REL}/templates/game`), { withFileTypes: true }).filter(d => d.isDirectory()).map(d => d.name));

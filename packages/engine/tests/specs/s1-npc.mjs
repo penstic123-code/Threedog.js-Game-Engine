@@ -370,7 +370,7 @@ export const specs = [
     },
   },
   {
-    name: 'S1 NPC module options: npcs: false leaves engine.npcs out and control still finds the player; npcTiers without NPCs is refused; a player needs world (bare engines)',
+    name: 'S1 NPC module options: npcs: false leaves engine.npcs out and control still finds the player; npcTiers without NPCs is refused; characters without world is refused at use() (bare engines)',
     url: '/tests/threads/',
     async run({ check, ev }) {
       const r = await ev(async () => {
@@ -378,10 +378,10 @@ export const specs = [
         const make = (...mods) => { const E = createEngine({ canvas: document.createElement('canvas'), headless: true, ui: { loading: false }, urlState: false, saveKey: 's1-bare' }); E.use(...mods); return E; };
         const code = f => { try { f(); return 'no error'; } catch (x) { return x.code; } };
         out.tiers = code(() => make(world(), characters({ npcs: false, npcTiers: {} })));
-        const noWorld = make(characters({ npcs: false }));
-        await noWorld.start();
-        out.noWorld = code(() => noWorld.characters.addPlayer({ control: 'camera' }));
-        noWorld.dispose();
+        // characters requires world: use() refuses at install, before any addPlayer (the engine made for it is disposed either way)
+        let bare = null;
+        out.noWorld = code(() => { bare = createEngine({ canvas: document.createElement('canvas'), headless: true, ui: { loading: false }, urlState: false, saveKey: 's1-bare' }); bare.use(characters({ npcs: false })); });   // module-lists: refused on purpose
+        bare?.dispose();
         const E = make(world(), collision(), characters({ npcs: false }));
         await E.start();
         out.npcs = E.npcs === undefined;
@@ -394,7 +394,7 @@ export const specs = [
       });
       const J = JSON.stringify(r);
       check('npcTiers with npcs: false is refused', r.tiers === 'module-params', J);
-      check('addPlayer without world names the missing module', r.noWorld === 'module-needs', J);
+      check('characters() without world() is refused at use() naming the missing module', r.noWorld === 'module-requires', J);
       check('npcs: false: no engine.npcs, the player still resolves by id', r.npcs && r.owner === 's1-bare', J);
       check('pathsPerStep stays at least 1', r.perStep === 1, J);
     },

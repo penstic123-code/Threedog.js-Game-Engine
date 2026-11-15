@@ -1,12 +1,11 @@
 // Characters module: player (keyboard/stick control, camera follow, footsteps, enter/exit vehicles) and NPCs (schedule, pathfinding, dialogue).
 // The pathfinding entry for game code is engine.characters.findPath: uses the navmesh if nav is installed and ready, else A* (astar.js is an internal fallback, not
 // exported).
-// NPC facts live in engine.world (kind 'npc'), the model is just a presentation when near (see the top of NPC.js): NPCs need world() installed (openWorld
-// already does).
+// NPC facts live in engine.world (kind 'npc'), the model is just a presentation when near (see the top of NPC.js).
 // The player is also a world record (id / kind both 'player'): position, facing, motion state and current vehicle live in the record and are saved with world;
 // world splits near / far by it by default.
 // Only the mover changes the player's position (Character.move / placeAt / enter / exit), then writes back to the record; loading places the player back by the
-// record. So install world() before creating the player.
+// record. Both are world records, so the module requires world(): use() says so at install, not addPlayer at runtime (openWorld() installs both).
 // Vehicles are used through an interface (the { object, speed, drive(), seatPosition(), exitPosition() } returned by rigid.addWheeled); rigid is not imported
 // here.
 import { Character } from './Character.js';
@@ -248,7 +247,7 @@ const NPC_CONTENT = {
 function describeCharacters(e, ctx, mgr) {
   // with a model report by the model (merged with interaction points and world's own report for the same object into one), without a model report by data
   // position
-  for (const r of mgr && e.world ? e.world.query({ kind: 'npc', near: ctx.center, radius: ctx.radius, where: r => e.world.inZone(r) }) : []) {
+  for (const r of mgr ? e.world.query({ kind: 'npc', near: ctx.center, radius: ctx.radius, where: r => e.world.inZone(r) }) : []) {
     ctx.near(e.world.view(r.id) ?? r.position, { id: r.id, name: r.name, kind: 'npc', state: r.state });
   }
   if (ctx.out.player) Object.assign(ctx.out.player, { swimming: e.player.swimming, grounded: e.player.grounded, facing: Math.round(e.player.facing * 100) / 100,
@@ -265,7 +264,7 @@ export function characters(opts = {}) {
   return {
     // before rigid: the player's move this step is in the physics step that follows (as when control was an onFixed)
     content: { npcs: NPC_CONTENT },
-    name: 'characters', skipKind: 'none', type: 'actor', provides: ['characters'], params: CHARACTERS_PARAMS, options: opts, label: 'Characters', before: ['rigid'], noSkip: 'fixed steps paths, control holders and riders, none of which a time jump moves; schedules read the calendar clock', optional: ['cameraRig', 'calendar', 'interactions', 'dialogue', 'nav', 'collision', 'rigid', 'world'],
+    name: 'characters', skipKind: 'none', type: 'actor', provides: ['characters'], params: CHARACTERS_PARAMS, options: opts, label: 'Characters', before: ['rigid'], noSkip: 'fixed steps paths, control holders and riders, none of which a time jump moves; schedules read the calendar clock', requires: ['world'], optional: ['cameraRig', 'calendar', 'interactions', 'dialogue', 'nav', 'collision', 'rigid'],
     install(e, ctx) {
       e.i18n.add(STRINGS); e.i18n.add({ 'zh-CN': { 'module.characters': '角色' }, en: { 'module.characters': 'characters' } });
       // move.* are defined at module install: doc examples call engine.mod('move.speed', …) in setup before creating a character, and relying on the first Character's definition would give unknown-name
@@ -282,9 +281,8 @@ export function characters(opts = {}) {
       listen(e, ctx, st);
       return charactersApi(e, st, animation);
     },
-    // NPC simulation and animation are driven by world (simulate / present update); here we only register with world at start; without world, wait for the
-    // first npcs.add and then report the error
-    init(e) { if (st.mgr && e.world) st.mgr.setup(); },
+    // NPC simulation and animation are driven by world (simulate / present update); here we only register with world at start
+    init() { st.mgr?.setup(); },
     // player control runs here (stage late: after every early onFixed and the gameplay stages); then carry riders by what moved since their own step
     // (support.js): every platform mover of this step has run by now
     // control holders' steps (the player's input, game steps) run here too, in that order: one move per held character per step (core/ops/control.js)
