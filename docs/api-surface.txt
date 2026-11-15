@@ -139,6 +139,7 @@ CLI options | --samples |
 CLI options | --save-baseline |
 CLI options | --scenario |
 CLI options | --scene-only |
+CLI options | --seconds |
 CLI options | --shading |
 CLI options | --shot-region |
 CLI options | --shots |
