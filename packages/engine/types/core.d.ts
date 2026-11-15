@@ -189,7 +189,7 @@ export interface EventMap extends GameEvents {
   /**
    * rigid: newGame / a load rebuilt the physics world (a fresh page for physics) and the engine's bodies are back (entry.body is the rebuilt Rapier
    * body; bodies maps the ids given to addBox / addBall / addHull / addWheeled). The old world's joints were freed with it: re-create the game's
-   * joints here (recipes/11-vehicles.md, Joints). Not emitted while a vehicle exists (the world is kept then, joints included)
+   * joints here (recipes/11-physics.md, Joints). Not emitted while a vehicle exists (the world is kept then, joints included)
    */
   'rigid:rebuilt': [{ world: any; player: any; bodies: Record<string, any> }];
   /** terrain({ shape }): the player or a moving rigid body dropped below engine.terrain.voidY (once per fall). The engine does not respawn: the game decides */

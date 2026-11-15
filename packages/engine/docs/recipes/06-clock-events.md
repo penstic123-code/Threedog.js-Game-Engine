@@ -16,20 +16,13 @@ engine.onFixed(dt => moveEnemies(dt), { channel: 'enemies' });  // this dt is al
 `engine.mod(target, { owner, mul | add | set | clamp, for, clock })` is the one entry for every quantity several systems share (time channels,
 `'clock.rate'`, `'freeze'`, your own from `engine.stacks.define(name, { base })`). It returns `{ remove() }`; `remove()` ends only this owner's entry.
 Details, only when you need them:
-- One entry per owner: the same owner modding again updates its entry. Ending one recomputes from the base and the entries left, so effects can end
-  in any order (bullet time ending under a stopwatch never "restores" a stale value).
-- Combine order and conflicts: `55-mods-time-wrap.md` (one layer table for every shared value; a stopwatch `set: 0, layer: 'effect'` beats any
-  slow-down; two owners `set` on one layer is an error in development).
+- One entry per owner, layers and conflicts: `55-mods-time-wrap.md`.
 - `for: seconds` ends it by itself, counted on `clock`: `'real'` (default; real seconds, which stop while frozen, so a pause menu does not use up a
-  bullet time) or a channel name (`clock: 'enemies'`: a slow that lasts 3 enemy seconds lasts longer in bullet time). Each end emits `mod:end`
+  bullet time) or a channel name (`clock: 'enemies'`: slowed by bullet time too). Each end emits `mod:end`
   `{ target, owner, id }`. Saved with the time left; `engine.skip` ends them at the right point of the jump.
 - One record only: `engine.mod('time.local', { owner: 'stopwatch', id: 'slime_3', set: 0, layer: 'effect' })` (its speed = channel x local).
   `world.remove(id)` drops that record's entries.
-- Reading: `engine.time.scale('enemies', id?)`, `engine.time.now('enemies')`, `engine.clock.rate`; `describe().time.channels` lists speeds and
-  holders. Saved: entries below `'system'`; `system` / `debug` ones (menus, debug panel) are screen state and are taken again after a load.
-- Freeze is not speed 0: a frozen engine runs no fixed step, so no channel moves, no `for` runs down and input is not read.
-- Plain JS keeps working: your own fields and `onFixed(dt => ...)` logic need none of this. Use `engine.mod` for quantities more than one system writes.
-- Order inside a fixed step: `onFixed(fn)` runs before the modules (player not moved yet), `onFixed(fn, { phase: 'late' })` after them. Stacks, `input.gate` and `engine.wrap` together: recipe 55.
+- Reading: `engine.time.scale(ch, id?)`, `engine.time.now(ch)`; `describe().time.channels` lists speeds and holders. Saved: entries below `'system'`; `system` / `debug` ones (menus, debug panel) are screen state and are taken again after a load.
 
 ## The time table (the single source; other docs link here)
 **One time source.** `engine.time` counts one thing, `engine.time.tick` (fixed steps run). Every other time is a

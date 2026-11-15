@@ -8,6 +8,8 @@ What changed in each version and how a game upgrades.
 - New (docs): screen shake without taking the camera, recipe 21 §6b: an offset added in `engine.onRender` and put back in `onRender(fn, { when: 'after' })`; the camera's takeover warning now names it, and a guard test holds the hook order it relies on.
 - Fixed: solver settings a game writes on `engine.rigid.world.integrationParameters` (such as `numSolverIterations`) are kept when newGame or a load rebuilds the physics world. Before, they fell back to Rapier's defaults.
 - Docs: recipe 11 §3c says when bodies can be added, that `rigid.impulse` wakes a sleeping body (explosions), and that resting stacks overlap a little because of Rapier's soft contacts, not a smaller collider (more iterations do not change it).
+- Renamed: `docs/recipes/11-vehicles.md` is now `docs/recipes/11-physics.md` (it covers all rigid bodies, joints and explosions, not only vehicles). No alias.
+- Docs: CONVENTIONS "One task, which entry" has a hit-stop / bullet-time row (`engine.mod('time.world', ...)`, `for` in real seconds; `clock.rate` is the calendar).
 - Upgrading: a game that installs `characters()` without `world()` or `openWorld()` adds `world()` before it: `engine.use(world(), collision(), characters())`.
 
 ## 1.4.0 (2026-11-15)

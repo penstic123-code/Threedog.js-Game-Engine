@@ -77,7 +77,7 @@ A row or `threedog how` -> recipe -> `api/<module>.md`. Also: `CONVENTIONS.md`, 
 | Pixel art | `pixelSize`, `pixelSnap` | 62-picture-code.md §4b |
 | Skeletal animation, IK | `engine.assets.animate`, `anim.addAim`, `.addFeet`, `engine.hlod` | 13-animation.md §3, 15-perf.md |
 | Pathfinding, navmesh, NPC jumps and gaps, gates | `engine.characters.findPath`, `engine.nav` | 12-navmesh.md §2 |
-| Physics, ragdoll, collision, vehicles | `engine.collision`, `engine.rigid`, `engine.collider3d` | 11-vehicles.md §3 |
+| Physics, ragdoll, collision, vehicles | `engine.collision`, `engine.rigid`, `engine.collider3d` | 11-physics.md §3 |
 | Ray / mouse picking, shooting, lock-on | `engine.rays` | 19-shooting-picking.md §1 |
 | Prompts, trigger zones | `engine.interactions`, `engine.triggers` | 20-content-actions-save.md §3 |
 | Press E on a mesh | `interactions.add(mesh, { once, counter })` | 03-items-pickups.md |
@@ -119,7 +119,7 @@ A row or `threedog how` -> recipe -> `api/<module>.md`. Also: `CONVENTIONS.md`, 
 | To do | Use | Recipe |
 |---|---|---|
 | Own ground or plant drawing, keep collision | `engine.terrain.view`, `engine.terrainDraw`, `engine.vegetationDraw` | 28-terrain.md §6 |
-| Worker results, far records' models, raw navmesh or physics, content sections, own mover | `ctx.commits`, `world.present`, `nav.query`, `rigid.world`, module `content`, `characters.kit` | 15-perf.md, 18-world.md, 12-navmesh.md, 11-vehicles.md, 14-custom-module.md, 57-control.md |
+| Worker results, far records' models, raw navmesh or physics, content sections, own mover | `ctx.commits`, `world.present`, `nav.query`, `rigid.world`, module `content`, `characters.kit` | 15-perf.md, 18-world.md, 12-navmesh.md, 11-physics.md, 14-custom-module.md, 57-control.md |
 
 ### Troubleshooting and speed
 | To do | Use | Recipe |

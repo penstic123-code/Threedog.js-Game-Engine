@@ -61,7 +61,7 @@ Taking over a game: its status notes first. A new feature: docs/AI.md or threedo
 - Pixel art: docs/recipes/62-picture-code.md §4b
 - Skeletal animation, IK: docs/recipes/13-animation.md §3, 15-perf.md
 - Pathfinding, navmesh, NPC jumps and gaps, gates: docs/recipes/12-navmesh.md §2
-- Physics, ragdoll, collision, vehicles: docs/recipes/11-vehicles.md §3
+- Physics, ragdoll, collision, vehicles: docs/recipes/11-physics.md §3
 - Ray / mouse picking, shooting, lock-on: docs/recipes/19-shooting-picking.md §1
 - Prompts, trigger zones: docs/recipes/20-content-actions-save.md §3
 - Press E on a mesh: docs/recipes/03-items-pickups.md
@@ -100,7 +100,7 @@ Taking over a game: its status notes first. A new feature: docs/AI.md or threedo
 ## Advanced
 
 - Own ground or plant drawing, keep collision: docs/recipes/28-terrain.md §6
-- Worker results, far records' models, raw navmesh or physics, content sections, own mover: docs/recipes/15-perf.md, 18-world.md, 12-navmesh.md, 11-vehicles.md, 14-custom-module.md, 57-control.md
+- Worker results, far records' models, raw navmesh or physics, content sections, own mover: docs/recipes/15-perf.md, 18-world.md, 12-navmesh.md, 11-physics.md, 14-custom-module.md, 57-control.md
 
 ## Troubleshooting and speed
 
@@ -122,7 +122,7 @@ Taking over a game: its status notes first. A new feature: docs/AI.md or threedo
 - [08-weather-sky](docs/recipes/08-weather-sky.md): Add weather or change the sky
 - [09-materials-lights-models](docs/recipes/09-materials-lights-models.md): Materials, lights and models: the game's own picture
 - [10-blender-level](docs/recipes/10-blender-level.md): Importing Blender models and levels
-- [11-vehicles](docs/recipes/11-vehicles.md): Physics: rigid bodies, pushing, joints, vehicles
+- [11-physics](docs/recipes/11-physics.md): Physics: rigid bodies, pushing, joints, vehicles
 - [12-navmesh](docs/recipes/12-navmesh.md): Navigation mesh (nav)
 - [13-animation](docs/recipes/13-animation.md): Animation state machine (skeletal animation)
 - [14-custom-module](docs/recipes/14-custom-module.md): Custom module

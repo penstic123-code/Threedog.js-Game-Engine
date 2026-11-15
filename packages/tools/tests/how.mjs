@@ -71,7 +71,8 @@ export async function run({ check }) {
     // benchmark 2026-11-16: fresh AIs missed these three
     ['screen shake', /21-camera/],
     ['game time seconds', /engine\.time\.now/],
-    ['explosion push physics bodies', /11-vehicles/],
+    ['explosion push physics bodies', /11-physics/],
+    ['hit stop', /time\.world/],
     ['stealth vision cone', /12-navmesh/],
     ['pixel art', /62-picture-code/],
     ['pixel perfect camera', /62-picture-code/],
@@ -164,8 +165,8 @@ export async function run({ check }) {
     ['save', /saves\.define/],
     ['2D side-scroller with sprites and dynamic lights', /sideScroller.*rc2d/],
     ['sprite lighting normal map 2d', /rc2d/],
-    ['push boxes with physics puzzle', /engine\.rigid|11-vehicles/],
-    ['can the player push rigid bodies', /11-vehicles/],
+    ['push boxes with physics puzzle', /engine\.rigid|11-physics/],
+    ['can the player push rigid bodies', /11-physics/],
     ['third person character running and jumping on terrain', /addPlayer|presets\.player/],
     // Phrasings that earlier blind tests asked but only got third-person results for, or nothing (2026-11-10)
     ['first person walk collide custom geometry walls', /63-third-person-start\.md §7/],
@@ -206,8 +207,8 @@ export async function run({ check }) {
   rmSync(fake2, { recursive: true });
   check('[guard] the section answers, not the list of sections above it; a bullet word ranks nothing', /Zebra crossing/.test(zebra[0]?.line) && zebra.length === 1 && yak.length === 0, JSON.stringify([zebra, yak]));
   check('the "nothing found" hint says what to try and where to read', /2-4 English task words/.test(tryNext(none)) && /AI\.md/.test(tryNext(none)) && /qqzzxx/.test(tryNext(none)), tryNext(none));
-  // [guard] the MCP how tool gives the same hint as the CLI (it once answered a bare "No match" with no words to try)
-  const mNone = await STATIC_TOOLS.how.run(ENGINE, { task: 'qqzzxx' }), mWeak = await STATIC_TOOLS.how.run(ENGINE, { task: 'camera shake boss' });
+  // [guard] the MCP how tool gives the same hint as the CLI (it once answered a bare "No match" with no words to try) ('camera boss qqzz': the weak query needs a word no doc uses; 'camera shake boss' became a real answer)
+  const mNone = await STATIC_TOOLS.how.run(ENGINE, { task: 'qqzzxx' }), mWeak = await STATIC_TOOLS.how.run(ENGINE, { task: 'camera boss qqzz' });
   check('[guard] MCP how: no match and a weak match carry the CLI hint (words the docs never use, 2-4 task words)',
     /Search words are English/.test(mNone.text) && /qqzzxx/.test(mNone.text) && /No good match/.test(mWeak.text) && /boss/.test(mWeak.text), mNone.text + ' | ' + mWeak.text.slice(0, 200));
   // [guard] words the search cannot read get one short line, not a page of closest hits; English beside them still gets its answer, with the line first

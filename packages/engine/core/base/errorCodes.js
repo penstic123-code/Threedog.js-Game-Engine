@@ -424,7 +424,7 @@ export const ERROR_CODES = {
     docs: ['recipes/27-net.md', 'api/net.md'],
     fix: 'net() needs role \'host\' or \'client\' and a transport; reconnect() is for clients only.' },
   'rigid-misuse': {
-    docs: ['recipes/11-vehicles.md §3', 'api/rigid.md'],
+    docs: ['recipes/11-physics.md §3', 'api/rigid.md'],
     fix: "The message says which: an id already used by another body or vehicle (give each its own id); a mesh that another body or a character already owns (one object, one physics owner: remove the first, or give the second its own object); joints lost when newGame / a load rebuilt the physics world (re-create them in a rigid:rebuilt listener, recipe 11 section 3 \"Joints\"); rigid.ragdoll() got something it cannot drive (a skinned character out of its vehicle, with the bones named when they cannot be read); or a moving body left the terrain colliders and froze (raise rigid({ terrainRing }) if it must keep moving there, recipe 11 section 3)." },
   'settings-row': {
     docs: ['api/settings.md'],

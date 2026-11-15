@@ -36,7 +36,6 @@ input gates; shadow on / quality and post parameters are on them too. Your own o
 materials and textures are plain three.js: never registered, never a conflict. Which tool to reach for: `../CONVENTIONS.md` "Customization ladder".
 
 ```js
-engine.mod('time.player', { owner: 'haste', mul: 1.2, for: 5 });  // haste on the player
 const menu = engine.freeze('pause-menu');  /* ... */  menu.remove();  // pause menu: the picture, UI and ambient uTime (wind, water, clouds) keep running; { still: true } stops those too
 engine.input.gate('jump', { owner: 'stun', for: 1.5 });  // no jumping while stunned
 engine.wrap(engine.inventory, 'add', (next, id, n = 1, o) =>  // a weight rule on top of the engine's inventory

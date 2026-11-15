@@ -418,7 +418,7 @@ export class RigidBodies {
    * @internal What a save keeps of each body with an id (addBox / addBall / addHull({ id }), vehicles always): pose, velocities, asleep. Without it a
    * load put a toppling crate back upright and at rest wherever its record was, so the game after the load was not the game that was saved. A template
    * body carries its record id, and atRest (content/templates.js): while it stands where content put it, content is its state and it stays out of the save.
-   * Bodies not built yet keep their loaded state (it is still the saved game). Not kept: Rapier's contact / warm-start caches (docs/recipes/11-vehicles.md, section 3).
+   * Bodies not built yet keep their loaded state (it is still the saved game). Not kept: Rapier's contact / warm-start caches (docs/recipes/11-physics.md, section 3).
    */
   _saveState() {
     const out = {};
@@ -478,7 +478,7 @@ export class RigidBodies {
     }
     this._upkeep();
     if (this._jointsGone) {   // dev only (set in _fresh): the old world had the game's joints and nothing re-created one since the rebuild
-      if (!this.world.impulseJoints.len()) warnOnce(coded('rigid-misuse', `rigid: ${this._jointsGone} joint(s) were freed with the old physics world by newGame / load and none was re-created. The engine rebuilds the world and does not copy joints: re-create them in a rigid:rebuilt listener ({ world }), between entry.body of the rebuilt bodies (recipes/11-vehicles.md, Joints)`));
+      if (!this.world.impulseJoints.len()) warnOnce(coded('rigid-misuse', `rigid: ${this._jointsGone} joint(s) were freed with the old physics world by newGame / load and none was re-created. The engine rebuilds the world and does not copy joints: re-create them in a rigid:rebuilt listener ({ world }), between entry.body of the rebuilt bodies (recipes/11-physics.md, Joints)`));
       this._jointsGone = 0;
     }
     // player capsule follows the player (the rapier mover computes collision and writes the position itself); turned off while driving to avoid colliding with
