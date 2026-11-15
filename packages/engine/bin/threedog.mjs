@@ -3,7 +3,7 @@
 // with the engine installed alone npx used to fail with "could not determine executable to run", and an AI concluded the package has no init.
 // The commands themselves stay in @threedog/tools (dev-only weight: playwright, vite, typescript); this file runs them in the same process,
 // or says the one line to install them. Only one package may own a bin name, so @threedog/tools has no bin of its own.
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, realpathSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { join, dirname } from 'node:path';
 
@@ -18,10 +18,10 @@ function findTools() {
   try { return join(dirname(fileURLToPath(import.meta.resolve('@threedog/tools/paths'))), 'bin', 'threedog.mjs'); } catch { return null; }
 }
 
-const toolsBin = findTools();
+const found = findTools();
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const install = `npm install -D @threedog/tools@${version.split('.')[0]}`;
-if (!toolsBin) {
+if (!found) {
   console.error(`✗ The threedog commands (init, shot, check, how, dev) come with @threedog/tools, which is not installed here. Run:
   ${install}
   npx threedog ${process.argv.slice(2).join(' ') || 'init'}`);
@@ -29,7 +29,9 @@ if (!toolsBin) {
 }
 // A half-installed or broken copy: one repair line instead of a module-not-found stack
 const broken = what => { console.error(`✗ @threedog/tools is installed but incomplete (${what}). Reinstall it: ${install}`); process.exit(1); };
-if (!existsSync(toolsBin)) broken(`no ${toolsBin}`);
+if (!existsSync(found)) broken(`no ${found}`);
+// The real path: through a link (workspaces, pnpm) Node's module-not-found message names real paths, so the check below compares like with like
+const toolsBin = realpathSync(found);
 // The tools entry runs when argv[1] is its own path (it is also imported by tests, where it must not run)
 process.argv[1] = toolsBin;
 try { await import(pathToFileURL(toolsBin).href); }
