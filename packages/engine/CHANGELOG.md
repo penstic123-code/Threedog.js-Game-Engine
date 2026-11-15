@@ -2,6 +2,12 @@
 
 What changed in each version and how a game upgrades.
 
+## 1.4.0 (2026-11-15)
+
+- New: `threedog hub`, a local web page that lists your threedog games and shows each game's screenshot wall. The points to shoot are in the game's own `shots.json` (each point takes the options of `threedog shot`: `view`, `cam`, `pos`, `at`, `play`, `time`, `weather`, `wait`, `size`, `page`). After a file of a game changes and 30 s pass with no further change, the hub shoots all its points again, one game at a time, and the page updates by itself; each point keeps its last 10 pictures, and a point that fails shows its reason. From the page you can create a game (the `threedog init` starts), add an existing game folder, open a game or its asset gallery, and re-shoot by hand. `threedog hub --shortcut` (or the page's button) puts a desktop icon that opens it (Windows). The server answers only on 127.0.0.1 and refuses requests from other web pages.
+- New: `threedog init` adds the game to the hub's list (`~/.threedog/projects.json`; `THREEDOG_HOME` moves it). New games start with a `shots.json` of one point.
+- Upgrading: nothing to change. To get pictures of your own spots, add a `shots.json` to the game's folder.
+
 ## 1.3.0 (2026-11-12)
 
 - Fixed: on WebGPU the engine now asks the device for the adapter's own `maxBufferSize`, `maxStorageBufferBindingSize`, `maxSampledTexturesPerShaderStage` and `maxSamplersPerShaderStage` (as it already did for the color attachment limits) instead of WebGPU's defaults. Before, `voxelGI` on a scene of about a million triangles or more failed every frame with `Buffer size exceeds the max buffer size limit` (its triangle buffer passed the default 256 MB), and a material with more than 16 textures counting the lights' shadow maps failed with only `Invalid PipelineLayout`. Measured on one desktop GPU: buffer 256 MB to 2 GB, storage binding 128 MB to 2 GB, textures per stage 16 to 48; samplers stay where the adapter's own limit is 16. A game's own renderer keeps the limits the game gave it.
