@@ -8,7 +8,7 @@
 Any physics body (crates the player pushes, balls, doors on hinges, ropes): §3, read it first when the game has no car. Cars and
 boarding: §1–2.
 
-Required modules: `collision()` + `rigid()` (Rapier physics; the vehicle controller lives there) + `characters()`. With
+Required modules: `collision()` + `rigid()` (Rapier physics; the vehicle controller lives there) + `world()` + `characters()` (the player and NPCs are world records). With
 `interactions({ ...presets.interactions.nearest })` installed, a "board/exit" prompt (E key) appears automatically near a vehicle.
 Convention: **the front of the car faces the model's +Z**, and a wheel's `position` is relative to the body origin (meters). Rapier has to be
 downloaded and initialized, so build the car after `engine:ready`.

@@ -114,12 +114,12 @@ export const specs = [
     expectErrors: /densityMap url \/audit-no-such-map\.png did not load/,
     async run({ check, ev }) {
       const r = await ev(async () => {
-        const { createEngine, vegetation, characters, THREE } = threedogTerrain;
+        const { createEngine, vegetation, characters, world, THREE } = threedogTerrain;
         const out = {}, wait = ms => new Promise(res => setTimeout(res, ms));
         const make = key => createEngine({ canvas: document.createElement('canvas'), headless: true, ui: { loading: false }, urlState: false, saveKey: key });
         // 2. 文档示例：setup 里先 mod 再造角色
         const M = make('audit-move');
-        M.use(characters());
+        M.use(world(), characters());
         try { M.mod('move.speed', { owner: 'mud', mul: 0.5 }); out.move = M.stacks.get('move.speed').value('player', 4); } catch (e) { out.move = String(e.message); }
         M.dispose();
         // 4a. init 取走 _pending 之后（engine 还没 ready）加的物种：没人 await，错误必须被接住，不成 unhandled rejection

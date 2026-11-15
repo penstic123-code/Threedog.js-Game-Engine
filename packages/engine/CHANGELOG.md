@@ -2,6 +2,11 @@
 
 What changed in each version and how a game upgrades.
 
+## Unreleased
+
+- Changed: `characters()` now requires `world()`, and `engine.use()` says so at install. Before, `world` was listed as optional and only `characters.addPlayer()` (or the first NPC) threw at runtime, although the player and every NPC are world records. The docs' module lists that left `world()` out (recipes 10, 11, 12, the pickups page) now include it, and a guard test checks every `engine.use` list in the docs, templates and examples against what each module requires.
+- Upgrading: a game that installs `characters()` without `world()` or `openWorld()` adds `world()` before it: `engine.use(world(), collision(), characters())`.
+
 ## 1.4.0 (2026-11-15)
 
 - New: `threedog hub`, a local web page that lists your threedog games and shows each game's screenshot wall. The points to shoot are in the game's own `shots.json` (each point takes the options of `threedog shot`: `view`, `cam`, `pos`, `at`, `play`, `time`, `weather`, `wait`, `size`, `page`). After a file of a game changes and 30 s pass with no further change, the hub shoots all its points again, one game at a time, and the page updates by itself; each point keeps its last 10 pictures, and a point that fails shows its reason. From the page you can create a game (the `threedog init` starts), add an existing game folder, open a game or its asset gallery, and re-shoot by hand. `threedog hub --shortcut` (or the page's button) puts a desktop icon that opens it (Windows). The server answers only on 127.0.0.1 and refuses requests from other web pages.

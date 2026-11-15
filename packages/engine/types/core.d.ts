@@ -1988,7 +1988,7 @@ export declare class Engine {
   dialogue?: Dialogue;
   /** Inventory (inventory() module). Items, counts and containers, saved with the game. Install: engine.use(inventory()); undefined until installed. add() answers { ok }, read .ok */
   inventory?: Inventory;
-  /** pickups(). Things on the ground that go in the bag. Install: engine.use(pickups()) with inventory() and interactions(); undefined until installed. A full bag leaves the item on the ground */
+  /** pickups(). Things on the ground that go in the bag. Install: engine.use(world(), inventory(), interactions(), pickups()) (pickups are world records); undefined until installed. A full bag leaves the item on the ground */
   pickups?: Pickups;
   /** Quests (quests() module) */
   quests?: Quests;

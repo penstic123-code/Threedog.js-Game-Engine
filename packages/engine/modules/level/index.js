@@ -3,7 +3,7 @@
 //   - collision: meshes named col_* (or userData.collider) become walls the character cannot cross; col_ meshes themselves are hidden
 //   - markers: objects named spawn, spawn_*, npc_*, trigger_*, marker_* (usually Blender empties) have their positions recorded
 //
-// engine.use(collision(), rigid(), followCamera(), characters(), level({ url: '/models/town.glb' }), triggers());
+// engine.use(world(), collision(), rigid(), followCamera(), characters(), level({ url: '/models/town.glb' }), triggers());
 // engine.events.on('level:loaded', ({ markers }) => {
 //   const s = engine.level.spawn;                                   // spawn point { x, y, z }
 //   engine.characters.addPlayer({ spawn: { x: s.x, z: s.z } });

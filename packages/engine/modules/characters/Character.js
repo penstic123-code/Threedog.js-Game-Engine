@@ -220,7 +220,7 @@ export class Character {
   placeAt(position) {
     this.engine.control?.endTasks(this, 'placed');
     if (this.vehicle) this.exit({ force: true });
-    else if (this.recordId && this.engine.world?.get(this.recordId)?.vehicle != null) this._writeSeat(null, null);   // its record waited for a vehicle not built yet: the game put it elsewhere
+    else if (this.recordId && this.engine.world.get(this.recordId)?.vehicle != null) this._writeSeat(null, null);   // its record waited for a vehicle not built yet: the game put it elsewhere
     return this._place(position);
   }
   /** @internal Put it there with no ending of its own: a link crossing, a step out of a vehicle */

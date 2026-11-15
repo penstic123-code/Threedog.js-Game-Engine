@@ -51,8 +51,6 @@ import { passesOf } from '../collision/grid.js';
 const STRINGS = {
   noInteract: 'NPC "{name}" has interact set, but the interactions() module is not installed: nothing can use it',
   badInteract: 'npcs.add(): interact is { op: \'npc.talk\' } or { label, op, args, radius } (op: the op name the interact key runs); got {got}',
-  noWorld: 'NPCs need the world() module (facts live in engine.world): engine.use(world(), …, characters()); openWorld() already installs it. '
-    + 'If you do not want NPCs, use characters({ npcs: false })',
   notNpc: 'npcs.add(): id "{id}" is already used by a "{kind}" in world; give this NPC a different id',
   sameName: 'npcs.add(): an NPC named "{name}" already exists (without id the name is the id, so the two would merge). '
     + 'Give each different NPC its own id, e.g. npcs.add({ id: "{name}_2", name: "{name}", … }); to update an existing NPC, add again with the same id',
@@ -148,7 +146,7 @@ export class NPCManager {
     // a load or new game is a new run, and it fires no world:remove: setup code adding the same names again is not a clash
     track(engine.events.on('world:load', () => this._byName.clear()));
   }
-  get world() { const W = this.engine.world; if (!W) throw codedError('module-needs', STRINGS.noWorld); return W; }
+  get world() { return this.engine.world; }
 
   /** Register the NPC model and simulation with world (called in characters init; add calls it first if npcs.add comes earlier)@internal */
   setup() {
@@ -326,7 +324,7 @@ export class NPCManager {
   }
   /** Find by id or name (id first) */
   get(idOrName) {
-    const W = this.engine.world; if (!W) return undefined;
+    const W = this.engine.world;
     if (W.get(idOrName)?.kind === KIND) return this._handle(idOrName);
     for (const r of W.records.values()) if (r.kind === KIND && r.name === idOrName) return this._handle(r.id);
     return undefined;
@@ -334,11 +332,11 @@ export class NPCManager {
   /** All NPCs (kind 'npc' records in world, including far ones and those in other levels) */
   list() {
     const W = this.engine.world, out = [];
-    if (W) for (const r of W.records.values()) if (r.kind === KIND) out.push(this._handle(r.id));
+    for (const r of W.records.values()) if (r.kind === KIND) out.push(this._handle(r.id));
     return out;
   }
   /** Current character model (Character) of an NPC; null if none */
-  character(id) { const o = this.engine.world?.view(id); return (o && this._views.get(o)?.ch) || null; }
+  character(id) { const o = this.engine.world.view(id); return (o && this._views.get(o)?.ch) || null; }
 
   /** @internal */
   _handle(id) { let h = this._handles.get(id); if (!h) this._handles.set(id, h = new NPC(this, id)); return h; }

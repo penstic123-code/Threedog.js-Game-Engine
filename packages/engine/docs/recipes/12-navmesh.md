@@ -14,8 +14,8 @@ There is a single pathfinding entry point: `engine.characters.findPath(from, to)
 ## 1. Install (main.js)
 A level is a file or a `THREE.Object3D` built in code: `level({ scene: group })`, its meshes named as in `10-blender-level.md`.
 ```js fragment
-import { level, collision, followCamera, characters, nav } from 'threedog';
-engine.use(level({ url: '/models/town.glb' }), collision(), followCamera(), characters(),
+import { level, world, collision, followCamera, characters, nav } from 'threedog';
+engine.use(level({ url: '/models/town.glb' }), world(), collision(), followCamera(), characters(),
   nav({ agentRadius: 0.4, agentHeight: 1.8, maxClimb: 0.45, maxSlope: 45, debug: false }));  // debug: true draws the navmesh
 ```
 - Mesh source: the walkable meshes in the level (naming convention in `10-blender-level.md`). Walls = the level's `col_` boxes + every

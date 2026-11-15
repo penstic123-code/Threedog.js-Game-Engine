@@ -24,8 +24,8 @@ hierarchy are kept; faces are not reduced. Only changed files are processed; `--
 
 ## 3. Putting it in the game (main.js)
 ```js fragment
-import { presets, level, collision, followCamera, characters, interactions, dialogue, triggers, content, hlod } from 'threedog';
-engine.use(level({ url: '/models/town.glb' }), collision(), followCamera(), characters(), interactions({ ...presets.interactions.nearest }), dialogue(), triggers(), content(), hlod());
+import { presets, level, world, collision, followCamera, characters, interactions, dialogue, triggers, content, hlod } from 'threedog';
+engine.use(level({ url: '/models/town.glb' }), world(), collision(), followCamera(), characters(), interactions({ ...presets.interactions.nearest }), dialogue(), triggers(), content(), hlod());
 engine.events.once('level:loaded', () => {  // once: level:loaded fires again on every level change
   engine.characters.addPlayer({ ...presets.player.thirdPerson, spawn: engine.level.spawn });
   engine.content.load(data);  // a place in content can be a marker name directly: { place: 'npc_shopkeeper' }

@@ -1,5 +1,5 @@
 // Navmesh (Recast): generated after a level loads; engine.characters.findPath switches to it automatically (falls back to A* when not installed).
-//   engine.use(level({ url }), collision(), characters(), nav({ agentRadius: 0.4 }));
+//   engine.use(level({ url }), world(), collision(), characters(), nav({ agentRadius: 0.4 }));
 // Once installed, engine.nav offers findPath(from, to) and the native objects navMesh / query / tileCache / crowd / helper.
 // version: +1 on every rebuild / unload. Native objects (crowd agents etc.) are destroyed on rebuild; code that cached them keeps the object and compares it (NPCs compare crowd): version counts per module, so a replaced nav can show the same number.
 //

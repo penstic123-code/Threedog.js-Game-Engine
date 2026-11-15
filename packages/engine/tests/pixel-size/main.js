@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import 'threedog/tsl';
 import { vignette } from '@threedog/post-effects';
-import { createEngine, photo, settings, followCamera, fixedCamera, characters, collision, rigid, Character } from '../../index.js';
+import { createEngine, photo, settings, followCamera, fixedCamera, characters, collision, rigid, world, Character } from '../../index.js';
 import { pixelGrid, pixelSprite, spriteFrame } from 'threedog/pixel';
 import { tierRatio } from '../../core/scene/pixelRatio.js';
 
@@ -20,7 +20,7 @@ if (q.has('settings')) engine.use(settings());
 // pixel=1: an orthographic rig for tests/specs/pixel-game.mjs. snap=0 is that spec's control, the same view without pixelSnap
 const pitch = 0.6, yaw = 0.6, view = { projection: 'orthographic', pitch, yaw, distance: 30, minDistance: 1, maxDistance: 80, height: 0, smoothing: 1000, mouseLook: false, minPitch: 0.1 };
 if (q.has('pixel')) engine.use(followCamera(q.get('snap') === '0' ? { ...view, size: 8 } : { ...view, pixelSnap: { pixelsPerMeter: 32 } }));
-if (q.has('physics')) { engine.use(collision()); engine.use(rigid()); engine.use(characters()); }
+if (q.has('physics')) { engine.use(collision()); engine.use(rigid()); engine.use(world(), characters()); }
 Object.assign(window, { THREE, pixelGrid, pixelSprite, spriteFrame, fixedCamera, Character });
 engine.use(photo());
 if (q.has('post')) engine.post.add(vignette({ strength: 0 }));

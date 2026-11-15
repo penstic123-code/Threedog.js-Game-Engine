@@ -38,7 +38,7 @@ export const sectionHomes = {
  "grids": "grids() after world()",
  "items": "inventory()",
  "level": "level()",
- "npcs": "characters()",
+ "npcs": "characters() after world()",
  "pickups": "pickups() after world()",
  "places": "content()",
  "props": "content()",
@@ -286,7 +286,9 @@ export const metadata = {
    "provides": [
     "characters"
    ],
-   "requires": [],
+   "requires": [
+    "world"
+   ],
    "handRolled": "none: walking code is game movement, and any code shape would match ordinary maths",
    "stage": "late",
    "before": [
@@ -300,8 +302,7 @@ export const metadata = {
     "dialogue",
     "nav",
     "collision",
-    "rigid",
-    "world"
+    "rigid"
    ],
    "params": {
     "npcs": {
