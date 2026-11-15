@@ -46,7 +46,7 @@ const GAMEPLAY = {
   openWorld: 'This game starts from `--open-world`: generated ground, a day/night sky, a follow camera, a player, a start screen, autosave and an Esc menu, no gameplay yet; build what DESIGN.md describes and remove what it does not need.',
 };
 
-// What differs by renderer inside shared template files. A __TSL_IMPORT__ line with nothing to say goes away whole.
+// What differs by renderer inside shared template files. A __TSL_IMPORT__ or __PMREM_IMPORT__ line with nothing to say goes away whole.
 const ROUTE = {
   webgpu: {
     __TSL_IMPORT__: "import 'threedog/tsl';   // first import: this game runs on WebGPU and writes shaders in TSL, recipe 56. A browser without WebGPU runs the same game on three's WebGL2 backend (slower); engine.describe().renderer says which and why",
@@ -54,6 +54,8 @@ const ROUTE = {
     __PICTURE_ROUTE__: 'This game runs on WebGPU: shaders are TSL on node materials (recipe 56); GLSL (`ShaderMaterial`, `onBeforeCompile`) stops with an error naming it.\nWithout WebGPU the browser runs it on WebGL2, slower; `engine.describe().renderer` says which backend draws and why.',
     __MATERIAL_IMPORT__: "// Node materials take the same options as the plain ones. A shader here is TSL on a material's fields (colorNode, positionNode, emissiveNode...), recipe 56:\n// import { color, positionWorld, sin } from 'three/tsl'; material.colorNode = color(0x88aa66).mul(sin(positionWorld.y).mul(0.1).add(0.9));\nimport { MeshStandardNodeMaterial } from 'three/webgpu';",
     __STANDARD_MATERIAL__: 'MeshStandardNodeMaterial',
+    __PMREM_IMPORT__: "import { PMREMGenerator } from 'three/webgpu';   // WebGPU prefilters environment maps with its own generator",
+    __PMREM__: 'PMREMGenerator',
     __OWN_SHADER__: '`new THREE.*Material`, a node material with TSL, recipe 56',
     __OWN_POST__: 'own TSL effect (`engine.post.add({ name, slot, node })`, recipe 56)',
   },
@@ -63,6 +65,8 @@ const ROUTE = {
     __PICTURE_ROUTE__: 'This game runs on WebGL: shaders are GLSL (`ShaderMaterial`, `onBeforeCompile`).',
     __MATERIAL_IMPORT__: "import { THREE } from 'threedog';",
     __STANDARD_MATERIAL__: 'THREE.MeshStandardMaterial',
+    __PMREM_IMPORT__: '',
+    __PMREM__: 'THREE.PMREMGenerator',
     __OWN_SHADER__: '`new THREE.*Material`, `ShaderMaterial`, `onBeforeCompile`',
     __OWN_POST__: 'own three.js passes / shader (`engine.post.add({ name, slot, create })`)',
   },
@@ -93,7 +97,7 @@ export function render(text, { name, openWorld, pixel, sceneOnly, webgl }) {
   const route = ROUTE[webgl ? 'webgl' : 'webgpu'];
   let out = text.replaceAll('__NAME__', name).replaceAll('__GAMEPLAY_NOTE__', GAMEPLAY[pixel ? 'pixel' : sceneOnly ? 'sceneOnly' : openWorld ? 'openWorld' : 'clean']);
   out = out.replace('__DEFAULT_LAYER__', () => defaultLayerTable());
-  out = out.replace(/__TSL_IMPORT__\r?\n/g, route.__TSL_IMPORT__ && `${route.__TSL_IMPORT__}\n`);
+  for (const line of ['__TSL_IMPORT__', '__PMREM_IMPORT__']) out = out.replace(new RegExp(`${line}\\r?\\n`, 'g'), route[line] && `${route[line]}\n`);
   for (const [word, value] of Object.entries(route)) out = out.replaceAll(word, value);
   return out;
 }

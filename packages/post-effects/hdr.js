@@ -41,11 +41,13 @@ export function ao({ radius = 0.25, intensity = 1, enabled, order = 20 } = {}) {
   const update = (pass, p) => { pass.updateGtaoMaterial({ radius: p.radius }); pass.blendIntensity = p.intensity; };
   return { ...declared(ao), name: 'ao', slot: 'hdr', order, enabled, params: { radius, intensity }, update,
     create: ({ scene, camera, width, height, params }) => { const pass = new GTAOPass(scene, camera, width, height); update(pass, params); return pass; },
-    // WebGPU: GTAONode on the scene pass's depth (normals reconstructed from depth), its .r darkens the color; intensity mixes toward no AO as blendIntensity does
+    // WebGPU: GTAONode on the scene pass's depth (normals reconstructed from depth), its .r darkens the color; intensity mixes toward no AO as blendIntensity does.
+    // Denoised as three's AO example does: GTAONode turns its samples by a 5x5 noise tile and leaves the speckle in (GTAOPass on WebGL blurs its own result).
     node: (input, { display, scenePass, camera, tsl, p }) => {
-      const n = display.ao(scenePass.getTextureNode('depth'), null, camera);
+      const depth = scenePass.getTextureNode('depth'), n = display.ao(depth, null, camera);
       n.radius = p.radius;
-      return tsl.vec4(input.rgb.mul(tsl.mix(tsl.float(1), n.getTextureNode().r, p.intensity)), input.a);
+      const occlusion = display.denoise(n.getTextureNode(), depth, null, camera).r;
+      return tsl.vec4(input.rgb.mul(tsl.mix(tsl.float(1), occlusion, p.intensity)), input.a);
     } };
 }
 
