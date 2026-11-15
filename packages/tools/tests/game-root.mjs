@@ -11,7 +11,9 @@ import { ROOT, TOOLS, rel } from '../paths.mjs';
 
 export const name = 'game root: init <folder> scaffolds there (never the repo root), commands inside a nested game act on that game, -w . works';
 
-const cli = (cwd, ...args) => spawnSync(process.execPath, [join(TOOLS, 'bin', 'threedog.mjs'), ...args], { cwd, encoding: 'utf8' });
+// init registers the game in the hub list under THREEDOG_HOME: a temp home keeps this test away from the real one
+const home = mkdtempSync(join(tmpdir(), 'threedog-home-'));
+const cli = (cwd, ...args) => spawnSync(process.execPath, [join(TOOLS, 'bin', 'threedog.mjs'), ...args], { cwd, encoding: 'utf8', env: { ...process.env, THREEDOG_HOME: home } });
 /** What paths.mjs decides from cwd: mode, root, the workspace with no -w and with the extra args */
 const resolveIn = (cwd, args = []) => {
   const src = `const p = await import(${JSON.stringify(pathToFileURL(join(TOOLS, 'paths.mjs')).href)});
@@ -103,5 +105,6 @@ export async function run({ check }) {
   } finally {
     rmSync(repo, { recursive: true, force: true });
     rmSync(nested, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
   }
 }

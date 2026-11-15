@@ -41,6 +41,9 @@ out.scripts = { ...tpl.scripts, ...scripts };
 const wanted = Object.entries(applyDeps(tpl.dependencies, opts)).filter(([n]) => !out.devDependencies?.[n]);
 out.dependencies = { ...Object.fromEntries(wanted), ...out.dependencies };
 writeFileSync(pkgPath, JSON.stringify(out, null, 2) + '\n');
+// the hub lists every game made here; a failure (read-only home) must not fail init
+try { const { addProject } = await import('./hub/registry.mjs'); const added = addProject(dir); if (!added.ok) throw new Error(added.reason); }
+catch (e) { console.log(`! could not add the game to the hub list: ${e.message}`); }
 
 // The tools running this command, when the game sits under the folder that holds them (hoisted to a repo's node_modules, or the workspace packages/tools of this
 // repository); otherwise the game's own node_modules (npx from a cache: the game installs its own copy next)
