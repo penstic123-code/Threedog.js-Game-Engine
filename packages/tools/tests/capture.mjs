@@ -33,7 +33,7 @@ export async function run({ check }) {
   const stopped = await refuseState(pageWith([word]), ['weather']).then(() => null, e => e.message);
   check('[guard] a refused value the user named stops the tool, and says why', /weather=rian \(no weather named/.test(stopped ?? ''), stopped);
   check('the tool\'s own keys are not the user\'s to hear about', await refuseState(pageWith([{ key: 'cutscene', value: 'skip', reason: 'x' }]), ['weather']).then(() => true, () => false));
-  check('[guard] capture and shot both ask', ['capture.mjs', 'shot.mjs'].every(f => /await refuseState\(page,/.test(readFileSync(join(TOOLS, f), 'utf8'))));
+  check('[guard] capture and shot both ask', ['capture.mjs', 'lib/shot-page.mjs'].every(f => /await refuseState\(page,/.test(readFileSync(join(TOOLS, f), 'utf8'))));
 
   // the hole this closes: the hook wrapped renderBufferDirect, which WebGPURenderer has not, and printed an empty report with exit 0
   const mesh = { isMesh: true, type: 'Mesh', name: 'statue', geometry: { index: { count: 300 }, drawRange: { count: Infinity }, attributes: {} }, userData: {} };
