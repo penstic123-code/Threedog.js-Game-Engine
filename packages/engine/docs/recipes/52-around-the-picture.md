@@ -129,7 +129,7 @@ Each of them is registered once (`core/ops/owned.js`), and every one behaves the
 | `view.far` | view | terrain view range (`terrain.viewChunks`) | `engine.autoView.manual('far')` | - |
 | `view.fov` | view | the settings menu fov slider, camera modules (first person / rts fov, fixed shots, back to the install fov on a switch) | `engine.autoView.manual('fov')` | - |
 | `view.pixelRatio` | view | adaptive resolution, about once a second while slow | `engine.autoView.manual('pixelRatio')` | `engine.setPixelRatio(1.5)` |
-| `camera` (position, rotation) | view | the camera module, every frame | `const cam = engine.takeCamera('me')` (`cam.remove()` gives it back) | - |
+| `camera` (position, rotation) | view | the camera module, every frame | `const cam = engine.takeCamera('me')` (`cam.remove()` gives it back) | shake / offset: recipe 21 §6b |
 | `post.chain` | post | whenever the effect list changes (add / remove / on / off, MSAA): the engine rebuilds the composer passes (WebGL) or `pipeline.outputNode` (WebGPU) | `engine.post.own()`: the built chain stays as you left it in `engine.post.object()`; `own(false)` rebuilds it from the list. A write to `object()` without `own()` does not yield: the next chain change replaces it | `engine.post.get('bloom').set({ strength: 0.6 })` |
 | `shadow.csm` (not a property: a list) | shadow | while cascades are on: the `csm` patch goes on every built-in lit material, yours too (else N times as bright) | - (`handle.remove()`); your ShaderMaterial is left alone until `engine.shadows.include(mat)` | - |
 

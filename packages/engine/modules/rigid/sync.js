@@ -224,6 +224,13 @@ export function carryBody(entry, o, n) {
   if (!o.isEnabled()) n.setEnabled(false);
 }
 
+/** @internal Copy the solver settings a game wrote on the old world (numSolverIterations for tall stacks, maxCcdSubsteps...) onto the rebuilt one.
+ *  Every Rapier setter but dt: the engine writes the timestep itself each step. Read from the prototype, so a Rapier update that adds a setting is carried too */
+export function carryWorld(o, n) {
+  const proto = Object.getPrototypeOf(o);
+  for (const k of Object.getOwnPropertyNames(proto)) if (k !== 'dt' && Object.getOwnPropertyDescriptor(proto, k).set && o[k] !== n[k]) n[k] = o[k];
+}
+
 /** @internal Copy game-set collider state from the old collider onto the one rebuilt from the entry's desc */
 export function carryCollider(o, n) {
   const pairs = [['isSensor', 'setSensor'], ['collisionGroups', 'setCollisionGroups'], ['solverGroups', 'setSolverGroups'], ['friction', 'setFriction'],

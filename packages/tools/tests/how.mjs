@@ -68,6 +68,10 @@ export async function run({ check }) {
   // 不过时改文档关键词（AI.md 行、THREE.md、菜谱标题），不改这里的期望
   const TASKS = [
     ['recoil', /32-action-game/],
+    // benchmark 2026-11-16: fresh AIs missed these three
+    ['screen shake', /21-camera/],
+    ['game time seconds', /engine\.time\.now/],
+    ['explosion push physics bodies', /11-vehicles/],
     ['stealth vision cone', /12-navmesh/],
     ['pixel art', /62-picture-code/],
     ['pixel perfect camera', /62-picture-code/],

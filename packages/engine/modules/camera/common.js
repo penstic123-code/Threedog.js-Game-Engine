@@ -25,7 +25,9 @@ import { warnOnce } from '../../core/base/validate.js';
 
 // the takeover calls the owned-camera warning quotes (core/ops/owned.js): takeCamera is the one explicit entry (its remove() gives the camera back);
 // back is the hand-back for a camera the engine yielded to a direct write (that takeover has no handle)
-const LEVELS = { manual: "const cam = engine.takeCamera('me') (cam.remove() gives it back)", back: "engine.autoView.manual('camera', false)" };
+// set: the one additive path (screen shake, recoil, a bob): offset the drawn frame only, so the rig keeps driving and the owned check sees its own value
+const LEVELS = { manual: "const cam = engine.takeCamera('me') (cam.remove() gives it back)", back: "engine.autoView.manual('camera', false)",
+  set: "for a shake or offset, add it inside engine.onRender and put the saved pose back in engine.onRender(fn, { when: 'after' }) (recipe 21 \"Screen shake\")" };
 
 /** True during a cutscene takeover, and updates engine.focus from the focus the owner supplied */
 function applyOverride(e) {

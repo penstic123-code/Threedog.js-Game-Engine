@@ -264,7 +264,7 @@ export interface RigidBodies {
    * Record<string, RagdollPart> for any other body, a function (facts: { character, root, mesh }, engine) => one of those, or false for no ragdoll (returns null). @experimental
    */
   ragdoll(who: any, opts?: RagdollOptions): Ragdoll | null;
-  /** Give it a push: impulse vector impulse (Vector3 / [x, y, z] / { x, y, z }), e.g. impulse(ball, [0, 3, 5]) */
+  /** Give it a push: impulse vector impulse (Vector3 / [x, y, z] / { x, y, z }), e.g. impulse(ball, [0, 3, 5]). Wakes a sleeping body first (an explosion: recipe 11 §3c) */
   impulse(entry: RigidEntry, impulse: Vec3Like): void;
   /** Teleport to position (velocity is zeroed) */
   setPosition(entry: RigidEntry, position: PositionLike): void;

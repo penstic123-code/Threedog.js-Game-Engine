@@ -3,7 +3,7 @@
 > **Covers:** rigid bodies, pushing, joints, vehicles, boarding and driving, ragdolls.
 > **Use when:** crates that tumble, doors on hinges, a car or a boat.
 > **Shortest:** `engine.rigid.addBox(mesh, { id })` with `rigid()` installed (§3).
-> **Sections:** 1 Build a car · 2 Boarding and driving · 3 Rigid bodies saves · 3b Ragdoll experimental) · 4 Verify
+> **Sections:** 1 Build a car · 2 Boarding and driving · 3 Rigid bodies saves · 3b Ragdoll experimental) · 3c Explosions, stacks, solver · 4 Verify
 
 Any physics body (crates the player pushes, balls, doors on hinges, ropes): §3, read it first when the game has no car. Cars and
 boarding: §1–2.
@@ -126,6 +126,15 @@ engine.clock.after(4, () => rd.remove(), { channel: 'real' });  // back to anima
   ```
   Without `id` it covers every body; a function `(facts, engine) => graph` picks per body; `false` makes `ragdoll()` return null.
 - **Left out:** partial or blended ragdoll (an arm thrown by a hit while the rest animates); `remove()` cuts to the animation.
+
+## 3c. Explosions, stacks and solver settings (when to add bodies)
+
+**When.** Calls that return a Rapier body (`addBox`, `addBall`, `addHull`, `addWheeled`, `ragdoll`) run after `await engine.start()`; `collider3d.addSolid` works before.
+
+**Explosion.** Loop over `engine.rigid.bodies` and call `engine.rigid.impulse(b, dirFromBlast * falloff)`: it wakes a sleeping body first.
+**Stacks.** The collider is exactly `size`; resting boxes overlap a little (soft contacts: ~0.7 cm a layer, ~5 cm under a body 50x heavier),
+the same at 4, 8 or 16 solver iterations: keep touching masses close. Iterations (joint chains): `engine.rigid.world.integrationParameters.numSolverIterations`
+(default 4), kept through newGame and a load.
 
 ## 4. Verify
 - In a test (no real key presses): `engine.player.enter(car); engine.input.autopilot = { x: 0, y: 1 }; engine.step(3)`,
