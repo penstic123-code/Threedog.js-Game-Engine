@@ -7,8 +7,12 @@ This README describes 1.0 (older releases do not match it). Inside the [reposito
 ```sh
 npm install threedog@1 three@~0.187.0
 npm install -D @threedog/tools@1
-npx threedog init                      # sets up the current folder, never overwrites a file
+npx playwright install chromium        # once per machine, for shot / play / test
+npx threedog init                      # sets up the current folder and its CLAUDE.md, never overwrites a file
+npm install
 ```
+
+The `threedog` command itself comes with the `threedog` package and runs this package's commands (so `npx threedog` works with only the engine installed, and then says to install this package).
 
 Node 20.19+ or 22.12+ (what vite 8 needs); the commands that start vite say so when the Node is older.
 
@@ -27,4 +31,4 @@ In-browser editor: on the dev server press F2 (or add `?edit=1`), click a conten
 
 vite preset: `import { gameConfig } from '@threedog/tools/vite'; export default gameConfig(import.meta.dirname);`
 
-Headless commands use Playwright's Chromium (`npx playwright install chromium` once). Peer dependencies: `threedog`; optional `tweakpane` (dev panel) and `@gltf-transform/cli` (asset optimisation). MIT license.
+Peer dependencies: `threedog`; optional `tweakpane` (dev panel) and `@gltf-transform/cli` (asset optimisation). MIT license.

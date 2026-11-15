@@ -199,14 +199,26 @@ idx.push('');
 // ---------------------------------------------------------------------
 // Write out / check
 // ---------------------------------------------------------------------
-// llms.txt at the package root (llmstxt.org convention): where an AI starts, the reading order, then AI.md's task table by domain (the same rows threedog how
-// searches and falls back to, read by one parser, aiTable; no second hand-written list) and one line per recipe from its title
+// llms.txt at the package root (llmstxt.org convention): its first screen is the start (README "Start here" command block and its short code block, copied
+// so the two never differ) and what to read next, because a long llms.txt gets cut off by the reader and the start must survive that; then AI.md's task
+// table by domain (the same rows threedog how searches and falls back to, read by one parser, aiTable; no second hand-written list) and one line per recipe
 const LLMS = join(ENGINE, 'llms.txt');
+const readme = readFileSync(join(ENGINE, 'README.md'), 'utf8');
+const readmeBlock = (heading, lang) => {
+  const at = readme.search(new RegExp(`\\n## ${heading}`)), block = at < 0 ? null : readme.slice(at).match(new RegExp('```' + lang + '\\r?\\n[^]*?```'));
+  if (!block) throw new Error(`apidoc: packages/engine/README.md needs a "## ${heading}" section with a \`\`\`${lang} block (llms.txt copies it)`);
+  return block[0];
+};
 const llms = ['# threedog', '', '> A web 3D game engine on three.js 0.187 (plain three.js, no React): core and modules installed with engine.use. ' +
   'It ships no art: each game draws its own picture (plain three.js in its picture/ folder, and assets).', '',
-  "Taking over a game: its status notes first. A new feature: docs/AI.md or threedog how, then the recipe, then docs/api/<module>.md.", '',
-  '## Start', '', '- [AI.md](docs/AI.md): entry table, commands, verification rules, conventions',
-    '- [API.md](docs/API.md): API index; one page per module in docs/api/', '',
+  '## Start a game (the one way, in an empty folder)', '', readmeBlock('Start here', 'sh'), '',
+  'The code, in short (init writes it with index.html, vite.config.js, picture/ and content/; do not hand-write the project):', '', readmeBlock('The code, in short', 'js'), '',
+  '## Read next', '',
+  "1. The game's CLAUDE.md (init writes it): what the engine already has, the loop, the checklist before calling it done.",
+  '2. `npx threedog how "<task words>"` prints the recipe section for a task. Taking over a game: its STATUS.md first.',
+  '3. The picture: docs/recipes/62-picture-code.md (code), docs/recipes/60-judge-the-picture.md (judge it with `npx threedog shot`), @threedog/post-effects (bloom, AO, color grading).',
+  '4. [AI.md](docs/AI.md): entry table, commands, verification rules, conventions. [API.md](docs/API.md): one page per module in docs/api/.', '',
+  'The rest of this file maps tasks to recipe sections.', '',
   ...[...new Set(aiTable(join(ENGINE, 'docs')).filter(r => r.domain).map(r => r.domain))].flatMap(d => [`## ${d}`, '',
     ...aiTable(join(ENGINE, 'docs')).filter(r => r.domain === d && r.where).map(r => `- ${r.task.replace(/`/g, '')}: docs/${r.where}`), '']),
   '## Recipes', '', ...recipeNames.map(r => `- [${r}](docs/recipes/${r}.md): ${readFileSync(join(abs(RECIPES_REL), r + '.md'), 'utf8').split('\n')[0].replace(/^#\s*/, '')}`), ''].join('\n');
