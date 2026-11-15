@@ -10,30 +10,26 @@ passes. The engine hands it signals (time of day, weather), keeps the engineerin
 Working example: `examples/plain-picture/` (page `/plain-picture.html`). Every value has one writer, a line in your code.
 
 ## 0. The `picture/` folder: where all picture code goes
-`threedog new-game` generates it, with a gray start; it is yours to change or delete. One file per job, so the picture never piles up in one place:
+`threedog new-game` generates it: gray surfaces under correct, neutral light (no style); it is yours to change or delete. One file per job, so the picture never piles up in one place:
 ```
 picture/
   index.js       wiring: the picture module (engine.use(createPicture()), then engine.picture): creates the parts, calls each part's update(signals) in one engine.onRender; no values here
-  palette.js     colors and key values for the whole game, including the tone curve
-  lights.js      lights: the mapping from signals to lights
+  palette.js     colors and key values for the whole game, each with how to judge it in a shot
+  lights.js      the key light from the signals, and the environment fill (scene.environment)
+  sky.js         background, and fog in the horizon color when the game has a sky()
+  post.js        tone curve, exposure, AO and bloom (@threedog/post-effects; one line each)
   materials.js   materials by name; other code asks for picture.materials.wall and never builds its own
-  sky.js         add when the game has its own sky or fog
-  post.js        add when the game has post effects
   shaders/       your shader code: TSL .js on WebGPU (the default), .glsl on WebGL (a saved .glsl hot-reloads)
   areas/<name>.js a large game's overrides for one area (a cave, an interior): only what differs
 ```
 To add a part, write a file that returns `{ update(signals) }` and call it from `index.js`, handing it the module's `ctx` so what it adds leaves with the picture:
 ```js
-// picture/sky.js: the engine's dome stays, fog is the game's
-export function createSky(engine, ctx) {
-  const fog = new THREE.Fog(palette.fog.color, palette.fog.near, palette.fog.far);
-  ctx.borrow(engine.scene, { fog });
-  return { update(s) { fog.color.copy(night).lerp(day, s.uDaylight.value); } };
-}
-// picture/post.js: engine.post.add takes a three.js Pass and keeps the chain in order (recipe 52)
-export function createPost(engine, ctx) {
-  ctx.track(engine.post.add(new ShaderPass(GrainShader), { name: 'grain' }));
-  return { update() {} };
+// picture/grain.js: engine.post.add keeps the chain in order (recipe 52); grain() runs on both renderers
+import { grain } from '@threedog/post-effects';
+export function createGrain(engine, ctx) {
+  const fx = engine.post.add(grain());
+  ctx.track(fx);
+  return { update(s) { fx.set({ amount: 0.02 + 0.06 * s.uNight.value }); } };
 }
 ```
 Gameplay and level code use material names and signals only.

@@ -26,17 +26,23 @@ export async function run({ check }) {
       const left = textFiles(dir).filter(f => /__[A-Z_]+__/.test(readFileSync(f, 'utf8')));
       check(`${label}: every placeholder filled`, left.length === 0, left.join(', '));
       const main = readFileSync(join(dir, 'main.js'), 'utf8'), materials = readFileSync(join(dir, 'picture', 'materials.js'), 'utf8');
+      const lights = readFileSync(join(dir, 'picture', 'lights.js'), 'utf8'), post = readFileSync(join(dir, 'picture', 'post.js'), 'utf8');
+      // the starter picture is lit and its post chain wired (plain three.js in the game, not the engine): a renderer mismatch here only shows at start-up
+      check(`${label}: starter picture wires AO and bloom from @threedog/post-effects, held on a 'low' tier by declaration, and package.json depends on it`,
+        /engine\.post\.add\(\{ \.\.\.ao\(.*skipOnLowTier: true/.test(post) && /engine\.post\.add\(\{ \.\.\.bloom\(.*skipOnLowTier: true/.test(post) && !!JSON.parse(readFileSync(join(TOOLS, 'templates/game/package.json'), 'utf8')).dependencies['@threedog/post-effects']);
       const imports = main.split('\n').filter(l => l.startsWith('import '));
       const notes = readFileSync(join(dir, 'CLAUDE.md'), 'utf8') + readFileSync(join(dir, 'DESIGN.md'), 'utf8');
       if (webgl) {
         check(`${label}: main.js asks for no renderer and no TSL`, !/threedog\/tsl|renderer:/.test(main), imports[0]);
         check(`${label}: plain materials`, /new THREE\.MeshStandardMaterial/.test(materials) && !/three\/webgpu/.test(materials));
+        check(`${label}: the environment fill prefilters with three's WebGL PMREMGenerator`, /new THREE\.PMREMGenerator\(/.test(lights) && !/three\/webgpu/.test(lights));
         check(`${label}: the notes name GLSL`, /onBeforeCompile/.test(notes) && /engine\.post\.add\(\{ name, slot, create \}\)/.test(notes));
       } else {
         // first import, because recipe 56 and the engine need its classes registered before createEngine runs
         check(`${label}: threedog/tsl is the first import`, imports[0].startsWith("import 'threedog/tsl';"), imports[0]);
         check(`${label}: main.js asks for WebGPU`, /createEngine\(\{ renderer: 'webgpu', /.test(main));
         check(`${label}: node materials`, /new MeshStandardNodeMaterial/.test(materials) && /three\/webgpu/.test(materials));
+        check(`${label}: the environment fill prefilters with the WebGPU PMREMGenerator`, /import \{ PMREMGenerator \} from 'three\/webgpu'/.test(lights) && /new PMREMGenerator\(/.test(lights));
         check(`${label}: the notes name TSL and where to read the backend`, /describe\(\)\.renderer/.test(notes) && /slot, node \}/.test(notes) && !/\bslot, create \}/.test(notes));
       }
     }
@@ -50,6 +56,7 @@ export async function run({ check }) {
       check(`pixel ${webgl ? '--webgl' : 'default'}: every placeholder filled`, left.length === 0, left.join(', '));
       check(`pixel ${webgl ? '--webgl' : 'default'}: engine path (pixelSize, pixelSnap, pixelSprite, input, interactions, dialogue, saves, start screen)`,
         ['pixelSize: 3', 'pixelSnap', 'pixelSprite', 'presets.bindings', 'interactions(', 'dialogue(', 'saves.autosave', 'ui: {'].every(w => main.includes(w)));
+      check(`pixel ${webgl ? '--webgl' : 'default'}: its own post.js keeps AO and bloom off the hard pixel edges`, !/ao\(|bloom\(/.test(readFileSync(join(dir, 'picture', 'post.js'), 'utf8').replace(/^\/\/.*$/gm, '')));
       check(`pixel ${webgl ? '--webgl' : 'default'}: the notes say it is a pixel start`, /--pixel/.test(readFileSync(join(dir, 'CLAUDE.md'), 'utf8')));
     }
     // --scene-only: the fourth starting point; the base's content/ and assets.js are not written and nothing imports them

@@ -145,7 +145,7 @@ export type PostFuse = {
 };
 /**
  * WebGPU only. scenePass: the scene's pass() node (.getTextureNode('depth'), getViewZNode() ...); buffer(name): a needsBuffers output as a texture node
- * ('normal' | 'diffuse' | 'velocity' | 'metalRough', the last as .x metalness, .y roughness: it may share velocity's target, so read it here, not from scenePass); tsl: three/tsl; display: three's display nodes (bloom, ao from three/addons/tsl/display) plus
+ * ('normal' | 'diffuse' | 'velocity' | 'metalRough', the last as .x metalness, .y roughness: it may share velocity's target, so read it here, not from scenePass); tsl: three/tsl; display: three's display nodes (bloom, ao, denoise from three/addons/tsl/display) plus
  * pass (an extra scene render), texture (the color so far as a texture to sample at other uvs) and own (a node the effect made itself, disposed with the chain),
  * handed in so the main entry of an effect package never imports three/webgpu (its /tsl subpath may, a WebGL game never loads that) and so the nodes they make are disposed with the chain;
  * fx: the threedog/tsl functions (noise, hash ...), handed in for the same reason;

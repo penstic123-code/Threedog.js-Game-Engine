@@ -66,7 +66,7 @@ npm install
 npm run dev
 ```
 
-Open the address the terminal prints. The default template is an empty scene with a camera, a gray starting picture and the basic wiring for startup, saves and settings. It assumes no terrain, player or game type. The folder needs a name npm accepts. In one it refuses, a Chinese name for example, `npm init -y` stops with "Invalid name": skip that line, and the next one writes `package.json`.
+Open the address the terminal prints. The default template is an empty scene with a camera, a neutral starting picture that is already lit correctly (gray surfaces, a sun with soft shadows, environment fill, tone mapping, ambient occlusion and a light bloom, all plain three.js in the game's `picture/` folder) and the basic wiring for startup, saves and settings. It assumes no terrain, player or game type. The folder needs a name npm accepts. In one it refuses, a Chinese name for example, `npm init -y` stops with "Invalid name": skip that line, and the next one writes `package.json`.
 
 `init` has a few options:
 
@@ -172,7 +172,7 @@ Have you seen the demos AI makes with three.js? The pictures are often startling
 
 **three.js keeps its full expression.** A project can make its own materials, lights, geometry and shaders, and it can plug in its own render pass. [THREE.md](packages/engine/docs/THREE.md) covers cameras, resource release, shared state and render backends.
 
-**No fixed look or gameplay.** The gray placeholder is only a start. Cartoon, realistic, pixel and procedural looks are the project's choice. Follow cameras, inventories, quests and open worlds are all optional, and a world can be a height field, a hand-built mesh or an imported level.
+**No fixed look or gameplay.** The neutral gray starting picture is only a start. Cartoon, realistic, pixel and procedural looks are the project's choice. Follow cameras, inventories, quests and open worlds are all optional, and a world can be a height field, a hand-built mesh or an imported level.
 
 **Many tools, few concepts.** One job has one recommended entry. What three.js already does clearly, the engine does not wrap.
 

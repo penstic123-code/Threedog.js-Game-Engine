@@ -8,6 +8,7 @@ import { RenderPipeline, UnsignedByteType } from 'three/webgpu';
 import * as TSL from 'three/tsl';
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 import { ao } from 'three/addons/tsl/display/GTAONode.js';
+import { denoise } from 'three/addons/tsl/display/DenoiseNode.js';
 import { codedError } from '../../core/base/errorHints.js';
 import { warnOnce } from '../../core/base/validate.js';
 import { runsOnWebGPU, OUTPUT_TWICE } from '../postRuns.js';
@@ -72,7 +73,7 @@ function displayFor(made) {
   // pass: an extra scene render (outline's normal / mask views); texture: the color so far as a texture, for effects that sample it at other
   // uvs (dof). Both own render targets, so they go through the recorder too; a node that already is a texture comes back as is and is not ours to dispose.
   const texture = n => { const t = convertToTexture(n); if (t !== n) made.push(t); return t; };
-  return { bloom: rec(bloom), ao: rec(ao), pass: rec(extraPass), texture, own: n => { made.push(n); return n; } };
+  return { bloom: rec(bloom), ao: rec(ao), denoise: rec(denoise), pass: rec(extraPass), texture, own: n => { made.push(n); return n; } };
 }
 
 /** An extra scene render: occlusion's boxes belong to the scene pass alone, drawn here they would show through an override material (outline's normal view) */

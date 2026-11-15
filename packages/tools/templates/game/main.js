@@ -1,10 +1,10 @@
 // @ts-check
-// __NAME__: blank start — an empty scene, a camera and a gray picture in picture/. No gameplay and no genre yet: build what DESIGN.md describes.
+// __NAME__: blank start — an empty scene, a camera and a neutral picture in picture/. No gameplay and no genre yet: build what DESIGN.md describes.
 // Wired: start screen (Continue / Start), autosave, Esc = pause + settings.
 // Keep, replace (engine.ui.set) or delete each. Rules live here (modules, ops, state); placed things default to content/ (saves read it); plain three.js works too.
 __TSL_IMPORT__
 import { createEngine, presets, world, content, settings } from 'threedog';
-import { createPicture } from './picture/index.js';   // the game's own picture in plain three.js: gray for now; make it yours, recipe 62
+import { createPicture } from './picture/index.js';   // the game's own picture in plain three.js: neutral for now; make it yours, recipe 62
 import data from './content/index.js';
 import packs from './assets.js';
 

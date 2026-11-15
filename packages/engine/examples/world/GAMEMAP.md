@@ -79,7 +79,7 @@ content/*.js is content data: how to write it in `node_modules/threedog/docs/rec
 | picture/lights.js | 42 | @ts-check Sun or moon and the ambient, from the sky of this moment (sky.js) and the weather. One sh… |
 | picture/materials.js | 35 | @ts-check Materials by name. They live at module level, not inside createPicture, because the model… |
 | picture/palette.js | 75 | @ts-check The open world's palette: every color and key value of the picture, one copy; the other f… |
-| picture/post.js | 10 | @ts-check The glow on the sun, the lamp and bright water. Added but off on low-tier devices: it blu… |
+| picture/post.js | 10 | @ts-check The glow on the sun, the lamp and bright water. Declared skipOnLowTier: it blurs the whol… |
 | picture/sky.js | 40 | @ts-check The sky and the fog. The engine's dome stays because this world shows its sun, moon, star… |
 
 ## NPCs (content/npcs.js)

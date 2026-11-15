@@ -11,7 +11,7 @@ A game that does not pull an entry gets nothing from it, and new games do not se
 
 ## Pull it
 
-Run these in a new game. `--force` replaces the four gray starter files in `picture/`, and `main.js` keeps working with no change.
+Run these in a new game. `--force` replaces the starter files of the same name in `picture/`, and `main.js` keeps working with no change. Starter files the entry does not ship (`post.js`, and `sky.js` for `ascii-meadow`) are no longer imported: delete them.
 
 ```sh
 threedog lib list --lib <repo>/packages/starter-pictures

@@ -1,5 +1,5 @@
 // Create a new game in one step: npm run new-game -- name [--open-world | --pixel | --scene-only] [--webgl]
-// Default: the blank template (templates/game): an empty scene with a camera, empty content files, a gray picture/ folder, no gameplay, no genre.
+// Default: the blank template (templates/game): an empty scene with a camera, empty content files, a neutral lit picture/ folder, no gameplay, no genre.
 // --open-world: overlays templates/openworld (generated terrain, day/night sky, follow camera, a player).
 // --pixel: overlays templates/pixel (a sprite character, pixelSize, pixelSnap camera, input, interaction, dialogue, saves). Not together with --open-world.
 // --scene-only: overlays templates/sceneonly and leaves the base's content/ and assets.js out (a showcase scene with nothing placed). One start flag at a time.
@@ -25,7 +25,7 @@ if (!/^[a-z0-9-]+$/.test(name)) { console.error(`name "${name}" is not allowed: 
 const dir = join(GAMES, name);
 if (existsSync(dir) || workspaces().some(d => d.endsWith(`/${name}`) || d.endsWith(`\\${name}`))) { console.error(`${rel(dir)} already exists, pick another name`); process.exit(1); }
 
-// Blank template (templates/game) = a scene and a camera, empty content, gray picture/; --open-world overlays templates/openworld
+// Blank template (templates/game) = a scene and a camera, empty content, neutral lit picture/; --open-world overlays templates/openworld
 copyTemplates(dir, { ...opts, name });
 // package.json dependencies follow the open-world choice
 const pkgPath = join(dir, 'package.json'), pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));

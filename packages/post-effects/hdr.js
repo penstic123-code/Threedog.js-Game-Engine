@@ -1,4 +1,4 @@
-// Bloom and ambient occlusion (GTAO) as engine.post effects (hdr slot). Both are heavy on weak devices: the game reads engine.tier to decide whether to add them.
+// Bloom and ambient occlusion (GTAO) as engine.post effects (hdr slot). Both are heavy on weak devices: the game adds them with skipOnLowTier: true to hold them on a 'low' tier (index.js says why).
 import * as THREE from 'three';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
@@ -41,11 +41,14 @@ export function ao({ radius = 0.25, intensity = 1, enabled, order = 20 } = {}) {
   const update = (pass, p) => { pass.updateGtaoMaterial({ radius: p.radius }); pass.blendIntensity = p.intensity; };
   return { ...declared(ao), name: 'ao', slot: 'hdr', order, enabled, params: { radius, intensity }, update,
     create: ({ scene, camera, width, height, params }) => { const pass = new GTAOPass(scene, camera, width, height); update(pass, params); return pass; },
-    // WebGPU: GTAONode on the scene pass's depth (normals reconstructed from depth), its .r darkens the color; intensity mixes toward no AO as blendIntensity does
+    // WebGPU: GTAONode on the scene pass's depth (normals reconstructed from depth), its .r darkens the color; intensity mixes toward no AO as blendIntensity does.
+    // Denoised as three's AO example does: GTAONode turns its samples by a 5x5 noise tile and leaves the speckle in (GTAOPass on WebGL blurs its own result).
     node: (input, { display, scenePass, camera, tsl, p }) => {
-      const n = display.ao(scenePass.getTextureNode('depth'), null, camera);
+      const depth = scenePass.getTextureNode('depth'), n = display.ao(depth, null, camera);
       n.radius = p.radius;
-      return tsl.vec4(input.rgb.mul(tsl.mix(tsl.float(1), n.getTextureNode().r, p.intensity)), input.a);
+      // display.denoise is newer than some engines in this package's peer range: those draw the raw (speckled) AO instead of throwing
+      const raw = n.getTextureNode(), occlusion = (display.denoise ? display.denoise(raw, depth, null, camera) : raw).r;
+      return tsl.vec4(input.rgb.mul(tsl.mix(tsl.float(1), occlusion, p.intensity)), input.a);
     } };
 }
 
