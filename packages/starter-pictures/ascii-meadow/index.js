@@ -28,6 +28,7 @@ import { grade } from './grade.js';
 import * as props from './props.js';
 
 // A picture module: engine.use(createPicture()), then engine.picture. Everything it adds goes through ctx, so engine.use(another(), { replaces: 'picture' }) leaves nothing of it.
+/** @returns {import('threedog').ModuleDef} */
 export function createPicture() {
   return {
     name: 'asciiMeadow', skipKind: 'none', type: 'picture', provides: ['picture', 'tone', 'fog', 'background', 'sun'],

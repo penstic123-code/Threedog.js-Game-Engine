@@ -1,4 +1,4 @@
-// Bloom and ambient occlusion (GTAO) as engine.post effects (hdr slot). Both are heavy on weak devices: the game reads engine.tier to decide whether to add them.
+// Bloom and ambient occlusion (GTAO) as engine.post effects (hdr slot). Both are heavy on weak devices: the game adds them with skipOnLowTier: true to hold them on a 'low' tier (index.js says why).
 import * as THREE from 'three';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
@@ -46,7 +46,8 @@ export function ao({ radius = 0.25, intensity = 1, enabled, order = 20 } = {}) {
     node: (input, { display, scenePass, camera, tsl, p }) => {
       const depth = scenePass.getTextureNode('depth'), n = display.ao(depth, null, camera);
       n.radius = p.radius;
-      const occlusion = display.denoise(n.getTextureNode(), depth, null, camera).r;
+      // display.denoise is newer than some engines in this package's peer range: those draw the raw (speckled) AO instead of throwing
+      const raw = n.getTextureNode(), occlusion = (display.denoise ? display.denoise(raw, depth, null, camera) : raw).r;
       return tsl.vec4(input.rgb.mul(tsl.mix(tsl.float(1), occlusion, p.intensity)), input.a);
     } };
 }

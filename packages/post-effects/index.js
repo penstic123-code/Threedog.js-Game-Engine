@@ -10,7 +10,8 @@
 // Added = on: an effect given to engine.post.add (or exported by a plugin file) is on unless it says enabled: false (added off for the game to switch on later with
 // handle.enabled = true); the engine's rule for every effect, so adding one never silently does nothing. Tier rule, the same as at skipOnLowTier in the engine's render/PostFX.js:
 // an effect declares skipOnLowTier itself, the engine only follows that declaration, and says so in describe() and with one console note when it holds one. None here declare it, so the heavy
-// ones (bloom, ao, dof, outline mode normal/both) stay the game's call on weak devices: read engine.tier and leave them out.
+// ones (bloom, ao, dof, outline mode normal/both) stay the game's call on weak devices: engine.post.add({ ...ao(), skipOnLowTier: true }).
+// Not engine.tier read before start(): the real tier is measured there, and only a declaration follows later tier changes and the quality ladder.
 import * as THREE from 'three';
 import { codedError } from 'threedog/error-hints';
 import { declared } from './about.js';

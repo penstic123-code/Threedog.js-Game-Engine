@@ -28,8 +28,8 @@ export async function run({ check }) {
       const main = readFileSync(join(dir, 'main.js'), 'utf8'), materials = readFileSync(join(dir, 'picture', 'materials.js'), 'utf8');
       const lights = readFileSync(join(dir, 'picture', 'lights.js'), 'utf8'), post = readFileSync(join(dir, 'picture', 'post.js'), 'utf8');
       // the starter picture is lit and its post chain wired (plain three.js in the game, not the engine): a renderer mismatch here only shows at start-up
-      check(`${label}: starter picture wires AO and bloom from @threedog/post-effects, and package.json depends on it`,
-        /engine\.post\.add\(ao\(/.test(post) && /engine\.post\.add\(bloom\(/.test(post) && !!JSON.parse(readFileSync(join(TOOLS, 'templates/game/package.json'), 'utf8')).dependencies['@threedog/post-effects']);
+      check(`${label}: starter picture wires AO and bloom from @threedog/post-effects, held on a 'low' tier by declaration, and package.json depends on it`,
+        /engine\.post\.add\(\{ \.\.\.ao\(.*skipOnLowTier: true/.test(post) && /engine\.post\.add\(\{ \.\.\.bloom\(.*skipOnLowTier: true/.test(post) && !!JSON.parse(readFileSync(join(TOOLS, 'templates/game/package.json'), 'utf8')).dependencies['@threedog/post-effects']);
       const imports = main.split('\n').filter(l => l.startsWith('import '));
       const notes = readFileSync(join(dir, 'CLAUDE.md'), 'utf8') + readFileSync(join(dir, 'DESIGN.md'), 'utf8');
       if (webgl) {

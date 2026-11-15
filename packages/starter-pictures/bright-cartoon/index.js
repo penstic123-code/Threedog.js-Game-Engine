@@ -26,6 +26,7 @@ import * as props from './props.js';
 
 // A picture module: engine.use(createPicture()), then engine.picture. Everything it adds goes through ctx, so engine.use(another(), { replaces: 'picture' }) leaves nothing of it.
 // It holds no 'sky' slot, because a sky() module stays for its signals: it borrows that dome's visible instead.
+/** @returns {import('threedog').ModuleDef} */
 export function createPicture() {
   return {
     name: 'brightCartoon', skipKind: 'none', type: 'picture', provides: ['picture', 'tone', 'fog', 'sun'], optional: ['sky'],

@@ -68,7 +68,7 @@ import { LUTPass } from 'three/addons/postprocessing/LUTPass.js';
 const line = engine.post.add(outline({ thickness: 1.5 })); engine.post.add(vignette());
 line.enabled = false;  // pauses it in place; a settings restriction above this still holds it off
 engine.post.get('vignette').set({ strength: 0.6 });  // params by name; an unknown name throws
-if (engine.tier !== 'low') engine.post.add(bloom());  // the heavy ones are the game's call on weak devices
+engine.post.add({ ...bloom(), skipOnLowTier: true });  // held while engine.tier is 'low', known only at start()
 engine.post.add({ name: 'myLut', slot: 'ldr', params: { lut: myLut }, create: ({ params }) => new LUTPass({ lut: params.lut }) });
 // a plugin file brings the same effect with no main.js line: plugins/10-bloom.js
 export default bloom({ strength: 0.2 });

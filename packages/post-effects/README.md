@@ -19,7 +19,7 @@ engine.post.add(bloom({ strength: 0.6 }));            // game code
 export default vignette();
 ```
 
-An added effect is on unless it says `enabled: false`. The heavy ones (`bloom`, `ao`, `dof`, outline `normal` / `both`) are the game's call on weak devices: read `engine.tier` before adding them. `engine.post.add` returns a handle; on / off and tuning go through it: `glow.enabled = false`, `engine.post.get('ao').set({ radius: 0.6 })`.
+An added effect is on unless it says `enabled: false`. The heavy ones (`bloom`, `ao`, `dof`, outline `normal` / `both`) are the game's call on weak devices: `{ ...bloom(), skipOnLowTier: true }` holds one while `engine.tier` is 'low' (known only once `start()` ran). `engine.post.add` returns a handle; on / off and tuning go through it: `glow.enabled = false`, `engine.post.get('ao').set({ radius: 0.6 })`.
 
 Six effects exist only as TSL nodes and live in a subpath, for games on WebGPURenderer: `voxelGI`, `reflections`, `temporalAA`, `sunShafts`, `lightVolumes`, `autoExposure`, from `@threedog/post-effects/tsl`. That file imports `three/webgpu`; the main entry does not, so a WebGL game's bundle does not grow.
 
