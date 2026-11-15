@@ -12,6 +12,8 @@ const LNK = 'threedog.lnk';
 export function shortcutPlan(platform, { current, node, script }) {
   const target = node, args = `"${script}"`, icon = ICON;
   if (platform !== 'win32') return { action: 'unsupported', target, args, icon };
+  // `npx threedog hub` runs a throwaway copy that npm clears later: an icon pointing there would break, so none is made or moved to it
+  if (/[\\/]_npx[\\/]/.test(script)) return { action: 'none', target, args, icon, message: 'running from an npx copy: install threedog in a project or globally, then run threedog hub --shortcut' };
   if (!current) return { action: 'create', target, args, icon };
   const norm = (p) => String(p ?? '').replaceAll('/', String.fromCharCode(92)).toLowerCase();
   const same = (a, b) => norm(a) === norm(b);
@@ -33,7 +35,7 @@ export function ensureShortcut({ onlyIfPresent = false, script = join(HERE, '..'
     const raw = ps('if(Test-Path -LiteralPath $env:TD_LNK){$s=(New-Object -ComObject WScript.Shell).CreateShortcut($env:TD_LNK);ConvertTo-Json @{target=$s.TargetPath;args=$s.Arguments}}', { TD_LNK: path });
     const current = raw ? JSON.parse(raw) : null;
     const plan = shortcutPlan('win32', { current, node: process.execPath, script });
-    if (plan.action === 'none') return { action: 'none', path, message: 'desktop icon already points here' };
+    if (plan.action === 'none') return { action: 'none', path, message: plan.message ?? 'desktop icon already points here' };
     if (plan.action === 'create' && onlyIfPresent) return { action: 'none', path, message: 'no desktop icon; run: threedog hub --shortcut' };
     ps('$s=(New-Object -ComObject WScript.Shell).CreateShortcut($env:TD_LNK);$s.TargetPath=$env:TD_TARGET;$s.Arguments=$env:TD_ARGS;$s.WindowStyle=7;$s.IconLocation=$env:TD_ICON;$s.WorkingDirectory=$env:TD_HOME;$s.Save()',
       { TD_LNK: path, TD_TARGET: plan.target, TD_ARGS: plan.args, TD_ICON: plan.icon, TD_HOME: homedir() });

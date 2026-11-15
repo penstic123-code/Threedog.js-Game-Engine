@@ -15,6 +15,9 @@ export async function run({ check }) {
   check('icon with another node -> retarget', shortcutPlan('win32', { ...base, current: { ...right, target: 'D:/other/node.exe' } }).action === 'retarget');
   check('icon already right -> none', shortcutPlan('win32', { ...base, current: right }).action === 'none');
   check('slash and case differences count as the same', shortcutPlan('win32', { ...base, current: { target: node.toLowerCase(), args: right.args.replaceAll(String.fromCharCode(92), '/') } }).action === 'none');
+  const npx = String.raw`D:\cache\_npx\abc123\node_modules\@threedog\tools\hub.mjs`;
+  const n1 = shortcutPlan('win32', { node, script: npx, current: null }), n2 = shortcutPlan('win32', { node, script: npx, current: { target: node, args: '"C:/gone/hub.mjs"' } });
+  check('an npx cache copy never gets an icon (create or retarget)', n1.action === 'none' && n2.action === 'none' && /npx/.test(n1.message));
   check('mac -> unsupported', shortcutPlan('darwin', { ...base, current: null }).action === 'unsupported');
   const p = shortcutPlan('win32', { ...base, current: null });
   check('plan carries node, quoted script and the ico', p.target === node && p.args === `"${script}"` && p.icon.endsWith('threedog.ico'));

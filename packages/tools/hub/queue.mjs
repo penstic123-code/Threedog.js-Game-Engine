@@ -47,11 +47,11 @@ const ignored = rel => IGNORED.has(String(rel).split(/[\\/]/)[0]);
  * Call onChange when a file of the project changes (outside node_modules, .threedog, dist, .git). Returns close.
  * Why errors are swallowed: the folder can be deleted or moved while the hub runs; the card then says "not found", the server stays up.
  */
-export function watchProject(dir, onChange) {
+export function watchProject(dir, onChange, onError = () => {}) {
   let w;
   try {
     w = watch(dir, { recursive: true }, (_event, file) => { if (file && !ignored(file)) onChange(); });
-    w.on('error', () => w.close());
+    w.on('error', () => { try { w.close(); } catch { /* already closed */ } onError(); });
   } catch { return () => {}; }
   return () => { try { w.close(); } catch { /* already closed */ } };
 }

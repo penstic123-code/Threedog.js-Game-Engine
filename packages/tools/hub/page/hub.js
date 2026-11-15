@@ -5,7 +5,10 @@ const api = (path, method = 'GET', body) => fetch(path, { method, headers: body 
   .then(async r => ({ ok: r.ok, status: r.status, data: await r.json().catch(() => ({})) }));
 const when = t => t ? new Date(t).toLocaleString() : 'never';
 let toastTimer;
-const toast = msg => { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 5000); };
+const toast = (msg, url) => {   // url: shown as a link (a blocked popup must not lose the address)
+  const t = $('#toast'); t.textContent = msg; t.hidden = false;
+  if (url) { const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.textContent = url; t.append(' ', a); } clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, url ? 30000 : 5000);
+};
 const log = [];   // progress lines of a new project, shown under the form
 
 const badges = p => [
@@ -17,11 +20,7 @@ const badges = p => [
 
 // ---- list view ----
 let lastParent = '';
-async function listView() {
-  const r = await api('/api/projects'), projects = r.data;
-  lastParent = lastParent || (await api('/api/defaults')).data.parent;
-  app.innerHTML = `<h1>Projects</h1>
-    <div class="grid">${projects.map(p => `<div class="card">
+const cardsHtml = projects => projects.map(p => `<div class="card">
       ${p.cover && p.exists ? `<a class="thumb" href="#/p/${p.id}"><img src="${p.cover}" alt=""></a>` : `<a class="thumb empty" href="#/p/${p.id}">${p.exists ? 'no picture yet' : 'folder not found'}</a>`}
       <div class="body"><a class="name" href="#/p/${p.id}">${esc(p.name)}</a>
         <div>${badges(p)}</div>
@@ -29,7 +28,18 @@ async function listView() {
         <div class="small">updated ${when(p.updatedAt)}</div>
         ${p.error ? `<div class="err">${esc(p.error)}</div>` : ''}
         ${p.exists ? '' : `<div><button data-remove="${p.id}">Remove</button></div>`}
-      </div></div>`).join('') || '<p class="small">No projects yet. Create one or add a folder below.</p>'}</div>
+      </div></div>`).join('') || '<p class="small">No projects yet. Create one or add a folder below.</p>';
+function bindCards() {
+  app.querySelectorAll('[data-remove]').forEach(b => { b.onclick = async () => { await api('/api/projects/' + b.dataset.remove, 'DELETE'); listView(); }; });
+  app.querySelectorAll('.thumb img').forEach(i => { i.onclick = e => { e.preventDefault(); location.hash = i.closest('a').getAttribute('href'); }; });
+}
+// Why only the grid is redrawn when the page is already showing: a live update must not wipe what is being typed in the forms below
+async function listView() {
+  const r = await api('/api/projects'), projects = r.data, grid = $('#cards');
+  if (grid) { grid.innerHTML = cardsHtml(projects); return bindCards(); }
+  lastParent = lastParent || (await api('/api/defaults')).data.parent;
+  app.innerHTML = `<h1>Projects</h1>
+    <div class="grid" id="cards">${cardsHtml(projects)}</div>
     <h2>Add a folder</h2>
     <div class="row"><input type="text" id="add-dir" placeholder="C:\\path\\to\\your\\game (a folder with threedog in package.json)"><button id="add-btn">Add folder</button></div>
     <h2>New project</h2>
@@ -51,8 +61,7 @@ async function listView() {
     if (!x.ok) return toast(x.data.reason || 'could not create');
     $('#new-log').hidden = false; $('#new-btn').disabled = true;
   };
-  app.querySelectorAll('[data-remove]').forEach(b => { b.onclick = async () => { await api('/api/projects/' + b.dataset.remove, 'DELETE'); listView(); }; });
-  app.querySelectorAll('.thumb img').forEach(i => { i.onclick = e => { e.preventDefault(); location.hash = i.closest('a').getAttribute('href'); }; });
+  bindCards();
 }
 
 // ---- wall view ----
@@ -83,7 +92,7 @@ async function wallView(id) {
     b.disabled = false;
     if (!x.ok) return toast(x.data.reason || 'could not open');
     if (x.data.hint) toast(x.data.hint);
-    window.open(x.data.url, '_blank');
+    if (!window.open(x.data.url, '_blank')) toast('the browser blocked the new tab:', x.data.url);   // popups after an await are often blocked
   }; });
   app.querySelectorAll('img[data-point]').forEach(img => { img.onclick = () => lightbox(p.points[img.dataset.point]); });
 }
@@ -95,8 +104,9 @@ function lightbox(pt, i = 0) {
     <div class="strip">${pt.shots.map((x, j) => `<img src="${x.url}" data-j="${j}" class="${j === i ? 'on' : ''}" alt="">`).join('')}</div>`;
   box.querySelectorAll('.strip img').forEach(im => { im.onclick = e => { e.stopPropagation(); lightbox(pt, Number(im.dataset.j)); }; });
 }
-$('#lightbox').onclick = e => { if (e.target.id === 'lightbox' || e.target.classList.contains('big')) $('#lightbox').hidden = true; };
-addEventListener('keydown', e => { if (e.key === 'Escape') $('#lightbox').hidden = true; });
+const closeViewer = () => { $('#lightbox').hidden = true; settle(); };
+$('#lightbox').onclick = e => { if (e.target.id === 'lightbox' || e.target.classList.contains('big')) closeViewer(); };
+addEventListener('keydown', e => { if (e.key === 'Escape') closeViewer(); });
 
 // ---- routing and live updates ----
 function route() {
@@ -106,8 +116,13 @@ function route() {
 }
 addEventListener('hashchange', route);
 
-let refresh;
+let refresh, dirty = false;
+const viewerOpen = () => !$('#lightbox').hidden, typing = () => document.activeElement?.tagName === 'INPUT' && app.contains(document.activeElement);
+const refreshSoon = () => { dirty = false; clearTimeout(refresh); refresh = setTimeout(route, 300); };
+const settle = () => { if (dirty && !viewerOpen() && !typing()) refreshSoon(); };   // what was skipped while the viewer was open or an input had focus
 const es = new EventSource('/events');
+let opened = false;
+es.onopen = () => { if (opened) route(); opened = true; };   // reconnect: events during the gap were lost, so draw again
 es.onmessage = e => {
   const ev = JSON.parse(e.data);
   if (ev.type === 'log') {
@@ -117,10 +132,9 @@ es.onmessage = e => {
     return;
   }
   // a project changed: redraw the current view shortly (not while a picture is open or a form is being typed in)
-  if ($('#lightbox').hidden && !app.contains(document.activeElement && document.activeElement.tagName === 'INPUT' ? document.activeElement : null)) {
-    clearTimeout(refresh); refresh = setTimeout(route, 300);
-  }
+  if (viewerOpen() || typing()) dirty = true; else refreshSoon();
 };
+addEventListener('focusout', () => setTimeout(settle, 0));
 
 $('#icon-btn').onclick = async () => { const x = await api('/api/shortcut', 'POST'); toast(x.data.message || 'done'); };
 $('#quit-btn').onclick = async () => { await api('/api/quit', 'POST'); document.body.innerHTML = '<main><h1>Hub closed</h1><p class="small">Run threedog hub to start it again.</p></main>'; };

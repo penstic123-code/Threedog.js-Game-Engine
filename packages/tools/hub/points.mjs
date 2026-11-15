@@ -12,6 +12,9 @@ function pointProblem(p, seen) {
   if (!p || typeof p !== 'object' || Array.isArray(p)) return 'a point is an object like { "name": "start" }';
   if (typeof p.name !== 'string' || !p.name.trim()) return 'name is required (a non-empty string)';
   if (seen.has(p.name)) return `name "${p.name}" is used twice`;
+  // two names that give one picture file would overwrite each other on the wall (case-insensitive file systems, "a b" and "a-b")
+  const same = [...seen.keys()].find(n => pointFile(n).toLowerCase() === pointFile(p.name).toLowerCase());
+  if (same) return `name "${p.name}" and "${same}" would share one picture file: rename one`;
   const unknown = Object.keys(p).find(k => !KEYS.includes(k));
   if (unknown) return `unknown key "${unknown}" (allowed: ${KEYS.join(', ')})`;
   if (p.view !== undefined && p.cam !== undefined) return 'view and cam both place the camera: use one';
@@ -30,13 +33,13 @@ function pointProblem(p, seen) {
 export function parsePoints(text) {
   if (text === null) return { points: [{ name: 'default' }], error: null, pointErrors: [], missing: true };
   let list;
-  try { list = JSON.parse(text); } catch (e) { return { points: [], error: `shots.json is not valid JSON (${e.message})`, pointErrors: [] }; }
+  try { list = JSON.parse(text.replace(/^﻿/, '')); } catch (e) { return { points: [], error: `shots.json is not valid JSON (${e.message})`, pointErrors: [] }; }
   if (!Array.isArray(list)) return { points: [], error: 'shots.json must be an array of points: [{ "name": "start" }]', pointErrors: [] };
-  const points = [], pointErrors = [], seen = new Set();
+  const points = [], pointErrors = [], seen = new Map();
   list.forEach((p, index) => {
     const message = pointProblem(p, seen);
     if (message) pointErrors.push({ index, ...(typeof p?.name === 'string' && { name: p.name }), message });
-    else { seen.add(p.name); points.push(p); }
+    else { seen.set(p.name, true); points.push(p); }
   });
   return { points, error: null, pointErrors };
 }
@@ -44,8 +47,8 @@ export function parsePoints(text) {
 /** The URL keys `threedog shot` sets for these options (shot.mjs builds the same query), so a point is the same picture as the same shot command */
 export function pointQuery(p) {
   const q = new URLSearchParams({ 'threedog-tier': 'high' });
-  for (const k of ['time', 'weather', 'at', 'view']) if (p[k]) q.set(k, p[k]);
-  if (p.pos) q.set('pos', joined(p.pos));
+  for (const k of ['time', 'weather', 'at', 'view']) if (p[k] !== undefined && p[k] !== '') q.set(k, p[k]);
+  if (p.pos !== undefined && p.pos !== '') q.set('pos', joined(p.pos));
   if (p.cam !== undefined) q.set('view', joined(p.cam));
   q.set('wait', String(p.wait ?? 1));
   q.set('cutscene', 'skip');

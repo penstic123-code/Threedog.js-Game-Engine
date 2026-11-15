@@ -32,8 +32,9 @@ try { hub = await startHub({ port }); }
 catch (e) { console.error(`✗ cannot start the hub on port ${port}: ${e.message}`); process.exit(1); }
 console.log(`Hub: ${hub.url} (Ctrl+C or close this window to stop)`);
 // an icon that points at a deleted copy of the tools is repointed here; no icon is never created without being asked
+if (!has('--no-open')) openBrowser(hub.url);
+// after the browser is open: the check starts PowerShell, slow on 5.1, and the page should not wait for it
 const sc = ensureShortcut({ onlyIfPresent: true, script });
 if (sc.action === 'retarget') console.log(sc.message);
-if (!has('--no-open')) openBrowser(hub.url);
 const stop = () => hub.close().finally(() => process.exit(0));
 process.on('SIGINT', stop); process.on('SIGTERM', stop);

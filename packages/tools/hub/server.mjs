@@ -1,8 +1,8 @@
 // The hub's local web server: one static page plus a small JSON API and a server-sent-events stream. Plain node:http, no dependency.
 // Why SSE and not polling: a re-shot picture should appear the moment it is written, and the page costs nothing while nothing happens.
 import { createServer } from 'node:http';
-import { readFileSync, existsSync, createReadStream } from 'node:fs';
-import { spawn } from 'node:child_process';
+import { readFileSync, existsSync, readdirSync, createReadStream } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
 import { homedir } from 'node:os';
 import { join, dirname, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,8 +27,9 @@ export async function startHub({ port = 5180, env = process.env, shoot = shootPr
   const clients = new Set(), watchers = new Map(), jobs = { busy: null };
   const emit = ev => { for (const c of clients) c.write(`data: ${JSON.stringify(ev)}\n\n`); };
   const find = id => listProjects(env).find(p => p.id === id);
-  let dev = null;   // the one project dev server: { id, server }
-  const closeDev = async () => { const d = dev; dev = null; await d?.server.close().catch(() => {}); };
+  let dev = null;   // the one project dev server: { id, server: Promise<{ base, close }> }; a promise so two quick /open requests share one start
+  const closeDev = async () => { const d = dev; dev = null; await (await d?.server.catch(() => null))?.close().catch(() => {}); };
+  const children = new Set(), creating = new Set();   // running npm / init processes (killed on quit); folders being created right now
 
   const queue = createQueue({ shoot: async id => {
     const p = find(id);
@@ -41,7 +42,8 @@ export async function startHub({ port = 5180, env = process.env, shoot = shootPr
   // one watcher per existing project; a project added later gets one on add
   const watch = p => {
     if (!p || watchers.has(p.id) || !p.exists) return;
-    watchers.set(p.id, watchProject(p.dir, () => { queue.touch(p.id); emit({ type: 'project', id: p.id }); }));
+    // a watcher that errors (folder deleted or moved) is dropped from the map so the next project list re-arms it when the folder is back
+    watchers.set(p.id, watchProject(p.dir, () => { queue.touch(p.id); emit({ type: 'project', id: p.id }); }, () => watchers.delete(p.id)));
     if (newestChange(p.dir) > (readWall(p.dir).runAt ?? 0)) queue.touch(p.id);
   };
   listProjects(env).forEach(watch);
@@ -71,27 +73,35 @@ export async function startHub({ port = 5180, env = process.env, shoot = shootPr
 
   // New project: init, npm install, register, first shoot. Progress lines go to every open page as log events.
   const run = (cmd, args, cwd) => new Promise(ok => {
-    const c = spawn(cmd, args, { cwd, shell: process.platform === 'win32' && cmd === 'npm', env: { ...env } });
+    // no THREEDOG_TEST: a shoot's build sets it on the whole process for a moment, and a game's npm install must not inherit that
+    const { THREEDOG_TEST: _t, ...clean } = env;
+    const c = spawn(cmd, args, { cwd, shell: process.platform === 'win32' && cmd === 'npm', env: clean });
+    children.add(c);
     const line = b => String(b).split(/\r?\n/).filter(Boolean).forEach(l => emit({ type: 'log', line: l.slice(0, 300) }));
-    c.stdout.on('data', line); c.stderr.on('data', line); c.on('error', e => { line(e.message); ok(1); }); c.on('close', code => ok(code ?? 1));
+    c.stdout.on('data', line); c.stderr.on('data', line); c.on('error', e => { line(e.message); ok(1); }); c.on('close', code => { children.delete(c); ok(code ?? 1); });
   });
   async function createProject({ parent, name, template }) {
     const dir = join(resolve(parent), name);
     emit({ type: 'log', line: `creating ${dir}` });
-    if (await run(process.execPath, [CLI, 'init', dir, ...TEMPLATES[template]], process.cwd()) !== 0) return emit({ type: 'log', line: 'init failed' });
-    if (await run('npm', ['install'], dir) !== 0) emit({ type: 'log', line: 'npm install failed: run it in the folder by hand' });
-    const added = addProject(dir, env);
-    if (!added.ok) return emit({ type: 'log', line: added.reason });
-    watch(find(added.id)); queue.now(added.id); emit({ type: 'project', id: added.id }); emit({ type: 'log', line: 'done' });
+    try {
+      if (await run(process.execPath, [CLI, 'init', dir, ...TEMPLATES[template]], process.cwd()) !== 0) return emit({ type: 'log', line: 'init failed' });
+      if (await run('npm', ['install'], dir) !== 0) emit({ type: 'log', line: 'npm install failed: run it in the folder by hand' });
+      const added = addProject(dir, env);
+      if (!added.ok) return emit({ type: 'log', line: added.reason });
+      watch(find(added.id)); queue.now(added.id); emit({ type: 'project', id: added.id }); emit({ type: 'log', line: 'done' });
+    } finally { creating.delete(dir.toLowerCase()); }
   }
 
   const routes = async (req, res) => {
     const path = new URL(req.url, 'http://x').pathname, m = req.method;
+    // Why: DNS rebinding. A page on evil.example whose name later resolves to 127.0.0.1 would be same-origin with the hub and could read it; its Host header still says evil.example
+    const at = server.address().port;
+    if (req.headers.host !== `127.0.0.1:${at}` && req.headers.host !== `localhost:${at}`) return json(res, 403, { reason: 'wrong host' });
     // Why: any web page open in the browser can send a POST to 127.0.0.1; only the hub's own page may create projects, write the icon or quit
     if (m !== 'GET' && req.headers.origin && req.headers.origin !== `http://${req.headers.host}`) return json(res, 403, { reason: 'only the hub page may do this' });
     if (m === 'GET' && STATIC[path]) { res.writeHead(200, { 'content-type': STATIC[path][1], 'cache-control': 'no-store' }); return res.end(readFileSync(join(PAGE, STATIC[path][0]))); }
     if (m === 'GET' && path === '/api/ping') return json(res, 200, { hub: 'threedog', version: VERSION });
-    if (m === 'GET' && path === '/api/projects') return json(res, 200, listProjects(env).map(card));
+    if (m === 'GET' && path === '/api/projects') { const l = listProjects(env); l.forEach(watch); return json(res, 200, l.map(card)); }   // watch: a project added from a terminal (threedog init) or a folder that came back gets its watcher now
     // where a new project goes by default: next to the newest project, else the Desktop
     if (m === 'GET' && path === '/api/defaults') { const l = listProjects(env); return json(res, 200, { parent: l.length ? dirname(l[l.length - 1].dir) : join(homedir(), 'Desktop') }); }
     if (m === 'GET' && path === '/events') {
@@ -112,10 +122,13 @@ export async function startHub({ port = 5180, env = process.env, shoot = shootPr
         if (!['game', 'editor', 'gallery'].includes(what) || !p.exists) return json(res, 400, { reason: 'folder not found or unknown target' });
         try {
           // one dev server at a time: opening another project closes the previous one
-          if (dev?.id !== p.id) { await closeDev(); dev = { id: p.id, server: await devServer(p.dir) }; }
+          // the start is stored as a promise and awaited by every request, so two quick clicks cannot start two servers and leak one
+          // cacheDir: its own dependency cache, so it does not fight a running `npm run dev` of the game over node_modules/.vite
+          if (dev?.id !== p.id) { await closeDev(); dev = { id: p.id, server: devServer(p.dir, { cacheDir: '.threedog/vite-hub' }) }; }
+          const server = await dev.server;
           // the editor has no URL switch (F2 inside the game), so it opens the game
-          return json(res, 200, { url: dev.server.base + (what === 'gallery' ? '/?gallery=1' : '/'), hint: what === 'editor' ? 'press F2 in the game to open the editor' : null });
-        } catch (e) { return json(res, 500, { reason: firstLine(e) }); }
+          return json(res, 200, { url: server.base + (what === 'gallery' ? '/?gallery=1' : '/'), hint: what === 'editor' ? 'press F2 in the game to open the editor' : null });
+        } catch (e) { dev = null; return json(res, 500, { reason: firstLine(e) }); }
       }
     }
     if (m === 'POST' && path === '/api/projects') {
@@ -128,6 +141,11 @@ export async function startHub({ port = 5180, env = process.env, shoot = shootPr
     if (m === 'POST' && path === '/api/new') {
       const b = await readBody(req);
       if (!b || typeof b.parent !== 'string' || !b.parent.trim() || !/^[\p{L}\p{N}_. -]+$/u.test(b.name ?? '') || /^[. ]+$/.test(b.name) || !Object.hasOwn(TEMPLATES, b.template)) return json(res, 400, { reason: 'give a name (letters, digits, - _ space), a parent folder and a template' });
+      const dir = join(resolve(b.parent.trim()), b.name.trim()), key = dir.toLowerCase();
+      if (creating.has(key)) return json(res, 409, { reason: 'this folder is already being created' });
+      // "new project" makes the folder; one that exists with files in it is for "Add folder"
+      if (existsSync(dir) && readdirSync(dir).length) return json(res, 400, { reason: `${dir} already exists and is not empty: use "Add folder" for an existing game` });
+      creating.add(key);
       createProject({ parent: b.parent.trim(), name: b.name.trim(), template: b.template }).catch(e => emit({ type: 'log', line: firstLine(e) }));
       return json(res, 202, { ok: true });
     }
@@ -141,6 +159,8 @@ export async function startHub({ port = 5180, env = process.env, shoot = shootPr
 
   async function close() {
     queue.stop(); watchers.forEach(c => c()); watchers.clear(); await closeDev();
+    // an npm install still running would go on after the hub is gone (on Windows npm runs in a shell: kill its whole tree)
+    for (const c of children) { if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(c.pid), '/T', '/F'], { windowsHide: true }); else c.kill(); }
     for (const c of clients) c.end();
     server.closeAllConnections?.(); await new Promise(ok => server.close(ok));
   }

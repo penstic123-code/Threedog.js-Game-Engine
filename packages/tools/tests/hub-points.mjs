@@ -16,5 +16,9 @@ export async function run({ check }) {
   check('bad cam and size refused', parsePoints('[{"name":"x","cam":[1,2]},{"name":"y","size":"big"}]').pointErrors.length === 2);
   check('query', pointQuery({ name: 'n', cam: [0, 12, 30, 0, 0, 0], play: true }).get('view') === '0,12,30,0,0,0' && pointQuery({ name: 'n' }).get('wait') === '1');
   check('query keys as shot', pointQuery({ name: 'n', play: true, at: 'x' }).has('play') && pointQuery({ name: 'n' }).get('cutscene') === 'skip' && pointQuery({ name: 'n' }).get('threedog-tier') === 'high');
+  const col = parsePoints('[{"name":"Start A"},{"name":"start-a"},{"name":"start a"}]');
+  check('names sharing one picture file refused, both named', col.points.length === 1 && col.pointErrors.length === 2 && /start-a/.test(col.pointErrors[0].message) && /Start A/.test(col.pointErrors[0].message));
+  check('UTF-8 BOM is ignored', parsePoints('\uFEFF[{"name":"a"}]').points.length === 1);
+  check('falsy values are kept (time 0, play false off)', pointQuery({ name: 'n', time: 0 }).get('time') === '0' && !pointQuery({ name: 'n', play: false }).has('play'));
   check('file stem', pointFile('村口 全景/1') === '村口-全景-1');
 }

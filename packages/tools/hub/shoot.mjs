@@ -28,7 +28,8 @@ export async function shootProject(dir, { onPoint } = {}) {
   process.env.THREEDOG_TEST = '1';
   let server, browser;
   try {
-    try { server = await buildAndPreview(dir); }
+    // its own build folder: shot / test / perf run beside the hub and rebuild .threedog/tool-build under it
+    try { server = await buildAndPreview(dir, { outDir: '.threedog/hub-build' }); }
     catch (e) { return recordRun(dir, { at, error: `build failed: ${firstLine(e)}` }); }
     finally { if (hadTest === undefined) delete process.env.THREEDOG_TEST; else process.env.THREEDOG_TEST = hadTest; }
     browser = await launchBrowser({ prefer: 'gpu' });
@@ -51,6 +52,8 @@ export async function shootProject(dir, { onPoint } = {}) {
         onPoint?.(p.name, false);
       } finally { await page?.close().catch(() => {}); }
     }
+  } catch (e) {
+    return recordRun(dir, { at, error: `browser failed: ${firstLine(e)}` });   // anything outside the per-point code: recorded, the finally below still closes what was opened
   } finally {
     await browser?.close().catch(() => {});
     await server?.close().catch(() => {});

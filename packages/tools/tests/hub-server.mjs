@@ -1,6 +1,7 @@
 // Hub server: API, picture serving, traversal refusal, a deleted project, SSE. A fake shooter keeps it away from real rendering.
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { startHub } from '../hub/server.mjs';
 import { recordRun, newShotPath, wallDir } from '../hub/wall.mjs';
@@ -37,6 +38,13 @@ export async function run({ check }) {
     check('page is served', /threedog hub/.test((await call('/')).text));
     const foreign = await fetch(hub.url + '/api/quit', { method: 'POST', headers: { origin: 'http://evil.example' } });
     check('a POST from another web page is refused (403), hub stays up', foreign.status === 403 && (await get('/api/ping')).hub === 'threedog');
+    // fetch cannot set Host, node:http can: a rebound name (evil.example) must be refused
+    const hostStatus = host => new Promise(ok => { const q = request(hub.url + '/api/ping', { headers: { host } }, r => { r.resume(); ok(r.statusCode); }); q.end(); });
+    const rebound = await hostStatus('evil.example:' + new URL(hub.url).port);
+    check('a foreign Host header (DNS rebinding) is refused (403), localhost is fine', rebound === 403 && await hostStatus('localhost:' + new URL(hub.url).port) === 200);
+    mkdirSync(join(tmp, 'taken')); writeFileSync(join(tmp, 'taken', 'x.txt'), '1');
+    const taken = await call('/api/new', 'POST', { parent: tmp, name: 'taken', template: 'blank' });
+    check('new project into a non-empty folder -> 400', taken.status === 400 && /not empty/.test(JSON.parse(taken.text).reason));
     const bad = await call('/api/projects', 'POST', { dir: plain });
     check('add folder without threedog -> 400 with reason', bad.status === 400 && /threedog/.test(JSON.parse(bad.text).reason));
     const added = await call('/api/projects', 'POST', { dir: game });
