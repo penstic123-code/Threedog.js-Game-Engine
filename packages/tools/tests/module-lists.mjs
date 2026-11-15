@@ -17,7 +17,8 @@ const engine = await import(pathToFileURL(join(ENGINE, 'index.js')).href);
 /** factory name -> module definitions it returns (terrain() gives terrain and terrainDraw) */
 const defsOf = new Map();
 for (const [k, f] of Object.entries(engine)) {
-  if (typeof f !== 'function' || /^[A-Z]/.test(k)) continue;
+  // createEngine is not a module factory: building one here (it throws in Node partway) leaves it counted page-wide (validate) for every later test
+  if (typeof f !== 'function' || /^[A-Z]/.test(k) || k === 'createEngine') continue;
   let r; try { r = k === 'openWorld' ? f({ camera: false }) : f(); } catch { continue; }
   const defs = [r].flat(Infinity).filter(d => d && typeof d === 'object' && d.name && (d.install || d.label));
   if (defs.length) defsOf.set(k, defs);
