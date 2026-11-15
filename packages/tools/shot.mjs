@@ -56,11 +56,12 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { cli, rel } from './paths.mjs';
 import { intOption } from './lib/cli-args.mjs';
-import { waitEngine, waitLoaded, sceneCounts, refuseState } from './wait-engine.mjs';
+import { sceneCounts } from './wait-engine.mjs';
+import { openShotPage } from './lib/shot-page.mjs';
 import { camPose, shotName, shotFile, viewSize, wrongServer } from './lib/shot-name.mjs';
 import { formatPicture, pagePicture, imagePicture, NO_PAGE } from './picture/check.mjs';
 import { PICTURE, TITLE_COVERS } from './threedog/pageFns.mjs';
-import { drawnBy, headlessUrl } from './lib/page-url.mjs';
+import { drawnBy } from './lib/page-url.mjs';
 import { loadBaseline, perfNotice } from './lib/perf-baseline.mjs';
 
 const t0 = Date.now();
@@ -136,19 +137,12 @@ try {
   q.set('wait', String(wait));
   q.set('cutscene', opt['keep-cutscene'] ? 'keep' : 'skip');
   if (opt.play) q.set('play', '');
-  await page.goto(base + headlessUrl(url, q));
-  await waitEngine(page, { timeout: 60000, errors });
-  await refuseState(page, ['time', 'weather', 'pos', 'at', 'view']);
+  const { tail } = await openShotPage(page, base, url, q, { errors, loadTimeout });   // goto, wait for the engine, refuse scene keys, wait for loading, settle the UI (lib/shot-page.mjs)
   const ev = (fn, arg) => page.evaluate(fn, arg);
-  // A picture taken while terrain / models are still arriving shows a half-built world that looks like an art bug, so finish loading first.
-  // Headless only advances on step, so step (no render) until engine.loading says nothing is pending; past the limit fail with what it is still waiting for
-  // then the game's own code after `await engine.start()` (lamps added after a later await): a shot never shows the scene before it ran
-  const { tail } = await waitLoaded(page, { timeout: loadTimeout * 1000 });
   result.afterStart = tail;
   const grew = [['objects', tail.objects], ['lights', tail.lights], ['materials', tail.materials]].filter(([, n]) => n).map(([k, n]) => `${n > 0 ? '+' : ''}${n} ${k}`);
   if (!tail.quiet) say(`  The scene was still changing ${Math.round(tail.ms / 1000)} s after start() resolved (${grew.join(', ') || 'requests still open'}); shot as it is now`);
   else if (grew.length) say(`  Waited ${(tail.ms / 1000).toFixed(1)} s for the game's code after await engine.start() (${grew.join(', ')})`);
-  await ev(() => engine.ui.settled());   // the loading screen fades out on a wall-clock timer after ready; do not capture it mid-fade
   const perfEval = (src, arg) => page.evaluate(`(${src})(${JSON.stringify(arg)})`);
   await loadBaseline(perfEval, dir);   // before describeText, so its perf line compares against the game's perf-baseline.json too
   const text = await ev(() => { engine.step(1 / 30, { render: true }); return engine.describeText(); });
