@@ -87,6 +87,8 @@ export async function startHub({ port = 5180, env = process.env, shoot = shootPr
 
   const routes = async (req, res) => {
     const path = new URL(req.url, 'http://x').pathname, m = req.method;
+    // Why: any web page open in the browser can send a POST to 127.0.0.1; only the hub's own page may create projects, write the icon or quit
+    if (m !== 'GET' && req.headers.origin && req.headers.origin !== `http://${req.headers.host}`) return json(res, 403, { reason: 'only the hub page may do this' });
     if (m === 'GET' && STATIC[path]) { res.writeHead(200, { 'content-type': STATIC[path][1], 'cache-control': 'no-store' }); return res.end(readFileSync(join(PAGE, STATIC[path][0]))); }
     if (m === 'GET' && path === '/api/ping') return json(res, 200, { hub: 'threedog', version: VERSION });
     if (m === 'GET' && path === '/api/projects') return json(res, 200, listProjects(env).map(card));
@@ -125,7 +127,7 @@ export async function startHub({ port = 5180, env = process.env, shoot = shootPr
     }
     if (m === 'POST' && path === '/api/new') {
       const b = await readBody(req);
-      if (!b || typeof b.parent !== 'string' || !b.parent.trim() || !/^[\p{L}\p{N}_. -]+$/u.test(b.name ?? '') || !Object.hasOwn(TEMPLATES, b.template)) return json(res, 400, { reason: 'give a name (letters, digits, - _ space), a parent folder and a template' });
+      if (!b || typeof b.parent !== 'string' || !b.parent.trim() || !/^[\p{L}\p{N}_. -]+$/u.test(b.name ?? '') || /^[. ]+$/.test(b.name) || !Object.hasOwn(TEMPLATES, b.template)) return json(res, 400, { reason: 'give a name (letters, digits, - _ space), a parent folder and a template' });
       createProject({ parent: b.parent.trim(), name: b.name.trim(), template: b.template }).catch(e => emit({ type: 'log', line: firstLine(e) }));
       return json(res, 202, { ok: true });
     }

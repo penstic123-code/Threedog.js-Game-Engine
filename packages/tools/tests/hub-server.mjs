@@ -35,6 +35,8 @@ export async function run({ check }) {
 
     check('ping', (await get('/api/ping')).hub === 'threedog');
     check('page is served', /threedog hub/.test((await call('/')).text));
+    const foreign = await fetch(hub.url + '/api/quit', { method: 'POST', headers: { origin: 'http://evil.example' } });
+    check('a POST from another web page is refused (403), hub stays up', foreign.status === 403 && (await get('/api/ping')).hub === 'threedog');
     const bad = await call('/api/projects', 'POST', { dir: plain });
     check('add folder without threedog -> 400 with reason', bad.status === 400 && /threedog/.test(JSON.parse(bad.text).reason));
     const added = await call('/api/projects', 'POST', { dir: game });
