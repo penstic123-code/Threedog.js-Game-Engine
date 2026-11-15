@@ -48,7 +48,7 @@ export const specs = [
         out.early = s._env.builds - b0;               // changed, but the interval has not passed
         engine.step(1.2, { render: false });
         out.late = s._env.builds - b0;                // interval passed: one build
-        out.live = h.texture !== first && !!h.texture;   // the getter follows the rebuild
+        out.live = h.texture !== first && !!h.texture;   // the getter follows the rebuild (this page is WebGL: three's WebGL generator returns a new target; WebGPU refills one, sky-tsl)
         engine.step(1.2, { render: false }); engine.step(1.2, { render: false });
         out.after = s._env.builds - b0;               // unchanged again: no build
         h.remove();

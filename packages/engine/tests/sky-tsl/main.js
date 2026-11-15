@@ -113,6 +113,8 @@ window.skyTsl = async () => {
     moved.back = change(b, await read()); rt.dispose();
     // engine.sky.environment on this renderer: three/webgpu's PMREMGenerator draws the node dome
     const envH = e2.sky.environment({ into: e2.scene }); e2.sky._envFrame(0); out.env = { written: !!envH.texture && e2.scene.environment === envH.texture };
+    // a rebuild refills the same texture: a new one rebuilt every material reading the environment (a stall at each rebuild, modules/sky/environment.js)
+    const envFirst = envH.texture; e2.sky._envBuild(); out.env.same = envH.texture === envFirst && e2.sky._env.builds === 2;
     envH.remove(); out.env.off = e2.scene.environment === null;
     // the real hook path on the WebGPU engine's node dome
     out.errors.cloudsHookGpu = tryIt(() => e2.sky.clouds('vec4 threedogClouds(vec3 d, float t, vec3 s, float n, vec3 l, vec3 h, float c){ return vec4(1.0); }'));

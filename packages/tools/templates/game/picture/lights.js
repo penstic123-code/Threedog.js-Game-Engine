@@ -38,7 +38,7 @@ export function createLights(engine, ctx) {
 
 // The fill: a neutral studio room (three's RoomEnvironment), prefiltered once, so it costs nothing per frame. scene.environment is plain three.js:
 // an .hdr panorama goes there the same way (recipe 34), and engine.sky.environment({ into: engine.scene, interval }) makes the sky dome the map, colored
-// by the sky but re-rendered as the sky changes (each rebuild is a heavy frame: a long interval, and threedog perf before and after).
+// by the sky and re-rendered as the sky changes (cheap: the same map is refilled). With it, take the night dimming out of update(): the map darkens by itself.
 // Called from the module's init, not install: prefiltering draws, and the renderer is ready only once start() begins the inits.
 /** @param {any} engine @param {any} ctx */
 export function createFill(engine, ctx) {

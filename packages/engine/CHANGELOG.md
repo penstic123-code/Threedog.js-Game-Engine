@@ -14,6 +14,7 @@ What changed in each version and how a game upgrades.
 - Changed: the `threedog` command now comes with the `threedog` package, and `@threedog/tools` has no bin of its own (one package may own a bin name). It runs the commands of `@threedog/tools`; with only the engine installed, `npx threedog init` used to fail with "could not determine executable to run", and now prints the line that installs `@threedog/tools`. Release both packages together: `@threedog/tools` needs an engine that carries the bin.
 - Changed: the package README and `llms.txt` open with one start sequence (install, `npx threedog init`, `npx threedog play`); `llms.txt` copies it from the README so the two cannot drift. `@threedog/tools` is no longer described as optional.
 - New: a new game's `CLAUDE.md` has a short "Before you call it done" checklist (compare `threedog shot` with the target style, recipes 60 and 62, `@threedog/post-effects`).
+- Fixed: on WebGPU each `engine.sky.environment()` rebuild stalled the game (100 ms to seconds, once per interval while the sky moved): every material reading the environment built again for the new map. The rebuild now refills the same map; on WebGL it was already cheap. A moving day can light the scene with its own sky.
 - Upgrading: nothing to change in a game; reinstall both packages so `node_modules/.bin/threedog` points at the engine's bin.
 
 ## 1.4.0 (2026-11-15)

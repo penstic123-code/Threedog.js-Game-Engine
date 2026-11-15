@@ -21,6 +21,7 @@ export const specs = [
       check("createEngine({ renderer: 'webgpu' }) + sky(): node dome, picture mean within 3% of the WebGL dome",
         r.engine.isGPU && r.engine.dome === 'MeshBasicNodeMaterial' && near(r.engine), JSON.stringify(r.engine));
       check('engine.sky.environment builds on WebGPURenderer and writes into; remove takes it off', r.env?.written && r.env?.off, JSON.stringify(r.env));
+      check('[guard] on WebGPURenderer a sky.environment rebuild refills the same texture (a new one rebuilt every material that reads it: a stall at each rebuild)', r.env?.same, JSON.stringify(r.env));
       const mv = r.engine.moved;
       check('[guard] engine.uniforms .value writes move the node dome (uSkyCurve, uCloudCover, uSkyCloudScale); writing back restores it', mv.uSkyCurve > 0.5 && mv.uCloudCover > 0.1 && mv.uSkyCloudScale > 0.5 && mv.back < 0.01, JSON.stringify(mv));
       const e = r.errors, named = (m, what) => new RegExp(what).test(m) && /\[webgpu-needs-tsl\]/.test(m);

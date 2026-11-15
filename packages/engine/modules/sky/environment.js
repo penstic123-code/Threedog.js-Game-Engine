@@ -78,10 +78,12 @@ export const environmentMethods = {
       this._envScene.add(copy);
     }
     /** @type {any} */ (this._envScene.children[0]).material = this.dome.material;   // a game may have set engine.sky.dome.material
-    const old = e.target, next = this._pmrem.fromScene(this._envScene, 0, 0.1, 100, { size: 256 });
+    // WebGPU: the rebuild refills the same target. A new texture there made every material that reads the environment build again: a stall of 100 ms
+    // to seconds at each rebuild, measured on the open-world start. three 0.187's WebGL generator has no renderTarget option and returns a new one, which costs nothing there
+    const old = e.target, next = this._pmrem.fromScene(this._envScene, 0, 0.1, 100, { size: 256, renderTarget: old });
     // a map the game wrote there is the game's: the owned check (frame.js) has yielded, and the sky writes it no more
     if (e.into && this._oEnv.on) { e.into.environment = next.texture; this._oEnv.mark(); }
-    e.target = next; old?.dispose();
+    if (old !== next) old?.dispose(); e.target = next;
     e.builds++; e.key = skyKey(this);
   },
 

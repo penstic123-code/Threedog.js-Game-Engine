@@ -86,6 +86,7 @@ On `renderer: 'webgpu'` take `PMREMGenerator` from `three/webgpu`. A map you mad
 - With `into`, that object's `.environment` gets the map at each rebuild. A map you write there yourself stays: the rebuilds go on, but only `handle.texture` follows them.
 - The dome is rendered into a cube (at least 256 px a face) and prefiltered with `PMREMGenerator`, rebuilt only when sky colors, sun direction or cloud cover changed
   AND `interval` seconds passed (default 1, 4 on a low tier; yours stands). A fixed time of day builds once; a call before the first frame waits for it. A second call replaces the first.
+  A rebuild is cheap on both renderers (WebGPU refills the same map, so no material builds again): a moving day can light the scene with its own sky.
 - An asset map is a fixed photo: it does not dim at night. Write `scene.environmentIntensity` from your own frame code reading `engine.uniforms.uDaylight`.
 
 ### What a MeshLambertMaterial does with it (three 0.187)
