@@ -310,6 +310,10 @@ engine.onRender(() => {
 
 按任务学习时读[配方目录](packages/engine/docs/recipes/)，不用从头读完 API。
 
+## 项目主页
+
+`npx threedog hub` 打开一个本地网页，列出本机所有 threedog 游戏：每个游戏一张卡片，点进去是固定点位的截图墙。点位写在游戏的 `shots.json` 里（字段与 `threedog shot` 相同：`view`、`cam`、`at`、`play`、`time`、`weather` 等），AI 做出新地方时自己往里加。主页开着时会盯着游戏文件，最后一次改动 30 秒后整面墙自动重拍，页面自己更新，每个点位保留最近 10 张用来对比改动前后。网页里也能新建项目、添加已有文件夹；Windows 上 `threedog hub --shortcut` 放桌面图标。一切只在本机。
+
 ## 为 AI 提供的工具
 
 AI 的工作过程是查找能力、写代码、运行操作、读取结果。命令行和 MCP（Claude Code、Cursor 等工具使用的模型上下文协议）提供同一套入口，参数见[命令文档](packages/engine/docs/COMMANDS.md)。

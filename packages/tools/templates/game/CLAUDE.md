@@ -17,7 +17,7 @@ __DEFAULT_LAYER__
 
 ## The loop
 1. Run: `npx threedog play` runs the game for you (`--stop` ends); `npx threedog dev` for a person.
-2. Look: `npx threedog shot` (`--play` past the start screen), `engine.describe()` for state; judge a picture: recipe 60.
+2. Look: `npx threedog shot` (`--play` past the start screen), `engine.describe()` for state; judge a picture: recipe 60. New place or visible change: add a `shots.json` point (shot options); `threedog hub` re-shoots.
 3. Fix: an error names its `code`, `fix` and docs section (`.threedog/errors.log`); root cause first, fixed once where it lives (recipe 16 §11).
 4. After a change: `npx threedog map`, `npx threedog check`, related tests (`npx threedog test name`).
 Helpers skip this file: tell them `npx threedog how` first, recipes 60 + 62, a clean `check`. Taking over: STATUS.md, then DESIGN.md.

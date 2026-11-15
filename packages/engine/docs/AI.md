@@ -125,7 +125,7 @@ A row or `threedog how` -> recipe -> `api/<module>.md`. Also: `CONVENTIONS.md`, 
 | To do | Use | Recipe |
 |---|---|---|
 | Broke; describe, explain, shot: which tool | `.threedog/errors.log`, `engine.describe`, `engine.explain` | 16-dev-bridge.md §11 |
-| Picture looks wrong: judge it | `threedog shot` | 60-judge-the-picture.md §"How to judge" |
+| Picture looks wrong: judge it | `threedog shot` (points in `shots.json`; `threedog hub` re-shoots them) | 60-judge-the-picture.md §"How to judge" |
 | Drive and check the live game | the dev bridge (`verify <scenario>`) | 16-dev-bridge.md §1 |
 | Slow, low fps | `engine.jobs`, `engine.threads`, `engine.budget`, `engine.debug` | 15-perf.md §1 |
 | Deploy | `npm run build` | 61-deploy.md |

@@ -311,6 +311,10 @@ A new game starts on WebGPU with TSL, the node shader language of three.js. In a
 
 To learn by task, read the [recipes](packages/engine/docs/recipes/). There is no need to read the whole API first.
 
+## Project hub
+
+`npx threedog hub` opens a local web page with every threedog game on your machine: a card per game, and per game a wall of screenshots at fixed points. The points live in the game's `shots.json` (the same fields as `threedog shot`: `view`, `cam`, `at`, `play`, `time`, `weather`, ...), which the AI adds to as it builds new places. While the hub runs it watches the game's files and re-shoots the whole wall 30 seconds after the last change; the page updates by itself and keeps the last 10 pictures per point to compare before and after. The page also creates new projects and adds existing folders. `threedog hub --shortcut` puts a desktop icon on Windows. Everything stays on your machine.
+
 ## Tools for AI
 
 An AI works by finding a capability, writing code, running actions and reading results. The command line and MCP (Model Context Protocol, used by tools such as Claude Code and Cursor) offer the same entries; the options are in [the command docs](packages/engine/docs/COMMANDS.md).

@@ -17,6 +17,7 @@ CLI commands | explain |
 CLI commands | gallery |
 CLI commands | hold |
 CLI commands | how |
+CLI commands | hub |
 CLI commands | impact |
 CLI commands | init |
 CLI commands | inspect |
