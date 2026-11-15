@@ -222,5 +222,7 @@ export class GpuTimer {
       this.free.push(q);
     }
   }
+  /** A restored context: the queries were the lost one's (never answer, so timing stopped) and ms was measured under the pressure that lost it */
+  reset() { this.pending = []; this.free = []; this.active = null; this.ms = null; this.ext = this.gl?.getExtension?.('EXT_disjoint_timer_query_webgl2') ?? null; }
   dispose() { if (!this.ext || this.gl.isContextLost()) return; for (const q of [...this.pending, ...this.free]) this.gl.deleteQuery(q); this.pending = []; this.free = []; }
 }

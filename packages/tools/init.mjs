@@ -60,5 +60,13 @@ if (map.status === 0) made.push(join(dir, 'GAMEMAP.md'));
 const short = p => p.slice(dir.length + 1).replaceAll('\\', '/');
 const where = relative(process.cwd(), dir).replaceAll('\\', '/');
 console.log(`✓ threedog init${where ? ' ' + where : ''}: ${made.length} files written, package.json ${pkg ? 'merged' : 'created'}${kept.length ? `, ${kept.length} existing files kept (${kept.slice(0, 5).map(short).join(', ')}${kept.length > 5 ? ', …' : ''})` : ''}`);
+// a kept file is harmless unless it is one the game starts through: an existing app's entry page, vite config or dev script means npm run dev never loads main.js
+// (a vite starter: index.html loads /src/main.ts). Kept, as promised, but named with its one-line fix
+const clash = [];
+const keptName = n => kept.some(p => short(p) === n);
+if (keptName('index.html') && !/src=["']?(\.?\/)?main\.js\b/.test(readFileSync(join(dir, 'index.html'), 'utf8'))) clash.push('index.html does not load main.js: add <script type="module" src="/main.js"></script> (or move your page aside and run init again)');
+for (const v of ['vite.config.js', 'vite.config.mjs', 'vite.config.ts']) if (keptName(v) && !readFileSync(join(dir, v), 'utf8').includes('@threedog/tools/vite')) clash.push(`${v} is your own: build it from gameConfig of @threedog/tools/vite (templates/game/vite.config.js), or the dev bridge and Worker settings are missing`);
+if (scripts.dev && scripts.dev !== tpl.scripts.dev) clash.push(`package.json scripts.dev is "${scripts.dev}": set it to "${tpl.scripts.dev}"`);
+for (const c of clash) console.log('! ' + c);
 if (wasType) console.log(`! package.json "type" was "${wasType}", now "module": a game's files are ES modules, and a CommonJS file of your own in this folder needs the .cjs ending`);
 console.log(`Next: ${where ? `cd ${where}  →  ` : ''}npm install  →  ${map.status === 0 ? '' : 'npx threedog map  →  '}npm run dev  →  open Claude Code in this folder (it asks once to trust the threedog MCP server in .mcp.json)`);

@@ -19,3 +19,9 @@ export function npm(args, opts = {}) {
   const q = a => /[\s"&|<>^]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a;
   return spawnSync('npm', process.platform === 'win32' ? args.map(q) : args, { ...o, shell: process.platform === 'win32' });
 }
+
+/** End a process and everything it started (npm runs through a shell on Windows, check spawns tsc): taskkill /T there, the process group elsewhere */
+export function killTree(pid) {
+  if (process.platform === 'win32') spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
+  else try { process.kill(-pid, 'SIGTERM'); } catch { try { process.kill(pid, 'SIGTERM'); } catch { /* already gone */ } }
+}

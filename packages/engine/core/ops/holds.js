@@ -25,8 +25,11 @@ function handle(owner, remove) { return { owner, remove }; }
 export function defineHoldStacks(engine) {
   engine.stacks.define('freeze', { kind: 'any', save: false, onChange: () => engine.input?._kbSync?.() });   // who froze gameplay; a freeze gives the page's key lock back (inputKeyboard.js)
   engine.stacks.define('halt', { kind: 'any', save: false, onChange: () => {   // who stopped the loop; it restarts only when empty
-    if (engine.stacks.get('halt').size()) engine.halted = true;
-    else if (!engine.disposed) { engine.halted = false; engine._loop(); }
+    // the last holder leaving gives back what was there before the first: a headless page (tests, shots) stays stepped by hand, and an engine not
+    // started yet gets no loop (start() begins it). Setting false and looping here made a halt taken and removed on such a page run in real time
+    const P = engine.stacks.get('halt');
+    if (P.size()) { if (!engine.halted) engine._haltBase = false; else engine._haltBase ??= true; engine.halted = true; }
+    else if (!engine.disposed) { engine.halted = engine._haltBase ?? false; engine._haltBase = null; if (!engine.halted && engine.phase !== 'constructed') engine._loop(); }
     engine.page._sync();   // a page hold is about the real-time loop: there is none while the loop is stopped (core/engine/page.js)
   } });
   // who holds the camera; the latest is in charge (cameraOverride). A claim that is in charge again after a newer one left gets its opts.onTop() called: it holds the camera
@@ -66,7 +69,9 @@ export const holdMethods = {
     const P = this.stacks.get('halt');
     if (P.size() && !P.has(o)) { warnOnce(coded('halt-owner', `ending the halt of '${o}': halted by ${P.names().map(n => `'${n}'`).join(', ')}, not by '${o}'. End a halt with the handle haltLoop() returned (h.remove()), or the loop stays stopped`)); return this; }
     // with holders the stack's onChange restarts the loop; with none (headless start) this call starts it
-    if (!P.release(o) && !P.size() && !this.disposed) { this.halted = false; this._loop(); }
+    // an explicit resume (the bridge's threedog resume): live once no one holds a halt, also where releasing the last one gave back a headless page's stepped state
+    const had = P.release(o);
+    if (!P.size() && !this.disposed && (!had || this.halted)) { this.halted = false; this._loop(); }
     return this;
   },
   // Gameplay freeze (menus, flow 'paused'): no fixed steps (movement, timers, tick and every time view but ambient stop) while frame hooks

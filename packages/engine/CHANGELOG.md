@@ -4,6 +4,11 @@ What changed in each version and how a game upgrades.
 
 ## Unreleased
 
+- Fixed: a module installed before the provider it requires (the order engine.use(x, { replaces }) leaves) now inits during start() and is awaited; before, start() resolved without waiting for it, and a critical one failing there did not block the start.
+- Fixed: on a headless page (tests, shots) a halt taken and removed left the engine running in real time; removing the last halt now gives back the state from before it (an explicit resume still goes live).
+- Fixed: after a WebGL context is restored, the GPU timer behind adaptive resolution starts over (it read the last time from before the loss, so the resolution could stay low).
+- Tools: a missing Playwright browser is one line with the install command (shot, perf, the dev bridge); other launch failures name their cause. init warns when a kept index.html, vite config or dev script would keep the game from starting. A timed-out MCP check ends its whole process tree.
+
 ## 1.5.0 (2026-11-16)
 
 - Changed: `characters()` now requires `world()`, and `engine.use()` says so at install. Before, `world` was listed as optional and only `characters.addPlayer()` (or the first NPC) threw at runtime, although the player and every NPC are world records. The docs' module lists that left `world()` out (recipes 10, 11, 12, the pickups page) now include it, and a guard test checks every `engine.use` list in the docs, templates and examples against what each module requires.

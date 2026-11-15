@@ -87,6 +87,7 @@ export class Page {
       toast(engine, engine.t('page.gpuBack'));
       // a restored context has empty shadow maps, and a map kept on purpose (autoUpdate off, a budget) would stay blank until the game next asked for it
       setShadowUpdate(engine.renderer, engine.scene, { now: true });
+      engine._gpu?.reset();   // its timer queries belonged to the lost context: adaptive resolution would keep reading the last time from before the loss
       engine.events.emit('page:contextrestored');
     }, { signal });
     // WebGPU fires no canvas event, three calls this hook. Its WebGL2 backend calls it too, but there the listeners above report the loss and its return

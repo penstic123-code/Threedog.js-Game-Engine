@@ -77,7 +77,7 @@ export default function threedogBridge() {
         headless = (async () => {
           let launchBrowser;
           try { ({ launchBrowser } = await import('../browser.mjs')); } catch { throw new Error('playwright not found · run npm install first'); }
-          const browser = await launchBrowser({ prefer: 'gpu' }).catch(() => { throw new Error('browser not installed · run npx playwright install chromium first'); });
+          const browser = await launchBrowser({ prefer: 'gpu' }).catch(e => { throw e?.code === 'no-browser' ? e : new Error(`the headless browser did not start (${String(e?.message ?? e).split('\n')[0]}) · threedog doctor names the cause`); });   // only a missing browser is 'install it'
           try {
             const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
             trackPageErrors(page);   // before goto: main.js runs during it, and an error missed there leaves waitEngine waiting on a dead page

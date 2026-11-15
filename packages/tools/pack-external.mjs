@@ -22,7 +22,7 @@ import { createServer } from 'node:net';
 import { pathToFileURL } from 'node:url';
 import { ENGINE, TOOLS, addonDir } from './paths.mjs';
 import { waitEngine } from './wait-engine.mjs';
-import { npm as npmRun } from './lib/proc.mjs';
+import { npm as npmRun, killTree } from './lib/proc.mjs';
 import { parseOptions } from './lib/cli-args.mjs';
 import { newGamePage } from './browser.mjs';
 import { copyTemplate, usePost, engineAlone, vendored, packageContents } from './lib/pack-cases.mjs';
@@ -90,7 +90,7 @@ async function preview(dir, app, port) {
     try { if ((await fetch(base + '/')).ok) return { proc, base }; } catch {}
     await new Promise(r => setTimeout(r, 500));
   }
-  proc.kill();
+  killTree(proc.pid);
   throw new Error('vite preview did not answer: ' + log.slice(-300));
 }
 
@@ -125,7 +125,7 @@ async function buildAndOpen(dir, app, label, { check, browser, look }) {
     await page.close();
   } finally {
     // wait for preview to exit: on Windows its open handles keep the temp folder locked (EBUSY) for a moment
-    if (proc.exitCode === null) await new Promise(r => { proc.once('exit', r); proc.kill(); });
+    if (proc.exitCode === null) await new Promise(r => { proc.once('exit', r); killTree(proc.pid); });   // the whole tree: on Windows the dev server runs under a shell
   }
 }
 
@@ -222,7 +222,7 @@ export async function packExternal({ check, browser, keep = false }) {
         for (let i = 0; i < 120 && !existsSync(join(app, '.threedog/dev.json')); i++) await new Promise(r => setTimeout(r, 250));
         const d = await cli(app, 'describe');
         check('cli: threedog dev starts and threedog describe reads the page', d.code === 0 && /Player/.test(d.out), d.out.slice(-300) || devLog.slice(-300));
-      } finally { if (dev.exitCode === null) await new Promise(r => { dev.once('exit', r); dev.kill(); }); }
+      } finally { if (dev.exitCode === null) await new Promise(r => { dev.once('exit', r); killTree(dev.pid); }); }
     }
 
     // 6 runs before the browser part: it needs no browser

@@ -2,6 +2,7 @@
 // description (the first words are what a client shows when it lists tools, so the rule that matters most goes first).
 import { readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
+import { killTree } from '../lib/proc.mjs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TIME } from './runtime.mjs';
@@ -139,12 +140,15 @@ export const STATIC_TOOLS = {
     schema: { type: 'object', properties: { rule: str('Optional: only these rules, e.g. "R33,R18"'), max: { type: 'number', description: 'Output cap in characters (default 2000)' }, hints: { type: 'number', description: `Bypass hints to list (default ${HINTS_SHOWN}; every one when rule names R40)` } }, required: [] },
     run: (dir, a) => new Promise(res => {
       const args = [join(HERE, '..', 'check.mjs'), '--json', ...(a.rule ? ['--rule', String(a.rule)] : [])];
-      const c = spawn(process.execPath, args, { cwd: dir, timeout: CHECK_MS });   // a check that hangs would hold every tool call queued behind it
+      // a check that hangs would hold every tool call queued behind it; its whole tree goes (spawn's own timeout ends check.mjs only, and tsc it started ran on)
+      const c = spawn(process.execPath, args, { cwd: dir, detached: process.platform !== 'win32' }); let timedOut = false;   // detached elsewhere: its own process group, which killTree ends
+      const timer = setTimeout(() => { timedOut = true; killTree(c.pid); }, CHECK_MS);
       c.on('error', e => res({ ok: false, text: `✗ check could not run: ${e.message}`, data: { exit: null, errors: [] } }));
       let out = '';
       c.stdout.setEncoding('utf8'); c.stderr.setEncoding('utf8');   // a Chinese character split over two chunks stays whole
       c.stdout.on('data', d => out += d); c.stderr.resume();   // stdout is only the JSON result; the text goes to stderr
       c.on('close', (code, signal) => {
+        clearTimeout(timer); if (timedOut) signal ??= 'SIGTERM';
         const r = parseResult(out) ?? result([item({ code: 'check', message: signal ? `check stopped after ${CHECK_MS / 60000} minutes` : 'check did not print a result' })], 'check failed', false);
         const hints = a.hints >= 0 ? a.hints : /\bR40\b/.test(String(a.rule ?? '')) ? Infinity : HINTS_SHOWN;   // what check --rule R40 prints
         res({ ok: code === 0, text: (code === 0 ? '✓ check passed\n' : '✗ check failed\n') + checkDigest(r, a.max > 0 ? a.max : 2000, hints), data: { exit: code, errors: r.items.filter(i => i.level === 'error'), hints: r.items.filter(isHint).slice(0, hints) } });

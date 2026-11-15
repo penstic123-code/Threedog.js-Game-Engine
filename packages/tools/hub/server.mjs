@@ -2,7 +2,8 @@
 // Why SSE and not polling: a re-shot picture should appear the moment it is written, and the page costs nothing while nothing happens.
 import { createServer } from 'node:http';
 import { readFileSync, existsSync, readdirSync, createReadStream } from 'node:fs';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
+import { killTree } from '../lib/proc.mjs';
 import { homedir } from 'node:os';
 import { join, dirname, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -160,7 +161,7 @@ export async function startHub({ port = 5180, env = process.env, shoot = shootPr
   async function close() {
     queue.stop(); watchers.forEach(c => c()); watchers.clear(); await closeDev();
     // an npm install still running would go on after the hub is gone (on Windows npm runs in a shell: kill its whole tree)
-    for (const c of children) { if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(c.pid), '/T', '/F'], { windowsHide: true }); else c.kill(); }
+    for (const c of children) killTree(c.pid);
     for (const c of clients) c.end();
     server.closeAllConnections?.(); await new Promise(ok => server.close(ok));
   }

@@ -441,4 +441,41 @@ export const specs = [
       check('a consumer waits for a provider still initializing, then inits after it', r.waiting.wait === 0 && r.waiting.by[0]?.state === 'initializing' && r.waited.wait === 1 && r.waited.order.join() === 'provider,consumer' && r.waited.state === 'running', J);
     },
   },
+  {
+    name: '[guard] Core modules: a module installed before its provider inits in start() and is awaited (critical still blocks); a halt taken and removed leaves a headless engine stepped by hand',
+    url: PAGE,
+    expectErrors: /consumer boom/,   // the critical consumer below throws on purpose
+    async run({ check, ev }) {
+      const r = await ev(async () => {
+        const mk = key => threedogThreads.createEngine({ canvas: document.createElement('canvas'), headless: true, urlState: false, saveKey: key });
+        const out = {};
+        // the provider replaced before start() moves to the end of the table, behind its consumer: the consumer's slow init must finish before start() resolves
+        const E = mk('cm-wave'); let done = false;
+        E.use({ name: 'cmGiver', type: 'rules', provides: ['cmGive'], async init() {} });
+        E.use({ name: 'cmUser', type: 'rules', requires: ['cmGive'], async init() { await new Promise(res => setTimeout(res, 50)); done = true; } });
+        E.use({ name: 'cmGiverB', type: 'rules', provides: ['cmGive'], async init() {} }, { replaces: 'cmGive' });
+        await E.start();
+        out.wave = { done, state: E.modules && E._modState.get('cmUser') };
+        E.dispose();
+        // the same with a critical consumer whose init throws: start() is blocked, not resolved with a broken module
+        const C = mk('cm-wave-crit');
+        C.use({ name: 'cmGiver2', type: 'rules', provides: ['cmGive2'], async init() {} });
+        C.use({ name: 'cmUser2', type: 'rules', critical: true, requires: ['cmGive2'], async init() { throw new Error('consumer boom'); } });
+        C.use({ name: 'cmGiver2B', type: 'rules', provides: ['cmGive2'], async init() {} }, { replaces: 'cmGive2' });
+        try { await C.start(); out.crit = 'resolved'; } catch (e) { out.crit = String(e?.message ?? e); }
+        out.critReady = !!C.ready; C.dispose();
+        // headless: halted with no holder; a halt taken and removed must give that back, not start the real-time loop
+        const H = mk('cm-halt');
+        await H.start();
+        const h = H.haltLoop('cm-test'); H.step(0.1); h.remove();
+        out.halt = { halted: H.halted, looping: !!H._looping };
+        H.dispose();
+        return out;
+      });
+      const J = JSON.stringify(r);
+      check('a consumer installed before its provider has finished its async init when start() resolves', r.wave.done && r.wave.state === 'running', J);
+      check('a critical consumer that throws in that late wave blocks start()', r.crit !== 'resolved' && !r.critReady, J);
+      check('headless: haltLoop then remove leaves the engine halted and no real-time loop running', r.halt.halted === true && r.halt.looping === false, J);
+    },
+  },
 ];

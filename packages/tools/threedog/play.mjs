@@ -3,7 +3,8 @@
 //            answers and the engine is ready, then says the page address and whether a headless or a live browser page is connected
 //   status   ready / loading / page errors / halted state in two lines; when it cannot answer, which of five causes it is (diagnose.mjs)
 //   play --stop   stops the server that play started (a server started by hand is closed in its own terminal)
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
+import { killTree } from '../lib/proc.mjs';
 import { mkdirSync, openSync, closeSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { TOOLS } from '../paths.mjs';
@@ -85,14 +86,10 @@ Run state: ${rs.state === 'frozen' ? `frozen(by ${rs.owners.join(', ')})` : rs.s
 }
 
 /** Ends the processes (on Windows with their children) and returns the pids still alive after a short wait; kill/alive can be replaced by a test. */
-export async function endProcesses(pids, { kill = killPid, alive = pidAlive, tries = 10 } = {}) {
+export async function endProcesses(pids, { kill = killTree, alive = pidAlive, tries = 10 } = {}) {
   for (const pid of pids) kill(pid);
   for (let i = 0; i < tries && pids.some(alive); i++) await wait(300);
   return pids.filter(alive);
-}
-function killPid(pid) {
-  if (process.platform === 'win32') spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
-  else try { process.kill(-pid, 'SIGTERM'); } catch { try { process.kill(pid, 'SIGTERM'); } catch { /* already gone */ } }
 }
 
 export async function stopServer(dir) {

@@ -70,7 +70,10 @@ export const startupMethods = {
     const ls = this.ui.get('loading'), t0 = performance.now(), L = this.loading;   // measure
     const ms = t => Math.round(performance.now() - t);        // measure
     const timing = {};                         // module name -> { init, ready } in ms (ready = time spent waiting for isReady)
-    for (const m of this.modules.values()) if (m.init && !this._modBlocked.has(m.name)) {   // a blocked one inits if its provider comes up (modules.js)
+    // In waves: a module that waited for its provider (one installed later, e.g. use(x, { replaces })) inits in the next wave, awaited like the rest,
+    // so start() resolves only after it and critical still blocks. It used to go to _initWaiting below, which does not wait
+    const due = () => [...this.modules.values()].filter(m => m.init && !this._modBlocked.has(m.name) && this._modState.get(m.name) === 'registered');
+    for (let wave = due(); wave.length; wave = due()) for (const m of wave) if (this.modules.get(m.name) === m && !this._modBlocked.has(m.name) && this._modState.get(m.name) === 'registered') {   // m itself: one replaced meanwhile inits in the next wave
       const task = L._begin(m.name, 'module', { critical: !!m.critical });
       task.phase('build');
       ls?.update({ progress: 0.1, text: this.t('common.preparing', { name: this.moduleName(m) }) });

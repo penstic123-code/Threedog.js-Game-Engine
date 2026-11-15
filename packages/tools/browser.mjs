@@ -85,7 +85,12 @@ let reaped = false, gpuFailed = null;   // why the GPU launch fell back, remembe
 export async function launchBrowser({ prefer = 'software', ...opts } = {}) {
   if (!reaped) { reaped = true; reapOrphanBrowsers(); }   // once per process, not awaited: the launch does not wait for the sweep
   const want = forcedRender() ?? prefer;
-  const launch = kind => chromium.launch({ ...opts, args: [...CHROMIUM_ARGS[kind], ...(opts.args || [])] });
+  // a fresh npm install downloads no browser: say that one line (doctor checks the same) instead of the GPU note and Playwright's stack
+  const launch = kind => chromium.launch({ ...opts, args: [...CHROMIUM_ARGS[kind], ...(opts.args || [])] }).catch(e => {
+    // case-sensitive, and not for a browser the caller pointed at itself (executablePath): Playwright's 'executable doesn't exist' there is a wrong path, not a missing install
+    if (!opts.executablePath && /Executable doesn't exist|npx playwright install/.test(String(e?.message ?? e))) throw Object.assign(new Error('the Playwright browser is not installed: run npx playwright install chromium (once per machine), then try again'), { code: 'no-browser' });
+    throw e;
+  });
   if (want === 'gpu' && !gpuFailed) {
     let b;
     try {
@@ -93,7 +98,7 @@ export async function launchBrowser({ prefer = 'software', ...opts } = {}) {
       const r = await probeRenderer(b);
       if (r && !SOFTWARE_RENDERER.test(r.renderer)) { b.render = { kind: 'gpu', ...r }; return b; }
       gpuFailed = r ? `the GPU launch got a software renderer (${r.renderer})` : 'the GPU launch has no WebGL2';
-    } catch (e) { gpuFailed = `the GPU launch failed (${String(e?.message ?? e).split('\n')[0]})`; }
+    } catch (e) { if (e?.code === 'no-browser') throw e; gpuFailed = `the GPU launch failed (${String(e?.message ?? e).split('\n')[0]})`; }
     await b?.close().catch(() => {});
     // stderr: a diagnostic, not output. shot / doctor / stress --json print one JSON object on stdout, and this line in front of it broke the parse
     console.error(`Note: ${gpuFailed}; using software rendering (SwiftShader). threedog doctor shows the details.`);

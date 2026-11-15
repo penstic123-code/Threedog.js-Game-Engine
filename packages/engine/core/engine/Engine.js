@@ -130,8 +130,8 @@ export class Engine {
     const canvas = canvasIn ?? (gpuWanted ? undefined : rendererIn?.domElement);
     this.movement = createMovement(movement);   // character radius / height / slope / step height: the single copy shared by collision, physics and nav
     if (opts.lights !== false) warnOnce(NO_PICTURE);
-    // a game-supplied renderer keeps its settings: the engine configures pixel ratio, size, tone mapping and shadows only on a renderer it created itself.
-    // One write on every renderer: info.autoReset = false below, because the frame stats count a whole frame, not each render call
+    // a game-supplied renderer keeps its settings: the engine configures pixel ratio, tone mapping and shadows only on a renderer it created itself.
+    // Written on every renderer: the drawing size follows the canvas box (core/scene/canvasBox.js; a frame of another size would stretch), and info.autoReset = false below, because the frame stats count a whole frame, not each render call
     const owned = !rendererIn || gpuWanted;
     this._ownsRenderer = owned;               // dispose() releases the WebGL context only of a renderer the engine built
     if (owned) checkCanvasUsable(canvas);
