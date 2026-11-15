@@ -2,6 +2,13 @@
 
 What changed in each version and how a game upgrades.
 
+## Unreleased
+
+- Changed: the `threedog` command now comes with the `threedog` package, and `@threedog/tools` has no bin of its own (one package may own a bin name). It runs the commands of `@threedog/tools`; with only the engine installed, `npx threedog init` used to fail with "could not determine executable to run", and now prints the line that installs `@threedog/tools`. Release both packages together: `@threedog/tools` needs an engine that carries the bin.
+- Changed: the package README and `llms.txt` open with one start sequence (install, `npx threedog init`, `npx threedog play`); `llms.txt` copies it from the README so the two cannot drift. `@threedog/tools` is no longer described as optional.
+- New: a new game's `CLAUDE.md` has a short "Before you call it done" checklist (compare `threedog shot` with the target style, recipes 60 and 62, `@threedog/post-effects`).
+- Upgrading: nothing to change in a game; reinstall both packages so `node_modules/.bin/threedog` points at the engine's bin.
+
 ## 1.4.0 (2026-11-15)
 
 - New: `threedog hub`, a local web page that lists your threedog games and shows each game's screenshot wall. The points to shoot are in the game's own `shots.json` (each point takes the options of `threedog shot`: `view`, `cam`, `pos`, `at`, `play`, `time`, `weather`, `wait`, `size`, `page`). After a file of a game changes and 30 s pass with no further change, the hub shoots all its points again, one game at a time, and the page updates by itself; each point keeps its last 10 pictures, and a point that fails shows its reason. From the page you can create a game (the `threedog init` starts), add an existing game folder, open a game or its asset gallery, and re-shoot by hand. `threedog hub --shortcut` (or the page's button) puts a desktop icon that opens it (Windows). The server answers only on 127.0.0.1 and refuses requests from other web pages.
