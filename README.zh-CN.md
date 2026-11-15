@@ -60,6 +60,7 @@ cd my-game
 npm init -y
 npm install threedog@1 three@~0.187.0
 npm install -D @threedog/tools@1
+npx playwright install chromium   # 每台机器一次：threedog shot、play、test 用的浏览器
 npx threedog init
 npm install
 npm run dev
@@ -80,7 +81,7 @@ npm run dev
 也可以全交给 AI：把下面三句粘贴给你的 AI，再描述要做的游戏。
 
 ```text
-在这个空文件夹里建一个 threedog 游戏：npm init -y、npm install threedog@1 three@~0.187.0、npm install -D @threedog/tools@1、npx threedog init、npm install。
+在这个空文件夹里建一个 threedog 游戏：npm init -y、npm install threedog@1 three@~0.187.0、npm install -D @threedog/tools@1、npx playwright install chromium、npx threedog init、npm install。
 先读新生成的 CLAUDE.md：里面列着引擎已经有的系统，其余的用 `npx threedog how "<英文任务词>"` 查。
 然后循环到游戏能玩、样子符合要求为止：`npx threedog play` 运行，`npx threedog shot --play` 看画面，按报错和 `npx threedog check` 指的地方修。
 ```

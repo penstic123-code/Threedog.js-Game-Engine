@@ -2,21 +2,27 @@
 
 A web 3D game engine on three.js 0.187: **core** (rendering, main loop, input, audio, saving, UI) -> **modules** (terrain, sky and weather, physics, characters, dialogue, inventory, quests... installed on demand); all art is the game's own (`picture/` folder, `assets.js`).
 
-## Install
-This README describes threedog 1.0 (older releases do not match it; from 0.x read `docs/MIGRATING-1.0.md`, from 0.8.0 `CHANGELOG.md`, from 0.7.0 first `docs/MIGRATING-0.8.md`). To work on the engine itself, clone the [repository](https://github.com/penstic123-code/Threedog.js-Game-Engine), run `npm install`, then `npm run new-game -- my-game`. A game in its own folder:
+## Start here
+One way to start a game, in an empty folder (the same for a person and for an AI agent):
 ```sh
 npm install threedog@1 three@~0.187.0
-npm install @threedog/terrain-noise@1      # optional: the noise terrain generator terrainPreset() (without one the ground is flat)
-npm install -D vite @threedog/tools@1      # optional: the vite preset and the threedog command line
+npm install -D @threedog/tools@1     # the threedog commands: init, shot, check, how, dev, play, test
+npx playwright install chromium      # once per machine: the headless browser behind shot, play and test
+npx threedog init                    # writes the game (main.js, picture/, content/) and its CLAUDE.md; never overwrites a file
+npm install
+npx threedog play                    # runs the game and reports it (--stop ends it); npm run dev opens it for a person
 ```
-Then let it set up the folder: `npx threedog init` (flags: `--open-world` for generated ground, sky, follow camera and a player; the default is a blank scene with a camera and a neutral, correctly lit starting picture in `picture/` (gray surfaces, white sun, soft shadows, AO, light bloom)) writes index.html, main.js, vite.config.js, content/, CLAUDE.md and `.mcp.json` (Claude Code then starts the threedog MCP server by itself), never overwriting a file you have. Finish with `npm install` (for what the new files need) and `npm run dev`.
+Then read the new `CLAUDE.md`: it lists what the engine already has, the loop (`threedog play`, `threedog shot`, `threedog check`), the picture recipes (60 judge the picture, 62 picture code) and `@threedog/post-effects` (bloom, AO, color grading). `npx threedog how "<task words>"` finds everything else.
+
+`init` flags: `--open-world` (generated ground, sky, follow camera and a player; it adds `@threedog/terrain-noise`), `--pixel`, `--scene-only`, `--webgl` (WebGL and GLSL instead of WebGPU and TSL). The default is a blank scene with a camera and a neutral, correctly lit starting picture in `picture/` (gray surfaces, white sun, soft shadows, AO, light bloom). It also writes `.mcp.json`, so Claude Code opened in the folder starts the threedog MCP server by itself.
+`npx threedog` comes with this package and runs the commands of `@threedog/tools`; without that package installed it prints the line to install it. To work on the engine itself, clone the [repository](https://github.com/penstic123-code/Threedog.js-Game-Engine), run `npm install`, then `npm run new-game -- my-game`. This README describes threedog 1.x (from 0.x read `docs/MIGRATING-1.0.md`).
 `three` is a peer dependency: your game and the engine share one copy. Types for three come with the engine (`@types/three`, same version), so `// @ts-check` JS and TypeScript both see real three.js types.
 
-## Minimal usage
+## The code, in short (the `--open-world` start)
 ```js
 import 'threedog/tsl';   // WebGPU with TSL, what a new game starts on; a game started with --webgl leaves this line out and the renderer option below
 import { createEngine, presets, openWorld } from 'threedog';
-import { terrainPreset } from '@threedog/terrain-noise';   // optional terrain generator (npm install @threedog/terrain-noise)
+import { terrainPreset } from '@threedog/terrain-noise';   // the noise terrain generator (init --open-world adds it; without one the ground is flat)
 
 const engine = createEngine({ canvas: document.getElementById('view'), renderer: 'webgpu' });   // no picture code yet: gray placeholders
 engine.use(openWorld({ camera: 'follow', seed: 7, terrain: terrainPreset() }));

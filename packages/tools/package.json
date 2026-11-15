@@ -1,7 +1,7 @@
 {
   "name": "@threedog/tools",
   "version": "1.4.0",
-  "description": "Tools shared by the engine and games: the threedog command line, vite preset, test runner, rules, doc generators, bake",
+  "description": "The threedog commands (init, shot, check, how, dev, test...), vite preset, rules, doc generators, bake; run them as npx threedog (the command comes with the threedog package)",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -16,9 +16,6 @@
     "node": "^20.19.0 || >=22.12.0"
   },
   "type": "module",
-  "bin": {
-    "threedog": "./bin/threedog.mjs"
-  },
   "exports": {
     "./vite": "./vite/gameConfig.js",
     "./paths": "./paths.mjs",
