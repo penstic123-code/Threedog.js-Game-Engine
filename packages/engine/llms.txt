@@ -2,6 +2,8 @@
 
 > A web 3D game engine on three.js 0.187 (plain three.js, no React): core and modules installed with engine.use. It ships no art: each game draws its own picture (plain three.js in its picture/ folder, and assets).
 
+Judge your picture with `npx threedog shot` and speed with `npx threedog perf -w .` (average FPS, 1% low); both need `npm i -D @threedog/tools@1`, use the discrete GPU and say GPU or software. Bloom, ambient occlusion (AO), color grading, outline and depth of field are `bloom()`, `ao()`, `lut()`... of `@threedog/post-effects`, added with `engine.post.add`.
+
 Taking over a game: its status notes first. A new feature: docs/AI.md or threedog how, then the recipe, then docs/api/<module>.md.
 
 ## Start

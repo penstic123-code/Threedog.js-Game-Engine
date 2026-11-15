@@ -181,7 +181,7 @@ export class PostFX {
    * The one way to add a post effect. x is a three.js Pass (WebGL), a TSL node function (input, ctx) => node (WebGPU), or an effect
    * { name, create | node | fuse, slot, order, params, needsDepth, needsBuffers, backend, skipOnLowTier, cheaper, facts } (both renderers when it gives create and node, or a fuse). A wrong shape throws with nothing added.
    * needsDepth, needsBuffers ('normal' | 'diffuse' | 'velocity' | 'metalRough', WebGPU), backend ('webgpu': not on the WebGL2 backend), skipOnLowTier (held when engine.tier is 'low') and facts (shown by describe().render.post) are explained on PostEffect.
-   * A Pass that draws engine.scene takes the 'scene' slot, FXAA / SMAA / TAA 'final', any other 'hdr' after the effects already there, or 'ldr' once an
+   * A Pass that draws engine.scene (RenderPass family, SSAA / TAA, RenderPixelatedPass; your own: `{ slot: 'scene' }`) takes the 'scene' slot, FXAA / SMAA 'final', any other 'hdr' after the effects already there, or 'ldr' once an
    * OutputPass was added. A RenderPass of engine.scene and an OutputPass are the engine's own stages: skipped and said once (an OutputPass still marks where display color starts).
    * @example const glow = engine.post.add(new UnrealBloomPass(size, 0.6, 0.4, 0.85), { name: 'glow' }); glow.enabled = false;
    * @example engine.post.add({ name: 'dim', fuse: { glsl: 'color.rgb *= 0.9;' }, slot: 'ldr' });
@@ -471,13 +471,18 @@ function reslot(post) {
   if (moved.length) post._change(() => { for (const [h, , s] of moved) h.slot = s; }, () => { for (const [h, was] of moved) h.slot = was; });
 }
 
-/** A three.js Pass that draws the scene itself (RenderPixelatedPass, SSAARenderPass, TAARenderPass, a RenderPass): it replaces the scene render */
-const drawsScene = (eng, p) => p.scene === eng.scene && !!p.camera;
+/**
+ * A three.js Pass that draws the scene itself (RenderPixelatedPass, SSAARenderPass, TAARenderPass, a RenderPass): it replaces the scene render.
+ * Known by what only those have (isRenderPass; sampleLevel of SSAA / TAA; pixelSize of RenderPixelatedPass), not by "holds scene and camera":
+ * GTAOPass, SAOPass, SSAOPass, SSRPass and BokehPass hold both too but read the scene render before them, and taking them for a
+ * replacement left the screen at the background colour with no message. A game's own scene-drawing Pass says so: add(pass, { slot: 'scene' }).
+ */
+const drawsScene = (eng, p) => p.scene === eng.scene && !!p.camera && !!(p.isRenderPass || 'sampleLevel' in p || 'pixelSize' in p);
 
 /**
  * add()'s value as a post effect; null for a RenderPass of engine.scene and { output: true } for an OutputPass (the engine's own stages). The three accepted shapes and where a plain Pass goes:
  * a pass that renders engine.scene itself goes in the 'scene' slot (it replaces the engine's scene render: stacked after it, the scene was
- * drawn twice a frame), FXAA / SMAA / TAA in 'final', any other pass in 'hdr' after the other effects (order 1000+), where it would sit in
+ * drawn twice a frame), FXAA / SMAA in 'final', any other pass in 'hdr' after the other effects (order 1000+), where it would sit in
  * a hand-built composer.
  * @param {any} post @param {any} x @param {{ name?: string, slot?: string, order?: number }} o
  */
