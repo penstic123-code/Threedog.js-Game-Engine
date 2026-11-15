@@ -36,7 +36,7 @@ export const specs = [
         // 4. a pass that draws engine.scene itself goes in the scene slot: the scene is drawn once a frame, not twice
         const Pass = Object.getPrototypeOf(ShaderPass);
         class PixelScene extends Pass {
-          constructor(scene, camera) { super(); this.scene = scene; this.camera = camera; }
+          constructor(scene, camera) { super(); this.scene = scene; this.camera = camera; this.pixelSize = 4; }   // pixelSize: what RenderPixelatedPass has, how the engine knows a pass replaces the scene render
           render(renderer, writeBuffer) { renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer); renderer.clear(); renderer.render(this.scene, this.camera); }
         }
         const pix = new PixelScene(engine.scene, engine.camera), hs = engine.post.add(pix);

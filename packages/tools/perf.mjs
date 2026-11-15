@@ -30,9 +30,10 @@ import { copyTemplates } from './lib/scaffold.mjs';
 // --only one section (`--only world` and `--only=world` both work; perf and stress used to read opposite spellings); a frame count as `--frames 120`
 // or a bare number. A wrong section or shading fails before the build instead of measuring nothing and exiting 0
 const SECTIONS = ['native', 'world', 'startup', 'props', 'stream', 'pages'], ROUTES = ['webgl', 'webgpu', 'both'], SHADINGS = ['smooth', 'flat', 'texture'];
-const { dir, named, opt, rest } = cli(process.argv.slice(2), { workspace: 'scope', positional: true, flags: ['gpu', 'software', 'impostor'], values: ['only', 'shading', 'frames', 'renderer', 'size'] });
+const { dir, named, opt, rest } = cli(process.argv.slice(2), { workspace: 'scope', positional: true, flags: ['gpu', 'software', 'impostor'], values: ['only', 'shading', 'frames', 'renderer', 'size', 'seconds'] });
 const GAME = MODE === 'game' ? dir ?? ROOT : named && dir !== ENGINE ? dir : null;   // a game in its own repo has no engine pages to fall back on
 const fail = m => { console.error('✗ ' + m); process.exit(1); };
+if (opt.seconds && !(+opt.seconds > 0)) fail('perf --seconds: a positive number');
 if (GAME && (opt.only || opt.shading || opt.renderer)) fail('perf -w <game> measures the game\'s own page: --only, --shading and --renderer choose among the engine\'s test pages');
 if (opt.only && !SECTIONS.includes(opt.only)) fail(`perf --only: unknown section "${opt.only}". Sections: ${SECTIONS.join(', ')}`);
 if (opt.shading && !SHADINGS.includes(opt.shading)) fail(`perf --shading: "${opt.shading}" is not one of ${SHADINGS.join(', ')}`);
@@ -169,19 +170,24 @@ if (want('stream')) {
 }
 
 /** In the page: n frames of the running loop, the numbers of section 7 and of a game */
-async function sampleFrames(n) {
-  await new Promise(res => setTimeout(res, 500));   // let start-up streaming settle a little before sampling
+async function sampleFrames(arg) {
+  const n = typeof arg === 'number' ? arg : Infinity, ms = arg?.ms ?? 0;   // a frame count, or { ms }: a fixed duration (a game: frame counts of 1 s made 130-185 fps swing)
+  await new Promise(res => setTimeout(res, arg?.warmMs ?? 500));   // let start-up streaming settle a little before sampling
+  const heap0 = performance.memory?.usedJSHeapSize;
   const timing = engine.profile() !== null; engine.profile(true);   // module medians and p95 over the sampled frames only (a built page times nothing by default)
   const gaps = []; let last = performance.now();
-  await new Promise(res => { let k = 0; const tick = () => { const t = performance.now(); gaps.push(t - last); last = t; if (++k < n) requestAnimationFrame(tick); else res(); }; requestAnimationFrame(tick); });
+  await new Promise(res => { let k = 0; const t0 = last, tick = () => { const t = performance.now(); gaps.push(t - last); last = t; if (++k < n && t - t0 < (ms || Infinity)) requestAnimationFrame(tick); else res(); }; requestAnimationFrame(tick); });
   const mid = a => [...a].sort((x, y) => x - y)[a.length >> 1], r1 = v => Math.round(v * 10) / 10;
+  const g = gaps.slice(1), sorted = [...g].sort((x, y) => x - y), md = mid(g);
+  const fps = { avg: Math.round(1000 * g.length / g.reduce((a, b) => a + b, 0)), low1: Math.round(1000 / sorted[Math.min(g.length - 1, Math.floor(g.length * 0.99))]),   // 1% low: the fps of the slowest 1% of frames
+    spikes: g.filter(x => x > Math.max(2 * md, 25)).length, frames: g.length, heap0: heap0 && r1(heap0 / 1048576) };
   const p = engine.inspect.perf(), rd = engine.renderer;
   // the five modules with the worst p95: a spike (p95 far over the median) hitches play even when the median looks cheap
   const modules = Object.entries(engine.profile()).sort((a, b) => b[1].p95 - a[1].p95).slice(0, 5).map(([k, m]) => `${k} ${m.ms}/${m.p95}`).join(', ');
   if (!timing) engine.profile(false);
   // WebGPU keeps no program list in renderer.info: count the distinct fragment programs three's pipeline cache holds instead
   const programs = p.programs ?? rd._pipelines?.programs?.fragment?.size ?? null;
-  return { cpuMs: p.cpuMs, frameMs: r1(mid(gaps.slice(1))), backend: engine.describe().renderer?.backend ?? '?', reason: engine.describe().renderer?.reason, drawCalls: p.drawCalls, triangles: p.triangles,
+  return { fps, cpuMs: p.cpuMs, frameMs: r1(md), backend: engine.describe().renderer?.backend ?? '?', reason: engine.describe().renderer?.reason, drawCalls: p.drawCalls, triangles: p.triangles,
     programs, geometries: p.memory.geometries, textures: p.memory.textures, textureMB: p.textureMB, heapMB: performance.memory ? r1(performance.memory.usedJSHeapSize / 1048576) : null, modules };
 }
 
@@ -190,9 +196,15 @@ if (GAME) {
   let page;
   try { page = await open('/'); await page.evaluate(() => engine.applyState({ play: 1 })); }
   catch (e) { await server.close(); fail(`the game's page did not start: ${String(e.message ?? e).split('\n')[0]}`); }
-  const r = await median(page, sampleFrames, FRAMES * 2);
+  // fixed warm-up (2 s) then 3 runs of a fixed duration: the median run is the result, the spread says how far to trust a difference
+  const SECS = opt.seconds ? +opt.seconds : 4, rs = [];
+  for (let i = 0; i < 3; i++) rs.push(await page.evaluate(sampleFrames, { ms: SECS * 1000, warmMs: i ? 200 : 2000 }));
   await page.close();
-  console.log(`\n## ${rel(GAME)}, in play, standing still (${FRAMES * 2} frames, median of 3 runs)\n`);
+  rs.sort((a, b) => a.fps.avg - b.fps.avg);
+  const r = rs[1], f = r.fps, lo = rs[0].fps.avg, hi = rs[2].fps.avg, spread = Math.round(100 * (hi - lo) / f.avg);
+  console.log(`\n## ${rel(GAME)}, in play, standing still (${SECS} s x 3 runs after a 2 s warm-up, median run)\n`);
+  console.log(`FPS ${f.avg} avg, 1% low ${f.low1}, ${f.spikes} spike frames (>2x median and >25 ms) in ${f.frames} frames; JS heap ${f.heap0 ?? '?'} -> ${r.heapMB ?? '?'} MB`);
+  console.log(spread > 10 ? `Runs differ by ${spread}% (${lo}-${hi} fps): noisy machine, trust only a change bigger than that.` : `Runs agree within ${spread}% (${lo}-${hi} fps): a change bigger than that is real.`);
   console.log('frame = requestAnimationFrame interval (capped by vsync on a GPU); JS = main-thread ms of update + render submit\n');
   row('backend', 'frame ms', 'JS ms', 'draw calls', 'triangles', 'programs', 'geometries', 'textures', 'texture MB', 'JS heap MB');
   row('---', '---', '---', '---', '---', '---', '---', '---', '---', '---');

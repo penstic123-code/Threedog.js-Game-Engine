@@ -25,6 +25,7 @@ const worldModels = sceneryModels, worldArt = sceneryArt;   // the art tests rea
 import * as postEffects from '@threedog/post-effects';
 const { outline } = postEffects;
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { CopyShader } from 'three/addons/shaders/CopyShader.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { terrainPreset, riverAt } from '@threedog/terrain-noise';
@@ -241,4 +242,4 @@ function skyLayers(e, { layers = [] } = {}) {
 }
 import * as tsl from 'three/tsl';   // scene.fogNode = tsl.fog(...) for the fog readers (tests/specs/group-p5.mjs)
 window.threedogTest = { tsl, THREE, patchesOf, skyLayers, fakeAssets, engineWith, Character, characters, protoOf, neutralMaterial, isEngineMade, rampTexture, toGLB, applyEffects, patchMaterial, materialPatches, SLOTS, terrainMaterial, copyPatches, createEngine,
-  injectUICSS, NOISE_GLSL, createTerrain, worldScene, worldArt, worldModels, sky, calendar, postEffects, outline, ShaderPass, CopyShader, water, weather, terrain, Reflector, world, grids, particles, pickups, triggers, music };   // packages/engine/tests/specs/c.mjs bake round-trip test uses it
+  injectUICSS, NOISE_GLSL, createTerrain, worldScene, worldArt, worldModels, sky, calendar, postEffects, outline, ShaderPass, GTAOPass, CopyShader, water, weather, terrain, Reflector, world, grids, particles, pickups, triggers, music };   // packages/engine/tests/specs/c.mjs bake round-trip test uses it
