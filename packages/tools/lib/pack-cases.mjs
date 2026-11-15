@@ -70,7 +70,7 @@ export async function vendored(tmp, tools, check, { npm, cli }) {
 }
 
 /** Step 1 of the outside-the-repo check: what the four packed tarballs contain (each is { filename, files: [{ path }] } from npm pack) */
-export function packageContents(check, { eng, tools, terrainPkg }) {
+export function packageContents(check, { eng, tools, terrainPkg, engPkg }) {
   const engFiles = eng.files.map(f => f.path), toolFiles = tools.files.map(f => f.path);
   const has = (pkg, ...names) => names.every(n => pkg.files.some(x => x.path === n));
   const need = ['index.js', 'index.d.ts', 'README.md', 'docs/AI.md', 'core/base/errorHints.js', 'core/threads/pureWorker.js', 'modules/terrain/chunkWorker.js'];
@@ -81,6 +81,8 @@ export function packageContents(check, { eng, tools, terrainPkg }) {
   check('the terrain generator is its own package (index.js, index.d.ts)', has(terrainPkg, 'index.js', 'index.d.ts'));
   check('tools tarball has the CLI and vite preset, no tests/',
     toolFiles.includes('bin/threedog.mjs') && toolFiles.includes('vite/gameConfig.js') && !toolFiles.some(f => f.startsWith('tests/')));
+  // the `threedog` bin belongs to the engine package (it forwards to the tools CLI): without it `npx threedog init` fails after npm install threedog
+  check('engine tarball ships the threedog bin (bin/threedog.mjs and package.json bin.threedog)', engFiles.includes('bin/threedog.mjs') && engPkg?.bin?.threedog === './bin/threedog.mjs');
   check('both tarballs carry LICENSE; the engine carries llms.txt', engFiles.includes('LICENSE') && toolFiles.includes('LICENSE') && engFiles.includes('llms.txt'),
     ['LICENSE', 'llms.txt'].filter(f => !engFiles.includes(f)).concat(toolFiles.includes('LICENSE') ? [] : ['tools LICENSE']).join(', '));
 }

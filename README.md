@@ -60,6 +60,7 @@ cd my-game
 npm init -y
 npm install threedog@1 three@~0.187.0
 npm install -D @threedog/tools@1
+npx playwright install chromium   # once per machine: the browser behind threedog shot, play and test
 npx threedog init
 npm install
 npm run dev
@@ -81,7 +82,7 @@ The two render routes use different picture code, so the choice is made when the
 Or let the agent do all of it. Paste this to your agent, then describe the game:
 
 ```text
-Create a threedog game in this empty folder: npm init -y, npm install threedog@1 three@~0.187.0, npm install -D @threedog/tools@1, npx threedog init, npm install.
+Create a threedog game in this empty folder: npm init -y, npm install threedog@1 three@~0.187.0, npm install -D @threedog/tools@1, npx playwright install chromium, npx threedog init, npm install.
 Read the new CLAUDE.md first: it lists what the engine already has, and `npx threedog how "<task words>"` finds everything else.
 Then loop until the game plays and looks as asked: `npx threedog play` to run it, `npx threedog shot --play` to look at it, fix what the errors and `npx threedog check` point to.
 ```

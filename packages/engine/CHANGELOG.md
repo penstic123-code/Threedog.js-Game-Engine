@@ -11,6 +11,10 @@ What changed in each version and how a game upgrades.
 - Renamed: `docs/recipes/11-vehicles.md` is now `docs/recipes/11-physics.md` (it covers all rigid bodies, joints and explosions, not only vehicles). No alias.
 - Docs: CONVENTIONS "One task, which entry" has a hit-stop / bullet-time row (`engine.mod('time.world', ...)`, `for` in real seconds; `clock.rate` is the calendar).
 - Upgrading: a game that installs `characters()` without `world()` or `openWorld()` adds `world()` before it: `engine.use(world(), collision(), characters())`.
+- Changed: the `threedog` command now comes with the `threedog` package, and `@threedog/tools` has no bin of its own (one package may own a bin name). It runs the commands of `@threedog/tools`; with only the engine installed, `npx threedog init` used to fail with "could not determine executable to run", and now prints the line that installs `@threedog/tools`. Release both packages together: `@threedog/tools` needs an engine that carries the bin.
+- Changed: the package README and `llms.txt` open with one start sequence (install, `npx threedog init`, `npx threedog play`); `llms.txt` copies it from the README so the two cannot drift. `@threedog/tools` is no longer described as optional.
+- New: a new game's `CLAUDE.md` has a short "Before you call it done" checklist (compare `threedog shot` with the target style, recipes 60 and 62, `@threedog/post-effects`).
+- Upgrading: nothing to change in a game; reinstall both packages so `node_modules/.bin/threedog` points at the engine's bin.
 
 ## 1.4.0 (2026-11-15)
 

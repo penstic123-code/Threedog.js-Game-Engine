@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// The threedog command line (bin of @threedog/tools). The root npm scripts and each game's package.json scripts forward here.
+// The threedog command line. The `threedog` bin belongs to the threedog package (engine bin/threedog.mjs), which runs this file; the root npm scripts and each game's package.json scripts forward here.
 // Works in this monorepo and in a game installed from npm (paths.mjs project(): MODE 'monorepo' or 'game'). Usage text is built from the tables below.
 import { spawnSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { ROOT, TOOLS, MODE, command, findWorkspace, workspaces, rel, ENGINE, ownViteConfig, VITE_DEFAULT_CONFIG } from '../paths.mjs';
 import { parseOptions, pagePath } from '../lib/cli-args.mjs';
 import { nodeProblem, pathProblem, NODE_FIX } from '../lib/node-version.mjs';
@@ -94,7 +94,11 @@ export function main([cmd, ...rest]) {
   return 0;
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] || '').href || /[\\/]threedog(\.mjs|\.cmd)?$/.test(process.argv[1] || '')) {
+// Run directly, or forwarded by the threedog package's bin (it sets argv[1] to this file); a test that imports the tables must not run it.
+// Real paths on both sides: started through a link (a workspace or pnpm symlink, npm link, a file: dependency) argv[1] is the link while
+// import.meta.url is the real file, and a plain compare silently ran nothing
+const isEntry = () => { try { return realpathSync(process.argv[1] || '') === realpathSync(fileURLToPath(import.meta.url)); } catch { return false; } };
+if (isEntry()) {
   // Bridge commands run IN this process (cli.mjs exits by itself): spawning a second node for them cost ~0.25 s per command on Windows
   if (BRIDGE.includes(process.argv[2])) { process.argv.splice(1, 1, join(TOOLS, 'threedog', 'cli.mjs')); await import('./../threedog/cli.mjs'); }
   else process.exit(main(process.argv.slice(2)));

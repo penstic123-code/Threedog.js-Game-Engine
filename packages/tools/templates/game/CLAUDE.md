@@ -17,16 +17,21 @@ __DEFAULT_LAYER__
 
 ## The loop
 1. Run: `npx threedog play` runs the game for you (`--stop` ends); `npx threedog dev` for a person.
-2. Look: `npx threedog shot` (`--play` past the start screen), `engine.describe()` for state; judge a picture: recipe 60. New place or visible change: add a `shots.json` point (shot options); `threedog hub` re-shoots.
+2. Look: `npx threedog shot` (`--play` past the start screen), `engine.describe()` for state. New place or visible change: add a `shots.json` point (shot options); `npx threedog hub` re-shoots.
 3. Fix: an error names its `code`, `fix` and docs section (`.threedog/errors.log`); root cause first, fixed once where it lives (recipe 16 §11).
 4. After a change: `npx threedog map`, `npx threedog check`, related tests (`npx threedog test name`).
 Helpers skip this file: tell them `npx threedog how` first, recipes 60 + 62, a clean `check`. Taking over: STATUS.md, then DESIGN.md.
 
+## Before you call it done
+Done = it plays and looks as DESIGN.md says (gray: art still to make, in STATUS.md).
+1. `npx threedog shot --play` beside the target style; name what differs (recipe 60).
+2. Picture by recipe 62; bloom, AO, grading: `@threedog/post-effects`, not hand-rolled.
+3. Logic with weight has a test or assert; each end state a scenario.
+
 ## Working rules
 - A clear request: build it, no confirmation round. Ask only about a choice that changes the result; picture not given: ask for reference images, the style and what would be wrong (DESIGN.md "Loved / Not for this game"). Other picks go into DESIGN.md as "(picked, not asked)" with a one-line why; changing what DESIGN.md settled: ask first.
-- Done = it plays AND looks as DESIGN.md describes; gray placeholders mean the art is still to make (STATUS.md lists them). Thin slice first (one place, one action, one goal, one shot), then widen; stop at DESIGN.md "Done for this version".
+- Thin slice first (one place, one action, one goal, one shot), then widen; stop at DESIGN.md "Done for this version".
 - Before writing, list every place the change reaches. The least code that fully works; no "for later" code; a new way deletes the old one in the same change.
-- End of a piece: a test or assert for logic with weight, one shot for a picture round, a scenario per end state.
 - Never cut save-data safety, input checks or what was asked. A known-limit shortcut gets `// shortcut: <limit>, <when to upgrade>`; other comments say why.
 - Report what is true: verified, not verified, placeholder; never call a picture "close to the reference". Check licenses before using others' code or assets.
 - Records: a change updates only the records it makes wrong (DESIGN.md, `docs/design/`, STATUS.md). Reply in the user's language.
