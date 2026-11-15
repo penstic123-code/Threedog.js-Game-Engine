@@ -7,7 +7,7 @@
 //   5. automatic batching (engine.batching): 3000 repeated props over 4 models, batching off vs on
 //   6. streaming into a new area: ms per stage of applying background results (transit, build, collider, upload, stream)
 //   7. the two real pages (world example, city test page) on WebGL and WebGPU: frame time, draw calls, programs, memory
-// A game: threedog perf -w my-game [frames]: its page in play, standing still, on the same numbers as section 7 (frame ms, JS ms, draw calls, memory);
+// A game: threedog perf -w my-game [--seconds N]: its page in play, standing still: 2 s warm-up, 3 runs of N s (default 4), avg FPS, 1% low, spike frames, JS heap start -> end, run spread, then the numbers of section 7 (frame ms, JS ms, draw calls, memory);
 //   the sections above measure the engine's own test pages, so --only, --shading and --renderer do not apply to a game.
 // Run one section only: npm run perf -- --only=props (sections: native, world, startup, props, stream, pages)
 // Terrain shading for the stream section: npm run perf -- --only=stream --shading=texture
@@ -34,6 +34,7 @@ const { dir, named, opt, rest } = cli(process.argv.slice(2), { workspace: 'scope
 const GAME = MODE === 'game' ? dir ?? ROOT : named && dir !== ENGINE ? dir : null;   // a game in its own repo has no engine pages to fall back on
 const fail = m => { console.error('✗ ' + m); process.exit(1); };
 if (opt.seconds && !(+opt.seconds > 0)) fail('perf --seconds: a positive number');
+if (GAME && (opt.frames || rest.length)) fail('perf -w <game> measures for a duration, not a frame count: use --seconds N');
 if (GAME && (opt.only || opt.shading || opt.renderer)) fail('perf -w <game> measures the game\'s own page: --only, --shading and --renderer choose among the engine\'s test pages');
 if (opt.only && !SECTIONS.includes(opt.only)) fail(`perf --only: unknown section "${opt.only}". Sections: ${SECTIONS.join(', ')}`);
 if (opt.shading && !SHADINGS.includes(opt.shading)) fail(`perf --shading: "${opt.shading}" is not one of ${SHADINGS.join(', ')}`);

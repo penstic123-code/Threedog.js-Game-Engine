@@ -177,7 +177,7 @@ sun.shadow.bias = -0.0001; sun.shadow.normalBias = 0.03;
 sun.shadow.mapSize.setScalar(2048);  // before the first frame; later also sun.shadow.map?.dispose(); sun.shadow.map = null;
 ```
 
-Soft shadows on three 0.187: `PCFSoftShadowMap` is gone (it logs a warning and gives `PCFShadowMap`). Keep `PCFShadowMap` and widen `light.shadow.radius`; `VSMShadowMap` blurs more (every receiver casts too, light can leak).
+Soft shadows on three 0.187: `PCFSoftShadowMap` is gone (it logs a warning and gives `PCFShadowMap`). Keep `PCFShadowMap` and widen `light.shadow.radius`; `VSMShadowMap` blurs more.
 
 PCF's `radius` is in shadow texels, so the blur in meters is `radius x 2 x extent / mapSize`: halve the map (a low-tier size) and keep the radius, and the blur doubles. Scale them
 together, `sun.shadow.radius = Math.max(Math.min(R, 2), R * size / 2048)` for a radius `R` tuned on the 2048 map, as the engine's own sun does (`R` = 3): under about 2 texels PCF shows the map's stair steps.
