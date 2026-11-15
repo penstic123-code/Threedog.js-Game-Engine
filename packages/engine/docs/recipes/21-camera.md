@@ -203,7 +203,7 @@ A direct camera write takes the camera (recipe 52); a shake is an offset on the 
 ```js fragment
 const pose = new THREE.Vector3(); let shake = 0;  // yours: raise it on a hit, let it fall in onFrame
 engine.onRender(({ camera }) => { pose.copy(camera.position); camera.position.y += (Math.random() - 0.5) * shake; });
-engine.onRender(({ camera }) => { camera.position.copy(pose); }, { when: 'after' });  // back before the rig's next check: no warning
+engine.onRender(({ camera }) => { camera.position.copy(pose); camera.updateMatrixWorld(); }, { when: 'after' });  // back: no warning, picking sees the real pose
 ```
 Aim that should climb (recoil) is `cameraRig.pitch` (recipe 32).
 

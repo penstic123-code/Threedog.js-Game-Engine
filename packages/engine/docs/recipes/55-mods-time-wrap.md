@@ -8,7 +8,7 @@
 A shared value is something several owners change: the game, a module, an effect. Name it, say who you are, say how you change it:
 
 ```js
-engine.time.channel('enemies');  // a channel of your own exists once you name it (world, player and calendar are built in)
+engine.time.channel('enemies');  // a channel of your own (built-in ones: recipe 06)
 const slow = engine.mod('time.enemies', { owner: 'bullet-time', mul: 0.35, for: 2 });  // bullet time; slow.remove() ends it early
 engine.mod('time.world', { owner: 'hitstop', set: 0, layer: 'system', for: 0.06 });  // decide on a higher layer: hides everything below
 
@@ -31,9 +31,8 @@ What to remember:
 - **`replaces` to swap an engine part** that `provides` a slot; a second provider without it is the error `shared-taken`. What the old part issued goes with it: read `engine.<slot>` where you use it, and keep the issuer beside any handle so you can compare (`if (from !== engine.rigid) { from = engine.rigid; crate = from.addBox(mesh); }`). Version numbers count per module, so they cannot tell two modules apart. The engine's own props, NPCs, pickups, cars and movers do this; a rider leaves a rigid car when rigid goes. `world` is the exception: it owns every record, so install your world before the modules that need it; once they are installed, or after `start()`, `replaces: 'world'` and `unuse('world')` are refused (`module-replaces`, `module-unuse`). A factory that gives two modules goes in whole: `engine.use(terrain(o), { replaces: 'terrain' })` swaps its drawing part too. A module of your own wraps `world.present`, `world.simulate`, `rays.addProvider`, `input.touchButton` and `assets.onSwap` in `ctx.track(...)`, so they leave with it.
 - Every handle ends with `h.remove()` (`engine.mod`, `ctx.mod`, `input.gate`, `wrap`, `freeze`, `takeCamera`); it drops only your own entry.
 
-Only things several parties commonly write are shared values: time speeds and the calendar rate, pause / freeze / camera holders, move stats,
-input gates; shadow on / quality and post parameters are on them too. Your own objects,
-materials and textures are plain three.js: never registered, never a conflict. Which tool to reach for: `../CONVENTIONS.md` "Customization ladder".
+Only things several parties write are shared values (time speeds, holders, move stats, input gates, shadow and post parameters); your own
+objects stay plain three.js. Which tool to reach for: `../CONVENTIONS.md` "Customization ladder".
 
 ```js
 const menu = engine.freeze('pause-menu');  /* ... */  menu.remove();  // pause menu: the picture, UI and ambient uTime (wind, water, clouds) keep running; { still: true } stops those too

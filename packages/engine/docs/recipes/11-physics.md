@@ -8,7 +8,7 @@
 Any physics body (crates the player pushes, balls, doors on hinges, ropes): §3, read it first when the game has no car. Cars and
 boarding: §1–2.
 
-Required modules: `collision()` + `rigid()` (Rapier physics; the vehicle controller lives there) + `world()` + `characters()` (the player and NPCs are world records). With
+Required modules: `collision()` + `rigid()` (Rapier, with the vehicle controller) + `world()` + `characters()` (the player and NPCs are world records). With
 `interactions({ ...presets.interactions.nearest })` installed, a "board/exit" prompt (E key) appears automatically near a vehicle.
 Convention: **the front of the car faces the model's +Z**, and a wheel's `position` is relative to the body origin (meters). Rapier has to be
 downloaded and initialized, so build the car after `engine:ready`.
@@ -59,7 +59,7 @@ This section covers every `engine.rigid` body (crates, balls, hulls, vehicles), 
 ahead. The mover leaves dynamic bodies out of its own collision, so a body is pushed instead of stopping the player; how hard it resists is
 its `mass` and friction. A body that should stop the player is `{ fixed: true }` with `mover: 'rapier'` (that mover collides with fixed bodies).
 A puzzle reads the result from the body (`entry.body.translation()` in `onFixed`, or a trigger zone) and gives the body an `id`, so a save keeps
-where it was pushed. Test: `threedog test "rigid push"` (both movers).
+where it was pushed.
 
 **Far bodies freeze.** On chunked terrain only the chunks within `rigid({ terrainRing })` of the player (default 1 ring) have terrain colliders. A
 body outside them stops (`entry.enabled` is false, `describe().rigid.frozen` counts them) instead of falling through the ground, and goes on when
@@ -93,8 +93,7 @@ stay). Removing a body removes its joints (Rapier does that).
 
 **Determinism**, the one place this is stated (replay, `engine.step`, saves and net link here):
 - Same build, same machine, same inputs and the same number of fixed steps give bit-identical bodies, in a fresh page and at any frame rate.
-  Physics only advances in fixed steps. Test: `threedog test "rigid determinism"`: stacked boxes knocked over, a rolling ball, a driving car, the
-  `mover: 'rapier'` player, two fresh pages, `frameEvery` 1 / 2 / 4.
+  Physics only advances in fixed steps.
 - A load restores each saved body exactly. Rapier's contact and warm-start caches and its solver order are not saved, so the run after a load
   is not bit-identical to the run that went on without the load: a toppling stack can end some centimetres away. Bodies at rest stay at rest.
 - Across machines: the engine uses `@dimforge/rapier3d-compat`, which Rapier does not promise to be cross-platform deterministic (that is the

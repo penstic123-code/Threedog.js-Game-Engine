@@ -406,13 +406,15 @@ export const specs = [
     async run({ check, ev }) {
       const r = await ev(async () => {
         const R = engine.rigid, old = R.world, p = R.world.integrationParameters;
-        p.numSolverIterations = 9; p.maxCcdSubsteps = 3;
+        p.numSolverIterations = 9; p.maxCcdSubsteps = 3; p.contact_natural_frequency = 45;   // the last has no getter in Rapier: read back through contact_erp
+        const dt = p.dt, erp = p.contact_erp;
         await engine.session.newGame();
         const q = R.world.integrationParameters;
-        return { rebuilt: R.world !== old, iters: q.numSolverIterations, ccd: q.maxCcdSubsteps };
+        q.dt = dt;   // erp depends on the step; compare at the same one
+        return { rebuilt: R.world !== old, iters: q.numSolverIterations, ccd: q.maxCcdSubsteps, erp, erp2: q.contact_erp };
       });
       check('newGame built a new Rapier world (otherwise this guard tests nothing)', r.rebuilt, JSON.stringify(r));
-      check('the new world has the solver iterations and CCD substeps the game set', r.iters === 9 && r.ccd === 3, JSON.stringify(r));
+      check('the new world has the solver iterations, CCD substeps and contact frequency the game set', r.iters === 9 && r.ccd === 3 && Math.abs(r.erp2 - r.erp) < 1e-5, JSON.stringify(r));
     },
   },
   {
