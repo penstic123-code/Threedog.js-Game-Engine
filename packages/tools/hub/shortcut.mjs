@@ -13,7 +13,7 @@ export function shortcutPlan(platform, { current, node, script }) {
   const target = node, args = `"${script}"`, icon = ICON;
   if (platform !== 'win32') return { action: 'unsupported', target, args, icon };
   // `npx threedog hub` runs a throwaway copy that npm clears later: an icon pointing there would break, so none is made or moved to it
-  if (/[\\/]_npx[\\/]/.test(script)) return { action: 'none', target, args, icon, message: 'running from an npx copy: install threedog in a project or globally, then run threedog hub --shortcut' };
+  if (/[\\/]_npx[\\/]/.test(script)) return { action: 'none', target, args, icon, message: 'running from an npx copy: install threedog and @threedog/tools in a project (npm install threedog@1 && npm install -D @threedog/tools@1) or globally, then run threedog hub --shortcut' };
   if (!current) return { action: 'create', target, args, icon };
   const norm = (p) => String(p ?? '').replaceAll('/', String.fromCharCode(92)).toLowerCase();
   const same = (a, b) => norm(a) === norm(b);

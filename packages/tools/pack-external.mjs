@@ -135,7 +135,7 @@ export async function packExternal({ check, browser, keep = false }) {
   try {
     // 1. pack and look at the contents
     const eng = pack(ENGINE, tmp), tools = pack(TOOLS, tmp), terrainPkg = pack(addonDir('terrain-noise'), tmp), postPkg = pack(addonDir('post-effects'), tmp);
-    packageContents(check, { eng, tools, terrainPkg });
+    packageContents(check, { eng, tools, terrainPkg, engPkg: JSON.parse(readFileSync(join(ENGINE, 'package.json'), 'utf8')) });
 
     // 2. a fresh project that installs the tarballs like a user would
     mkdirSync(app);
@@ -160,6 +160,9 @@ export async function packExternal({ check, browser, keep = false }) {
     const inst = npm(['install', '--no-audit', '--no-fund', '--loglevel=error'], app);
     check('npm install of the tarballs succeeds', inst.status === 0, (inst.stderr || String(inst.error)).slice(0, 300));
     if (inst.status !== 0) return;
+    // the way a user starts it: npx threedog runs the engine package's bin, which forwards to the tools CLI (the other cli() calls below use the tools file directly)
+    const viaBin = npmRun(['exec', '--', 'threedog', '--help'], { cwd: app, timeout: 120000, env: cleanEnv() });
+    check('npx threedog --help runs through the engine bin', viaBin.status === 0 && /Usage: threedog/.test(viaBin.stdout + viaBin.stderr), (viaBin.stdout + viaBin.stderr).slice(0, 300));
     const deep = existsSync(join(app, 'node_modules/threedog/node_modules/three'));
     check('one copy of three (peer dependency, not nested under threedog)', !deep);
 
