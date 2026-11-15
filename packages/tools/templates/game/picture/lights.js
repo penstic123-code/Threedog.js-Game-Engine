@@ -30,23 +30,21 @@ export function createLights(engine, ctx) {
       sun.position.copy(engine.sky ? signals.uSunDir.value : noSky).multiplyScalar(100).add(sun.target.position);
       const day = signals.uDaylight.value;
       sun.intensity = S.noon * day * signals.uWeatherLight.value;   // uWeatherLight: 1 in clear weather, lower under rain
-      // The fill dims toward night too, so a night is dark because the light is. Without a sky uDaylight stays 1: the room's fill holds
-      engine.scene.environmentIntensity = engine.sky ? E.sky * (E.night + (1 - E.night) * day) : E.room;
+      // The fill dims toward night too, so a night is dark because the light is. Without a sky uDaylight stays 1 and the fill holds
+      engine.scene.environmentIntensity = E.intensity * (E.night + (1 - E.night) * day);
     },
   };
 }
 
-// The fill. With a sky the dome itself becomes the map (rebuilt when the sky changes), so the fill takes the sky's colors with no code here.
-// Without one, a neutral studio room, prefiltered once. Either way scene.environment is plain three.js: an .hdr panorama of your own goes there the same way (recipe 34).
+// The fill: a neutral studio room (three's RoomEnvironment), prefiltered once, so it costs nothing per frame. scene.environment is plain three.js:
+// an .hdr panorama goes there the same way (recipe 34), and engine.sky.environment({ into: engine.scene, interval }) makes the sky dome the map, colored
+// by the sky but re-rendered as the sky changes (each rebuild is a heavy frame: a long interval, and threedog perf before and after).
 // Called from the module's init, not install: prefiltering draws, and the renderer is ready only once start() begins the inits.
 /** @param {any} engine @param {any} ctx */
 export function createFill(engine, ctx) {
-  if (engine.sky) ctx.track(engine.sky.environment({ into: engine.scene }));
-  else {
-    const pmrem = new __PMREM__(engine.renderer), room = new RoomEnvironment();
-    const map = pmrem.fromScene(room, 0.04);
-    room.dispose(); pmrem.dispose();
-    ctx.borrow(engine.scene, { environment: map.texture });
-    ctx.track({ remove() { map.dispose(); } });
-  }
+  const pmrem = new __PMREM__(engine.renderer), room = new RoomEnvironment();
+  const map = pmrem.fromScene(room, 0.04);
+  room.dispose(); pmrem.dispose();
+  ctx.borrow(engine.scene, { environment: map.texture });
+  ctx.track({ remove() { map.dispose(); } });
 }

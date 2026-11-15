@@ -1,10 +1,10 @@
 // @ts-check
-// __NAME__: scene-only start (--scene-only) — an empty scene, a camera and a gray picture in picture/. No content/, no assets.js, no gameplay: build what DESIGN.md describes.
+// __NAME__: scene-only start (--scene-only) — an empty scene, a camera and a neutral lit picture in picture/. No content/, no assets.js, no gameplay: build what DESIGN.md describes.
 // Wired: start screen (Continue / Start), autosave, Esc = pause + settings. Keep, replace (engine.ui.set) or delete each.
 // Something placed and saved later: engine.use(content()) and a content/ folder (npx threedog how "place things"); plain three.js works as it is.
 __TSL_IMPORT__
 import { createEngine, presets, world, settings } from 'threedog';
-import { createPicture } from './picture/index.js';   // the game's own picture in plain three.js: gray for now; make it yours, recipe 62
+import { createPicture } from './picture/index.js';   // the game's own picture in plain three.js: neutral light on gray surfaces for now; make it yours, recipe 62
 
 const engine = createEngine({ __RENDERER__bindings: { ...presets.bindings.walk, ...presets.bindings.interact }, canvas: /** @type {HTMLCanvasElement} */ (document.getElementById('view')), lights: false, ui: { loading: { title: '__NAME__' }, title: { title: '__NAME__' } }, saveKey: '__NAME__' });
 engine.use(world(), settings({ freezeWorld: true }));   // settings: Esc pauses and opens the menu

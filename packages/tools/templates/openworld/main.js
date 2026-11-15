@@ -4,7 +4,7 @@
 // Rules live here (modules, ops, state); placed things default to content/ (saves read it), plain three.js works as well. Other systems: CLAUDE.md "Already here".
 __TSL_IMPORT__
 import { createEngine, presets, openWorld, followCamera, content } from 'threedog';
-import { createPicture } from './picture/index.js';   // the game's own picture in plain three.js: gray for now; make it yours, recipe 62
+import { createPicture } from './picture/index.js';   // the game's own picture in plain three.js: neutral light on gray surfaces for now; make it yours, recipe 62
 import { terrainPreset } from '@threedog/terrain-noise';   // optional: a terrain generator (the engine ships none)
 import data from './content/index.js';
 import packs from './assets.js';

@@ -1,5 +1,5 @@
 // Shared by new-game and init: read the flags, copy the template layers, fill the placeholders.
-//   templates/game       the base: a blank scene with a camera, empty content files, a gray picture/ folder (no gameplay, no genre assumed)
+//   templates/game       the base: a blank scene with a camera, empty content files, a neutral lit picture/ folder (no gameplay, no genre assumed)
 //   templates/openworld  an overlay for --open-world: generated terrain, day/night sky, follow camera, a player (a main.js only)
 //   templates/sceneonly  an overlay for --scene-only: a main.js with no content/ and no assets.js (copyTemplates leaves those two out of the base): a showcase scene, nothing placed
 //   templates/pixel      an overlay for --pixel: a sprite character in a pixel-snapped orthographic view, input, interaction, dialogue, saves (main.js + picture/sprites.js)
@@ -8,7 +8,7 @@
 // Which renderer: a new game starts on WebGPU, its shaders in TSL; --webgl starts on WebGLRenderer, its shaders in GLSL. It is chosen here, once, because it decides the
 // language of the game's own shaders; plain three.js materials and lights work on both. createEngine's own default stays WebGL: the choice is written into each new
 // game's main.js. A browser without WebGPU gets createEngine's fallback: 'webgl2', the same game on three's WebGL2 backend, TSL still drawing.
-// Placeholders in text files: __NAME__, __GAMEPLAY_NOTE__, __DEFAULT_LAYER__ (rows of AI.md) and the ROUTE words below. The art always starts in the game's own gray picture/ folder (the engine ships no art).
+// Placeholders in text files: __NAME__, __GAMEPLAY_NOTE__, __DEFAULT_LAYER__ (rows of AI.md) and the ROUTE words below. The art always starts in the game's own picture/ folder (neutral: gray surfaces under correct light) (the engine ships no art).
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';

@@ -2,7 +2,7 @@
   "name": "bright-cartoon",
   "kind": "picture",
   "summary": "A clear, bright cartoon starter picture: lights, sky, fog, cel materials, ground, water and a few props, all in code. Copy it, then change it.",
-  "use": "threedog lib pull bright-cartoon --force in a new game (it replaces the gray starter files in picture/); main.js keeps its engine.use(createPicture()) line. Shapes take picture.materials.<name>; read the notes at the top of picture/index.js first.",
+  "use": "threedog lib pull bright-cartoon --force in a new game (it replaces the starter files of the same name in picture/; delete the ones it does not ship); main.js keeps its engine.use(createPicture()) line. Shapes take picture.materials.<name>; read the notes at the top of picture/index.js first.",
   "backends": [
     "webgpu"
   ],
@@ -66,5 +66,5 @@
       "#101a3c"
     ]
   },
-  "usage": "@ts-check\nGround: one mesh from your own height function. pathAt() paints paths into a vertex value, and the patch field cuts that value into a clean, wobbling\nedge. Why not a texture: a mask stored per vertex costs nothing, stays sharp up close, and the game's level code already knows where the paths are.\nA sharper or thinner path needs more segments.\nthreedog lib pull bright-cartoon --force in a new game (it replaces the gray starter files in picture/); main.js keeps its engine.use(createPicture()) line. Shapes take picture.materials.<name>; read the notes at the top of picture/index.js first."
+  "usage": "@ts-check\nGround: one mesh from your own height function. pathAt() paints paths into a vertex value, and the patch field cuts that value into a clean, wobbling\nedge. Why not a texture: a mask stored per vertex costs nothing, stays sharp up close, and the game's level code already knows where the paths are.\nA sharper or thinner path needs more segments.\nthreedog lib pull bright-cartoon --force in a new game (it replaces the starter files of the same name in picture/; delete the ones it does not ship); main.js keeps its engine.use(createPicture()) line. Shapes take picture.materials.<name>; read the notes at the top of picture/index.js first."
 }

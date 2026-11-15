@@ -9,7 +9,7 @@ npm install threedog@1 three@~0.187.0
 npm install @threedog/terrain-noise@1      # optional: the noise terrain generator terrainPreset() (without one the ground is flat)
 npm install -D vite @threedog/tools@1      # optional: the vite preset and the threedog command line
 ```
-Then let it set up the folder: `npx threedog init` (flags: `--open-world` for generated ground, sky, follow camera and a player; the default is a blank scene with a camera and a gray starter picture in `picture/`) writes index.html, main.js, vite.config.js, content/, CLAUDE.md and `.mcp.json` (Claude Code then starts the threedog MCP server by itself), never overwriting a file you have. Finish with `npm install` (for what the new files need) and `npm run dev`.
+Then let it set up the folder: `npx threedog init` (flags: `--open-world` for generated ground, sky, follow camera and a player; the default is a blank scene with a camera and a neutral, correctly lit starting picture in `picture/` (gray surfaces, white sun, soft shadows, AO, light bloom)) writes index.html, main.js, vite.config.js, content/, CLAUDE.md and `.mcp.json` (Claude Code then starts the threedog MCP server by itself), never overwriting a file you have. Finish with `npm install` (for what the new files need) and `npm run dev`.
 `three` is a peer dependency: your game and the engine share one copy. Types for three come with the engine (`@types/three`, same version), so `// @ts-check` JS and TypeScript both see real three.js types.
 
 ## Minimal usage

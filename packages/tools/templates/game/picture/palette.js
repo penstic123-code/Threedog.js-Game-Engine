@@ -14,10 +14,9 @@ export const palette = {
   // shadowRadius: blur of the shadow edge in shadow-map texels (higher for cloud or a gentle look, low for a crisp sun); shadowMap: map size per engine.tier.
   // direction: toward the sun when the game has no sky() (with one, the sky aims it); from the side and above, so each form shows a lit and a shaded face.
   sun: { color: 0xffffff, noon: 3, direction: [0.7, 1, 0.3], shadowRadius: 3, shadowMap: { low: 1024, high: 2048 } },
-  // The fill: light from every direction, so faces away from the sun show their shape instead of going black. Standard and Lambert materials take it.
-  // sky: its strength with a sky() (the dome becomes the map and follows the day), night: the share left at midnight; room: its strength without a sky
-  // (three's RoomEnvironment, a much brighter map than a dome). More fill: softer, more readable shadows; less: harder. Shot's light: fact shows key against fill.
-  environment: { sky: 1, night: 0.3, room: 0.25 },
+  // The fill: light from every direction (lights.js), so faces away from the sun show their shape instead of going black; Standard and Lambert materials take it.
+  // More: softer, more readable shadows; less: harder (shot's light: fact shows key against fill). night: the share left at midnight when a sky() runs the day.
+  environment: { intensity: 0.25, night: 0.3 },
   // Fog, only with a sky(): the far edge of the world melts into the horizon color instead of ending in a line. near / far are shares of uViewDistance.
   // Right when the play space stays clear (shot's "fog covers X%" is small where the player looks) and the distance dissolves.
   fog: { near: 0.3, far: 1 },

@@ -5,7 +5,7 @@
 __TSL_IMPORT__
 import { createEngine, presets, world, content, settings, collision, characters, followCamera, hud, interactions, dialogue, THREE } from 'threedog';
 import { pixelSprite, spriteFrame } from 'threedog/pixel';
-import { createPicture } from './picture/index.js';   // the game's own picture in plain three.js: gray for now; make it yours, recipe 62
+import { createPicture } from './picture/index.js';   // the game's own picture in plain three.js: neutral light on gray surfaces for now; make it yours, recipe 62
 import { placeholderSheet, SHEET } from './picture/sprites.js';   // a drawn placeholder sheet: replace with your art
 import data from './content/index.js';
 import packs from './assets.js';
