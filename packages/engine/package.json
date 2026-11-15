@@ -1,7 +1,7 @@
 {
   "name": "threedog",
   "version": "1.4.0",
-  "description": "Web 3D game engine on three.js: core + optional modules, no built-in art (the picture comes from your own style), built to be driven by an AI",
+  "description": "Web 3D game engine on three.js, built to be driven by an AI. Start: npm install threedog three && npm install -D @threedog/tools && npx threedog init (writes the game and its CLAUDE.md). No built-in art",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -18,6 +18,9 @@
   "type": "module",
   "main": "./index.js",
   "types": "./index.d.ts",
+  "bin": {
+    "threedog": "./bin/threedog.mjs"
+  },
   "exports": {
     ".": {
       "types": "./index.d.ts",
@@ -47,6 +50,7 @@
     "./package.json": "./package.json"
   },
   "files": [
+    "bin",
     "index.js",
     "index.d.ts",
     "presets.js",
