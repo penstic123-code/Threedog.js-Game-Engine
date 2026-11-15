@@ -170,4 +170,3 @@ One place listens to window focus, tab visibility, mouse lock and the WebGL cont
   `page:pointerlock { locked, byEngine }` (cameras lock again on the next click; a lock the player ended counts as Esc, because the browser keeps that key), `page:contextlost` / `page:contextrestored` (the same freeze, and the player
   sees a message; three.js restores the context).
 - `engine.step()` still advances while away (tests, dev bridge). Held keys are released by Input.
-- Tests: `threedog test "Session:" "Window:"`.

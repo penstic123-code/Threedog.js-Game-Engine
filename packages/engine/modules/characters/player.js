@@ -16,7 +16,6 @@ function checkOptions(e, st, opts) {
   const control = opts.control;
   if (control === undefined) throw codedError('player-control', DEV_STRINGS.noControl);
   if (!validControl(control)) throw codedError('player-control', fmt(DEV_STRINGS.badControl, { got: JSON.stringify(control) ?? String(control) }));
-  if (!e.world) throw codedError('module-needs', DEV_STRINGS.noWorld);
   if (opts.input !== undefined && !e.input.seats.includes(opts.input)) throw codedError('input-seat', 'characters.addPlayer(): input is a seat from engine.input.seat({ pad, keys })');
   const id = opts.id ?? PLAYER;
   if (opts.input) for (const [other, q] of st.players) if (other !== id && q.input === opts.input) throw codedError('input-seat', `characters.addPlayer(): this seat already drives player '${other}'`);

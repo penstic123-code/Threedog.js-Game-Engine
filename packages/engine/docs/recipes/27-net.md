@@ -75,7 +75,7 @@ engine.ops.define('cheat.gold', { args: { n: 'int' }, run: (e, { n }, ctx) => e.
 The host sends a full snapshot when a client joins (or after a lost message), then diffs every `syncEvery` fixed steps (default 3, 20 per second):
 world records, containers, `vars`, and every other save part (quests, clock, sky, weather...) except `random`, `level` and `rigid`. Choose explicitly with
 `sync: ['world', 'containers', 'vars', 'quests']`. Physics runs on each machine and is not synced, and machines need not agree on it
-(why: [11-vehicles.md, Determinism](11-vehicles.md#3-rigid-bodies-saves-joints-determinism)).
+(why: [11-physics.md, Determinism](11-physics.md#3-rigid-bodies-saves-joints-determinism)).
 On a client the mirror is applied at the next fixed step; `world.simulate` does not run there (the host simulates). Other players glide between
 updates (kinds in `interpolate`, default `['player']`). The client moves its own avatar and reports its position; the host clamps it to `maxSpeed`
 (m/s, default 15).

@@ -21,7 +21,7 @@ import { vec3, xzOf } from '../../core/base/math.js';
 import { readParams, keysSchema } from '../../core/base/params.js';
 import { cellsChanged } from '../../core/stream/streamCells.js';
 import { createVehicle, VEHICLE_KEYS, STRINGS } from './Vehicles.js';
-import { syncTerrain, syncTrees, treesChanged, syncGroundTrees, syncStatics, restandStatics, syncLevel, syncFloor, dropChunks, wantsFloor, recordLocks, carryBody, carryCollider } from './sync.js';
+import { syncTerrain, syncTrees, treesChanged, syncGroundTrees, syncStatics, restandStatics, syncLevel, syncFloor, dropChunks, wantsFloor, recordLocks, carryBody, carryCollider, carryWorld } from './sync.js';
 import { refreshQueries } from './refresh.js';
 import { Ragdolls } from './ragdoll.js';
 import { codedError, coded } from '../../core/base/errorHints.js';
@@ -186,7 +186,7 @@ export class RigidBodies {
    * crate pushed the same way after newGame landed a few millimetres off the fresh-page result (durability audit). The world is rebuilt: the
    * player capsule first, every body still here (bodies of world records were already removed by the load and come back with their views) at its
    * pose with no velocity, and terrain / tree / static colliders on the next step, the order a fresh page builds them in. What the game wrote on a
-   * body or collider itself (gravityScale, axis locks, ccd, dominance, sensor, groups, enabled) is carried onto the rebuilt one (carryBody / carryCollider in sync.js). Joints are not carried: Rapier has no getters for a joint's
+   * body or collider itself (gravityScale, axis locks, ccd, dominance, sensor, groups, enabled) is carried onto the rebuilt one (carryBody / carryCollider in sync.js), and so are the world's solver settings (carryWorld). Joints are not carried: Rapier has no getters for a joint's
    * whole description (rope length, motor settings), and copying one would mean patching Rapier. The game re-creates its own joints on rigid:rebuilt,
    * emitted once the bodies are back (the coordination point); a dev warning names a game whose joints vanished with no re-creation. Movers'
    * character controllers are freed with the old world (World.free frees them; movers/rapier.js sees another world object and builds new ones).
@@ -201,6 +201,7 @@ export class RigidBodies {
     }
     const old = this.world, R = this.rapier, hadJoints = old.impulseJoints.len();
     this._newWorld();
+    carryWorld(old.integrationParameters, this.world.integrationParameters);   // solver settings are the game's, like what it wrote on a body
     this.terrain.clear(); this.trees.clear(); this.groundTrees.clear(); this._statics?.clear(); this._onGround.clear(); this._layered.clear();
     this._level.reset(); this._levelColliders = [];
     this._srcMemo = null; this._srcPending = false; this._syncT = 0; this._anchors = []; this._treeMemo = [];
@@ -417,7 +418,7 @@ export class RigidBodies {
    * @internal What a save keeps of each body with an id (addBox / addBall / addHull({ id }), vehicles always): pose, velocities, asleep. Without it a
    * load put a toppling crate back upright and at rest wherever its record was, so the game after the load was not the game that was saved. A template
    * body carries its record id, and atRest (content/templates.js): while it stands where content put it, content is its state and it stays out of the save.
-   * Bodies not built yet keep their loaded state (it is still the saved game). Not kept: Rapier's contact / warm-start caches (docs/recipes/11-vehicles.md, section 3).
+   * Bodies not built yet keep their loaded state (it is still the saved game). Not kept: Rapier's contact / warm-start caches (docs/recipes/11-physics.md, section 3).
    */
   _saveState() {
     const out = {};
@@ -477,7 +478,7 @@ export class RigidBodies {
     }
     this._upkeep();
     if (this._jointsGone) {   // dev only (set in _fresh): the old world had the game's joints and nothing re-created one since the rebuild
-      if (!this.world.impulseJoints.len()) warnOnce(coded('rigid-misuse', `rigid: ${this._jointsGone} joint(s) were freed with the old physics world by newGame / load and none was re-created. The engine rebuilds the world and does not copy joints: re-create them in a rigid:rebuilt listener ({ world }), between entry.body of the rebuilt bodies (recipes/11-vehicles.md, Joints)`));
+      if (!this.world.impulseJoints.len()) warnOnce(coded('rigid-misuse', `rigid: ${this._jointsGone} joint(s) were freed with the old physics world by newGame / load and none was re-created. The engine rebuilds the world and does not copy joints: re-create them in a rigid:rebuilt listener ({ world }), between entry.body of the rebuilt bodies (recipes/11-physics.md, Joints)`));
       this._jointsGone = 0;
     }
     // player capsule follows the player (the rapier mover computes collision and writes the position itself); turned off while driving to avoid colliding with

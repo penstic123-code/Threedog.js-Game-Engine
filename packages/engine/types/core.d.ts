@@ -189,7 +189,7 @@ export interface EventMap extends GameEvents {
   /**
    * rigid: newGame / a load rebuilt the physics world (a fresh page for physics) and the engine's bodies are back (entry.body is the rebuilt Rapier
    * body; bodies maps the ids given to addBox / addBall / addHull / addWheeled). The old world's joints were freed with it: re-create the game's
-   * joints here (recipes/11-vehicles.md, Joints). Not emitted while a vehicle exists (the world is kept then, joints included)
+   * joints here (recipes/11-physics.md, Joints). Not emitted while a vehicle exists (the world is kept then, joints included)
    */
   'rigid:rebuilt': [{ world: any; player: any; bodies: Record<string, any> }];
   /** terrain({ shape }): the player or a moving rigid body dropped below engine.terrain.voidY (once per fall). The engine does not respawn: the game decides */
@@ -1988,7 +1988,7 @@ export declare class Engine {
   dialogue?: Dialogue;
   /** Inventory (inventory() module). Items, counts and containers, saved with the game. Install: engine.use(inventory()); undefined until installed. add() answers { ok }, read .ok */
   inventory?: Inventory;
-  /** pickups(). Things on the ground that go in the bag. Install: engine.use(pickups()) with inventory() and interactions(); undefined until installed. A full bag leaves the item on the ground */
+  /** pickups(). Things on the ground that go in the bag. Install: engine.use(world(), inventory(), interactions(), pickups()) (pickups are world records); undefined until installed. A full bag leaves the item on the ground */
   pickups?: Pickups;
   /** Quests (quests() module) */
   quests?: Quests;

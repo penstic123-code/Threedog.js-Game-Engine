@@ -141,6 +141,7 @@ into, or a convenience for after.
 | Load far parts of a big map only when near | `engine.stream` (recipe 33) | |
 | Heavy work in a web worker | `engine.threads` (recipe 15) | bit by bit on the main thread: `engine.jobs` |
 | How many seconds passed in the game | `engine.time.now()` (recipe 06) | |
+| Hit stop, bullet time | `engine.mod('time.world', { owner, set: 0, layer: 'system', for: 0.06 })`; `for` is real seconds (or `clock: '<channel>'`) | not `clock.rate` (the calendar) |
 | Remember a flag or a count, a door was opened | `engine.vars` (recipe 20) | |
 | A named fixed view, a second camera to show | `engine.views` (recipe 46) | |
 | Load a model, texture or sound file | `engine.assets` (recipe 05) | a format it does not read: a three.js loader |

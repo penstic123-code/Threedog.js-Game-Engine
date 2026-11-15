@@ -198,8 +198,8 @@ export const specs = [
     url: page, expectErrors: /404|Not Found|Failed to load resource/,   // the skybox file never exists: only the wait for it matters
     async run({ check, ev }) {
       const r = await ev(async () => {
-        const T = __threedogThree, { make, protoOf, holdProtos, copyLeft, sky, characters } = threedogLoad, tick = () => new Promise(res => setTimeout(res, 0)), out = {};
-        const E = make('rl-defer', { ui: { loading: false } }); E.use(sky(), characters()); await E.start();
+        const T = __threedogThree, { make, protoOf, holdProtos, copyLeft, sky, characters, world } = threedogLoad, tick = () => new Promise(res => setTimeout(res, 0)), out = {};
+        const E = make('rl-defer', { ui: { loading: false } }); E.use(sky(), world(), characters()); await E.start();
         // 1. a palette write retires a bare-geometry prototype while a placed copy still draws its neutral material
         E.assets.manifest({ name: 'rl3', models: { flat: () => new T.BoxGeometry() } });
         const c = {}; holdProtos(E, c);

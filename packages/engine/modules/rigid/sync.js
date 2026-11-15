@@ -224,6 +224,20 @@ export function carryBody(entry, o, n) {
   if (!o.isEnabled()) n.setEnabled(false);
 }
 
+/** @internal Copy the solver settings a game wrote on the old world (numSolverIterations, maxCcdSubsteps, contact_natural_frequency...) onto the rebuilt one.
+ *  Every Rapier setter with a getter but dt (the engine writes the timestep each step), read from the prototype so a setting a Rapier update adds is carried too.
+ *  contact_natural_frequency has no getter in rapier3d-compat 0.21: it is read back from contact_erp (erp = a·f / (a·f + c), a = 2π·dt, c Rapier's
+ *  hidden damping term), with c measured on the new world by setting a known frequency there, so no Rapier constant is copied here */
+export function carryWorld(o, n) {
+  const proto = Object.getPrototypeOf(o), d = k => Object.getOwnPropertyDescriptor(proto, k);
+  for (const k of Object.getOwnPropertyNames(proto)) if (k !== 'dt' && d(k).set && d(k).get && o[k] !== n[k]) n[k] = o[k];
+  if (!d('contact_natural_frequency')?.set || !d('contact_erp')?.get) return;
+  const a0 = 2 * Math.PI * o.dt, a1 = 2 * Math.PI * n.dt, f1 = 30;
+  n.contact_natural_frequency = f1;
+  const e0 = o.contact_erp, e1 = n.contact_erp, c = a1 * f1 * (1 - e1) / e1;
+  if (e0 > 0 && e0 < 1) n.contact_natural_frequency = c * e0 / ((1 - e0) * a0);
+}
+
 /** @internal Copy game-set collider state from the old collider onto the one rebuilt from the entry's desc */
 export function carryCollider(o, n) {
   const pairs = [['isSensor', 'setSensor'], ['collisionGroups', 'setCollisionGroups'], ['solverGroups', 'setSolverGroups'], ['friction', 'setFriction'],

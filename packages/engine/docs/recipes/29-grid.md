@@ -15,7 +15,7 @@ Works on any ground: procedural terrain, a Blender level, an indoor floor. Heigh
 ## 1. Grids and items
 ```js
 import { grids, toast } from 'threedog';
-engine.use(grids());
+engine.use(world(), grids());
 const board = engine.grids.add('board', { cell: 1, origin: [0, 0], size: [16, 12] });  // several grids may exist: a tower-defense board,
 const room = engine.grids.add('room', { cell: 0.5, origin: [-3, -3], size: [12, 12], zone: 'house' });  // a dungeon or house room,
 const plot = engine.grids.add('plot', { cell: 1, origin: [20, 0], size: [8, 8] });  // a garden plot

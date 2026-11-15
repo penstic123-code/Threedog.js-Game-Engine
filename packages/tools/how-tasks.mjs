@@ -110,7 +110,7 @@ export const RECIPES = {
   '08-weather-sky': 'make it rain and change the clouds',
   '09-materials-lights-models': 'give the game its own colors and textures',
   '10-blender-level': 'bring a map made in a 3d modeling tool',
-  '11-vehicles': 'drive a car with wheels and joints',
+  '11-physics': 'drive a car with wheels and joints',
   '12-navmesh': 'pathfinding around obstacles',
   '13-animation': 'walk and run clips on a skinned character',
   '14-custom-module': 'write my own engine system',
@@ -160,7 +160,7 @@ export const RECIPES = {
 /** threedog how --browse: a few categories by what a game needs, not by where the code sits. An id may sit in two; every capability sits in at least one (R64) */
 export const CATEGORIES = {
   character: { title: 'Input, characters and camera', ids: `input player characters interactions cameraRig firstPersonCamera followCamera fixedCamera rtsCamera collision control cameraOverride autoView rays collider3d ground views
-    nav rigid npcs 02-npc 11-vehicles 12-navmesh 13-animation 19-shooting-picking 21-camera 57-control 58-input 63-third-person-start` },
+    nav rigid npcs 02-npc 11-physics 12-navmesh 13-animation 19-shooting-picking 21-camera 57-control 58-input 63-third-person-start` },
   items: { title: 'Items, quests and game rules', ids: `inventory pickups interactions quests dialogue triggers grids vars stacks ops events random 03-items-pickups 04-quests 22-shop-gold 23-ops 29-grid 30-templates 32-action-game 66-common-tasks` },
   time: { title: 'Time, saves, scenes and data', ids: `time clock calendar saves session flow timeline settings world content level runState page jobs 01-new-game 06-clock-events 07-flow-scenes-pause 14-custom-module 18-world 20-content-actions-save
     40-scene 49-game-module-contract 55-mods-time-wrap` },
@@ -237,7 +237,7 @@ export const ROUTES = [
   ['play walk and run clips on a rigged model', '13-animation.md §3'],
   ['head looks at target, feet on uneven ground', '13-animation.md §3e'],
   ['enemies find a way around walls', '12-navmesh.md §2'],
-  ['boxes that tumble and a ragdoll', '11-vehicles.md §3'],
+  ['boxes that tumble and a ragdoll', '11-physics.md §3'],
   ['click on an object to select it', '19-shooting-picking.md §1'],
   ['enter an area and something happens', '20-content-actions-save.md §3'],
   ['press a key next to a door', '03-items-pickups.md'],

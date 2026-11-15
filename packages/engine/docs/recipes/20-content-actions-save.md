@@ -222,4 +222,3 @@ A save is one envelope; `engine.saves.collect()` returns it and `export` / `expo
   progress by step ids (`steps: [{ id: 'talk-mayor', ... }]`, recipe 04). Content edits (a new step, a new prop) then never shift an old save.
 - The export file wraps the envelope:
   `{ threedog: 'save', format: 1, game, slot, savedAt, data: <envelope>, files: [{ group, id, at, meta, type, url: 'data:...' }] }`.
-- Tests: `threedog test "Save failure"`.

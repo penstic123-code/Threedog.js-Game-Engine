@@ -9,7 +9,7 @@
 // at the wire (toLocal / toHost). Record fields that hold actor ids (owner...) are listed in net({ actorFields }) and swapped too.
 
 // random/level stay per machine; inventory is the home bag 'player', sent inside containers with every other bag; rigid (body velocities, for loads)
-// stays per machine too: each machine simulates its own physics, clients follow the host through world records (docs/recipes/11-vehicles.md, section 3)
+// stays per machine too: each machine simulates its own physics, clients follow the host through world records (docs/recipes/11-physics.md, section 3)
 const SKIP = ['random', 'level', 'inventory', 'containers', 'world', 'vars', 'rigid'];
 const GENERIC = '=';
 

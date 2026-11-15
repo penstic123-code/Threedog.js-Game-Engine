@@ -399,6 +399,25 @@ export const specs = [
     },
   },
   {
+    // Settings a game writes on the Rapier world itself (recipe 11 §3c: more solver iterations for tall stacks) are the game's, like what it writes on a
+    // body: newGame / a load build a new world, and a setting that fell back to Rapier's default there would make the stacks collapse only after a load
+    name: 'durability: solver settings the game wrote on rigid.world.integrationParameters survive the rebuild of newGame (open world) [guard]',
+    url: '/?threedog-headless',
+    async run({ check, ev }) {
+      const r = await ev(async () => {
+        const R = engine.rigid, old = R.world, p = R.world.integrationParameters;
+        p.numSolverIterations = 9; p.maxCcdSubsteps = 3; p.contact_natural_frequency = 45;   // the last has no getter in Rapier: read back through contact_erp
+        const dt = p.dt, erp = p.contact_erp;
+        await engine.session.newGame();
+        const q = R.world.integrationParameters;
+        q.dt = dt;   // erp depends on the step; compare at the same one
+        return { rebuilt: R.world !== old, iters: q.numSolverIterations, ccd: q.maxCcdSubsteps, erp, erp2: q.contact_erp };
+      });
+      check('newGame built a new Rapier world (otherwise this guard tests nothing)', r.rebuilt, JSON.stringify(r));
+      check('the new world has the solver iterations, CCD substeps and contact frequency the game set', r.iters === 9 && r.ccd === 3 && Math.abs(r.erp2 - r.erp) < 1e-5, JSON.stringify(r));
+    },
+  },
+  {
     // joints are plain Rapier (no engine wrapper); newGame / a load rebuild the world and free them. The contract: rigid:rebuilt is where the game
     // re-creates them (the engine does not patch Rapier to copy them); a game that does not listen gets one dev warning, not a silent loss
     name: 'durability: a game that re-creates its joints on rigid:rebuilt keeps its rope and limited hinge after newGame; one that does not gets a warning (open world) [guard]',
