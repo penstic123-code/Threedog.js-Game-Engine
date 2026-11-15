@@ -150,7 +150,7 @@ export async function packExternal({ check, browser, keep = false }) {
       scripts: { test: 'threedog test', check: 'threedog check', map: 'threedog map' },
       dependencies: { ...deps, '@threedog/post-effects': `file:../${postPkg.filename}` } }, null, 2));
     copyTemplate(app);   // index.html, main.js, content/, vite.config.js and the docs of a new game
-    usePost(app);   // plugins/10-bloom.js: export default bloom(), as the docs show it, so types, build and the preview page need the post-effects package added above
+    usePost(app);   // plugins/10-grain.js: export default grain(), as the docs show it, so types, build and the preview page need the post-effects package added above
     // the type-error fixture lives in tests/, which every game check leaves out (template tsconfig exclude, threedog check / types since 1.1.0 read every
     // other .js of a game): at the project root it would be a game source, and check / types below would rightly fail on it
     mkdirSync(join(app, 'tests'), { recursive: true });

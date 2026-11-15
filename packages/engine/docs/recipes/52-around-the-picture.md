@@ -63,15 +63,15 @@ A plain Pass is placed by its kind: one that renders `engine.scene` itself (`Ren
 
 To read the chain: `engine.post.object()` and `engine.post.targets()`; both stay the engine's (it rebuilds, resizes, disposes), so change the chain through `engine.post`, or take it over with `engine.post.own()` (`own(false)` gives it back). A game that renders the canvas itself (its own composer) takes the frame: the engine stops drawing and warns once `[own-frame]`.
 ```js fragment
-import { bloom, outline, vignette, lut } from '@threedog/post-effects';  // shared effects come from the add-on
+import { bloom, outline, vignette, lut, grain } from '@threedog/post-effects';  // shared effects come from the add-on
 import { LUTPass } from 'three/addons/postprocessing/LUTPass.js';
 const line = engine.post.add(outline({ thickness: 1.5 })); engine.post.add(vignette());
 line.enabled = false;  // pauses it in place; a settings restriction above this still holds it off
 engine.post.get('vignette').set({ strength: 0.6 });  // params by name; an unknown name throws
 engine.post.add({ ...bloom(), skipOnLowTier: true });  // held while engine.tier is 'low', known only at start()
 engine.post.add({ name: 'myLut', slot: 'ldr', params: { lut: myLut }, create: ({ params }) => new LUTPass({ lut: params.lut }) });
-// a plugin file brings the same effect with no main.js line: plugins/10-bloom.js
-export default bloom({ strength: 0.2 });
+// a plugin file adds one with no main.js line: plugins/10-grain.js (a new game adds ao and bloom in picture/post.js)
+export default grain({ amount: 0.04 });
 ```
 - `bloom({ strength, radius, threshold })`, defaults 0.35, 0.5, 0.85 (glow added, spread 0 to 1, brightness a pixel needs to glow). It reads linear color before the tone curve, so a
   surface brighter than 1 glows hard however small: if the frame washes out, raise `threshold` or dim that surface before lowering `strength`. On the WebGPU route three's own `BloomNode` is also open to you through `engine.post.add({ node })`.

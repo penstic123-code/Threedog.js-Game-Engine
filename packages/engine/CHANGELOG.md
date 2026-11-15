@@ -4,6 +4,8 @@ What changed in each version and how a game upgrades.
 
 ## Unreleased
 
+## 1.5.0 (2026-11-16)
+
 - Changed: `characters()` now requires `world()`, and `engine.use()` says so at install. Before, `world` was listed as optional and only `characters.addPlayer()` (or the first NPC) threw at runtime, although the player and every NPC are world records. The docs' module lists that left `world()` out (recipes 10, 11, 12, the pickups page) now include it, and a guard test checks every `engine.use` list in the docs, templates and examples against what each module requires.
 - New (docs): screen shake without taking the camera, recipe 21 §6b: an offset added in `engine.onRender` and put back in `onRender(fn, { when: 'after' })`; the camera's takeover warning now names it, and a guard test holds the hook order it relies on.
 - Fixed: solver settings a game writes on `engine.rigid.world.integrationParameters` (such as `numSolverIterations`, and `contact_natural_frequency`) are kept when newGame or a load rebuilds the physics world. Before, they fell back to Rapier's defaults.

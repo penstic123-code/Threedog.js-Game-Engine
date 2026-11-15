@@ -13,9 +13,9 @@ export function copyTemplate(to) {
   copyTemplates(to, { name: 'external', openWorld: true }, { skipPackage: true });
 }
 
-/** Add bloom() from @threedog/post-effects as plugins/10-bloom.js, so the outside check imports that package */
+/** Add grain() from @threedog/post-effects as plugins/10-grain.js, so the outside check loads an effect through a plugin file too. Not bloom: the template's picture/post.js adds bloom, and a second one throws */
 export function usePost(dir) {
-  writeFileSync(join(dir, 'plugins', '10-bloom.js'), "// @ts-check\nimport { bloom } from '@threedog/post-effects';\n\nexport default bloom();\n");
+  writeFileSync(join(dir, 'plugins', '10-grain.js'), "// @ts-check\nimport { grain } from '@threedog/post-effects';\n\nexport default grain();\n");
 }
 
 /** Step 6: install the engine folder by path into a project with only threedog, three and vite, then build it with a plain vite config */
