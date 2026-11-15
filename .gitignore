@@ -6,3 +6,5 @@ dist
 .env*
 *.log
 *.pem
+# design notes and build plans of the maintainer (scripts/check-public-export.mjs PRIVATE)
+docs/superpowers/

@@ -5,7 +5,7 @@
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-export const PRIVATE = ['HANDOFF.md', 'docs/workflow.md', 'docs/plans/', 'docs/research/', 'experiments/', 'games/', 'docs/testing/'];
+export const PRIVATE = ['HANDOFF.md', 'docs/workflow.md', 'docs/plans/', 'docs/research/', 'experiments/', 'games/', 'docs/testing/', 'docs/superpowers/'];
 /** Inside a private entry, what is public: the testing evidence and perf numbers the README cites, and the empty games folder marker */
 export const PUBLIC = ['games/.gitkeep', 'docs/testing/README.md', 'docs/testing/perf.md', 'docs/testing/capability/', 'docs/testing/field/2026-11-05-city/'];
 
