@@ -34,8 +34,9 @@ export const palette = {
   // direction: toward the sun when the game has no sky() (with one, the sky aims it); from the side and above, so each form shows a lit and a shaded face.
   sun: { color: SUN, noon: 3, direction: [0.7, 1, 0.3], shadowRadius: 3, shadowMap: { low: 1024, high: 2048 } },
   // The fill: light from every direction (lights.js), so faces away from the sun show their shape instead of going black; Standard and Lambert materials take it.
-  // More: softer, more readable shadows; less: harder (shot's light: fact shows key against fill). night: the share left at midnight when a sky() runs the day.
-  environment: { intensity: 0.25, night: 0.3 },
+  // More: softer, more readable shadows; less: harder (shot's light: fact shows key against fill). sky: the strength with a sky(), whose dome is the map
+  // (shade takes its color, night darkens it); room: without one, a neutral studio map that is brighter, hence the lower number.
+  environment: { sky: 1, room: 0.25 },
   // Fog, only with a sky(): the far edge of the world melts into the horizon color instead of ending in a line. near / far are shares of uViewDistance.
   // Right when the play space stays clear (shot's "fog covers X%" is small where the player looks) and the distance dissolves.
   fog: { near: 0.3, far: 1 },
@@ -46,10 +47,12 @@ export const palette = {
   // little (albedo about 0.1-0.25), so lighter or more saturated ground turns pastel under the sun and leaves nothing for props and characters to stand out against.
   // The type names are the terrain generator's (@threedog/terrain-noise BIOMES, plus 'cliff' for island walls and 'tilled' / 'wet' for paint); a type left out is gray.
   ground: {
-    colors: { grass: 0x5a7446, grass2: 0x6e7c4c, leafy: 0x4a5e3e, soil: 0x6a5a42, dry: 0x968a5c, dry2: 0x857a50, moss: 0x52603c,
+    colors: { grass: 0x627443, grass2: 0x767c4a, leafy: 0x505e3a, soil: 0x6a5a42, dry: 0x968a5c, dry2: 0x857a50, moss: 0x52603c,
       sand: 0xb8a882, sand2: 0xa89a76, rock: 0x7c776e, rock2: 0x68645c, snow: 0xe4e8ec, mud: 0x4c4234 },
     biomeColors: { meadow: ['grass', 'grass2'], forest: ['leafy', 'grass'], highland: ['grass2', 'dry2'], savanna: ['dry', 'dry2'], wetland: ['moss', 'leafy'],
       riverbank: ['soil', 'moss'], beach: ['sand', 'sand2'], rock: ['rock', 'rock2'], cliff: ['rock2', 'rock'], snow: ['snow', 'snow'], tilled: ['soil', 'mud'], wet: ['mud', 'mud'] },
+    // How the two colors mix (meters): a blend shorter than the default and a mild per-cell grain and large patches, so the ground near the player is not one flat tone
+    variation: { blend: { size: 14 }, jitter: { min: 0.88, range: 0.2 }, patches: { size: 60, strength: 0.12 } },
   },
   water: 0x3e5c66,   // engine.water's plain material, when the game has water: a dark blue-green, darker than the ground, so shores read; the fog and fresnel lighten the distance
   material: { color: 0xa8a49c, roughness: 0.9 },   // the default surface: a light warm gray, a stand-in that reads as "not made yet" without looking cold

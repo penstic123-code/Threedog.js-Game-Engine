@@ -14,7 +14,7 @@ export function createWorldColors(engine, ctx, materials) {
   // recolor rebuilds the loaded chunks once (collision and edits stay); null on leaving gives back what terrain({...}) was given.
   // A picture that draws the ground itself (replaces 'terrain-draw') sets its colors there instead, and this line goes.
   if (engine.terrain) {
-    engine.terrain.recolor({ colors: palette.ground.colors, biomeColors: palette.ground.biomeColors });
-    ctx.track({ remove() { engine.terrain.recolor({ colors: null, biomeColors: null }); } });
+    engine.terrain.recolor(palette.ground);
+    ctx.track({ remove() { engine.terrain.recolor({ colors: null, biomeColors: null, variation: null }); } });
   }
 }
