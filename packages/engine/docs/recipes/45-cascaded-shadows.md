@@ -9,7 +9,8 @@
 const sun = new THREE.DirectionalLight('#fff4e0', 3);
 sun.position.set(40, 80, 30);
 sun.castShadow = true;
-sun.shadow.mapSize.setScalar(engine.tier === 'low' ? 1024 : 2048);
+const fit = () => engine.shadows.mapSize(sun, engine.tier === 'low' ? 1024 : 2048);
+fit(); engine.events.on('tier:change', fit);
 engine.scene.add(sun);
 if (engine.lights.sun) engine.lights.sun.castShadow = false;  // WebGL: cascades must be the only shadowing DirectionalLight (or createEngine({ lights: false }))
 
@@ -73,7 +74,7 @@ It works with and without a sky, on both renderers (WebGPU needs `import 'threed
   `light.position` and `light.target` hold that placement: writes to `light.position` or a new `light.target` still set the direction, and
   `remove()` puts both back as you left them, with the shadow camera box. A `light.target` you assigned (your player, say) is never moved.
 - `engine.tier === 'low'` gets one map unless you pass `low: { count: 2 }`. That map covers `maxFar / count` each way, so its texels are as small as an average cascade's: the low tier
-  saves shadow passes and draws shadows less far, not blurrier (one map over all of `maxFar` has `count` times the texels, and the PCF blur is `radius` x texel). On a game's light it follows the
+  saves shadow passes and draws shadows less far, not blurrier. On a game's light it follows the
   camera, shifted half its size ahead of the view, and never stops at the origin; like cascades it places the light, so `engine.shadows.box` on that light is refused. On `engine.lights.sun` the
   one map stays the engine's own box around the focus, sized the same way. `count: 1` (one map on every tier) covers all of `maxFar`. `handle.csm` is null while there is one map.
 - An engine draws one set of cascades: a second handle throws. A box on the same light throws too, except the engine's own box on `engine.lights.sun`, which waits
@@ -174,7 +175,7 @@ engine.renderer.shadowMap.type = THREE.VSMShadowMap;  // BasicShadowMap | PCFSha
 const sun = new THREE.DirectionalLight(0xffffff, 2);
 sun.shadow.radius = 3; sun.shadow.blurSamples = 8;  // softness (pcf, vsm); blur quality (vsm)
 sun.shadow.bias = -0.0001; sun.shadow.normalBias = 0.03;
-sun.shadow.mapSize.setScalar(2048);  // before the first frame; later also sun.shadow.map?.dispose(); sun.shadow.map = null;
+engine.shadows.mapSize(sun, 2048);   // any time: after the first frame it reallocates the map
 ```
 
 Soft shadows on three 0.187: `PCFSoftShadowMap` is gone (it logs a warning and gives `PCFShadowMap`). Keep `PCFShadowMap` and widen `light.shadow.radius`; `VSMShadowMap` blurs more.

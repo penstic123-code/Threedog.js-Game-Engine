@@ -456,3 +456,44 @@ window.fxLit = async () => {
   }
   return { routes };
 };
+
+/**
+ * engine.tier changing while running (tier:change): the public event fires once per real change after the engine's own followers, never for a
+ * take or release that leaves the value, never during dispose; a default particle max follows in place (the same points, material and uniform
+ * objects a game's material may share), a max the game gave stays; a picture sized the template's way (fit, then tier:change through
+ * engine.shadows.mapSize) follows both writers: game code writing engine.tier and a preset's engine.mod('tier')
+ */
+window.fxTierFollow = async () => {
+  const e = createEngine({ canvas: canvas(), lights: false, pixelRatio: 1, adaptiveResolution: false, ui: { loading: false }, urlState: false, saveKey: 'test-fx-tier' });
+  e.use(particles());
+  await e.start(); e.haltLoop();
+  e.tier = 'high';
+  const { max: _, ...noMax } = STILL, a = e.particles.define('a', noMax), b = e.particles.define('b', { ...STILL, max: 30 });
+  const held = { points: a.points, material: a.material, uniforms: a.uniforms, uScale: a.uniforms.uScale };   // what a game may hold or share
+  const sun = new THREE.DirectionalLight(0xffffff, 1); sun.castShadow = true; e.scene.add(sun);
+  const fit = () => e.shadows.mapSize(sun, e.tier === 'low' ? 1024 : 2048);   // the template's lights.js, word for word but for its palette
+  fit(); e.events.on('tier:change', fit);
+  const heard = []; e.events.on('tier:change', ({ tier }) => heard.push([tier, a.max]));   // a.max already followed: the engine's parts run first
+  const same = () => a.points === held.points && a.material === held.material && a.uniforms === held.uniforms && a.uniforms.uScale === held.uScale && e.particles._get('a') === a;
+  const read = () => ({ tier: e.tier, a: a.max, b: b.max, map: sun.shadow.mapSize.x, same: same() });
+  const stack = e.stacks.get('tier'), preset = set => e.mod('tier', { owner: 'settings', layer: 'settings', set });   // what a settings preset does (modules/settings/apply.js)
+  const r = { high: read() };
+  e.particles.emit('a', [0, 0, 0], { count: 100 }); e.step(1 / 60); r.full = e.particles.count('a');
+  e.tier = 'low'; r.low = read(); r.cut = e.particles.count('a');   // the slots above 60 are dropped
+  e.tier = 'low'; r.again = heard.length;   // the same value: no change, no event
+  e.tier = 'high'; r.back = read();
+  preset('low'); r.preset = read();
+  stack.release('settings'); r.presetGone = read();
+  // a take or release that leaves the value: a preset equal to the tier, engine.tier written under a preset, a preset released onto an equal base
+  const n0 = heard.length;
+  preset('high'); e.tier = 'low'; stack.release('settings'); r.silent = [heard.length - n0, e.tier];   // the release does change it (high -> low): one event
+  preset('low'); stack.release('settings'); r.silent2 = heard.length - n0;   // low over low, released onto low: none
+  e.tier = 'high';
+  e.particles.clear('a'); e.particles.emit('a', [0, 0, 0], { count: 5 }); e.step(1 / 60); r.emits = e.particles.count('a');
+  preset('low'); const n1 = heard.length, max1 = a.max;
+  e.dispose();
+  stack.release('settings');   // what settings' dispose does after the engine is marked disposed (releaseLimits)
+  r.disposed = [heard.length - n1, a.max === max1];
+  r.heard = heard;
+  return r;
+};

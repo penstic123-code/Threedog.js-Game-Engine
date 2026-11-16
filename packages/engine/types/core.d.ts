@@ -86,6 +86,8 @@ export interface EventMap extends GameEvents {
   'settings:shadows': [on: boolean];
   /** A value in the settings menu changed (the argument is all setting values) */
   'settings:change': [values: Record<string, any>];
+  /** engine.tier changed (device found at start, a preset, a write): resize what was sized from it */
+  'tier:change': [{ tier: 'low' | 'high' }];
   /** A post effect was added (its name) */
   'post:add': [name: string];
   /** A water body was added */
@@ -1729,7 +1731,7 @@ export declare class Engine {
   validate: boolean;
   /** three.js renderer: WebGLRenderer, or WebGPURenderer on the WebGPU route (EngineRenderer) */
   renderer: EngineRenderer;
-  /** The one quality value, what everything that scales by quality reads: the device's tier, 'low' (phones, integrated graphics) | 'high', unless the player's preset says otherwise (shared point 'tier'). A headless page takes the device's from ?threedog-tier=low|high (threedog shot / gallery / capture pass high, shot --tier low checks the low tier) */
+  /** The one quality value, what everything that scales by quality reads: the device's tier, 'low' (phones, integrated graphics) | 'high', unless the player's preset says otherwise (shared point 'tier'). Changes fire 'tier:change'. A headless page takes the device's from ?threedog-tier=low|high (threedog shot / gallery / capture pass high, shot --tier low checks the low tier) */
   tier: 'low' | 'high';
   /** three.js scene */
   scene: import('three').Scene;

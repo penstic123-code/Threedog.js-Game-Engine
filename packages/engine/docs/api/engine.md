@@ -83,7 +83,7 @@
 ## engine properties (module properties are on each module page)
 - `validate: boolean` False when createEngine({ validate: false }) turned the development checks off for this engine
 - `renderer: EngineRenderer` three.js renderer: WebGLRenderer, or WebGPURenderer on the WebGPU route (EngineRenderer)
-- `tier: 'low' | 'high'` The one quality value, what everything that scales by quality reads: the device's tier, 'low' (phones, integrated graphics) / 'high', unless the player's preset says otherwise (shared point 'tier'). A headless page takes the device's from ?threedog-tier=low/high (threedog shot / gallery / capture pass high, shot --tier low checks the low tier)
+- `tier: 'low' | 'high'` The one quality value, what everything that scales by quality reads: the device's tier, 'low' (phones, integrated graphics) / 'high', unless the player's preset says otherwise (shared point 'tier'). Changes fire 'tier:change'.
 - `scene: import('three').Scene` three.js scene
 - `lights: { sun, hemi }` Placeholder lights: neutral and still, nothing moves them (the sky only gives signals). createEngine({ lights: false }) leaves them out of the scene
 - `camera: import('three').Perspec… | import('three').Orthogr…` The camera the engine draws with, a plain THREE.PerspectiveCamera to begin with. Assign a real THREE.PerspectiveCamera or THREE.OrthographicCamera to draw through it; any other class is refused [camera-option].

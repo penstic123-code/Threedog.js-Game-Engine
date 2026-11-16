@@ -41,7 +41,7 @@ import { defineSkipOp } from '../time/skip.js';
 import { installThings } from '../scene/thingOps.js';
 import { Plugins } from './plugins.js';
 import { watchGameLights } from '../scene/gameLights.js';
-import { tierChanged } from '../scene/tier.js';
+import { tierChanged, tierDefined } from '../scene/tier.js';
 
 /**
  * Create the engine services on `engine` (called once from the Engine constructor, after the renderer, scene and uniforms exist).
@@ -84,6 +84,7 @@ export function createServices(engine, { canvas, validate, locale, strings, save
   defineHoldStacks(engine);
   // the one quality value (engine.tier): the device gives the base, the player's preset sets over it. settingsSet: on this point the player's choice is a choice, not a restriction
   engine.stacks.define('tier', { kind: 'value', base: engine._deviceTier, save: false, settingsSet: true, onChange: () => tierChanged(engine) });   // the post chain and cascades follow it (core/scene/tier.js onTierChange)
+  tierDefined(engine);
   engine.commits = new Commits(engine);          // background results that affect gameplay take effect on a fixed tick (see Commits.js)
   engine.ops = new Ops(engine);                  // one entry point for actions (define / run / can / list / recent), see Ops.js
   engine.views = new Views(engine);              // named fixed camera views for repeatable screenshots (Views.js)

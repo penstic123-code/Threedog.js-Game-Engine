@@ -13,7 +13,9 @@ export function createLights(engine, ctx) {
   const sun = new THREE.DirectionalLight(S.color, S.noon);
   sun.name = 'sun';   // the 'sun' slot finds the main light by this name
   sun.castShadow = true;
-  sun.shadow.mapSize.setScalar(S.shadowMap[engine.tier]);   // the picture reads the quality tier itself: the engine cannot hold this code to it
+  // the map size comes from engine.tier and follows it: a settings preset changes the tier while running, and 'tier:change' says so
+  const fit = () => engine.shadows.mapSize(sun, S.shadowMap[engine.tier]);
+  fit(); ctx.track(engine.events.on('tier:change', fit));
   Object.assign(sun.shadow.camera, { left: -SHADOW_BOX, right: SHADOW_BOX, bottom: -SHADOW_BOX, top: SHADOW_BOX, near: 1, far: 250 });
   // three 0.187: the default PCFShadowMap filters softly and radius widens the edge. Stripes on lit faces: more normalBias; a gap under a foot: less (shot names both)
   sun.shadow.bias = -0.0001; sun.shadow.normalBias = 0.03; sun.shadow.radius = S.shadowRadius;

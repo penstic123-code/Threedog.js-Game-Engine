@@ -13,6 +13,7 @@ export const ENGINE_EVENTS = [
   'ui:close',
   'settings:shadows',
   'settings:change',
+  'tier:change',
   'post:add',
   'water:add',
   'water:remove',

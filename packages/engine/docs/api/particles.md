@@ -18,7 +18,7 @@ Particles (particles() module)
 
 ## Data structures
 - **ParticleOptions** Particle effect parameters (define(), and each entry of particles({ effects, default })). All optional
-  - `max?: number` Maximum alive at once, default 120 (60 on low-tier devices; a number the game gives stands)
+  - `max?: number` Maximum alive at once, default 120 (60 while engine.tier is 'low'; a number the game gives stands)
   - `lifetime?: Range` Seconds each particle lives [min, max]
   - `rate?: number` Default particles per second for attach
   - `speed?: Range` Initial speed (m/s) [min, max]

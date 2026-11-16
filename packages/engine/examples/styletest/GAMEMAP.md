@@ -59,7 +59,7 @@ content/*.js is content data: how to write it in `node_modules/threedog/docs/rec
 | main.js | 87 | @ts-check This example is written in GLSL: it is the WebGL route (`threedog new-game --webgl`). On … |
 | models.js | 88 | The exhibits that are not in the world example's art (../world/art), built in code and registered b… |
 | params.js | 30 | URL parameters of the style test page. Import this file first in main.js: it rewrites word values i… |
-| picture/env.js | 39 | @ts-check ?env=1: soft light from the sky. A gradient of the sky's two colors over the ground color… |
+| picture/env.js | 38 | @ts-check ?env=1: soft light from the sky. A gradient of the sky's two colors over the ground color… |
 | picture/index.js | 17 | @ts-check The picture this page judges: wiring only. The picture under test is the world example's;… |
 | picture/lights.js | 10 | @ts-check The room's lamp. The sun and the ambient belong to the picture under test; this page only… |
 | picture/materials.js | 29 | @ts-check The exhibits' materials by name. One surface kind each: wood and plaster are matte Lamber… |

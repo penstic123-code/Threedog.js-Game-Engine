@@ -16,14 +16,13 @@ export function createEnv(engine, ambients) {
       void main(){ vec3 d = normalize(vDir); gl_FragColor = vec4(d.y < 0.0 ? uGround : mix(uHorizon, uTop, smoothstep(0.0, 0.5, d.y)), 1.0); }`,
   })));
   scene.environmentIntensity = ENV.intensity;
-  const every = engine.tier === 'low' ? ENV.lowInterval : ENV.interval;
   let target = /** @type {THREE.WebGLRenderTarget | null} */ (null), built = '', last = -Infinity;
   return {
     /** Runs after the picture under test wrote this frame's sky and lights @param {any} s engine.uniforms */
     update(s) {
       for (const light of ambients) light.intensity *= ENV.hemi;
       const now = engine.time.now('real');
-      if (now - last < every) return;
+      if (now - last < (engine.tier === 'low' ? ENV.lowInterval : ENV.interval)) return;   // read each frame: a settings preset changes the tier while running
       last = now;
       const key = s.uSkyTop.value.getHexString() + s.uSkyHorizon.value.getHexString();
       if (key === built) return;   // a fixed sky costs one build, however long the page runs

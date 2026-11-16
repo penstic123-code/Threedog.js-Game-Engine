@@ -48,9 +48,11 @@ function nodeSide(engine, name) {
 }
 
 export class Effect {
-  constructor(sys, name, o) {
+  /** @param {any} sys @param {string} name @param {any} o @param {number} [cap] buffer slots, at least o.max: room for a default max that follows engine.tier (_resize) */
+  constructor(sys, name, o, cap) {
     this.sys = sys; this.name = name; this.o = o;
-    const N = this.max = Math.max(1, Math.round(o.max));
+    const N = this.cap = Math.max(1, Math.round(Math.max(cap ?? 0, o.max)));
+    /** slots in use (spawn's ring, the update loop): o.max, at most cap */ this.max = Math.max(1, Math.round(o.max));
     this.pos = new Float32Array(N * 3); this.vel = new Float32Array(N * 3);
     this.age = new Float32Array(N); this.life = new Float32Array(N).fill(0);   // life 0 = empty slot
     this.spinV = new Float32Array(N);
@@ -93,7 +95,7 @@ export class Effect {
 
   /** @internal The geometry, material and draw object for the engine's current renderer (sprite quads on WebGPU, points on WebGL) */
   _build() {
-    const sys = this.sys, o = this.o, N = this.max, name = this.name;
+    const sys = this.sys, o = this.o, N = this.cap, name = this.name;
     const g = this.geometry = new THREE.BufferGeometry();
     const gpu = nodeSide(sys.engine, name);   // WebGPU: the same attributes, read per instance by sprite quads
     const attr = (n, size) => { const a = new (gpu ? THREE.InstancedBufferAttribute : THREE.BufferAttribute)(new Float32Array(N * size), size); a.setUsage(THREE.DynamicDrawUsage); g.setAttribute(n, a); return a; };
@@ -218,6 +220,17 @@ export class Effect {
     for (const a of this._attrs) {
       a.clearUpdateRanges(); a.addUpdateRange(0, up * a.itemSize); a.needsUpdate = true;
     }
+  }
+
+  /**
+   * @internal a default max following engine.tier: only the slots in use change, inside buffers built for the larger count, so nothing the game holds
+   * (points, material, the uniforms its own material shares, the WebGPU nodes reading the attributes) is replaced. Particles above the new count go
+   */
+  _resize(max) {
+    const n = Math.min(this.cap, Math.max(1, Math.round(max)));
+    if (n === this.max) return;
+    for (let i = n; i < this.max; i++) if (this.life[i] !== 0) { this.life[i] = 0; this.aAlpha.array[i] = 0; this.alive--; }
+    this.max = n; this.head %= n; this._stale = this.cap;   // the next upload clears the dropped slots on the GPU too
   }
 
   dispose() { this._swap.remove(); this._drop(); }

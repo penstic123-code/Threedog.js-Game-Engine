@@ -23,8 +23,25 @@ export function onTierChange(e, fn) {
   FOLLOWERS.get(e).add(fn);
   return { remove: () => { FOLLOWERS.get(e)?.delete(fn); } };
 }
-/** The tier stack's onChange (core/engine/services.js) @param {any} e */
-export function tierChanged(e) { for (const fn of [...(FOLLOWERS.get(e) ?? [])]) fn(); }
+/** @type {WeakMap<any, string>} per engine: the tier last announced by 'tier:change' */
+const ANNOUNCED = new WeakMap();
+/** The tier stack was just defined (core/engine/services.js): its first value is the baseline the first 'tier:change' differs from @param {any} e */
+export function tierDefined(e) { ANNOUNCED.set(e, e.tier); }
+/**
+ * The tier stack's onChange (core/engine/services.js). The engine's own parts first, then the public 'tier:change' event: game code sizes what it
+ * makes from engine.tier and follows this event (a shadow map, a pool), so a preset reaches it like it reaches the post chain.
+ * The stack calls this on every take and release, also when the value stays (a preset equal to the device's tier, engine.tier written under a
+ * preset), so the event fires only when the tier differs from the last one announced. Nothing during dispose: settings, disposed first, gives
+ * its tier back then, and a follower would allocate (particles, a shadow map) on an engine being torn down. @param {any} e
+ */
+export function tierChanged(e) {
+  if (e.disposed) return;
+  for (const fn of [...(FOLLOWERS.get(e) ?? [])]) fn();
+  const t = e.tier;
+  if (t === ANNOUNCED.get(e)) return;
+  ANNOUNCED.set(e, t);
+  e.events?.emit('tier:change', { tier: t });
+}
 
 /** The name under engine.saves.storageKey of a player's MSAA choice */
 export const MSAA_KEY = 'msaa';

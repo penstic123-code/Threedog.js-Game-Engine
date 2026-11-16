@@ -11,7 +11,7 @@ export const palette = {
   exposure: 1,
   background: 0x8c8c8c,   // behind everything when nothing is drawn there; a sky() dome draws over it
   // The key light: it casts the shadow, and its strength against the fill below sets how deep shadows look (shot's light: fact is that ratio).
-  // shadowRadius: blur of the shadow edge in shadow-map texels (higher for cloud or a gentle look, low for a crisp sun); shadowMap: map size per engine.tier.
+  // shadowRadius: blur of the shadow edge in shadow-map texels (higher for cloud or a gentle look, low for a crisp sun); shadowMap: map size per engine.tier (lights.js follows a tier change).
   // direction: toward the sun when the game has no sky() (with one, the sky aims it); from the side and above, so each form shows a lit and a shaded face.
   sun: { color: 0xffffff, noon: 3, direction: [0.7, 1, 0.3], shadowRadius: 3, shadowMap: { low: 1024, high: 2048 } },
   // The fill: light from every direction (lights.js), so faces away from the sun show their shape instead of going black; Standard and Lambert materials take it.
