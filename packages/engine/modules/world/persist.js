@@ -209,10 +209,7 @@ export function loadWorld(w, d) {
   for (const [id, base] of w._base) if (!w._removed.has(id)) w._insert(w._fromBase(id, base));
   for (const [id, r] of Object.entries(d?.records || {})) w._insert({ id, ...r });
   if (built) w._v.keepSame(built);
-  // the reset step for what modules derive from the records (session.js step 2), in module order, then the game's event
-  const info = { count: w.records.size };
-  w.engine._resetStep('worldLoad', info);
-  w.engine.events.emit('world:load', info);
+  w._recordsLoaded({ count: w.records.size });   // ctx.things.recordsLoaded: the modules' worldLoad step, then 'world:load' (core/saves/session.js step 2)
 }
 
 /**

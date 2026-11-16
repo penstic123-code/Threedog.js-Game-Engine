@@ -13,8 +13,8 @@
 //
 // The reset sequence, one declared order (a module joins with hooks on its definition, never with listeners whose order would be install order):
 //   1. end      core first (control ends the old walks), then every module's sessionEnd(e), then the 'session:end' event
-//   2. apply    the save parts load (saveApply.js); the records part (world module) calls engine._resetStep('worldLoad', info) when its records were
-//               replaced, then emits 'world:load' (outside a session too: a quick load, a level load; an atomic op's muted rollback runs neither)
+//   2. apply    the save parts load (saveApply.js); when the records part (world module) replaced its records it calls ctx.things.recordsLoaded, which runs
+//               every module's worldLoad(e, info), then emits 'world:load' (outside a session too: a quick load, a level load; an atomic op's muted rollback runs neither)
 //   3. rebuild  every module's afterLoad(e, turn) (saveApply.js; gameplay frozen until they settle)
 //   4. start    core first (what is added now is setup, things.js), then every module's sessionStart(e, info), then the 'session:start' event
 //   Within a step modules run in engine.moduleOrder (stage, then before / after, then install order: modules.js), so an order that matters is declared there.

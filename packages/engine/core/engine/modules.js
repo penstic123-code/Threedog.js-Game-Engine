@@ -30,7 +30,7 @@
 //   ctx.mod(point, o) = ctx.track(engine.mod(point, { ...o, owner: ctx.name })): a module's changes to shared values go with it too.
 //   ctx.rule(name, default, names?) = a replaceable rule on a plain shared point: .decide(id, facts) gives a built-in name, false for manual, or what the game's function answered.
 //   ctx.input.define(name, { context }) / ctx.input.bind(name, keys): the module's input declarations and bindings, gone with it too.
-//   ctx.ops.define, ctx.saves.define, ctx.ui.define, ctx.stream.addReadyCheck, ctx.budget.metric, ctx.things.addSource / explainWith, ctx.ground.provide / addColliders:
+//   ctx.ops.define, ctx.saves.define, ctx.ui.define, ctx.stream.addReadyCheck, ctx.budget.metric, ctx.things.addSource / explainWith / recordsLoaded, ctx.ground.provide / addColliders:
 //   the same registrars, recorded in the one scope with kind, id, owner and instance (engine.catalog(name).resources reads it). Built-in modules register only through
 //   these (tools/tests/module-boundaries). A save part leaving keeps its data as unattached data of the save (Saves.define), so a module unloaded for a while loses nothing.
 //   Every install is its own instance (engine._modInst: name -> token): a ctx belongs to one install, not to a name. An async init that resumes after
@@ -438,7 +438,9 @@ export const moduleMethods = {
       ui: { define: owned('ui', (n, factory, def) => this.ui.define(n, factory, def)) },
       stream: { addReadyCheck: owned('ready', (n, fn) => this.stream.addReadyCheck(n, fn)) },
       budget: { metric: owned('metric', (n, read, o) => this.budget.metric(n, read, o)) },
-      things: { addSource: ifLive(src => own('source', name, this._things.addSource(src))), explainWith: ifLive(fn => own('explainer', name, this.explainWith(fn))) },
+      things: { addSource: ifLive(src => own('source', name, this._things.addSource(src))), explainWith: ifLive(fn => own('explainer', name, this.explainWith(fn))),
+        // the records source replaced its records wholesale (a load): core runs the worldLoad reset step, then tells the game (session.js step 2)
+        recordsLoaded: info => { this._resetStep('worldLoad', info); this.events.emit('world:load', info); } },
       ground: { provide: provideGround, addColliders: ifLive(fn => own('colliders', name, this.addGroundColliders(fn))) },
     };
   },

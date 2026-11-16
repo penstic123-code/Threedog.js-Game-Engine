@@ -251,7 +251,7 @@ Type = what the module may own (core/engine/moduleTypes.js): world, picture, act
 | weather:lightning | weather | weather |
 | world:add | world | gameplay, grid |
 | world:change | world | gameplay, grid |
-| world:load | world | — |
+| world:load | core/engine/modules.js | — |
 | world:remove | world | core/ops/control.js, core/ops/stacks.js, characters, gameplay, grid |
 
 ## Input actions (engine.input)

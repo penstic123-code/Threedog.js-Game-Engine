@@ -50,6 +50,7 @@ export function world(opts = {}) {
       ctx.track(e.onFixed(() => w._v.pull(), { phase: 'late' }));
       ctx.track(e.time.onMove(() => w._s.moved()));
       ctx.saves.define('world', { atomic: true, version: 5, migrate: WORLD_MIGRATE, save: () => w.toJSON(), load: d => w.fromJSON(d), checkNewGame: codePlaced });
+      w._recordsLoaded = ctx.things.recordsLoaded;
       ctx.things.addSource(recordSource(w));   // engine.thing / thing.set / the shared id space reach the records through this
       ctx.things.explainWith(worldExplain);
       ctx.budget.metric('worldRecords', () => w.records.size);
