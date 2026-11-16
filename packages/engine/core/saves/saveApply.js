@@ -291,7 +291,7 @@ export function applyAnnounced(s, data, slot, done) {
  *  Returns true when no module has a hook (nothing waited), else a Promise. The hooks start a microtask after the parts, and the marker and the
  *  freeze with them: the lines right after an unawaited apply can still step, run ops and apply again (stateReplace.js, pause). */
 function afterLoad(s, e, slot, scope) {
-  const has = [...e.modules.values()].filter(m => m.afterLoad), q = s._replace;
+  const has = e.moduleOrder.map(n => e.modules.get(n)).filter(m => m?.afterLoad), q = s._replace;   // in module order, like every reset step (session.js)
   if (!has.length) { takeListenerError(scope, 0); return true; }
   const job = q.pause();
   let hooks = [];

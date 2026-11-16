@@ -312,7 +312,6 @@ export function dialogue(opts = {}) {
       // choice1..9 pick a choice by number: declared, never bound here (presets.bindings.dialogNumbers binds 1-9). Optional: the choice cursor
       // (basic menu keys + confirm) and clicks pick choices without them. Context 'dialog', so 1-9 stay free for hotbars outside a conversation
       for (let i = 1; i <= 9; i++) ctx.input.define('choice' + i, { context: 'dialog', label: 'dialogue.choice', optional: true });
-      ctx.track(e.events.on('session:end', () => d._cancel()));   // an open dialogue belongs to the playthrough that opened it
       ctx.ui.define('dialogue', dialogueBox);
       ctx.ui.define('dialogue.bubble', bubblePart, { multi: true });
       ctx.ops.define('dialogue.advance', {
@@ -332,6 +331,7 @@ export function dialogue(opts = {}) {
       return d;
     },
     frame(dt) { d.frame(dt); },
+    sessionEnd() { d._cancel(); },   // an open dialogue belongs to the playthrough that opened it
     // unloaded mid-conversation: the input context and focus entry are the conversation's, not tracked, and a say() Promise gets its end. Not on engine.dispose: waits stay pending there
     dispose(e) { if (!e.disposed) { d._bubbles.clear(); d._asks.clear(); d.end(); } },
     afterLoad() { if (!d.active?.duringLoad) d._cancel(); },   // a line open at a load belongs to the state thrown away; one a load opened stays

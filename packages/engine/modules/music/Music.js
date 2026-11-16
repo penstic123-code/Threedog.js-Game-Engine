@@ -321,11 +321,11 @@ export function music(opts = {}) {
     name: 'music', skipKind: 'none', type: 'picture', params: MUSIC_PARAMS, options: opts, label: 'Music', optional: ['dialogue'], stage: 'audio',
     install(e, ctx) { e.i18n.add({ 'zh-CN': { 'module.music': '音乐' }, en: { 'module.music': 'music' } });
       m = new Music(e, opts, ctx.track);
-      ctx.track(e.events.on('session:end', () => m.stop({ fade: 0 })));   // a playthrough ends: its music stops at once
       ctx.saves.define('music', { notAtomic: 'sound, which an atomic op leaves alone: side effects go in after', save: () => ({ override: m._override ?? null, intensity: m.intensity }), load: d => m._load(d) });
       return m;
     },
     frame(dt) { m.frame(dt); },
+    sessionEnd() { m.stop({ fade: 0 }); },   // a playthrough ends: its music stops at once
     dispose() { m._close(); },   // nothing would stop a looping track once the module is gone
     // the same state the tests read (music.state) plus why nothing may sound: audio still locked (ready false, the track waits in pending), rules on, ducked by dialogue
     describe() { return { ...m.state, ready: m.ready, ruled: m.ruled, ducked: !!m._duck, tracks: m.tracks.size }; },

@@ -99,9 +99,10 @@ export function defineTemplates(e, api, st, defs) {
     if (d.stages || d.update) simulate(e, st, name);
     limitContainers(e, st, name);
   }
-  // a save brings back runtime instances and their goods, but container limits are definition data: put them back from the template
-  st.templateLoad ??= st.track(e.events.on('world:load', () => { for (const name of st.templates.keys()) limitContainers(e, st, name); }));
 }
+
+/** The content module's worldLoad step: a save brings back runtime instances and their goods, but container limits are definition data: put them back from the template. @internal */
+export function templatesWorldLoad(e, st) { for (const name of st.templates.keys()) limitContainers(e, st, name); }
 
 /** The definition of a template, or a dev error listing the known ones. @internal */
 export function templateOf(st, name) {

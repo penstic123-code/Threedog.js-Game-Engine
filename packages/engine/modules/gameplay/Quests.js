@@ -326,6 +326,7 @@ export function quests(opts = {}) {
     name: 'quests', skipKind: 'approx', type: 'rules', provides: ['quests'], label: 'Quests', params: QUEST_PARAMS, options: o,
     // o: the schema defaults are filled in, the class repeats none
     install(e, ctx) { q = new Quests(e, o, ctx); return q; },
+    sessionEnd() { q.win.toggle(false); },   // the log shows the playthrough that ended
     // Check quests in the fixed step (game time; not while frozen or flow is paused, so no rewards are granted while paused)
     fixed() { if (--q._t <= 0) { q._t = q._period; q.check(); } },
     // engine.skip: the countdown lands where stepping would have left it; conditions are checked once, on the last segment, if a check fell inside

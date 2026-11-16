@@ -321,11 +321,10 @@ export function timeline(opts = {}) {
     name: 'timeline', skipKind: 'none', type: 'rules', params: TIMELINE_PARAMS, options: opts, label: 'Timeline', stage: 'control', before: ['cameraRig'], optional: ['dialogue'],   // before the camera, so the takeover applies on the same frame
     install(e, ctx) {
       e.i18n.add(STRINGS); t = new Timeline(e, ctx);
-      // a running cutscene ends with its playthrough (session waits one macrotask for its steps to settle)
-      ctx.track(e.events.on('session:end', () => t._drop()));
       return t;
     },
     frame(dt) { t.frame(dt); },
+    sessionEnd() { t._drop(); },   // a running cutscene ends with its playthrough (session waits one macrotask for its steps to settle)
     afterLoad() { t._drop(r => r.duringLoad); },
     // unloaded mid-cutscene: every run ends through its finally (camera, focus, actors go back); nothing else would, the frame hook is gone
     dispose() { t._drop(); t._tweener.cancelAll(); },   // also the tweens started with timeline.tween(): no run owns them

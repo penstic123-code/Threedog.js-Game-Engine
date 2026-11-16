@@ -25,7 +25,7 @@ import { missingText, warnOnce } from '../../core/base/validate.js';
 import { loadContent, checkRefs, BUILTIN_TESTS, BUILTIN_RUNS } from './loader.js';
 import { sectionsOf } from '../../core/base/sections.js';
 import { addProps, needWorld } from './props.js';
-import { templateOf, spawnTemplate, placeTemplate, defineTemplates } from './templates.js';
+import { templateOf, spawnTemplate, placeTemplate, defineTemplates, templatesWorldLoad } from './templates.js';
 import { refit } from './models.js';
 import { holdProtos } from '../../core/assets/namedModel.js';
 import { packsOf } from './packs.js';
@@ -232,6 +232,7 @@ export function content() {
       st.checkOps = () => { if (e.ready) checkOps(e, st); };
       return api;
     },
+    worldLoad(e) { templatesWorldLoad(e, st); },
     isReady() { return api.ready; },
     // ?at=<place> / applyState({ at }): this module owns the names, core does the placing with what it gets back. An unknown name stops here: a picture of the
     // spawn point taken for "the pier" would look fine and be wrong

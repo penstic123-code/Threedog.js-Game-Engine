@@ -269,25 +269,6 @@ export function rigModule(kind, opts) {
           if (r.pitch !== undefined && r.kind === d.kind && Number.isFinite(d.pitch)) r.pitch = d.pitch;
         },
       });
-      // a new playthrough (newGame / load) starts with the camera as installed (kind, distance, every option), placed at the player instead of flying across the map.
-      // The same object, so a rig the game kept at boot stays the camera; its view is what the load just left on it (the part above, or a game part's load() writing the rig)
-      ctx.track(e.events.on('session:start', () => {
-        // a hold made by writing the camera has no handle and no one who will end it: it belonged to the playthrough that is over. A manual() hold is on purpose and stays
-        if (owned.mode === 'yielded') owned.manual(false);
-        // the view the load left is on the rig of the saved kind, and that may be a rig switched to at runtime (the cameraRig part above)
-        const old = c, { yaw, pitch } = c.kind === kind ? c : home;
-        old.onExit?.(); cache.clear();
-        setProjection(e);
-        setFov(e, fov0());
-        const built = make(kind, opts);
-        for (const k of Object.keys(home)) delete home[k];
-        c = e.cameraRig = Object.assign(home, built, yaw !== undefined && { yaw, pitch });
-        cache.set(kind, home);
-        // follows the player only if the game asked (addPlayer({ cameraFollow })), through the seat the load put it in: the rig was rebuilt after that seat was taken
-        const P = e.player, car = P?.cameraFollow ? P.vehicle : null;
-        c.onEnter?.(false); c.follow(car ? car.object : P?.cameraFollow ? P.root : null, car?.camera); fresh = true;
-        e.events.emit('camera:change', { kind, previous: old.kind });   // settings re-apply the player's sensitivity / fov to the rebuilt rig
-      }));
       // a scenario put the player somewhere else (?at, ?pos): a rig that eases would open on a glide across the map; follow() puts it there at once
       ctx.track(e.events.on('state:placed', () => { if (c.target) { c.follow(c.target); fresh = true; } }));
       // The camera module places position / orientation every frame: a game that moves the camera directly takes it (the rig stops), warned once
@@ -303,6 +284,25 @@ export function rigModule(kind, opts) {
         } });
       RIG_OWNED.set(e, owned);
       return c;
+    },
+    // a new playthrough (newGame / load) starts with the camera as installed (kind, distance, every option), placed at the player instead of flying across the map.
+    // The same object, so a rig the game kept at boot stays the camera; its view is what the load just left on it (the part above, or a game part's load() writing the rig)
+    sessionStart(e) {
+      // a hold made by writing the camera has no handle and no one who will end it: it belonged to the playthrough that is over. A manual() hold is on purpose and stays
+      if (owned.mode === 'yielded') owned.manual(false);
+      // the view the load left is on the rig of the saved kind, and that may be a rig switched to at runtime (the cameraRig part above)
+      const old = c, { yaw, pitch } = c.kind === kind ? c : home;
+      old.onExit?.(); cache.clear();
+      setProjection(e);
+      setFov(e, fov0());
+      const built = make(kind, opts);
+      for (const k of Object.keys(home)) delete home[k];
+      c = e.cameraRig = Object.assign(home, built, yaw !== undefined && { yaw, pitch });
+      cache.set(kind, home);
+      // follows the player only if the game asked (addPlayer({ cameraFollow })), through the seat the load put it in: the rig was rebuilt after that seat was taken
+      const P = e.player, car = P?.cameraFollow ? P.vehicle : null;
+      c.onEnter?.(false); c.follow(car ? car.object : P?.cameraFollow ? P.root : null, car?.camera); fresh = true;
+      e.events.emit('camera:change', { kind, previous: old.kind });   // settings re-apply the player's sensitivity / fov to the rebuilt rig
     },
     frame(dt, e) {
       const over = !!e.cameraOverride;

@@ -211,11 +211,11 @@ export function hud(opts = {}) {
       e.i18n.add(STRINGS);
       defineHudParts(e, ctx, containers);
       for (const ev of ['quest:start', 'quest:step', 'quest:part', 'quest:done', 'quest:fail', 'state:replaced', 'op:rolledBack']) ctx.track(e.events.on(ev, syncQuests));
-      // quest markers are derived from the quests save part: they belong to the old quests, and session:start / save:loaded rebuild them; session:failed too, the quests stayed
-      ctx.track(e.events.on('session:end', () => { for (const m of quest.values()) m.remove(); quest.clear(); }));
       ctx.track(e.events.on('i18n:change', () => { for (const [id, it] of items) it.part?.update({ id, ...it.o }); }));
       return api;
     },
+    // quest markers are derived from the quests save part: they belong to the old quests, and session:start / save:loaded rebuild them; session:failed too, the quests stayed
+    sessionEnd() { for (const m of quest.values()) m.remove(); quest.clear(); },
     frame() {
       for (const m of api.markers) updateMarker(m);
       // input has no event for a device switch or bind(), so a hint compares its key text each frame and redraws only on a change. Not through item():

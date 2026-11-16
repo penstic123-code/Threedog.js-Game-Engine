@@ -139,8 +139,14 @@ export class Events {
     const s = this.map.get(name); if (!s) { if (this.traceSize > 0) this._note(name); return; }
     const prev = this._cur;
     if (this.traceSize > 0) this._cur = `ev:${this._note(name)}`;   // handlers run under this event: what they emit names it as parent
-    try { for (const fn of [...s]) { if (!s.has(fn)) continue; /* removed by an earlier listener of this emit */ try { const r = fn(...args); if (this._scopes.length) syncOnly(r, `a listener of '${name}' inside a load`, true); } catch (err) { if (this._scopes.length) this._scopes.at(-1).push({ name, err }); else if (this.onError) this.onError(name, err); else console.error(`[event ${name}]`, err); } } }
+    try { for (const fn of [...s]) { if (!s.has(fn)) continue; /* removed by an earlier listener of this emit */ this._call(name, fn, args); } }
     finally { this._cur = prev; }
+  }
+  /** @internal run one handler the way a listener runs: an error is collected by the load in progress (it fails it) or reported, never thrown to the caller.
+   *  Shared with the session reset steps (engine._resetStep), so a module's reset hook fails or reports exactly as the listener it replaced did */
+  _call(name, fn, args) {
+    try { const r = fn(...args); if (this._scopes.length) syncOnly(r, `a listener of '${name}' inside a load`, true); }
+    catch (err) { if (this._scopes.length) this._scopes.at(-1).push({ name, err }); else if (this.onError) this.onError(name, err); else console.error(`[event ${name}]`, err); }
   }
   /** @internal trace entries old -> new */
   _ordered() { const t = this._trace; return this._th ? t.slice(this._th).concat(t.slice(0, this._th)) : t; }

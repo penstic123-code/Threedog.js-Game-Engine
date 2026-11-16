@@ -86,15 +86,16 @@ export class Things {
     this.byId = new Map();          // id -> WeakRef(root)
     this.n = 0;                     // session ids obj#n
     this.stacks = 0;
-    this.setup = false;             // true inside session:start listeners: what they add is rebuilt by code every playthrough
+    this.setup = false;             // true inside sessionStart hooks and session:start listeners: what they add is rebuilt by code every playthrough
     this.over = new Map();          // stable id -> { orig, cur }: thing.set overrides (orig = the code-built transform, for load / newGame / undo)
     this.removed = new Set();       // stable ids removed with thing.remove (saved)
     this.gone = new Map();          // id -> { obj, parent }: removed with thing.remove, detached and held so undo or a load can put it back
     this.pending = { set: {}, removed: new Set() };   // from a loaded save, objects not registered yet (orphans if they never come)
     this.unsaved = new Set();       // WeakRefs of session-tier objects someone expected to keep (save: true, or made inside an op)
     this.conflicts = [];            // dev: "two systems manage one object" findings, newest last
-    e.events.on('session:start', () => { this.setup = true; queueMicrotask(() => { this.setup = false; }); });
   }
+  /** @internal step 4 of the session reset (session.js), before the modules' sessionStart hooks and the 'session:start' listeners: what they add is setup */
+  setupTurn() { this.setup = true; queueMicrotask(() => { this.setup = false; }); }
   /**
    * A store of records that share the id space with engine.add objects (the world module registers itself at install). The shape core uses:
    * { has(id), get(id) -> { position, ... }, ids(), idOf(obj) -> id | null (model -> record), view(id) -> Object3D | null,

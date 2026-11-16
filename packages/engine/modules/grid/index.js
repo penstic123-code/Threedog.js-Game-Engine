@@ -278,9 +278,9 @@ export function grids(opts = {}) {
       ctx.track(e.events.on('world:add', ({ id }) => G._reindex(id)));
       ctx.track(e.events.on('world:remove', ({ id }) => G._unindex(id)));
       ctx.track(e.events.on('world:change', ({ id, keys }) => { if (keys.includes('grid')) G._reindex(id); }));
-      ctx.track(e.events.on('world:load', () => G._rebuild()));
       return G;
     },
+    worldLoad() { G._rebuild(); },   // the records were replaced wholesale (a load): index them again
     frame() { for (const t of G._tiles.values()) t.frame(); for (const p of G._previews) p.frame(); },
     explain: { grid: (e, q) => G._explain(q) },
     describe() { return G._describe(); },

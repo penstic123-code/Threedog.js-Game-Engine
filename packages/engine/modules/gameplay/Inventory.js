@@ -44,9 +44,6 @@ export class Inventory {
     if (engine.input.keysOf(action).length) track(engine.input.touchButton(action, 'inventory.action'));
     ctx.ui.define('inventory', inventoryWindow, { modal: { cancel: e => e.ui.close('inventory'), freeze: () => this.pauseGame, data: () => windowData(this) } });
     for (const ev of ['i18n:change', 'input:rebind']) track(engine.events.on(ev, () => this._refresh()));
-    // a pack loaded after start() stays for the next playthrough with its props and definitions, and its start items with them
-    track(engine.events.on('session:start', ({ kind }) => { if (kind === 'new') for (const d of this._lateStart) this.giveStart(d); }));
-    track(engine.events.on('session:end', () => engine.ui.close('inventory')));   // it shows the playthrough that ended, and its freeze must not reach the next one
     // version 1 is the current shape; raise it with a migrate step when it changes. seq: the numbering of entry keys (sword#3); a save without it continues
     // after the highest key it holds
     ctx.saves.define('inventory', { atomic: true, version: 1, save: () => ({ seq: this._seq, items: this.home._save() }), load: d => {
@@ -247,6 +244,9 @@ export function inventory(opts = {}) {
       defineInventoryOps(e, ctx, inv);
       return inv;
     },
+    sessionEnd(e) { e.ui.close('inventory'); },   // it shows the playthrough that ended, and its freeze must not reach the next one
+    // a pack loaded after start() stays for the next playthrough with its props and definitions, and its start items with them
+    sessionStart(e, { kind }) { if (kind === 'new') for (const d of inv._lateStart) inv.giveStart(d); },
     frame(dt, e) {   // the inventory key toggles the part; while open the part holds the input lock, so the close press is read raw
       const open = e.ui.isOpen('inventory');
       if (open ? e.input.pressedRaw(inv.action) : e.input.pressed(inv.action)) { if (open) e.ui.close('inventory'); else e.ui.open('inventory'); }

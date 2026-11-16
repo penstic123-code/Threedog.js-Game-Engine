@@ -289,6 +289,8 @@ export function characters(opts = {}) {
     fixed(_dt, e) { st.paths.flush(); e.control.stepAll(); stepSeats(e); carryRiders(e, false); },
     // a timeline or frame code moved a platform: carry now, so the picture never shows a rider sinking into or floating above it
     frame(dt, e) { for (const p of st.players.values()) p.character.animate(dt); carryRiders(e, true); },
+    // world replaced wholesale (a load): NPC indexes first, then each player goes back to its record, in the order they were added
+    worldLoad() { st.mgr?._worldLoad(); for (const p of st.players.values()) p.worldLoad(); },
     describe(e, ctx) { describeCharacters(e, ctx, st.mgr); },
     // a player, a queued path and the control lookup all outlive install unless they are ended here; the player's record stays in world, as NPC records do
     dispose(e) {

@@ -1144,8 +1144,15 @@ export interface ModuleDef<Api = any> {
   content?: Record<string, ContentSection>;
   /** The loading screen waits until this returns true before disappearing (the hook is called isReady; in the engine ready is always a boolean property) */
   isReady?(e: Engine): boolean;
-  /** After a save loaded: rebuild what the loaded state needs nearby; gameplay waits frozen until the returned Promise resolves. turn: as SaveProvider.load */
+  /** Session reset, step 1 (core/saves/session.js): a playthrough ends (newGame / load / quit), before anything is replaced. Stop what belongs to it (a cutscene, the music); start nothing.
+   *  Every reset step runs in engine.moduleOrder (stage, before / after), before the matching event (session:end) reaches the game */
+  sessionEnd?(e: Engine): void;
+  /** Session reset, step 2: the world's records were replaced wholesale (any load, new game included), before 'world:load'. Rebuild what is derived from the records */
+  worldLoad?(e: Engine, info: { count: number }): void;
+  /** Session reset, step 3: after a save loaded: rebuild what the loaded state needs nearby; gameplay waits frozen until the returned Promise resolves. turn: as SaveProvider.load */
   afterLoad?(e: Engine, turn: SaveTurn): void | Promise<void>;
+  /** Session reset, step 4: a new playthrough began (not after a quick load), before 'session:start' */
+  sessionStart?(e: Engine, info: { kind: 'new' | 'load'; slot?: string }): void;
   /** Fixed step (60 times per second); dt is in seconds */
   fixed?(dt: number, e: Engine): void;
   /** Once per frame; dt is in seconds */
