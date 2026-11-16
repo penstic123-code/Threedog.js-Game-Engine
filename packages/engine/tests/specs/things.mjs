@@ -75,7 +75,7 @@ export const specs = [
         return { x, z, gameBefore, batchingOwner: (engine.scene.add(engine.batching.root), engine.thing(engine.batching.root).owner), a: { saved: a.saved, owner: a.owner, at: a.at, loses: a.loses, edit: a.edit, kind: a.kind },
           b: { saved: b.saved, owner: b.owner, template: b.template, edit: b.edit }, hit: hit?.thing?.id ?? null, viaBlade, viaModel,
           at0, b0, moved, undone, rmParent: rmParent === null, back: mill.parent === engine.scene, unsavedWarn, owned, dupRec, badId, capped, gone, scene, dupNative, implicit,
-          saved: engine.saves.collect().parts.scene, sessionFlag: (engine.events.emit('session:start', {}), T.setup) };
+          saved: engine.saves.collect().parts.scene, sessionFlag: await (async () => { let f = null; const h = engine.events.on('session:start', () => { f = T.setup; }); await engine.session.newGame(); h.remove(); return f; })() };   // a real new game: the window opens in session.js's start step, not on an emitted event
       }, build.toString());
       console.log('    game things at start:', r.gameBefore.join(' | '), '· windmill-a at', r.a.at);
       check('both doors answer engine.thing: native saved "code" (loses geometry / material), template saved "record"', r.a.saved === 'code' && r.a.owner === 'game' && r.a.loses.some(l => /geometry and material/.test(l)) && r.b.saved === 'record' && r.b.template === 'windmill', JSON.stringify([r.a, r.b]));

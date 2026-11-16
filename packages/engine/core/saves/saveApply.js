@@ -1,7 +1,7 @@
 // Applying a save (split out of Saves.js): every part is checked and migrated before anything changes (saveVersions.js), then loaded in order;
 // if anything in the load throws, every part reloads the state from just before the load (rollback), so a game is never left half-loaded.
 // "Anything" is the whole load, not only load() itself: a listener of an event a part emits while loading (world:load) and the modules' afterLoad
-// hooks count too. Reported on their own they let the load carry on: a hand-edited player position threw in a world:load listener and left the game
+// hooks count too. Reported on their own they let the load carry on: a hand-edited player position threw in a worldLoad hook (then a world:load listener) and left the game
 // frozen half-loaded (durability audit 2026-11-02).
 // The capture lasts the whole load, past every await: an async part that emits after `await` (async load(d) { apply(d); await res(); emit(...) })
 // is part of the load as much as its first line. The browser has no async context to tell whose code emitted after an await, so each load

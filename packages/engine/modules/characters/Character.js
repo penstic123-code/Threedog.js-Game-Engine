@@ -374,7 +374,7 @@ export class Character {
   }
   /** Dispose this character completely: exit the vehicle first, release animation and mover, remove from the scene and dispose geometries and materials */
   dispose() {
-    // a player made by addPlayer: its registry entry (st.players, keys, touch button, world:load listener) goes first, and calls this again with _release cleared
+    // a player made by addPlayer: its registry entry (st.players, keys, touch button, worldLoad entry) goes first, and calls this again with _release cleared
     if (this._release) { const r = this._release; this._release = null; r(); return; }
     this.disposed = true;   // a model still loading by asset name is dropped on arrival
     this.engine.control?.endTasks(this, 'gone');
