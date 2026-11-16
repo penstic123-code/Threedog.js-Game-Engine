@@ -10,11 +10,12 @@ export function createLights(engine) {
   const sun = new THREE.DirectionalLight(0xffffff, LIGHT.sunIntensity);
   sun.position.set(LIGHT.sun[0], LIGHT.sun[1], LIGHT.sun[2]);
   sun.castShadow = true;
-  sun.shadow.mapSize.setScalar(engine.tier === 'low' ? 1024 : 2048);
+  // sized from engine.tier, resized on 'tier:change' (a settings preset changes the tier while running)
+  const fit = () => { const n = engine.tier === 'low' ? 1024 : 2048; engine.shadows.mapSize(sun, n); sun.shadow.radius = Math.max(Math.min(3, 2), 3 * n / 2048); };
   Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 250 });
   sun.shadow.bias = -0.0001; sun.shadow.normalBias = 0.03;   // the box covers the row of columns with a little margin
   // radius is in shadow texels: scaled with the map so the low tier's half-size map blurs the same meters, never under 2 texels (stair steps) unless set lower
-  sun.shadow.radius = Math.max(Math.min(3, 2), 3 * sun.shadow.mapSize.x / 2048);
+  fit(); engine.events.on('tier:change', fit);
   engine.scene.add(hemi, sun, sun.target);
   return { sun, hemi };
 }

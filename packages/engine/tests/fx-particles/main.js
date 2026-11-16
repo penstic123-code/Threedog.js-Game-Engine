@@ -456,3 +456,32 @@ window.fxLit = async () => {
   }
   return { routes };
 };
+
+/**
+ * engine.tier changing while running (tier:change): the public event fires once per change after the engine's own followers, a default particle max
+ * follows in place (same object, the game's material kept), a max the game gave stays, and a picture sized the template's way (fit at creation, again on
+ * tier:change through engine.shadows.mapSize) follows both writers: game code writing engine.tier and a preset's engine.mod('tier')
+ */
+window.fxTierFollow = async () => {
+  const e = createEngine({ canvas: canvas(), lights: false, pixelRatio: 1, adaptiveResolution: false, ui: { loading: false }, urlState: false, saveKey: 'test-fx-tier' });
+  e.use(particles());
+  await e.start(); e.haltLoop();
+  e.tier = 'high';
+  const { max: _, ...noMax } = STILL, a = e.particles.define('a', noMax), b = e.particles.define('b', { ...STILL, max: 30 }), mine = a.material.clone();
+  a.material = mine;
+  const sun = new THREE.DirectionalLight(0xffffff, 1); sun.castShadow = true; e.scene.add(sun);
+  const fit = () => e.shadows.mapSize(sun, e.tier === 'low' ? 1024 : 2048);   // the template's lights.js, word for word but for its palette
+  fit(); e.events.on('tier:change', fit);
+  const heard = []; e.events.on('tier:change', ({ tier }) => heard.push([tier, a.max]));   // a.max already followed: the engine's parts run first
+  const read = () => ({ tier: e.tier, a: a.max, b: b.max, map: sun.shadow.mapSize.x, same: e.particles._get('a') === a, mat: a.material === mine });
+  const r = { high: read() };
+  e.tier = 'low'; r.low = read();
+  e.tier = 'low'; r.again = heard.length;   // the same value: no change, no event
+  e.tier = 'high'; r.back = read();
+  e.mod('tier', { owner: 'settings', layer: 'settings', set: 'low' }); r.preset = read();   // what a settings preset does (modules/settings/apply.js)
+  e.stacks.get('tier').release('settings'); r.presetGone = read();
+  e.particles.emit('a', [0, 0, 0], { count: 5 }); e.step(1 / 60); r.emits = e.particles.count('a');
+  r.heard = heard;
+  e.destroy?.();
+  return r;
+};

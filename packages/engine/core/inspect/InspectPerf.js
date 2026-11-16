@@ -22,7 +22,7 @@ const NEXT = {
   lights: 'many lights: light pool, engine.use(lightPool({ point: 8 })) then engine.lightPool.add(torch, { intensity: 4, distance: 8 })',
   shadowLights: 'set castShadow = false on the lights that can go without; a point light draws six shadow maps',
   shadowMaps: 'set castShadow = false on the lights that can go without; a point light draws six shadow maps',
-  shadowMapSize: 'pick light.shadow.mapSize from engine.tier in the picture code',
+  shadowMapSize: 'size it with engine.shadows.mapSize(light, n) from engine.tier in the picture code, again on tier:change',
 };
 
 // "first frame 1840 ms = script 210 + construct 40 + ..." (engine.startup.phases; startup.js); empty before the first frame

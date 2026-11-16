@@ -16,12 +16,14 @@ export function createLights(engine, { night, fill, windowOpening }) {
   sun.position.set(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)).multiplyScalar(SHADOW.distance);
   sun.castShadow = true;
   renderer.shadowMap.type = SHADOW.type;
-  sun.shadow.mapSize.setScalar(SHADOW.mapSize[engine.tier === 'low' ? 'low' : 'high']);
+  // sized from engine.tier, resized on 'tier:change' (a settings preset changes the tier while running)
+  const fit = () => { const n = SHADOW.mapSize[engine.tier === 'low' ? 'low' : 'high']; engine.shadows.mapSize(sun, n); sun.shadow.radius = Math.max(Math.min(SHADOW.radius, 2), SHADOW.radius * n / SHADOW.mapSize.high); };
   const { extent: e, distance } = SHADOW;
   Object.assign(sun.shadow.camera, { left: -e, right: e, top: e, bottom: -e, near: 1, far: distance * 2 });
   // three adds bias in the shadow camera's 0-1 depth, i.e. a world offset of bias x (far - near)
   // radius is in shadow texels: scaled with the map so the low tier's half-size map blurs the same meters, never under 2 texels (stair steps) unless set lower
-  Object.assign(sun.shadow, { normalBias: SHADOW.normalBias, bias: -SHADOW.biasCm / 100 / (distance * 2 - 1), radius: Math.max(Math.min(SHADOW.radius, 2), SHADOW.radius * sun.shadow.mapSize.x / SHADOW.mapSize.high) });
+  Object.assign(sun.shadow, { normalBias: SHADOW.normalBias, bias: -SHADOW.biasCm / 100 / (distance * 2 - 1) });
+  fit(); engine.events.on('tier:change', fit);
   scene.add(hemi, sun, sun.target);
 
   if (windowOpening && !night) windowLight(engine, { ...windowOpening, ...WINDOW_LIGHT });

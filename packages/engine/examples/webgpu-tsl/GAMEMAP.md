@@ -40,7 +40,7 @@ content/*.js is content data: how to write it in `node_modules/threedog/docs/rec
 |---|---|---|
 | main.js | 45 | @ts-check WebGPU + TSL demo (page /webgpu-tsl.html): a field with grass and a lantern, every materi… |
 | picture/index.js | 19 | @ts-check The picture of the WebGPU + TSL demo: wiring only. Materials and post are nodes that read… |
-| picture/lights.js | 26 | @ts-check Sun and ambient from the signals. The engine's placeholder lights are off (createEngine({… |
+| picture/lights.js | 28 | @ts-check Sun and ambient from the signals. The engine's placeholder lights are off (createEngine({… |
 | picture/materials.js | 37 | @ts-check Materials by name, every one a three.js NodeMaterial written in TSL. The engine's shader … |
 | picture/palette.js | 24 | @ts-check The picture's numbers: one place for colors, light levels and the tone curve. Neutral sta… |
 | picture/post.js | 17 | @ts-check Soft scanlines. On the WebGPU route a post effect is a node function: input is the pictur… |
@@ -78,7 +78,9 @@ Code that breaks saves or manages world models: none (rule R33).
 
 ## Events the game emits / listens to
 
-(none)
+| Event | Emitted by the game | Listened to by the game |
+|---|---|---|
+| tier:change | — | lights.js |
 
 ## Saves
 

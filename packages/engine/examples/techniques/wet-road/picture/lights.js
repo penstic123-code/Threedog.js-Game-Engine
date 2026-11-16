@@ -9,7 +9,9 @@ export function createLights(engine) {
   const hemi = new THREE.HemisphereLight(ambient.dayColor, ambient.ground, ambient.day);
   const sun = new THREE.DirectionalLight(key.dayColor, key.day);
   sun.castShadow = true;
-  sun.shadow.mapSize.setScalar(engine.tier === 'low' ? 1024 : 2048);
+  // sized from engine.tier, resized on 'tier:change' (a settings preset changes the tier while running)
+  const fit = () => engine.shadows.mapSize(sun, engine.tier === 'low' ? 1024 : 2048);
+  fit(); engine.events.on('tier:change', fit);
   // wide enough for the whole visible street around the focus point, which sits 20 m down the road
   Object.assign(sun.shadow.camera, { left: -70, right: 70, top: 70, bottom: -70, near: 1, far: 160 });
   sun.shadow.normalBias = 0.04;

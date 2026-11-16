@@ -71,7 +71,7 @@ Measured with `engine.step` + a 1 px `readPixels` per frame, median of 120 frame
   camera; the far ground loses its sun shadow, which is what cascades are for (`engine.shadows.cascades(sun, { count: 3 })`, recipe 45) when the view is long.
 - A `scene.environment` lights Standard materials on top of the hemisphere light, so a strong environment plus a strong hemi doubles the fill.
 - Which steps where: small props on tables, a tidy room, a yard: 1-3, plus 4 for every static code-built model (free at run time).
-  Characters and moving props that must look planted close up: add 5 on desktop, keep it off on low-tier devices (read `engine.tier`).
+  Characters and moving props that must look planted close up: add 5 on desktop, keep it off on low-tier devices (read `engine.tier`, again on `'tier:change'`).
 
 Rules (correctness):
 - Vertex AO needs `vertexColors: true` on the material and vertices where the darkening should be; it is baked once, so only static geometry.

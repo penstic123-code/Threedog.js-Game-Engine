@@ -2,6 +2,12 @@
 // A guard: the engine's own particle / weather code, built against both renderers from one seed, must hold the same particles (count, positions,
 // sizes, alpha read from the data) and draw the same picture to within 3% mean brightness, with the particles in the same place; moving time moves
 // both and they still agree. GLSL text on WebGPU and a missing threedog/tsl fail by code, never silently. Software rendering like every pixel test.
+import { readFileSync, readdirSync } from 'node:fs';
+
+const ROOT = new URL('../../', import.meta.url);
+const code = f => readFileSync(new URL(f, ROOT), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+const filesIn = d => readdirSync(new URL(d, ROOT), { withFileTypes: true }).flatMap(f => (f.isDirectory() ? filesIn(`${d}/${f.name}`) : f.name.endsWith('.js') ? [`${d}/${f.name}`] : []));
+
 export const specs = [
   {
     name: '[guard] WebGPU particles and weather match WebGL: orthographic size does not shrink with depth, weather is fogged on both, the "no texture" stand-in is freed',
@@ -114,6 +120,27 @@ export const specs = [
       check('the same glsl spec still builds on WebGL', e.glslGl === 'no error', e.glslGl);
       check("without threedog/tsl, particles and weather on WebGPU say import 'threedog/tsl' [webgpu-needs-tsl]",
         [e.noTslParticles, e.noTslWeather].every(m => /import 'threedog\/tsl'/.test(m) && /\[webgpu-needs-tsl\]/.test(m)), JSON.stringify(e));
+    },
+  },
+  {
+    // 不许绕开: something sized from engine.tier when made follows a change through the one public notice, 'tier:change' (core/scene/tier.js);
+    // read once, a low-tier start kept its small sizes after the player picked the high preset
+    name: '[guard] tier:change: the event fires per change, a default particle max follows in place, a picture sized the template way follows; examples and the template follow',
+    url: '/tests/fx-particles/index.html',
+    software: true,
+    async run({ check, ev }) {
+      const r = await ev(() => window.fxTierFollow()), J = JSON.stringify(r);
+      const at = (s, tier, a, map) => s.tier === tier && s.a === a && s.b === 30 && s.map === map && s.same && s.mat;
+      check('game code writing engine.tier: the default max halves and comes back (60 / 120), a given max stays, the same effect object keeps its material, the shadow map follows',
+        at(r.high, 'high', 120, 2048) && at(r.low, 'low', 60, 1024) && at(r.back, 'high', 120, 2048), J);
+      check("a settings preset (engine.mod('tier')) and its release reach the same followers", at(r.preset, 'low', 60, 1024) && at(r.presetGone, 'high', 120, 2048), J);
+      check("one 'tier:change' per change, after the engine's own followers; writing the same tier fires none",
+        r.again === 1 && JSON.stringify(r.heard) === JSON.stringify([['low', 60], ['high', 120], ['low', 60], ['high', 120]]), J);
+      check('a resized effect still emits and draws its particles', r.emits === 5, J);
+      // the whole class, statically: a picture file that reads engine.tier where it makes things also follows 'tier:change' (a read inside a per-frame function is live already)
+      const pics = [...filesIn('examples'), ...filesIn('../tools/templates/game')].filter(f => /\/picture\/[^/]+\.js$/.test(f));
+      const once = pics.filter(f => { const c = code(f); return c.split('\n').some(l => /engine\.tier\b/.test(l) && /^ {0,4}\S/.test(l)) && !c.includes("'tier:change'"); });
+      check(`every examples / template picture file reading engine.tier at creation follows 'tier:change' (${pics.length} files)`, pics.length > 10 && !once.length, JSON.stringify(once));
     },
   },
 ];

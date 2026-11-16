@@ -12,7 +12,7 @@
 //   engine.particles.count('dust')   // live particle count; no name = all
 //
 // Params (all optional; below are the neutral fallback values):
-//   max 120         max particles alive at once (the default is 60 when engine.tier is 'low'; a number the game gives stands)
+//   max 120         max particles alive at once (the default is 60 while engine.tier is 'low' and follows a tier change; a number the game gives stands)
 //   lifetime [1,2]  seconds each particle lives (random range)
 //   rate 10         particles per second by default for attach
 //   speed [0.5,1.5] initial speed (m/s); direction [0,1,0] emit direction; spread 0.5 max angle off the direction (radians, pi = all directions)
@@ -50,6 +50,7 @@ import { isOptions, isUnder } from '../../core/base/util.js';
 import { codedError } from '../../core/base/errorHints.js';
 import { borrowRenderer } from '../../render/backend.js';
 import { ParticleLights } from './lit.js';
+import { onTierChange } from '../../core/scene/tier.js';
 // one schema per public entry (unknown keys throw in dev with did-you-mean). Effect param values come in many shapes (number or [min, max], color), so most are only checked by key name
 const FX_PARAMS = keysSchema(KEYS, {}, {
   ratePerMeter: { type: 'number', optional: true, min: 0, desc: 'particles per meter the emitter moves' },
@@ -108,13 +109,18 @@ export class Particles {
   define(name, opts = {}) {
     readFx(`particles.define('${name}')`, opts);
     const old = this.effects.get(name);
-    const o = { ...NEUTRAL, max: this.engine.tier === 'low' ? NEUTRAL.max / 2 : NEUTRAL.max, ...this._fallback, ...this._given[name], ...opts };
+    const o = { ...NEUTRAL, max: this._tierMax(), ...this._fallback, ...this._given[name], ...opts };
     const fx = new Effect(this, name, o);
+    /** @internal no max given anywhere: the default follows engine.tier (_tierChanged) */ fx._maxFollows = [this._fallback, this._given[name], opts].every(g => g?.max == null);
     this.effects.set(name, fx);
     // emitters attached to the old effect keep running on the new one (redefining tunes an effect, it does not stop it)
     if (old) { for (const h of this.emitters) if (h.fx === old) h.fx = fx; old.dispose(); }
     return fx;
   }
+  /** @internal the default max: half on a low-tier device */
+  _tierMax() { return this.engine.tier === 'low' ? NEUTRAL.max / 2 : NEUTRAL.max; }
+  /** @internal engine.tier changed (a preset, often a stored one arriving after the effects are defined): a default max follows it in place; a max the game gave stays */
+  _tierChanged() { for (const fx of this.effects.values()) if (fx._maxFollows) fx._resize(this._tierMax()); }
   /**
    * Whether this effect has been defined
    * @param {string} name
@@ -278,7 +284,7 @@ export function particles(opts = {}) {
   }
   if (opts.default) readFx('particles({ default })', opts.default);
   let p = null;
-  return { name: 'particles', skipKind: 'none', type: 'picture', provides: ['particles'], label: 'Particles', params: PARTICLES_PARAMS, options: opts, stage: 'effects', install(e) { e.i18n.add({ 'zh-CN': { 'module.particles': '粒子' }, en: { 'module.particles': 'particles' } }); p = new Particles(e, opts); return p; }, frame(dt) { p.update(dt); },
+  return { name: 'particles', skipKind: 'none', type: 'picture', provides: ['particles'], label: 'Particles', params: PARTICLES_PARAMS, options: opts, stage: 'effects', install(e, ctx) { e.i18n.add({ 'zh-CN': { 'module.particles': '粒子' }, en: { 'module.particles': 'particles' } }); p = new Particles(e, opts); ctx.track(onTierChange(e, () => p._tierChanged())); return p; }, frame(dt) { p.update(dt); },
     dispose() { for (const fx of p.effects.values()) fx.dispose(); p.effects.clear(); p.emitters.clear(); p._depth?.target.depthTexture.dispose(); p._depth?.target.dispose(); p._depth?.material.dispose(); },
     counts() { return { alive: p.count(), emitters: p.emitters.size }; },   // engine.counts().particles
     // "did the dust burst fire": live particles in total and per effect that has any (idle effects left out to stay short). Kept under `alive`

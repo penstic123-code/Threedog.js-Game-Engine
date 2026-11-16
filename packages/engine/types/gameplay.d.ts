@@ -253,7 +253,7 @@ export interface Triggers {
 
 /** Particle effect parameters (define(), and each entry of particles({ effects, default })). All optional */
 export interface ParticleOptions {
-  /** Maximum alive at once, default 120 (60 on low-tier devices; a number the game gives stands) */
+  /** Maximum alive at once, default 120 (60 while engine.tier is 'low'; a number the game gives stands) */
   max?: number;
   /** Seconds each particle lives [min, max] */
   lifetime?: Range;

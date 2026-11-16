@@ -24,6 +24,7 @@
 - `ui:close` [id: string] A window was closed
 - `settings:shadows` [on: boolean] Shadows were toggled
 - `settings:change` [values: Record<string, any>] A value in the settings menu changed (the argument is all setting values)
+- `tier:change` [{ tier: 'low' | 'high' }] engine.tier changed (device found at start, a preset, a write): resize what was sized from it
 - `post:add` [name: string] A post effect was added (its name)
 - `water:add` [body: WaterBody] A water body was added
 - `water:remove` [body: WaterBody] A water body was removed

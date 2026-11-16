@@ -1,5 +1,5 @@
 // @ts-check
-// The bloom on the lamp heads. Declared skipOnLowTier: it blurs the whole frame several times (the real tier is known only at start).
+// The bloom on the lamp heads. Declared skipOnLowTier: it blurs the whole frame several times (the tier is known only at start and can change later).
 import { bloom } from '@threedog/post-effects';
 import { BLOOM, GLARE } from './palette.js';
 

@@ -9,7 +9,9 @@ export function createLights(engine) {
   const hemi = new THREE.HemisphereLight(0xffffff, 0x4a4a4a, 1);
   const sun = new THREE.DirectionalLight(0xffffff, 1);
   sun.castShadow = true;
-  sun.shadow.mapSize.setScalar(engine.tier === 'low' ? 1024 : 2048);
+  // sized from engine.tier, resized on 'tier:change' (a settings preset changes the tier while running)
+  const fit = () => engine.shadows.mapSize(sun, engine.tier === 'low' ? 1024 : 2048);
+  fit(); engine.events.on('tier:change', fit);
   Object.assign(sun.shadow.camera, { left: -24, right: 24, top: 24, bottom: -24, near: 1, far: 120 });
   sun.shadow.normalBias = 0.04;
   scene.add(hemi, sun, sun.target);

@@ -92,8 +92,8 @@ engine.onRender(() => {
   ```
 - **`picture/` shaders follow the renderer.** A new game is on WebGPU and writes TSL (recipe 56); `ShaderMaterial` and `onBeforeCompile` do not run there, and a GLSL material
   on WebGPU stops at start and names itself. A `--webgl` game writes GLSL (recipe 43).
-- **The picture reads the quality tier.** The engine cannot hold your code to it, so read `engine.tier` (`'low'` | `'high'`) for what costs: shadow map size,
-  real light count, post effects. The generated `lights.js` sizes its shadow map this way.
+- **The picture follows the quality tier.** `engine.tier` (`'low'` | `'high'`) changes while running (a preset), so size what costs from it, then again on
+  `'tier:change'`: shadow map (`engine.shadows.mapSize`), light count. The generated `lights.js` does this.
 
 ## 3c. Wiring `picture/` parts
 - **One `engine.onRender`, in `picture/index.js`.** It calls each part's `update(signals)` and holds no values. A part never adds its own hook: two hooks hide the order.

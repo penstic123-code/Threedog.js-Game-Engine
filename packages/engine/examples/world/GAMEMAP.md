@@ -76,7 +76,7 @@ content/*.js is content data: how to write it in `node_modules/threedog/docs/rec
 | main.js | 176 | Open-world example (slow photography life): riverside cabin + an old fisherman who walks by the clo… |
 | models.js | 39 | Models this game builds in code: the cabin (registered by name in main.js, placed by content/props.… |
 | picture/index.js | 21 | @ts-check The open world's picture: wiring only. Each part writes plain three.js; one onRender driv… |
-| picture/lights.js | 42 | @ts-check Sun or moon and the ambient, from the sky of this moment (sky.js) and the weather. One sh… |
+| picture/lights.js | 44 | @ts-check Sun or moon and the ambient, from the sky of this moment (sky.js) and the weather. One sh… |
 | picture/materials.js | 35 | @ts-check Materials by name. They live at module level, not inside createPicture, because the model… |
 | picture/palette.js | 75 | @ts-check The open world's palette: every color and key value of the picture, one copy; the other f… |
 | picture/post.js | 10 | @ts-check The glow on the sun, the lamp and bright water. Declared skipOnLowTier: it blurs the whol… |
@@ -167,6 +167,7 @@ Code that breaks saves or manages world models: none (rule R33).
 | engine:ready | — | main.js, quests.js (starts first-light) |
 | photo:denied | — | main.js |
 | photo:taken | — | main.js |
+| tier:change | — | lights.js |
 
 ## Saves
 

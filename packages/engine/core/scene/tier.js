@@ -23,8 +23,14 @@ export function onTierChange(e, fn) {
   FOLLOWERS.get(e).add(fn);
   return { remove: () => { FOLLOWERS.get(e)?.delete(fn); } };
 }
-/** The tier stack's onChange (core/engine/services.js) @param {any} e */
-export function tierChanged(e) { for (const fn of [...(FOLLOWERS.get(e) ?? [])]) fn(); }
+/**
+ * The tier stack's onChange (core/engine/services.js). The engine's own parts first, then the public 'tier:change' event: game code sizes what it
+ * makes from engine.tier and follows this event (a shadow map, a pool), so a preset reaches it like it reaches the post chain. @param {any} e
+ */
+export function tierChanged(e) {
+  for (const fn of [...(FOLLOWERS.get(e) ?? [])]) fn();
+  e.events?.emit('tier:change', { tier: e.tier });
+}
 
 /** The name under engine.saves.storageKey of a player's MSAA choice */
 export const MSAA_KEY = 'msaa';

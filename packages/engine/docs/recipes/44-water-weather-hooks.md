@@ -114,7 +114,7 @@ m.colorNode = mix(color(0x2a5a7a), mirror, 0.6);  // 0 = water color, 1 = pure r
 engine.water.material = m;
 ```
 - Cost: the whole scene drawn once more per frame per water mesh at `textureWidth` x `textureHeight` (shadows are not re-rendered). Use 256-512
-  on phones; on `engine.tier === 'low'` keep the default material instead.
+  on phones; on `engine.tier` 'low' keep the default material instead; again on `'tier:change'`.
 - One mirror plane: the material is shared, so water bodies at other levels need `water({ sea: false })` or their own mirror. The Reflector's
   shader has no waves or fog; for both, copy its `fragmentShader` into a `MeshPhongMaterial` patch that samples `tDiffuse` with `textureMatrix`.
 - three's `Refractor` addon (next to `Reflector`) reads `matrixWorld` as an XY plane too, so the same adapter applies (not covered by a test).

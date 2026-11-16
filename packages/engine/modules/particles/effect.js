@@ -50,7 +50,20 @@ function nodeSide(engine, name) {
 export class Effect {
   constructor(sys, name, o) {
     this.sys = sys; this.name = name; this.o = o;
-    const N = this.max = Math.max(1, Math.round(o.max));
+    this._alloc();
+    /** @internal the game's material while one is set */ this._given = null;
+    this._build();
+    // fallback 'webgl': an effect defined before start() was built for the WebGPURenderer start() then replaced; build its draw object again
+    // for the renderer in use (the particle state lives in the arrays, so live particles carry over)
+    /** @internal */ this._swap = onRendererSwap(sys.engine, () => {
+      const was = this._attrs.map(a => a.array);
+      this._rebuild(() => this._attrs.forEach((a, i) => a.array.set(was[i])));
+    });
+    if (o.texture) this._loadTexture(o.texture);
+  }
+  /** @internal the CPU-side particle arrays for o.max slots */
+  _alloc() {
+    const N = this.max = Math.max(1, Math.round(this.o.max));
     this.pos = new Float32Array(N * 3); this.vel = new Float32Array(N * 3);
     this.age = new Float32Array(N); this.life = new Float32Array(N).fill(0);   // life 0 = empty slot
     this.spinV = new Float32Array(N);
@@ -59,20 +72,26 @@ export class Effect {
     this._curves = {};   // the last curve of each kind: most batches reuse the effect's own, like the merged params of a handle
     this.head = 0; this.alive = 0;
     /** @internal clear() zeroed slots the GPU copy still shows: the next upload reaches this far */ this._stale = 0;
-    /** @internal the game's material while one is set */ this._given = null;
+  }
+  /** @internal the draw object built again, keeping what the game set on it (visibility, its material, the texture); fill runs on the new attributes */
+  _rebuild(fill) {
+    const vis = this.points.visible;
+    this._drop();
     this._build();
-    // fallback 'webgl': an effect defined before start() was built for the WebGPURenderer start() then replaced; build its draw object again
-    // for the renderer in use (the particle state lives in the arrays above, so live particles carry over)
-    /** @internal */ this._swap = onRendererSwap(sys.engine, () => {
-      const vis = this.points.visible, was = this._attrs.map(a => a.array);
-      this._drop();
-      this._build();
-      this._attrs.forEach((a, i) => a.array.set(was[i]));
-      this.points.visible = vis;
-      if (this._given) this.points.material = this._given;
-      if (this._tex) this._useTexture(this._tex);
-    });
-    if (o.texture) this._loadTexture(o.texture);
+    fill?.();
+    this.points.visible = vis;
+    if (this._given) this.points.material = this._given;
+    if (this._tex) this._useTexture(this._tex);
+  }
+  /**
+   * @internal a new slot count in place (a default max following engine.tier): the same object, so a reference the game holds, its material and its
+   * emitters stay; the particles alive now are dropped (a settings change, where one frame of missing sparks is not seen)
+   */
+  _resize(max) {
+    if (Math.max(1, Math.round(max)) === this.max) return;
+    this.o = { ...this.o, max };
+    this._alloc();
+    this._rebuild();
   }
 
   /** The plain three.js material drawn; set yours and it is drawn as given, null gives the engine's back */

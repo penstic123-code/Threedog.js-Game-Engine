@@ -9,11 +9,12 @@ export function createLights(engine) {
   const hemi = new THREE.HemisphereLight(ambient.sky, ambient.ground, ambient.intensity);
   const sun = new THREE.DirectionalLight(key.color, key.intensity);
   sun.castShadow = true;
-  sun.shadow.mapSize.setScalar(engine.tier === 'low' ? lowMapSize : mapSize);
+  // sized from engine.tier, resized on 'tier:change' (a settings preset changes the tier while running)
+  const fit = () => { const n = engine.tier === 'low' ? lowMapSize : mapSize; engine.shadows.mapSize(sun, n); sun.shadow.radius = Math.max(Math.min(radius, 2), radius * n / mapSize); };
   Object.assign(sun.shadow.camera, { left: -extent, right: extent, top: extent, bottom: -extent, near: 1, far });
   Object.assign(sun.shadow, { bias, normalBias });
   // radius is in shadow texels: scaled with the map so the low tier's half-size map blurs the same meters, never under 2 texels (stair steps) unless set lower
-  sun.shadow.radius = Math.max(Math.min(radius, 2), radius * sun.shadow.mapSize.x / mapSize);
+  fit(); engine.events.on('tier:change', fit);
   engine.scene.add(hemi, sun, sun.target);
 
   const [ox, oy, oz] = key.offset;
