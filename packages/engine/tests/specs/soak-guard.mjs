@@ -20,7 +20,9 @@ export const specs = [
       check('soak: inside one engine, counts (listeners, hooks, timers, jobs, module counts, scene children) are the same in every round after the first', [...byGen.values()].every(g => g.every(x => key(x) === key(g[0]))),
         JSON.stringify([...byGen.values()].map(g => g.map(key))));
       const fresh = r.rows.filter(x => x.action === 'recreate');
-      check('soak: a re-created engine starts with the same counts as the one before it', fresh.length >= 2 && fresh.every(x => key(x) === key(fresh[0])), JSON.stringify(fresh.map(key)));
+      // a just-made engine: its streamed chunk groups depend on worker timing (about one run in three differed), so they are left out here; the rounds above, after everything built, count them
+      const freshKey = x => key({ ...x, sceneChildren: x.sceneChildren - x.sceneStreamed });
+      check('soak: a re-created engine starts with the same counts as the one before it (streamed chunks aside)', fresh.length >= 2 && fresh.every(x => freshKey(x) === freshKey(fresh[0])), JSON.stringify(fresh.map(freshKey)));
       check('soak: page canvases and DOM listeners do not pile up across re-creates', r.rows.every(x => x.domCanvas <= r.rows[0].domCanvas + 1), JSON.stringify(r.rows.map(x => x.domCanvas)));
       const heaps = fresh.map(x => x.heapMB).filter(h => h != null);
       check('soak: JS heap after gc at each re-create does not climb by more than 25 MB over the run', heaps.length < 2 || heaps.at(-1) - heaps[0] < 25, JSON.stringify(heaps));

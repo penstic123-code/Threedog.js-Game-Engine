@@ -71,6 +71,8 @@ export function soakMethods({ mkEngine, ready, heap, gc }) {
       await step(10);
     };
 
+    // terrain and vegetation chunk groups arrive as the generation workers finish: how many a just-made engine has is timing, not a leak
+    const STREAMED = new Set(['terrain', 'vegetation']);
     const counts = () => {
       const c = e.counts(), lc = L.counts(), mods = { level: lc.level }; for (const k of ['world', 'particles', 'sky', 'calendar', 'weather', 'quests', 'dialogue']) if (c[k] != null) mods[k] = c[k];
       return { listeners: c.listeners, fixed: c.fixed, frame: c.frame, timers: c.timers, statics: c.statics, streamEntries: c.streamEntries, jobs: c.jobs, commits: c.commits, geometries: c.geometries + lc.geometries, textures: c.textures, mods };
@@ -78,7 +80,7 @@ export function soakMethods({ mkEngine, ready, heap, gc }) {
     const sample = async what => {
       await gc();
       const g = window.__gpu, sorted = [...ms].sort((a, b) => a - b), q = p => sorted.length ? r1(sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))]) : null;
-      const row = { round, gen, action: what, tMin: Math.round((performance.now() - t0) / 600) / 100, heapMB: heap(), ...counts(), sceneChildren: e.scene.children.length, domCanvas: document.querySelectorAll('canvas').length,
+      const row = { round, gen, action: what, tMin: Math.round((performance.now() - t0) / 600) / 100, heapMB: heap(), ...counts(), sceneChildren: e.scene.children.length, sceneStreamed: e.scene.children.filter(o => STREAMED.has(o.userData.budgetTag)).length, domCanvas: document.querySelectorAll('canvas').length,
         frames: sorted.length, frameP50: q(0.5), frameP99: q(0.99), frameMax: q(1),
         ...(g && { gpuMB: Math.round(g.bytes / 1048576), gpuBuffers: g.buffers, bindGroupsLive: g.bindGroupsLive, pipelines: g.pipelines, devices: g.devices }),
         day: e.calendar?.day, ...(kinds && g?.kinds && { kinds: Object.entries(g.kinds).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).slice(0, 10) }) };
