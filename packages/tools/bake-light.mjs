@@ -13,11 +13,10 @@ if (!Number.isInteger(Math.log2(size)) || size < 64 || size > 4096) { console.er
 if (!Number.isInteger(samples) || samples < 8 || samples > 2048) { console.error(`✗ --samples ${opt.samples}: rays per texel, a whole number from 8 to 2048`); process.exit(1); }
 const OUT = resolve(ROOT, opt.out ?? 'public/light/level.lightmap');
 
-const [{ launchRealGPU, injectTool, devServer }, { waitEngine }] = await Promise.all([import('./browser.mjs'), import('./wait-engine.mjs')]);
-const { base, close } = await devServer(ROOT, { cacheDir: '.threedog/vite-bake', fs: { strict: false } });
-let code = 0, browser;
-try {
-  browser = await launchRealGPU();
+const [{ withBrowser, launchRealGPU, injectTool, devServer }, { waitEngine }] = await Promise.all([import('./browser.mjs'), import('./wait-engine.mjs')]);
+let code = 0;
+await withBrowser(async ({ base, launch }) => { try {
+  const browser = await launch();
   const page = await browser.newPage({ viewport: { width: 640, height: 360 } }), errors = [];
   page.on('pageerror', x => errors.push(String(x)));
   // a shader that fails to compile is only a console line: the draw is dropped and the map stays black, so the failure has to show here
@@ -40,7 +39,6 @@ try {
     if (r.warnings.excludedFaces) console.log(`  ${r.warnings.excludedFaces} face(s) too thin to unwrap`);
     console.log('  In the game: await engine.loadLightmap(path), and turn down the ambient light the bake saw (recipes/34-environment-lighting.md)');
   }
-} catch (e) { console.error('✗ ' + String(e?.message ?? e).split('\n')[0]); code = 1; }
-await browser?.close();
-await close();
+} catch (e) { console.error('✗ ' + String(e?.message ?? e).split('\n')[0]); code = 1; } },
+{ launch: launchRealGPU, server: () => devServer(ROOT, { cacheDir: '.threedog/vite-bake', fs: { strict: false } }) });
 process.exit(code);

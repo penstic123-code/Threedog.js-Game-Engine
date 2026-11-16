@@ -3,7 +3,7 @@
 // Why it reuses lib/shot-page.mjs: the wall's pictures must be what `threedog shot` would give for the same options.
 import { readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { buildAndPreview, launchBrowser, newGamePage } from '../browser.mjs';
+import { buildAndPreview, withBrowser, newGamePage } from '../browser.mjs';
 import { openShotPage } from '../lib/shot-page.mjs';
 import { viewSize } from '../lib/shot-name.mjs';
 import { parsePoints, pointQuery } from './points.mjs';
@@ -26,14 +26,14 @@ export async function shootProject(dir, { onPoint } = {}) {
   // the build reads THREEDOG_TEST at build time (test pages in the tool build); restore it so a long-running hub is not left in test mode
   const hadTest = process.env.THREEDOG_TEST;
   process.env.THREEDOG_TEST = '1';
-  let server, browser;
+  let server;
+  // its own build folder: shot / test / perf run beside the hub and rebuild .threedog/tool-build under it
+  try { server = await buildAndPreview(dir, { outDir: '.threedog/hub-build' }); }
+  catch (e) { return recordRun(dir, { at, error: `build failed: ${firstLine(e)}` }); }
+  finally { if (hadTest === undefined) delete process.env.THREEDOG_TEST; else process.env.THREEDOG_TEST = hadTest; }
   try {
-    // its own build folder: shot / test / perf run beside the hub and rebuild .threedog/tool-build under it
-    try { server = await buildAndPreview(dir, { outDir: '.threedog/hub-build' }); }
-    catch (e) { return recordRun(dir, { at, error: `build failed: ${firstLine(e)}` }); }
-    finally { if (hadTest === undefined) delete process.env.THREEDOG_TEST; else process.env.THREEDOG_TEST = hadTest; }
-    browser = await launchBrowser({ prefer: 'gpu' });
-    for (const p of parsed.points) {
+    // rethrow: the hub keeps running, so a browser that cannot start is recorded below, not the end of the process; withBrowser closes it and the server
+    await withBrowser(async ({ launch }) => { const browser = await launch(); for (const p of parsed.points) {
       const errors = [];
       let page;
       try {
@@ -51,12 +51,9 @@ export async function shootProject(dir, { onPoint } = {}) {
         results.push({ name: p.name, error: firstLine(e) });
         onPoint?.(p.name, false);
       } finally { await page?.close().catch(() => {}); }
-    }
+    } }, { prefer: 'gpu', server: async () => server, rethrow: true });
   } catch (e) {
-    return recordRun(dir, { at, error: `browser failed: ${firstLine(e)}` });   // anything outside the per-point code: recorded, the finally below still closes what was opened
-  } finally {
-    await browser?.close().catch(() => {});
-    await server?.close().catch(() => {});
+    return recordRun(dir, { at, error: `browser failed: ${firstLine(e)}` });   // anything outside the per-point code: recorded, already closed
   }
   return recordRun(dir, { at, results });
 }

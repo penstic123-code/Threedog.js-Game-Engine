@@ -31,25 +31,23 @@ if (!force && !only.length && existsSync(SIG) && readFileSync(SIG, 'utf8') === s
 }
 const withExists = Object.fromEntries(Object.entries(index).map(([k, v]) => [k, { ...v, exists: (!force || v.source === 'file') && existsSync(resolve(DIR, v.file)) }]));
 
-const { launchBrowser, devServer } = await import('./browser.mjs');   // loaded only when there is something to bake
-// Use its own dependency cache directory: do not fight with a running npm run dev over node_modules/.vite
-const { base, close } = await devServer(ROOT, { cacheDir: '.threedog/vite-bake' });
-const browser = await launchBrowser();
-const page = await browser.newPage();
+const { withBrowser, devServer } = await import('./browser.mjs');   // loaded only when there is something to bake
 const errors = [];
-page.on('pageerror', e => errors.push(String(e)));
 let results = [];
-// The first time vite meets a new dependency it re-optimizes and reloads the page, and a dynamic import may fail: retry
-for (let i = 0; i < 3 && !results.length; i++) {
-  try {
-    await page.goto(base + '/@fs' + TOOLS.replace(/\\/g, '/').replace(/^(?!\/)/, '/') + '/bake.html');   // a page in the tools package, opened through vite's /@fs/
-    await page.waitForFunction(() => window.threedogBakeReady, null, { timeout: 60000 });
-    results = await page.evaluate(a => window.threedogBake(a), { only, index: withExists });
-    errors.length = 0;
-  } catch (e) { errors.push(String(e).split('\n')[0]); }
-}
-await browser.close();
-await close();
+await withBrowser(async ({ base, launch }) => {
+  const page = await (await launch()).newPage();
+  page.on('pageerror', e => errors.push(String(e)));
+  // The first time vite meets a new dependency it re-optimizes and reloads the page, and a dynamic import may fail: retry
+  for (let i = 0; i < 3 && !results.length; i++) {
+    try {
+      await page.goto(base + '/@fs' + TOOLS.replace(/\\/g, '/').replace(/^(?!\/)/, '/') + '/bake.html');   // a page in the tools package, opened through vite's /@fs/
+      await page.waitForFunction(() => window.threedogBakeReady, null, { timeout: 60000 });
+      results = await page.evaluate(a => window.threedogBake(a), { only, index: withExists });
+      errors.length = 0;
+    } catch (e) { errors.push(String(e).split('\n')[0]); }
+  }
+// Use its own dependency cache directory: do not fight with a running npm run dev over node_modules/.vite
+}, { server: () => devServer(ROOT, { cacheDir: '.threedog/vite-bake' }) });
 if (errors.length) { console.log('Bake page error:\n  ' + errors.join('\n  ')); process.exit(1); }
 
 mkdirSync(DIR, { recursive: true });

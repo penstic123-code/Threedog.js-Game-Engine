@@ -27,11 +27,12 @@ const { base, close } = await devServer(dir, { port: opt.port ? +opt.port : opt.
 if (!opt.shots) {
   console.log(`Asset gallery: ${base}/?gallery=1   (${rel(dir)}; save an art module and the gallery and game update in place; Ctrl+C stops)`);
 } else {
-  const { launchBrowser, newGamePage } = await import('./browser.mjs');
+  const { withBrowser, newGamePage } = await import('./browser.mjs');
   const { waitEngine } = await import('./wait-engine.mjs');
-  const browser = await launchBrowser({ prefer: 'gpu' }), errors = [], out = join(dir, '.threedog', 'gallery');
+  const errors = [], out = join(dir, '.threedog', 'gallery');
   let code = 0;
-  try {
+  // the dev server above is withBrowser's to close: a launch failure must not leave it holding the port
+  await withBrowser(async ({ launch }) => { const browser = await launch(); try {
     const page = await newGamePage(browser, { errors });
     // desktop tier like shot (core/scene/tier.js): the headless browser would be detected low and the turntables would lack the game's post
     await page.goto(base + headlessUrl('/', { 'threedog-tier': 'high', cutscene: 'skip', gallery: '1' }));
@@ -66,7 +67,7 @@ ${names.map(n => `<tr><td>${esc(n)}</td>${lights.map(l => cell(rows.find(r => r.
     }
     if (bad.length) { console.log('Failed:\n  ' + bad.map(r => `${r.name}: ${r.error}`).slice(0, 10).join('\n  ')); code = 1; }
   } catch (e) { console.error(String(e?.message ?? e)); code = 1; }
-  finally { await browser.close(); await close(); }
+  }, { prefer: 'gpu', server: async () => ({ base, close }) });
   if (errors.length) console.log('\nPage errors:\n  ' + errors.slice(0, 5).join('\n  '));
   process.exit(code);
 }

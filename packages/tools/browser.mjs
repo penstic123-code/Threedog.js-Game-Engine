@@ -76,46 +76,92 @@ export function reapOrphanBrowsers() {
   }));
 }
 
+/** The fixes for a browser that cannot run, in the words threedog doctor reports them (doctor imports these, so a command and doctor never disagree) */
+export const BROWSER_FIX = {
+  install: 'run npx playwright install chromium (once per machine), then try again',
+  repair: 'update the graphics driver; if that fails, reinstall the browser: npx playwright install chromium --force',
+};
+/** Codes a launch failure carries: withBrowser turns these into one line, anything else is a bug and keeps its stack */
+const BROWSER_FAILURE = new Set(['no-browser', 'browser-failed']);
+/**
+ * Launch Playwright's Chromium with one CHROMIUM_ARGS entry, no fallback (doctor tests each path this way). A failure comes back as one coded line with its fix:
+ * code 'no-browser' (not installed) or 'browser-failed' (anything else), `why` the raw first line. Why coded here: each command used to word it its own way.
+ */
+export function launchKind(kind, opts = {}) {
+  return chromium.launch({ ...opts, args: [...CHROMIUM_ARGS[kind], ...(opts.args || [])] }).catch(e => {
+    const why = String(e?.message ?? e).split('\n')[0];
+    // case-sensitive, and not for a browser the caller pointed at itself (executablePath): Playwright's 'executable doesn't exist' there is a wrong path, not a missing install
+    if (!opts.executablePath && /Executable doesn't exist|npx playwright install/.test(String(e?.message ?? e))) throw Object.assign(new Error(`the Playwright browser is not installed: ${BROWSER_FIX.install}`), { code: 'no-browser', why });
+    throw Object.assign(new Error(`the headless browser did not start (${why}): ${BROWSER_FIX.repair}. threedog doctor shows the details`), { code: 'browser-failed', why });
+  });
+}
+
 let reaped = false, gpuFailed = null;   // why the GPU launch fell back, remembered so perf (a fresh browser per page) notes it once and does not retry each time
 /**
  * Launch headless Chromium. `prefer`: 'software' (default: tests need the same pixels everywhere) or 'gpu' (shot, gallery, perf, stress);
  * --gpu / --software / THREEDOG_RENDER override it. A GPU launch is verified (renderer string): no hardware GPU or a failed launch falls back to
  * SwiftShader with a one-line note. The browser gets `render`: { kind: 'gpu' | 'software', renderer?, timer?, fallback? }.
+ * A command opens it through withBrowser, which closes it; launching it directly is for callers that keep it open (run.mjs, the dev bridge).
  */
 export async function launchBrowser({ prefer = 'software', ...opts } = {}) {
   if (!reaped) { reaped = true; reapOrphanBrowsers(); }   // once per process, not awaited: the launch does not wait for the sweep
   const want = forcedRender() ?? prefer;
-  // a fresh npm install downloads no browser: say that one line (doctor checks the same) instead of the GPU note and Playwright's stack
-  const launch = kind => chromium.launch({ ...opts, args: [...CHROMIUM_ARGS[kind], ...(opts.args || [])] }).catch(e => {
-    // case-sensitive, and not for a browser the caller pointed at itself (executablePath): Playwright's 'executable doesn't exist' there is a wrong path, not a missing install
-    if (!opts.executablePath && /Executable doesn't exist|npx playwright install/.test(String(e?.message ?? e))) throw Object.assign(new Error('the Playwright browser is not installed: run npx playwright install chromium (once per machine), then try again'), { code: 'no-browser' });
-    throw e;
-  });
   if (want === 'gpu' && !gpuFailed) {
     let b;
     try {
-      b = await launch('gpu');
+      b = await launchKind('gpu', opts);
       const r = await probeRenderer(b);
       if (r && !SOFTWARE_RENDERER.test(r.renderer)) { b.render = { kind: 'gpu', ...r }; return b; }
       gpuFailed = r ? `the GPU launch got a software renderer (${r.renderer})` : 'the GPU launch has no WebGL2';
-    } catch (e) { if (e?.code === 'no-browser') throw e; gpuFailed = `the GPU launch failed (${String(e?.message ?? e).split('\n')[0]})`; }
+    } catch (e) { if (e?.code === 'no-browser') throw e; gpuFailed = `the GPU launch failed (${e?.why ?? String(e?.message ?? e).split('\n')[0]})`; }
     await b?.close().catch(() => {});
     // stderr: a diagnostic, not output. shot / doctor / stress --json print one JSON object on stdout, and this line in front of it broke the parse
     console.error(`Note: ${gpuFailed}; using software rendering (SwiftShader). threedog doctor shows the details.`);
   }
-  const b = await launch('software');
+  const b = await launchKind('software', opts);
   b.render = { kind: 'software', ...(want === 'gpu' && { fallback: gpuFailed }) };
   return b;
 }
 
 /**
- * System Chrome on the real GPU, for what needs true WebGPU (`threedog bake light`). Playwright's Chromium compiles WebGPU shaders through FXC and some of
- * three's fail there; Chrome ships dxil.dll and uses DXC. Throws with what to do when Chrome is not installed.
+ * System Chrome on the real GPU, for what needs true WebGPU (`threedog bake light`, stress on a game). Playwright's Chromium compiles WebGPU shaders through FXC and some of
+ * three's fail there; Chrome ships dxil.dll and uses DXC. Fails coded like launchKind, with what to do when Chrome is not installed.
  */
 export async function launchRealGPU({ headless = true } = {}) {
   try {
     return await chromium.launch({ channel: 'chrome', headless, args: ['--enable-unsafe-webgpu', '--force_high_performance_gpu', '--ignore-gpu-blocklist'] });
-  } catch (e) { throw new Error(`system Chrome could not start (${String(e?.message ?? e).split('\n')[0]}): install Google Chrome, this step needs real WebGPU`); }
+  } catch (e) {
+    const why = String(e?.message ?? e).split('\n')[0];
+    throw Object.assign(new Error(`system Chrome could not start (${why}): install Google Chrome, this step needs real WebGPU`), { code: 'browser-failed', why });
+  }
+}
+
+/**
+ * The one lifecycle of a command's headless run: start the server (when given), hand fn a launcher, and in finally close every browser it launched,
+ * then the server, whatever fn did. Before it each command had its own try/finally, and a launch failure left the preview server open and printed a stack.
+ * A browser that could not start ends the command with one line on stderr (stdout stays clean for --json) and exit 1; `rethrow` hands it back instead
+ * (the hub records it and keeps running). Long-lived owners (run.mjs's shared browsers, the dev bridge's page) call launchBrowser and close it themselves.
+ * @template T
+ * @param {(ctx: { server: { base: string, close(): Promise<void> } | null, base: string, launch: () => Promise<import('playwright').Browser & { render?: object }> }) => Promise<T>} fn
+ *   launch() may be called more than once (perf takes a fresh browser per page); closing one early is fine
+ * @param {{ prefer?: 'software' | 'gpu', launch?: () => Promise<import('playwright').Browser>, server?: () => Promise<{ base: string, close(): Promise<void> }>, rethrow?: boolean }} [o]
+ *   launch: another launcher (launchRealGPU); server: started first, e.g. () => buildAndPreview(dir)
+ * @returns {Promise<T>}
+ */
+export async function withBrowser(fn, { prefer = 'software', launch = () => launchBrowser({ prefer }), server: start, rethrow = false } = {}) {
+  const open = new Set();
+  let server = null, failure = null;
+  try {
+    server = start ? await start() : null;
+    return await fn({ server, base: server?.base ?? '', launch: async () => { const b = await launch(); open.add(b); return b; } });
+  } catch (e) {
+    if (rethrow || !BROWSER_FAILURE.has(e?.code)) throw e;
+    failure = e;
+  } finally {
+    await Promise.all([...open].map(b => b.close().catch(() => {})));
+    await server?.close().catch(() => {});
+    if (failure) { console.error('✗ ' + failure.message); process.exit(1); }
+  }
 }
 
 /**

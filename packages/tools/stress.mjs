@@ -11,7 +11,7 @@
 process.env.THREEDOG_TEST = '1';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { launchBrowser, launchRealGPU, buildAndPreview, devServer, injectTool, forcedRender } from './browser.mjs';
+import { withBrowser, launchRealGPU, buildAndPreview, devServer, injectTool, forcedRender } from './browser.mjs';
 import { ENGINE, cli } from './paths.mjs';
 import { rendererLine, headlessUrl } from './lib/page-url.mjs';
 import { waitEngine, waitLoaded } from './wait-engine.mjs';
@@ -28,11 +28,10 @@ try { FRAMES = intOption(opt, 'frames') ?? FRAMES; } catch (e) { console.error('
 const say = (...a) => { if (!JSON_OUT) console.log(...a); };
 const t0 = Date.now();
 // the game on a dev server: the injected page has to import the game's own three
-const server = GAME ? await devServer(GAME, { cacheDir: '.threedog/vite-stress', fs: { strict: false } }) : await buildAndPreview(ENGINE);
-let browser;
-try { browser = GAME ? await launchRealGPU() : await launchBrowser({ prefer: 'gpu' }); } catch (e) { console.error('✗ ' + e.message); await server.close(); process.exit(1); }
-const out = { target: GAME ? 'game' : 'neutral page', renderer: browser.render?.renderer ?? 'SwiftShader (software)', kind: browser.render?.kind ?? 'gpu', timer: false, axes: {} };
-let code = 0;
+let out, code = 0;
+await withBrowser(async ({ server, launch }) => {
+const browser = await launch();
+out = { target: GAME ? 'game' : 'neutral page', renderer: browser.render?.renderer ?? 'SwiftShader (software)', kind: browser.render?.kind ?? 'gpu', timer: false, axes: {} };
 try {
   const open = async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
@@ -88,7 +87,8 @@ try {
     say(`stopped: ${stop}`);
   }
 } catch (e) { console.error(String(e?.message ?? e)); code = 1; }
-finally { await browser.close(); await server.close(); }
+}, { prefer: 'gpu', launch: GAME ? launchRealGPU : undefined,
+  server: () => GAME ? devServer(GAME, { cacheDir: '.threedog/vite-stress', fs: { strict: false } }) : buildAndPreview(ENGINE) });
 
 /** Largest measured load under `ms`, the first above it, and (doubling axes) the log-interpolated crossing */
 function fit(steps, ms, ladder) {

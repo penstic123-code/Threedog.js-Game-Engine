@@ -51,7 +51,7 @@
 //   --gpu / --software  force the renderer (default: the hardware GPU when headless can reach it, else SwiftShader; also THREEDOG_RENDER=gpu|software)
 //   -w name         which workspace (engine, my-game…); default the one containing the current directory, then the engine package
 process.env.THREEDOG_TEST = '1';
-import { launchBrowser, newGamePage, buildAndPreview } from './browser.mjs';
+import { withBrowser, newGamePage, buildAndPreview } from './browser.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { cli, rel } from './paths.mjs';
@@ -124,11 +124,11 @@ if (live) {
   if (who.unknown) say(`Note: ${who.unknown}`);
 }
 if (!opt['no-build'] && !live) say(`Building… (${rel(dir)})`);
-const server = live ? { base: '', close: async () => {} } : await buildAndPreview(dir, { build: !opt['no-build'] }), base = server.base;
-const browser = await launchBrowser({ prefer: 'gpu' });   // a hardware GPU is several times faster than SwiftShader; tests stay on software for stable pixels
 const errors = [];
+// a hardware GPU is several times faster than SwiftShader; tests stay on software for stable pixels. A live URL needs no server (base '')
+await withBrowser(async ({ base, launch }) => {
+const browser = await launch();
 const page = await newGamePage(browser, { errors, viewport: { width: W, height: H } });
-
 try {
   // Time, weather, position, skipping cutscenes and advancing are all left to the engine's URL parameters (engine.applyState, see packages/engine/core/inspect/UrlState.js)
   const q = new URLSearchParams({ 'threedog-tier': tier });
@@ -205,7 +205,7 @@ Pixel diff: ${diff} (0 = identical, 1 = black vs white)`);
   else { result.pictureLines = await ev(`(${PICTURE})(window.engine)`); say('\n' + result.pictureLines.join('\n')); if (perf.notice) say(perf.notice); }   // result.picture holds the numbers
   for (const l of perf.lines) say(l);
 } catch (e) { errors.push(String(e?.message ?? e)); }   // whole message: the wait/loading failures put the reason on the following lines
-finally { await browser.close(); await server.close(); }
+}, { prefer: 'gpu', server: live ? null : () => buildAndPreview(dir, { build: !opt['no-build'] }) });
 if (errors.length) say('\nPage errors:\n  ' + errors.slice(0, 5).join('\n  '));
 say(`\nTook ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 if (json) console.log(JSON.stringify({ ...result, errors, seconds: +((Date.now() - t0) / 1000).toFixed(1) }, null, 1));

@@ -137,8 +137,7 @@ for (const ws of workspaces()) {
 // ── Browser (slowest, last): one real engine frame per render path ──
 // Why a real frame, not just getContext('webgl2'): a context can exist while the engine still cannot draw (shader compile, a blocklisted driver
 // path, an ANGLE backend that silently falls back), and the shot / test failure that follows looks like a game bug.
-const { chromium } = await import('playwright');
-const { CHROMIUM_ARGS, SOFTWARE_RENDERER, forcedRender } = await import('./browser.mjs');
+const { launchKind, BROWSER_FIX, SOFTWARE_RENDERER, forcedRender } = await import('./browser.mjs');
 {
   const page = join(ROOT, '.threedog', 'doctor-page');
   mkdirSync(page, { recursive: true });
@@ -166,19 +165,19 @@ try {
   const frame = async kind => {
     let b;
     try {
-      b = await chromium.launch({ args: CHROMIUM_ARGS[kind] });
+      b = await launchKind(kind);
       const p = await b.newPage();
       await p.goto(url, { timeout: 60000 });
       await p.waitForFunction(() => window.doctor, null, { timeout: 60000 });
       return await p.evaluate(() => window.doctor);
-    } catch (e) { return { error: String(e?.message ?? e).split('\n')[0] }; }
+    } catch (e) { return { error: e?.why ?? String(e?.message ?? e).split('\n')[0], ...e?.code === 'no-browser' && { missing: true } }; }   // why: the raw cause, the fix is ours
     finally { await b?.close().catch(() => {}); }
   };
   try {
     // the launch itself is the install check: executablePath() names the full chromium, while headless launches use the headless shell
     const sw = render.software = await frame('software');
-    if (/Executable doesn't exist|npx playwright install/.test(sw.error ?? '')) no('Playwright chromium is not installed', 'run npx playwright install chromium');
-    else if (sw.error) no(`the engine cannot render a frame with software rendering (tests use it): ${sw.error}`, 'update the graphics driver; if that fails, reinstall the browser: npx playwright install chromium --force');
+    if (sw.missing) no('Playwright chromium is not installed', BROWSER_FIX.install);
+    else if (sw.error) no(`the engine cannot render a frame with software rendering (tests use it): ${sw.error}`, BROWSER_FIX.repair);
     else if (!sw.drawn) no(`software rendering ran but the frame came out wrong (center pixel ${sw.pixel}, renderer ${sw.renderer})`, 'reinstall the browser: npx playwright install chromium --force');
     else ok(`engine frame rendered with software rendering (${sw.renderer}, ${sw.frameMs} ms): tests run on this, the same pixels on every machine`);
     const gpu = await frame('gpu');

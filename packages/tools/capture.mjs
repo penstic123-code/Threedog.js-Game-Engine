@@ -16,7 +16,7 @@
 //   --no-spector · --spector-url url · --full (keep Spector's per-draw state and stack traces: loads in the Spector UI, 10+ MB) · --no-build · --size WxH
 // The capture file lists every WebGL command of the frame; the printed summary is what to read first. On a software browser the GPU work is slow but the draw list is the same.
 process.env.THREEDOG_TEST = '1';
-import { launchBrowser, newGamePage, buildAndPreview } from './browser.mjs';
+import { withBrowser, newGamePage, buildAndPreview } from './browser.mjs';
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { cli, rel } from './paths.mjs';
@@ -35,12 +35,12 @@ const TOP = +(opt.top || 8);
 const outDir = opt.out ? resolve(String(opt.out)) : join(dir, '.threedog', 'captures');
 
 if (!opt['no-build']) console.log(`Building… (${rel(dir)})`);
-const server = await buildAndPreview(dir, { build: !opt['no-build'] }), base = server.base;
-const browser = await launchBrowser({ prefer: 'gpu' });   // the game's own renderer where the machine has it: a software browser puts a WebGPU game on its WebGL2 fallback
 const errors = [];
-const page = await newGamePage(browser, { errors, viewport: { width: W, height: H } });
 let spectorNote = '', file = null, failed = null;
-
+// gpu: the game's own renderer where the machine has it, a software browser puts a WebGPU game on its WebGL2 fallback
+await withBrowser(async ({ base, launch }) => {
+const browser = await launch();
+const page = await newGamePage(browser, { errors, viewport: { width: W, height: H } });
 try {
   // desktop tier like shot (core/scene/tier.js): the captured frame is the one the game's picture is made of, costly post included
   const q = new URLSearchParams({ 'threedog-tier': 'high', wait: '1', cutscene: 'skip' });
@@ -96,7 +96,7 @@ try {
   if (file) console.log(`\nSpector capture: ${rel(file)} (${(readFileSync(file).length / 1048576).toFixed(1)} MB; the commands array, or with --full a file the Spector UI can load)`);
   if (spectorNote) console.log(`\n${spectorNote}. The summary above comes from the renderer hook alone.`);
 } catch (e) { failed = String(e?.message ?? e).split('\n')[0]; }
-finally { await browser.close(); await server.close(); }
+}, { prefer: 'gpu', server: () => buildAndPreview(dir, { build: !opt['no-build'] }) });
 // Spector probes the canvas for a WebGL 1 context; three.js logs that as an error although nothing is wrong
 const real = errors.filter(e => !/Canvas has an existing context of a different type/.test(e));
 if (real.length) console.log('\nPage errors:\n  ' + real.slice(0, 5).join('\n  '));

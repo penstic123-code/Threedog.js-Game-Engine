@@ -13,7 +13,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { build } from 'vite';
-import { buildAndPreview, launchRealGPU, newGamePage, IGNORED_CONSOLE, TOOL_BUILD, collect, specContext } from './browser.mjs';
+import { withBrowser, buildAndPreview, launchRealGPU, newGamePage, IGNORED_CONSOLE, TOOL_BUILD, collect, specContext } from './browser.mjs';
 import { viteOptions, ENGINE } from './paths.mjs';
 import { workspaceSpecs } from './lib/specs.mjs';
 import { waitEngine, waitLoaded } from './wait-engine.mjs';
@@ -184,9 +184,8 @@ async function runUrl(browser, server, url) {
 
 if (!flag('no-build')) await build(await viteOptions(dir, { plugins: flag('webgl') ? [] : [rewrites], build: TOOL_BUILD, logLevel: 'error' }));
 if (!existsSync(join(dir, TOOL_BUILD.outDir))) throw new Error(`${dir} has no ${TOOL_BUILD.outDir}: drop --no-build`);
-const server = await buildAndPreview(dir, { build: false });
-const browser = await launchRealGPU({ headless: !flag('headed') });
-try {
+await withBrowser(async ({ server, launch }) => {
+  const browser = await launch();
   const cdp = await browser.newBrowserCDPSession();
   const { processInfo } = await cdp.send('SystemInfo.getProcessInfo');
   console.log(`system Chrome ${browser.version()} pid ${processInfo.find(p => p.type === 'browser')?.id} on ${basename(dir)}, served at ${server.base}`);
@@ -198,9 +197,6 @@ try {
       if (s.notRealWebGPU) { skipped++; console.log(`SKIP  ${s.name}\n      ${s.notRealWebGPU}`); } else await runSpec(browser, server, s);
     }
   }
-} finally {
-  await browser.close().catch(() => {});
-  await server.close();
-}
+}, { launch: () => launchRealGPU({ headless: !flag('headed') }), server: () => buildAndPreview(dir, { build: false }) });
 console.log(`${failed ? `\n${failed} page(s) FAILED` : '\nall pages passed on real WebGPU'}${skipped ? `, ${skipped} skipped by their spec` : ''}`);
 process.exitCode = failed ? 1 : 0;

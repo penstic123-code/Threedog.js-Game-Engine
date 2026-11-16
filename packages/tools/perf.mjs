@@ -19,7 +19,7 @@
 process.env.THREEDOG_TEST = '1';
 import { rmSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { launchBrowser, buildAndPreview, newGamePage } from './browser.mjs';
+import { withBrowser, buildAndPreview, newGamePage } from './browser.mjs';
 import { waitEngine } from './wait-engine.mjs';
 import { ENGINE, GAMES, MODE, ROOT, cli, rel } from './paths.mjs';
 import { intOption } from './lib/cli-args.mjs';
@@ -45,11 +45,13 @@ const SHADING = opt.shading;   // world / stream pages: terrain shading 'smooth'
 let W, H; try { [W, H] = viewSize(opt.size ?? '1280x720'); } catch (e) { fail(e.message); }   // --size WxH as in shot / capture; perf kept its own 1280x720 default
 let FRAMES = 60;
 try { FRAMES = intOption({ frames: opt.frames ?? rest[0] }, 'frames') ?? FRAMES; } catch (e) { fail(e.message); }
-const server = await buildAndPreview(GAME ?? ENGINE), base = server.base;
+let failed = 0, startFail = null;
+// withBrowser closes the server and any browser a failed section left open
+await withBrowser(async ({ base, launch }) => {
 // A fresh browser for every page (leftover work in the software-rendering GPU process from the previous page would slow the next one)
-let said = false, failed = 0;
+let said = false;
 async function open(url, host = base) {
-  const browser = await launchBrowser({ prefer: 'gpu' });
+  const browser = await launch();
   if (!said) { said = true; console.log(`Renderer: ${browser.render.kind}${browser.render.renderer ? ` (${browser.render.renderer})` : ''}`); }
   const page = await newGamePage(browser, { viewport: { width: W, height: H } });
   page.close = () => browser.close();
@@ -196,7 +198,7 @@ if (GAME) {
   // the real loop, past the title: a built page reads no ?play, so the same call the title's Start ends in. Headless mode would stop the loop being measured
   let page;
   try { page = await open('/'); await page.evaluate(() => engine.applyState({ play: 1 })); }
-  catch (e) { await server.close(); fail(`the game's page did not start: ${String(e.message ?? e).split('\n')[0]}`); }
+  catch (e) { startFail = `the game's page did not start: ${String(e.message ?? e).split('\n')[0]}`; return; }   // fail() after withBrowser has closed everything
   // fixed warm-up (2 s) then 3 runs of a fixed duration: the median run is the result, the spread says how far to trust a difference
   const SECS = opt.seconds ? +opt.seconds : 4, rs = [];
   for (let i = 0; i < 3; i++) rs.push(await page.evaluate(sampleFrames, { ms: SECS * 1000, warmMs: i ? 200 : 2000 }));
@@ -249,5 +251,6 @@ if (want('pages')) {
   console.log('\nmodules, ms median/p95 (worst p95 first):\n' + spikes.map(l => '  ' + l).join('\n'));
 }
 
-await server.close();
+}, { prefer: 'gpu', server: () => buildAndPreview(GAME ?? ENGINE) });
+if (startFail) fail(startFail);
 process.exit(failed ? 1 : 0);

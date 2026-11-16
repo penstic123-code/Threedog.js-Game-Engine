@@ -258,11 +258,9 @@ export async function packExternal({ check, browser, keep = false }) {
 // Standalone: node packages/tools/pack-external.mjs [--keep]
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   const { opt } = parseOptions(process.argv.slice(2), { flags: ['keep', 'gpu', 'software'] });
-  const { launchBrowser } = await import('./browser.mjs');
-  const browser = await launchBrowser();
+  const { withBrowser } = await import('./browser.mjs');
   let fail = 0;
-  await packExternal({ browser, keep: !!opt.keep,
-    check: (label, ok, detail = '') => { if (!ok) fail++; console.log(`${ok ? '✓' : '✗'} ${label}${!ok && detail ? '  → ' + detail : ''}`); } });
-  await browser.close();
+  await withBrowser(async ({ launch }) => packExternal({ browser: await launch(), keep: !!opt.keep,
+    check: (label, ok, detail = '') => { if (!ok) fail++; console.log(`${ok ? '✓' : '✗'} ${label}${!ok && detail ? '  → ' + detail : ''}`); } }));
   process.exit(fail ? 1 : 0);
 }

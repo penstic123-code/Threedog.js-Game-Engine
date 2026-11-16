@@ -2,7 +2,7 @@
 // Pixels are read in a headless browser (canvas getImageData: every format the browser decodes works, no image library needed).
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, extname, resolve } from 'node:path';
-import { launchBrowser } from '../browser.mjs';
+import { launchBrowser, withBrowser } from '../browser.mjs';
 
 const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.bmp': 'image/bmp', '.svg': 'image/svg+xml' };
 
@@ -137,8 +137,9 @@ export function laplacianVariance(rgba, w, h) {
  */
 export async function writeSideBySide(a, b, labels, file) {
   const GAP = 6, w = a.w + GAP + b.w, h = Math.max(a.h, b.h), b64 = d => d.toString('base64');
-  const browser = await launchBrowser(), page = await browser.newPage();
-  try {
+  // rethrow: a library call, the command that called it decides how a missing browser ends
+  return withBrowser(async ({ launch }) => {
+    const page = await (await launch()).newPage();
     const png = await page.evaluate(([A, B, labels, GAP, w, h]) => {
       const un = s => Uint8ClampedArray.from(atob(s), ch => ch.charCodeAt(0));
       const c = document.createElement('canvas');
@@ -158,5 +159,5 @@ export async function writeSideBySide(a, b, labels, file) {
     mkdirSync(dirname(resolve(file)), { recursive: true });
     writeFileSync(resolve(file), Buffer.from(png, 'base64'));
     return { w, h };
-  } finally { await browser.close(); }
+  }, { rethrow: true });
 }
