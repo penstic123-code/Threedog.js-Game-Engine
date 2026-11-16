@@ -53,7 +53,7 @@ With a preset the same switch gives crisp banks without more triangles: `terrain
 
 Cost: the worker time per chunk is mostly your `groundType` called once per pixel, several times that of smooth at 128; 64 costs a quarter, 256 four times that.
 Memory is `(colorResolution + 2)^2 x 4` bytes per chunk plus mipmaps (about 90 KB at 128, 23 KB at 64). The first frames pay one shader compile and the uploads, not a cost per frame.
-On a low tier the default drops to 64 unless you set `colorResolution`. To skip the color map there,
+On a low tier the default drops to 64 unless set by `colorResolution` (follows tier). To skip the color map there,
 choose the shading: `shading: engine.tier === 'low' ? 'smooth' : 'texture'`, read once at `terrain({})`.
 
 `variation` shapes *what* color a point gets; `shading` decides *where* it is evaluated. In vertex modes every variation is limited to cell size; in

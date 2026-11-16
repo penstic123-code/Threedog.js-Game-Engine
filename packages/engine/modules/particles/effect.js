@@ -231,6 +231,7 @@ export class Effect {
     if (n === this.max) return;
     for (let i = n; i < this.max; i++) if (this.life[i] !== 0) { this.life[i] = 0; this.aAlpha.array[i] = 0; this.alive--; }
     this.max = n; this.head %= n; this._stale = this.cap;   // the next upload clears the dropped slots on the GPU too
+    this.o.max = n;   // fx.o is the effect's resolved options (public): it says the count in use, a fresh object per define (Particles.js), not the game's
   }
 
   dispose() { this._swap.remove(); this._drop(); }
