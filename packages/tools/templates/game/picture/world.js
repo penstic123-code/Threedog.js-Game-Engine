@@ -11,10 +11,11 @@ export function createWorldColors(engine, ctx, materials) {
     const { r, g, b } = new THREE.Color(palette.water);
     ctx.borrow(engine.water.material.color, { r, g, b });
   }
-  // recolor rebuilds the loaded chunks once (collision and edits stay); null on leaving gives back what terrain({...}) was given.
-  // A picture that draws the ground itself (replaces 'terrain-draw') sets its colors there instead, and this line goes.
+  // recolor rebuilds the loaded chunks once (collision and edits stay); on leaving, the colors the terrain had before (generator.config) go back.
+  // A picture that draws the ground itself (replaces 'terrain-draw') sets its colors there instead, and this block goes.
   if (engine.terrain) {
+    const { colors, biomeColors, variation } = engine.terrain.generator.config;
     engine.terrain.recolor(palette.ground);
-    ctx.track({ remove() { engine.terrain.recolor({ colors: null, biomeColors: null, variation: null }); } });
+    ctx.track({ remove() { engine.terrain.recolor({ colors, biomeColors, variation: variation ?? null }); } });
   }
 }

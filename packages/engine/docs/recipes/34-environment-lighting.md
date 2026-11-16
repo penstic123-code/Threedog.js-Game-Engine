@@ -91,6 +91,7 @@ On `renderer: 'webgpu'` take `PMREMGenerator` from `three/webgpu`. A map you mad
 
 ### What a MeshLambertMaterial does with it (three 0.187)
 The engine's neutral materials are Lambert: they get soft ambient light colored by the environment by direction, and no specular (reflections need Standard / Physical).
+Same on both renderers: on WebGPU the engine gives the node twin of a classic `MeshLambertMaterial` / `MeshPhongMaterial` this diffuse light; a `MeshLambertNodeMaterial` you build yourself reads only its own `envMap` (three's node class).
 The hemisphere light still adds on top, so lower it when the environment comes on. The first frame with an environment recompiles every Lambert program once: do it at start-up.
 - Toon, Basic and ShaderMaterial surfaces ignore it.
 

@@ -23,12 +23,18 @@ export const specs = [
         EU.uMoonSize.value = 500; EU.uSkyCurve.value = 0.3; s.sky.orbit.tilt = 0.1; s.sky.dim.stars = true; s.sky.update(s.focus);
         out.s1 = [U.uMoonSize.value, U.uSkyCurve.value, U.uStarCloudDim.value];
         out.sBad = err(() => s.sky.keyframes([[0.5, 0, 0, 0, 1, 1]]));
+        // keyframes() reads the rows back (a picture keeps them to give back on leaving); a copy, so editing it changes nothing
+        const rows = [[0, 0x101828, 0x202838, 0x8090b0, 0.3], [0.5, 0x4080c0, 0xc0d8e8, 0xffffff, 1.2], [1, 0x101828, 0x202838, 0x8090b0, 0.3]];
+        const before = s.sky.keyframes(); s.sky.keyframes(rows); const got = s.sky.keyframes(); got[1][1] = 0;
+        out.kfRead = [Array.isArray(before) && before.length > 1, JSON.stringify(s.sky.keyframes()) === JSON.stringify(rows)];
+        s.sky.keyframes(before); out.kfRead.push(JSON.stringify(s.sky.keyframes()) === JSON.stringify(before));
         s.dispose();
         return out;
       }));
       check('structural options stay (sky time and start values)', r.kept.join('') === '', JSON.stringify(r.kept));
       check('sky: start values are on the dome through engine.uniforms; .value and plain fields move it; bad keyframes throw', r.s0.join() === '1400,true,0'
         && r.s1.join() === '500,0.3,1' && /keyframes/.test(r.sBad), JSON.stringify([r.s0, r.s1, r.sBad]));
+      check('sky.keyframes() with no argument returns the rows in use, as a copy; giving the old rows back restores them', r.kfRead.every(Boolean), JSON.stringify(r.kfRead));
     },
   },
   {

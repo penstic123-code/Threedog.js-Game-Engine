@@ -10,8 +10,10 @@ export function createSky(engine, ctx) {
   const { r, g, b } = new THREE.Color(palette.background);
   ctx.borrow(engine.scene.background, { r, g, b });
   if (!engine.sky) return { update() {} };   // no sky, no far horizon to hide: no fog until the game wants one (recipe 34)
-  // The dome's colors over the day. A picture that replaces this one sets its own rows: engine.sky.keyframes has no undo
+  // The dome's colors over the day; the rows found here go back when this picture leaves
+  const before = engine.sky.keyframes();
   engine.sky.keyframes(palette.sky);
+  ctx.track({ remove() { engine.sky.keyframes(before); } });
 
   const F = palette.fog, fog = new THREE.Fog(0xffffff, 1, 2);
   ctx.borrow(engine.scene, { fog });

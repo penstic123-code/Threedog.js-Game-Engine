@@ -23,12 +23,12 @@ export async function run({ check }) {
     scene, tier: 'high', focus: new THREE.Vector3(), camera: new THREE.PerspectiveCamera(),
     renderer: { toneMapping: THREE.LinearToneMapping, shadowMap: { type: THREE.PCFShadowMap }, getPixelRatio: () => 1 },
     uniforms: { uDaylight: uniform(1), uSunDir: uniform(new THREE.Vector3(0, 1, 0)), uWeatherLight: uniform(1), uTime: uniform(0) },
-    sky: { dome: { visible: true }, keyframes() {} },   // keyframes: the template sets the dome's day rows (picture/sky.js)
+    sky: { dome: { visible: true }, rows: 'start', keyframes(r) { if (r === undefined) return this.rows; this.rows = r; } },   // the template sets the dome's day rows and gives them back (picture/sky.js)
     onRender: fn => handle(hooks, fn), post: { add: fx => handle(posts, fx) },
     shadows: { mapSize() {} }, events: { on: () => ({ remove() {} }) },   // the template sizes its shadow map from engine.tier and follows 'tier:change'
   });
   const state = () => JSON.stringify({ kids: scene.children.length, fog: scene.fog, same: scene.background === background, bg: background.getHex(), tone: e.renderer.toneMapping,
-    shadow: e.renderer.shadowMap.type, dome: e.sky.dome.visible, hooks: hooks.size, posts: posts.size });
+    shadow: e.renderer.shadowMap.type, dome: e.sky.dome.visible, rows: e.sky.rows, hooks: hooks.size, posts: posts.size });
   const start = state();
 
   // the template holds placeholders until new-game fills them, so it is made for real, inside the repository where 'threedog' resolves

@@ -99,6 +99,7 @@ export class Sky {
 
   /** The day's rows as colors (start, keyframes()) @internal */
   _setKeyframes(rows) {
+    /** @internal the rows as given, for keyframes() with no argument (copied, so a later edit of the caller's array changes nothing here) */ this._rows = rows.map(r => [...r]);
     /** @internal */ this.kf = rows.map(k => [k[0], new THREE.Color(k[1]), new THREE.Color(k[2]), new THREE.Color(k[3]), k[4]]);
     // brightest row of the sky's ambient light (ambient column x the hemi color's brightness, frame.js skyLight): the sky's light now / this is
     // the 0-1 scale the sky.tint color (weather grey) follows
@@ -108,12 +109,18 @@ export class Sky {
 
   /**
    * The day's colors, live: rows [time, zenith, horizon, sunColor, ambient] sorted from 0 to 1 (the same rows as sky({ keyframes })).
-   * Throws, changing nothing, on rows that are not sorted from 0 to 1.
+   * Throws, changing nothing, on rows that are not sorted from 0 to 1. With no argument, returns the rows in use as they were given (a picture that sets its own
+   * keeps them and gives them back when it leaves).
    * @example engine.sky.keyframes([[0, 0x101828, 0x202838, 0x8090b0, 0.3], [0.5, 0x4080c0, 0xc0d8e8, 0xffffff, 1.2], [1, 0x101828, 0x202838, 0x8090b0, 0.3]]);
-   * @param {any[][]} rows
-   * @returns {void}
+   * @example const before = engine.sky.keyframes(); engine.sky.keyframes(mine); ctx.track({ remove() { engine.sky.keyframes(before); } });
+   * @param {any[][]} [rows]
+   * @returns {any[][]} the rows in use (the ones given, when rows were given)
    */
-  keyframes(rows) { checkKeyframes(rows); this._setKeyframes(rows); }
+  keyframes(rows) {
+    if (rows === undefined) return this._rows.map(r => [...r]);   // a copy: editing it changes nothing until it is passed back
+    checkKeyframes(rows); this._setKeyframes(rows);
+    return rows;
+  }
 
   /**
    * Sun direction (unit vector toward the sun): the same vector as engine.uniforms.uSunDir. Computed each frame from the time and orbit until a game writes either,
