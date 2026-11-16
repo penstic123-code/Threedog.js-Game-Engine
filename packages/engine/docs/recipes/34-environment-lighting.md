@@ -63,7 +63,7 @@ engine.renderer.toneMapping = THREE.NeutralToneMapping;  // the curve; materials
 ```
 The engine picks no curve: `renderer.toneMapping` stays three.js's default (`NoToneMapping`) until your code writes it. A curve of your own is a post effect in the `'tone'` slot (recipe 52).
 
-Exposure that adapts like an eye (WebGPU): `engine.post.add(autoExposure({ min: 0.25, max: 4 }))` from `@threedog/post-effects/tsl` measures the average brightness on the GPU and eases toward `key`. It multiplies after everything that adds light, before tone mapping (`toneMappingExposure` still applies on top). Bloom runs before it, so in bright daylight large areas glow and are then darkened: raise bloom's `threshold` or give it an `order` above 800. Narrow `min` / `max` for an authored look; `speedUp` / `speedDown` set the speed, on `engine.time`; a chain rebuild keeps the adapted value. It measures a 64x64 sample: a small, very bright thing can nudge it.
+Exposure that adapts like an eye (WebGPU): `engine.post.add(autoExposure({ min: 0.25, max: 4 }))` from `@threedog/post-effects/tsl` eases the average GPU-measured brightness toward `key`. It multiplies after everything that adds light, before tone mapping (`toneMappingExposure` still applies on top). Bloom runs before it (bright daylight glows, then darkens): raise bloom's `threshold` or give it an `order` above 800. Narrow `min` / `max` for an authored look; `speedUp` / `speedDown` (on `engine.time`); a chain rebuild keeps the adapted value. It measures a 64x64 sample: a small, very bright thing nudges it.
 
 ## Environment maps
 `scene.environment` is plain three.js and stays `null` until your code writes it. The background (the sky dome or a skybox) and the environment lighting are two separate fields.
@@ -90,9 +90,9 @@ On `renderer: 'webgpu'` take `PMREMGenerator` from `three/webgpu`. A map you mad
 - An asset map is a fixed photo: it does not dim at night. Write `scene.environmentIntensity` from your own frame code reading `engine.uniforms.uDaylight`.
 
 ### What a MeshLambertMaterial does with it (three 0.187)
-The engine's neutral materials are Lambert: they get soft ambient light colored by the environment by direction, and no specular (reflections need Standard / Physical).
-Same on both renderers: on WebGPU the engine gives the node twin of a classic `MeshLambertMaterial` / `MeshPhongMaterial` this diffuse light; a `MeshLambertNodeMaterial` you build yourself reads only its own `envMap` (three's node class).
-The hemisphere light still adds on top, so lower it when the environment comes on. The first frame with an environment recompiles every Lambert program once: do it at start-up.
+The engine's neutral materials are Lambert: soft ambient light colored by the environment by direction, no specular (reflections need Standard / Physical).
+Both renderers alike; a `MeshLambertNodeMaterial` you build reads only its own `envMap`.
+A hemisphere light adds on top: lower it. The first frame with an environment recompiles every Lambert program once: do it at start-up.
 - Toon, Basic and ShaderMaterial surfaces ignore it.
 
 ## Light probes (baked indirect light)

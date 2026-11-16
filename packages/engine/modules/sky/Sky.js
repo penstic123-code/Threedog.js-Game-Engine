@@ -109,12 +109,10 @@ export class Sky {
 
   /**
    * The day's colors, live: rows [time, zenith, horizon, sunColor, ambient] sorted from 0 to 1 (the same rows as sky({ keyframes })).
-   * Throws, changing nothing, on rows that are not sorted from 0 to 1. With no argument, returns the rows in use as they were given (a picture that sets its own
-   * keeps them and gives them back when it leaves).
+   * Throws, changing nothing, on rows that are not sorted from 0 to 1. No argument: a copy of the rows in use (a picture gives them back on leaving).
    * @example engine.sky.keyframes([[0, 0x101828, 0x202838, 0x8090b0, 0.3], [0.5, 0x4080c0, 0xc0d8e8, 0xffffff, 1.2], [1, 0x101828, 0x202838, 0x8090b0, 0.3]]);
-   * @example const before = engine.sky.keyframes(); engine.sky.keyframes(mine); ctx.track({ remove() { engine.sky.keyframes(before); } });
    * @param {any[][]} [rows]
-   * @returns {any[][]} the rows in use (the ones given, when rows were given)
+   * @returns {any[][]} the rows in use
    */
   keyframes(rows) {
     if (rows === undefined) return this._rows.map(r => [...r]);   // a copy: editing it changes nothing until it is passed back

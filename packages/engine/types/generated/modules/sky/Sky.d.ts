@@ -43,12 +43,12 @@ export class Sky {
     };
     /**
      * The day's colors, live: rows [time, zenith, horizon, sunColor, ambient] sorted from 0 to 1 (the same rows as sky({ keyframes })).
-     * Throws, changing nothing, on rows that are not sorted from 0 to 1.
+     * Throws, changing nothing, on rows that are not sorted from 0 to 1. No argument: a copy of the rows in use (a picture gives them back on leaving).
      * @example engine.sky.keyframes([[0, 0x101828, 0x202838, 0x8090b0, 0.3], [0.5, 0x4080c0, 0xc0d8e8, 0xffffff, 1.2], [1, 0x101828, 0x202838, 0x8090b0, 0.3]]);
-     * @param {any[][]} rows
-     * @returns {void}
+     * @param {any[][]} [rows]
+     * @returns {any[][]} the rows in use
      */
-    keyframes(rows: any[][]): void;
+    keyframes(rows?: any[][]): any[][];
     set sunDir(v: THREE.Vector3);
     /**
      * Sun direction (unit vector toward the sun): the same vector as engine.uniforms.uSunDir. Computed each frame from the time and orbit until a game writes either,

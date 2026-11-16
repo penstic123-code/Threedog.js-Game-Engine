@@ -4,6 +4,7 @@ What changed in each version and how a game upgrades.
 
 ## Unreleased
 
+- Added: `sky.keyframes()` with no argument returns a copy of the rows in use, so a picture that sets its own can give them back when it leaves. A call with rows works as before and now returns them; nothing to migrate.
 - Added: the `tier:change` event ({ tier }), fired after engine.tier changes (a settings preset, game code writing it). Something sized from the tier when made (a shadow map, a light budget) had no public way to follow it, so the template, the examples and the recipes read it once and kept a low-tier start's sizes after the player picked high; they now size at creation and follow this event. Particles: an effect's default max (60 on low) now follows a tier change in place.
 - Changed: the session reset (newGame / load) runs in one declared order: modules join through sessionEnd(e), worldLoad(e, info) and sessionStart(e, info) on their definition, run in engine.moduleOrder (stage, then before / after), and only then the session:end / world:load / session:start events fire. Before, the order was install order. A game's own world:load listener now always runs after the player is placed back (before, one registered at boot ran before it).
 - Fixed: a module installed before the provider it requires (the order engine.use(x, { replaces }) leaves) now inits during start() and is awaited; before, start() resolved without waiting for it, and a critical one failing there did not block the start.

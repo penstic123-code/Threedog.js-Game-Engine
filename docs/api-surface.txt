@@ -1480,7 +1480,7 @@ module APIs | sky.environment | (options?: { into?: { environment: any; }; inter
 module APIs | sky.fixedTime | number
 module APIs | sky.horizon | any
 module APIs | sky.isDay | boolean
-module APIs | sky.keyframes | (rows: any[][]) => void
+module APIs | sky.keyframes | (rows?: any[][]) => any[][]
 module APIs | sky.layer | (name: string, spec: string | { glsl?: string; tsl?: Function; uniforms?: object; order?: number; blend?: "mix" | "add"; } | null) => void
 module APIs | sky.orbit | { tilt: number; sway: number; distance: number; }
 module APIs | sky.replace | (sky: string | import("three").Texture | THREE.Object3D | null | false) => void
