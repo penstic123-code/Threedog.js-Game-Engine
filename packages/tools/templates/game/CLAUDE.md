@@ -23,9 +23,9 @@ __DEFAULT_LAYER__
 Helpers skip this file: tell them `npx threedog how` first, recipes 60 + 62, a clean `check`. Taking over: STATUS.md, then DESIGN.md.
 
 ## Before you call it done
-Done = it plays and looks as DESIGN.md says; art still to make goes in STATUS.md. `picture/palette.js` starts as a neutral placeholder day: restyle it to the target first (recipes 60 + 62, packs `@threedog/starter-pictures`).
-1. `npx threedog shot --play` beside the target style; name what differs (recipe 60).
-2. Picture by recipe 62; bloom, AO, grading: `@threedog/post-effects`, not hand-rolled.
+Done = it plays and looks as DESIGN.md says (art to make: STATUS.md).
+1. `npx threedog shot --play` beside the target; name what differs (recipe 60).
+2. `picture/` is a neutral placeholder: restyle by recipe 62; bloom, AO, grading: `@threedog/post-effects`, not hand-rolled.
 3. Logic with weight has a test or assert; each end state a scenario.
 
 ## Working rules
