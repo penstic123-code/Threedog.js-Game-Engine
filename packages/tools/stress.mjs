@@ -30,63 +30,63 @@ const t0 = Date.now();
 // the game on a dev server: the injected page has to import the game's own three
 let out, code = 0;
 await withBrowser(async ({ server, launch }) => {
-const browser = await launch();
-out = { target: GAME ? 'game' : 'neutral page', renderer: browser.render?.renderer ?? 'SwiftShader (software)', kind: browser.render?.kind ?? 'gpu', timer: false, axes: {} };
-try {
-  const open = async () => {
-    const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
-    page.on('pageerror', e => say('  page error', String(e)));
-    if (GAME) {
-      await injectTool(page, server.base, 'stress-page.js', async () => {
-        await page.goto(server.base + headlessUrl('/', { 'threedog-tier': 'high', cutscene: 'skip' }));
-        await waitEngine(page, { timeout: 120000, errors: [] });
-        await waitLoaded(page);
-      }, () => window.stress?.ready);
-      return page;
-    }
-    await page.goto(server.base + '/tests/stress/index.html', { waitUntil: 'domcontentloaded', timeout: 120000 });
-    await page.waitForFunction(() => window.stress?.ready, null, { timeout: 120000 });
-    return page;
-  };
-  const probe = await open();
-  const axes = await probe.evaluate(() => window.stress.axes), maxTex = await probe.evaluate(() => window.stress.maxTexture());
-  if (GAME) {
-    const back = await probe.evaluate(() => engine.describe().renderer);
-    out.renderer = rendererLine(back).replace('Renderer: ', ''); out.backend = back.backend;
-    if (back.requested === 'webgpu' && back.backend !== 'webgpu') throw new Error(`stress refuses: the game asks for WebGPU but this browser gave it ${back.backend}${back.reason ? ` (${back.reason})` : ''}, so the numbers would describe another renderer`);
-    await probe.evaluate(() => { engine.step(1 / 60, { render: true, describe: false }); });
-    out.alone = await probe.evaluate(f => window.stress.measure(f), FRAMES);
-    if (!out.alone.drawCalls) throw new Error('the game drew nothing on this page, so there is no frame to load: is it on a screen with no 3D?');
-  }
-  await probe.close();
-  for (const k of ONLY ?? []) if (!axes[k]) throw new Error(`stress --only: unknown axis "${k}". Axes: ${Object.keys(axes).join(', ')}`);
-  say(`Measured: ${GAME ? 'this game' : 'the neutral test page (WebGL, no game)'} · ${out.renderer} (${out.kind}) · 1280×720 · ${FRAMES} frames per step, medians`);
-  if (out.alone) say(`The game alone: ${out.alone.frame} ms a frame (cpu ${out.alone.cpu}), ${out.alone.drawCalls} draw calls, ${out.alone.triangles} triangles. The load below comes on top of it.`);
-  for (const [name, ax] of Object.entries(axes)) {
-    if (ONLY && !ONLY.includes(name)) continue;
-    say(`\n## ${name}: ${ax.unit}`);
-    say('| load | cpu ms | gpu ms | frame ms | draw calls | triangles |\n|---|---|---|---|---|---|');
-    // a fresh page per axis: leftover GPU memory and compiled programs of the previous axis would bias the next one
-    const page = await open(), steps = [];
-    let n = ax.start, stop = 'cap';
-    try {
-      for (; n <= (name === 'shadowMapSize' ? Math.min(ax.cap, maxTex) : ax.cap); n = await page.evaluate(([a, x]) => window.stress.next(a, x), [name, n])) {
-        await page.evaluate(([a, x]) => window.stress.set(a, x), [name, n]);
-        // the first step of a fresh page still pays one-time costs (program link, render targets, driver warm-up): measure it twice, keep the second
-        if (!steps.length) await page.evaluate(f => window.stress.measure(f), FRAMES);
-        const r = await page.evaluate(f => window.stress.measure(f), FRAMES);
-        out.timer ||= r.timer;
-        if (r.error) { stop = `${r.error} at ${n}`; break; }
-        steps.push({ n, ...r });
-        say(`| ${n} | ${r.cpu} | ${r.gpu ?? '—'} | ${r.frame} | ${r.drawCalls} | ${r.triangles} |`);
-        if (r.frame > 33.3) { stop = '33 ms'; break; }
+  const browser = await launch();
+  out = { target: GAME ? 'game' : 'neutral page', renderer: browser.render?.renderer ?? 'SwiftShader (software)', kind: browser.render?.kind ?? 'gpu', timer: false, axes: {} };
+  try {
+    const open = async () => {
+      const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+      page.on('pageerror', e => say('  page error', String(e)));
+      if (GAME) {
+        await injectTool(page, server.base, 'stress-page.js', async () => {
+          await page.goto(server.base + headlessUrl('/', { 'threedog-tier': 'high', cutscene: 'skip' }));
+          await waitEngine(page, { timeout: 120000, errors: [] });
+          await waitLoaded(page);
+        }, () => window.stress?.ready);
+        return page;
       }
-    } catch (e) { stop = `error at ${n}: ${String(e?.message ?? e).split('\n')[0]}`; }
-    await page.close();
-    out.axes[name] = { unit: ax.unit, ladder: ax.ladder, steps, stop, fit60: fit(steps, 16.7, ax.ladder), fit30: fit(steps, 33.3, ax.ladder) };
-    say(`stopped: ${stop}`);
-  }
-} catch (e) { console.error(String(e?.message ?? e)); code = 1; }
+      await page.goto(server.base + '/tests/stress/index.html', { waitUntil: 'domcontentloaded', timeout: 120000 });
+      await page.waitForFunction(() => window.stress?.ready, null, { timeout: 120000 });
+      return page;
+    };
+    const probe = await open();
+    const axes = await probe.evaluate(() => window.stress.axes), maxTex = await probe.evaluate(() => window.stress.maxTexture());
+    if (GAME) {
+      const back = await probe.evaluate(() => engine.describe().renderer);
+      out.renderer = rendererLine(back).replace('Renderer: ', ''); out.backend = back.backend;
+      if (back.requested === 'webgpu' && back.backend !== 'webgpu') throw new Error(`stress refuses: the game asks for WebGPU but this browser gave it ${back.backend}${back.reason ? ` (${back.reason})` : ''}, so the numbers would describe another renderer`);
+      await probe.evaluate(() => { engine.step(1 / 60, { render: true, describe: false }); });
+      out.alone = await probe.evaluate(f => window.stress.measure(f), FRAMES);
+      if (!out.alone.drawCalls) throw new Error('the game drew nothing on this page, so there is no frame to load: is it on a screen with no 3D?');
+    }
+    await probe.close();
+    for (const k of ONLY ?? []) if (!axes[k]) throw new Error(`stress --only: unknown axis "${k}". Axes: ${Object.keys(axes).join(', ')}`);
+    say(`Measured: ${GAME ? 'this game' : 'the neutral test page (WebGL, no game)'} · ${out.renderer} (${out.kind}) · 1280×720 · ${FRAMES} frames per step, medians`);
+    if (out.alone) say(`The game alone: ${out.alone.frame} ms a frame (cpu ${out.alone.cpu}), ${out.alone.drawCalls} draw calls, ${out.alone.triangles} triangles. The load below comes on top of it.`);
+    for (const [name, ax] of Object.entries(axes)) {
+      if (ONLY && !ONLY.includes(name)) continue;
+      say(`\n## ${name}: ${ax.unit}`);
+      say('| load | cpu ms | gpu ms | frame ms | draw calls | triangles |\n|---|---|---|---|---|---|');
+      // a fresh page per axis: leftover GPU memory and compiled programs of the previous axis would bias the next one
+      const page = await open(), steps = [];
+      let n = ax.start, stop = 'cap';
+      try {
+        for (; n <= (name === 'shadowMapSize' ? Math.min(ax.cap, maxTex) : ax.cap); n = await page.evaluate(([a, x]) => window.stress.next(a, x), [name, n])) {
+          await page.evaluate(([a, x]) => window.stress.set(a, x), [name, n]);
+          // the first step of a fresh page still pays one-time costs (program link, render targets, driver warm-up): measure it twice, keep the second
+          if (!steps.length) await page.evaluate(f => window.stress.measure(f), FRAMES);
+          const r = await page.evaluate(f => window.stress.measure(f), FRAMES);
+          out.timer ||= r.timer;
+          if (r.error) { stop = `${r.error} at ${n}`; break; }
+          steps.push({ n, ...r });
+          say(`| ${n} | ${r.cpu} | ${r.gpu ?? '—'} | ${r.frame} | ${r.drawCalls} | ${r.triangles} |`);
+          if (r.frame > 33.3) { stop = '33 ms'; break; }
+        }
+      } catch (e) { stop = `error at ${n}: ${String(e?.message ?? e).split('\n')[0]}`; }
+      await page.close();
+      out.axes[name] = { unit: ax.unit, ladder: ax.ladder, steps, stop, fit60: fit(steps, 16.7, ax.ladder), fit30: fit(steps, 33.3, ax.ladder) };
+      say(`stopped: ${stop}`);
+    }
+  } catch (e) { console.error(String(e?.message ?? e)); code = 1; }
 }, { exitOnFail: true, prefer: 'gpu', launch: GAME ? launchRealGPU : undefined,
   server: () => GAME ? devServer(GAME, { cacheDir: '.threedog/vite-stress', fs: { strict: false } }) : buildAndPreview(ENGINE) });
 
