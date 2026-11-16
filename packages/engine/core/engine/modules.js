@@ -300,7 +300,7 @@ export const moduleMethods = {
     if (this.events.muted > 0) return;   // an atomic op's rollback puts plain data back and announces nothing (opsAtomic.js): it is no reset either
     for (const name of this.moduleOrder) {
       const m = this.modules.get(name), st = this._modState.get(name);
-      if (typeof m?.[step] !== 'function' || st === 'failed' || st === 'disposed') continue;
+      if (typeof m?.[step] !== 'function' || st === 'failed' || st === 'disabled' || st === 'disposed') continue;   // disabled: a picture / ui module switched off after a throw lost its listeners too (errors.js disableModule)
       this.events._call(`${name}.${step}`, () => m[step](this, ...args), []);
     }
   },

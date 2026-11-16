@@ -1051,7 +1051,7 @@ export interface ModuleCtx {
   /** engine.budget.metric, owned */
   budget: { metric(name: string, read: () => number, opts?: { limit?: number }): Handle };
   /** Where engine.thing finds this module's records, and what engine.explain({ thing }) adds; owned */
-  things: { addSource(source: any): Handle; explainWith(fn: (e: Engine, thing: any, out: any) => void): Handle };
+  things: { addSource(source: any): Handle; explainWith(fn: (e: Engine, thing: any, out: any) => void): Handle; recordsLoaded(info: { count: number }): void };
   /**
    * Give the ground. provides must name 'ground' (terrain and level hold it too, so two providers are refused at use()); when the module goes the flat ground comes back.
    * addColliders: more static colliders in engine.ground.forEachCollider, whoever gives the ground.
