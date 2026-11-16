@@ -10,7 +10,7 @@ export function createLights(engine) {
   const sun = new THREE.DirectionalLight(0xffffff, LIGHT.sunIntensity);
   sun.position.set(LIGHT.sun[0], LIGHT.sun[1], LIGHT.sun[2]);
   sun.castShadow = true;
-  // sized from engine.tier, resized on 'tier:change' (a settings preset changes the tier while running)
+  // sized from engine.tier, resized on 'tier:change' (a preset changes it while running); these lights live with the engine, so the listener is not removed: in a module, ctx.track(engine.events.on(...))
   const fit = () => { const n = engine.tier === 'low' ? 1024 : 2048; engine.shadows.mapSize(sun, n); sun.shadow.radius = Math.max(Math.min(3, 2), 3 * n / 2048); };
   Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 250 });
   sun.shadow.bias = -0.0001; sun.shadow.normalBias = 0.03;   // the box covers the row of columns with a little margin

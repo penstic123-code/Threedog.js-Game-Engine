@@ -10,7 +10,7 @@ export function createLights(engine) {
   const fill = new THREE.AmbientLight(0xffffff, 0);
   const sun = new THREE.DirectionalLight(0xffffff, 1);
   sun.castShadow = true;
-  // sized from engine.tier, resized on 'tier:change' (a settings preset changes the tier while running)
+  // sized from engine.tier, resized on 'tier:change' (a preset changes it while running); these lights live with the engine, so the listener is not removed: in a module, ctx.track(engine.events.on(...))
   const fit = () => { const n = engine.tier === 'low' ? 1024 : 2048; engine.shadows.mapSize(sun, n); sun.shadow.radius = Math.max(Math.min(SHADOW.radius, 2), SHADOW.radius * n / 2048); };
   Object.assign(sun.shadow.camera, { left: -SHADOW.extent, right: SHADOW.extent, top: SHADOW.extent, bottom: -SHADOW.extent, near: 1, far: SHADOW.far });
   sun.shadow.camera.updateProjectionMatrix();   // three does not redo it for a light's shadow camera: without this line the box stays at its 10 m default

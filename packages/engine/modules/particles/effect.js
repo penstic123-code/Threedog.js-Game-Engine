@@ -48,22 +48,11 @@ function nodeSide(engine, name) {
 }
 
 export class Effect {
-  constructor(sys, name, o) {
+  /** @param {any} sys @param {string} name @param {any} o @param {number} [cap] buffer slots, at least o.max: room for a default max that follows engine.tier (_resize) */
+  constructor(sys, name, o, cap) {
     this.sys = sys; this.name = name; this.o = o;
-    this._alloc();
-    /** @internal the game's material while one is set */ this._given = null;
-    this._build();
-    // fallback 'webgl': an effect defined before start() was built for the WebGPURenderer start() then replaced; build its draw object again
-    // for the renderer in use (the particle state lives in the arrays, so live particles carry over)
-    /** @internal */ this._swap = onRendererSwap(sys.engine, () => {
-      const was = this._attrs.map(a => a.array);
-      this._rebuild(() => this._attrs.forEach((a, i) => a.array.set(was[i])));
-    });
-    if (o.texture) this._loadTexture(o.texture);
-  }
-  /** @internal the CPU-side particle arrays for o.max slots */
-  _alloc() {
-    const N = this.max = Math.max(1, Math.round(this.o.max));
+    const N = this.cap = Math.max(1, Math.round(Math.max(cap ?? 0, o.max)));
+    /** slots in use (spawn's ring, the update loop): o.max, at most cap */ this.max = Math.max(1, Math.round(o.max));
     this.pos = new Float32Array(N * 3); this.vel = new Float32Array(N * 3);
     this.age = new Float32Array(N); this.life = new Float32Array(N).fill(0);   // life 0 = empty slot
     this.spinV = new Float32Array(N);
@@ -72,26 +61,20 @@ export class Effect {
     this._curves = {};   // the last curve of each kind: most batches reuse the effect's own, like the merged params of a handle
     this.head = 0; this.alive = 0;
     /** @internal clear() zeroed slots the GPU copy still shows: the next upload reaches this far */ this._stale = 0;
-  }
-  /** @internal the draw object built again, keeping what the game set on it (visibility, its material, the texture); fill runs on the new attributes */
-  _rebuild(fill) {
-    const vis = this.points.visible;
-    this._drop();
+    /** @internal the game's material while one is set */ this._given = null;
     this._build();
-    fill?.();
-    this.points.visible = vis;
-    if (this._given) this.points.material = this._given;
-    if (this._tex) this._useTexture(this._tex);
-  }
-  /**
-   * @internal a new slot count in place (a default max following engine.tier): the same object, so a reference the game holds, its material and its
-   * emitters stay; the particles alive now are dropped (a settings change, where one frame of missing sparks is not seen)
-   */
-  _resize(max) {
-    if (Math.max(1, Math.round(max)) === this.max) return;
-    this.o = { ...this.o, max };
-    this._alloc();
-    this._rebuild();
+    // fallback 'webgl': an effect defined before start() was built for the WebGPURenderer start() then replaced; build its draw object again
+    // for the renderer in use (the particle state lives in the arrays above, so live particles carry over)
+    /** @internal */ this._swap = onRendererSwap(sys.engine, () => {
+      const vis = this.points.visible, was = this._attrs.map(a => a.array);
+      this._drop();
+      this._build();
+      this._attrs.forEach((a, i) => a.array.set(was[i]));
+      this.points.visible = vis;
+      if (this._given) this.points.material = this._given;
+      if (this._tex) this._useTexture(this._tex);
+    });
+    if (o.texture) this._loadTexture(o.texture);
   }
 
   /** The plain three.js material drawn; set yours and it is drawn as given, null gives the engine's back */
@@ -112,7 +95,7 @@ export class Effect {
 
   /** @internal The geometry, material and draw object for the engine's current renderer (sprite quads on WebGPU, points on WebGL) */
   _build() {
-    const sys = this.sys, o = this.o, N = this.max, name = this.name;
+    const sys = this.sys, o = this.o, N = this.cap, name = this.name;
     const g = this.geometry = new THREE.BufferGeometry();
     const gpu = nodeSide(sys.engine, name);   // WebGPU: the same attributes, read per instance by sprite quads
     const attr = (n, size) => { const a = new (gpu ? THREE.InstancedBufferAttribute : THREE.BufferAttribute)(new Float32Array(N * size), size); a.setUsage(THREE.DynamicDrawUsage); g.setAttribute(n, a); return a; };
@@ -237,6 +220,17 @@ export class Effect {
     for (const a of this._attrs) {
       a.clearUpdateRanges(); a.addUpdateRange(0, up * a.itemSize); a.needsUpdate = true;
     }
+  }
+
+  /**
+   * @internal a default max following engine.tier: only the slots in use change, inside buffers built for the larger count, so nothing the game holds
+   * (points, material, the uniforms its own material shares, the WebGPU nodes reading the attributes) is replaced. Particles above the new count go
+   */
+  _resize(max) {
+    const n = Math.min(this.cap, Math.max(1, Math.round(max)));
+    if (n === this.max) return;
+    for (let i = n; i < this.max; i++) if (this.life[i] !== 0) { this.life[i] = 0; this.aAlpha.array[i] = 0; this.alive--; }
+    this.max = n; this.head %= n; this._stale = this.cap;   // the next upload clears the dropped slots on the GPU too
   }
 
   dispose() { this._swap.remove(); this._drop(); }

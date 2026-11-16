@@ -9,7 +9,7 @@ export function createLights(engine) {
   const hemi = new THREE.HemisphereLight(A.sky, A.ground, A.day);
   const sun = new THREE.DirectionalLight(S.color, S.intensity);
   sun.castShadow = true;
-  // sized from engine.tier, resized on 'tier:change' (a settings preset changes the tier while running)
+  // sized from engine.tier, resized on 'tier:change' (a preset changes it while running); these lights live with the engine, so the listener is not removed: in a module, ctx.track(engine.events.on(...))
   const fit = () => engine.shadows.mapSize(sun, engine.tier === 'low' ? 1024 : 2048);
   fit(); engine.events.on('tier:change', fit);
   Object.assign(sun.shadow.camera, { left: -SHADOW_BOX, right: SHADOW_BOX, top: SHADOW_BOX, bottom: -SHADOW_BOX, near: 1, far: 120 });

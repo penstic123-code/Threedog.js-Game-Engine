@@ -110,8 +110,10 @@ export class Particles {
     readFx(`particles.define('${name}')`, opts);
     const old = this.effects.get(name);
     const o = { ...NEUTRAL, max: this._tierMax(), ...this._fallback, ...this._given[name], ...opts };
-    const fx = new Effect(this, name, o);
-    /** @internal no max given anywhere: the default follows engine.tier (_tierChanged) */ fx._maxFollows = [this._fallback, this._given[name], opts].every(g => g?.max == null);
+    // no max given anywhere: the default follows engine.tier (_tierChanged), so the buffers hold the high tier's count from the start
+    const follows = [this._fallback, this._given[name], opts].every(g => g?.max == null);
+    const fx = new Effect(this, name, o, follows ? NEUTRAL.max : undefined);
+    /** @internal */ fx._maxFollows = follows;
     this.effects.set(name, fx);
     // emitters attached to the old effect keep running on the new one (redefining tunes an effect, it does not stop it)
     if (old) { for (const h of this.emitters) if (h.fx === old) h.fx = fx; old.dispose(); }
@@ -119,7 +121,7 @@ export class Particles {
   }
   /** @internal the default max: half on a low-tier device */
   _tierMax() { return this.engine.tier === 'low' ? NEUTRAL.max / 2 : NEUTRAL.max; }
-  /** @internal engine.tier changed (a preset, often a stored one arriving after the effects are defined): a default max follows it in place; a max the game gave stays */
+  /** @internal engine.tier changed (a preset, often a stored one arriving after the effects are defined): a default max follows it in place (Effect._resize); a max the game gave stays */
   _tierChanged() { for (const fx of this.effects.values()) if (fx._maxFollows) fx._resize(this._tierMax()); }
   /**
    * Whether this effect has been defined
@@ -180,7 +182,7 @@ export class Particles {
    * @param {string} [name]
    * @returns {void}
    */
-  clear(name) { for (const fx of name ? [this.effects.get(name)].filter(Boolean) : this.effects.values()) { fx.life.fill(0); fx.aAlpha.array.fill(0); fx.alive = 0; fx._stale = fx.max; fx.points.visible = false; } }
+  clear(name) { for (const fx of name ? [this.effects.get(name)].filter(Boolean) : this.effects.values()) { fx.life.fill(0); fx.aAlpha.array.fill(0); fx.alive = 0; fx._stale = fx.cap; fx.points.visible = false; } }
 
   /** @internal Where the emitter is in the world (written into this._o) */
   _at(h) {

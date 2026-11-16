@@ -16,7 +16,7 @@ export function createLights(engine, { night, fill, windowOpening }) {
   sun.position.set(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)).multiplyScalar(SHADOW.distance);
   sun.castShadow = true;
   renderer.shadowMap.type = SHADOW.type;
-  // sized from engine.tier, resized on 'tier:change' (a settings preset changes the tier while running)
+  // sized from engine.tier, resized on 'tier:change' (a preset changes it while running); these lights live with the engine, so the listener is not removed: in a module, ctx.track(engine.events.on(...))
   const fit = () => { const n = SHADOW.mapSize[engine.tier === 'low' ? 'low' : 'high']; engine.shadows.mapSize(sun, n); sun.shadow.radius = Math.max(Math.min(SHADOW.radius, 2), SHADOW.radius * n / SHADOW.mapSize.high); };
   const { extent: e, distance } = SHADOW;
   Object.assign(sun.shadow.camera, { left: -e, right: e, top: e, bottom: -e, near: 1, far: distance * 2 });

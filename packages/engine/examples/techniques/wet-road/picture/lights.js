@@ -9,7 +9,7 @@ export function createLights(engine) {
   const hemi = new THREE.HemisphereLight(ambient.dayColor, ambient.ground, ambient.day);
   const sun = new THREE.DirectionalLight(key.dayColor, key.day);
   sun.castShadow = true;
-  // sized from engine.tier, resized on 'tier:change' (a settings preset changes the tier while running)
+  // sized from engine.tier, resized on 'tier:change' (a preset changes it while running); these lights live with the engine, so the listener is not removed: in a module, ctx.track(engine.events.on(...))
   const fit = () => engine.shadows.mapSize(sun, engine.tier === 'low' ? 1024 : 2048);
   fit(); engine.events.on('tier:change', fit);
   // wide enough for the whole visible street around the focus point, which sits 20 m down the road

@@ -130,16 +130,18 @@ export const specs = [
     software: true,
     async run({ check, ev }) {
       const r = await ev(() => window.fxTierFollow()), J = JSON.stringify(r);
-      const at = (s, tier, a, map) => s.tier === tier && s.a === a && s.b === 30 && s.map === map && s.same && s.mat;
-      check('game code writing engine.tier: the default max halves and comes back (60 / 120), a given max stays, the same effect object keeps its material, the shadow map follows',
-        at(r.high, 'high', 120, 2048) && at(r.low, 'low', 60, 1024) && at(r.back, 'high', 120, 2048), J);
+      const at = (s, tier, a, map) => s.tier === tier && s.a === a && s.b === 30 && s.map === map && s.same;
+      check('game code writing engine.tier: the default max halves and comes back (60 / 120), a given max stays, the shadow map follows; the points, material and shared uniform objects are the same',
+        at(r.high, 'high', 120, 2048) && at(r.low, 'low', 60, 1024) && at(r.back, 'high', 120, 2048) && r.full === 100 && r.cut === 60, J);
       check("a settings preset (engine.mod('tier')) and its release reach the same followers", at(r.preset, 'low', 60, 1024) && at(r.presetGone, 'high', 120, 2048), J);
-      check("one 'tier:change' per change, after the engine's own followers; writing the same tier fires none",
-        r.again === 1 && JSON.stringify(r.heard) === JSON.stringify([['low', 60], ['high', 120], ['low', 60], ['high', 120]]), J);
+      check("one 'tier:change' per change, after the engine's own followers; a write, take or release that leaves the tier fires none",
+        r.again === 1 && JSON.stringify(r.silent) === '[1,"low"]' && r.silent2 === 1, J);
       check('a resized effect still emits and draws its particles', r.emits === 5, J);
-      // the whole class, statically: a picture file that reads engine.tier where it makes things also follows 'tier:change' (a read inside a per-frame function is live already)
+      check('nothing follows during dispose: the preset released by a disposing settings module fires no event and resizes nothing', r.disposed[0] === 0 && r.disposed[1], J);
+      // the whole class, statically: a picture file that reads the tier where it makes things also follows 'tier:change' (a read inside a per-frame function is live already).
+      // Limits: by indentation (4 spaces or less = creation code) and per file, not per read; a second creation-time read in a file that follows once passes
       const pics = [...filesIn('examples'), ...filesIn('../tools/templates/game')].filter(f => /\/picture\/[^/]+\.js$/.test(f));
-      const once = pics.filter(f => { const c = code(f); return c.split('\n').some(l => /engine\.tier\b/.test(l) && /^ {0,4}\S/.test(l)) && !c.includes("'tier:change'"); });
+      const once = pics.filter(f => { const c = code(f); return c.split('\n').some(l => /\b(engine|e)\.tier\b/.test(l) && /^ {0,4}\S/.test(l)) && !c.includes("'tier:change'"); });
       check(`every examples / template picture file reading engine.tier at creation follows 'tier:change' (${pics.length} files)`, pics.length > 10 && !once.length, JSON.stringify(once));
     },
   },
