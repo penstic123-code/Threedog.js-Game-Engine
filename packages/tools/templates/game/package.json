@@ -23,8 +23,8 @@
   },
   "dependencies": {
     "three": "~0.187.0",
-    "threedog": "^1.5.0",
-    "@threedog/tools": "^1.5.0",
-    "@threedog/post-effects": "^1.5.0"
+    "threedog": "^2.0.0",
+    "@threedog/tools": "^2.0.0",
+    "@threedog/post-effects": "^2.0.0"
   }
 }

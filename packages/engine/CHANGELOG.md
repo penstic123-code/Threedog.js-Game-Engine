@@ -4,6 +4,19 @@ What changed in each version and how a game upgrades.
 
 ## Unreleased
 
+## 2.0.0 (2026-11-16)
+
+A major version: some games need a change to upgrade (below). 1.5.0 was prepared but never published; its changes are part of this release.
+
+**Upgrading from 1.x**
+- Install the packages together at 2.0: `npm install threedog@2 @threedog/tools@2` (and `@threedog/post-effects@2`, `@threedog/terrain-noise@2` if you use them). The `threedog` command now comes with `threedog`, not `@threedog/tools`.
+- `characters()` requires `world()`: a game that installs it without `world()` or `openWorld()` adds it before: `engine.use(world(), collision(), characters())`.
+- The newGame / load reset runs in one declared order (below): a game's own `world:load` listener now always runs after the player is placed back. A game that relied on running before it moves that code into a module's `worldLoad(e, info)` hook.
+- A module of your own that listened to `session:end`, `world:load` or `session:start` to reset itself keeps working; to run in the declared order, use the definition hooks `sessionEnd`, `worldLoad`, `sessionStart` instead.
+- Something your picture sizes from `engine.tier` when it is made (a shadow map size, a light count) follows a later change only if you listen to `tier:change` (recipe 62).
+- New games start from a neutral daytime palette with the sky as the fill light; existing games are not touched.
+
+- Changed: new games (`threedog init`, `new-game`) start from a neutral, temperate daytime palette instead of grey: sky keyframes, warm sun, muted ground, water and player colors, all in the game's `picture/palette.js`, and with a sky the sky itself is the fill light (`engine.sky.environment`). The generated `CLAUDE.md` and the palette say it is a placeholder to restyle.
 - Added: `sky.keyframes()` with no argument returns a copy of the rows in use, so a picture that sets its own can give them back when it leaves. A call with rows works as before and now returns them; nothing to migrate.
 - Added: the `tier:change` event ({ tier }), fired after engine.tier changes (a settings preset, game code writing it). Something sized from the tier when made (a shadow map, a light budget) had no public way to follow it, so the template, the examples and the recipes read it once and kept a low-tier start's sizes after the player picked high; they now size at creation and follow this event. Particles: an effect's default max (60 on low) now follows a tier change in place.
 - Changed: the session reset (newGame / load) runs in one declared order: modules join through sessionEnd(e), worldLoad(e, info) and sessionStart(e, info) on their definition, run in engine.moduleOrder (stage, then before / after), and only then the session:end / world:load / session:start events fire. Before, the order was install order. A game's own world:load listener now always runs after the player is placed back (before, one registered at boot ran before it).
@@ -12,20 +25,16 @@ What changed in each version and how a game upgrades.
 - Fixed: after a WebGL context is restored, the GPU timer behind adaptive resolution starts over (it read the last time from before the loss, so the resolution could stay low).
 - Tools: a missing Playwright browser is one line with the install command (shot, perf, the dev bridge); other launch failures name their cause. init warns when a kept index.html, vite config or dev script would keep the game from starting. A timed-out MCP check ends its whole process tree.
 
-## 1.5.0 (2026-11-16)
-
 - Changed: `characters()` now requires `world()`, and `engine.use()` says so at install. Before, `world` was listed as optional and only `characters.addPlayer()` (or the first NPC) threw at runtime, although the player and every NPC are world records. The docs' module lists that left `world()` out (recipes 10, 11, 12, the pickups page) now include it, and a guard test checks every `engine.use` list in the docs, templates and examples against what each module requires.
 - New (docs): screen shake without taking the camera, recipe 21 §6b: an offset added in `engine.onRender` and put back in `onRender(fn, { when: 'after' })`; the camera's takeover warning now names it, and a guard test holds the hook order it relies on.
 - Fixed: solver settings a game writes on `engine.rigid.world.integrationParameters` (such as `numSolverIterations`, and `contact_natural_frequency`) are kept when newGame or a load rebuilds the physics world. Before, they fell back to Rapier's defaults.
 - Docs: recipe 11 §3c says when bodies can be added, that `rigid.impulse` wakes a sleeping body (explosions), and that resting stacks overlap a little because of Rapier's soft contacts, not a smaller collider (more iterations do not change it).
 - Renamed: `docs/recipes/11-vehicles.md` is now `docs/recipes/11-physics.md` (it covers all rigid bodies, joints and explosions, not only vehicles). No alias.
 - Docs: CONVENTIONS "One task, which entry" has a hit-stop / bullet-time row (`engine.mod('time.world', ...)`, `for` in real seconds; `clock.rate` is the calendar).
-- Upgrading: a game that installs `characters()` without `world()` or `openWorld()` adds `world()` before it: `engine.use(world(), collision(), characters())`.
 - Changed: the `threedog` command now comes with the `threedog` package, and `@threedog/tools` has no bin of its own (one package may own a bin name). It runs the commands of `@threedog/tools`; with only the engine installed, `npx threedog init` used to fail with "could not determine executable to run", and now prints the line that installs `@threedog/tools`. Release both packages together: `@threedog/tools` needs an engine that carries the bin.
 - Changed: the package README and `llms.txt` open with one start sequence (install, `npx threedog init`, `npx threedog play`); `llms.txt` copies it from the README so the two cannot drift. `@threedog/tools` is no longer described as optional.
 - New: a new game's `CLAUDE.md` has a short "Before you call it done" checklist (compare `threedog shot` with the target style, recipes 60 and 62, `@threedog/post-effects`).
 - Fixed: on WebGPU each `engine.sky.environment()` rebuild stalled the game (100 ms to seconds, once per interval while the sky moved): every material reading the environment built again for the new map. The rebuild now refills the same map; on WebGL it was already cheap. A moving day can light the scene with its own sky.
-- Upgrading: nothing to change in a game; reinstall both packages so `node_modules/.bin/threedog` points at the engine's bin.
 
 ## 1.4.0 (2026-11-15)
 
