@@ -172,7 +172,10 @@
   - `install(e: Engine, ctx: ModuleCtx) → Api` — Install: create and return the object the game uses (engine.name). Register listeners / timers through ctx.track so they leave with the module (a use() batch that rolls back, a failed init, engine.dispose). Example: `install(e, ctx) { ctx.track(e.events.on('item:add', onAdd)); return api; }`
   - `init(e: Engine, ctx: ModuleCtx) → void | Promise<void>` — Called at startup (download things, wait for assets); may be async. ctx is the same as install's
   - `isReady(e: Engine) → boolean` — The loading screen waits until this returns true before disappearing (the hook is called isReady; in the engine ready is always a boolean property)
-  - `afterLoad(e: Engine, turn: SaveTurn) → void | Promise<void>` — After a save loaded: rebuild what the loaded state needs nearby; gameplay waits frozen until the returned Promise resolves. turn: as SaveProvider.load
+  - `sessionEnd(e: Engine)` — Session reset, step 1 (core/saves/session.js): a playthrough ends (newGame / load / quit), before anything is replaced. Stop what belongs to it (a cutscene, the music); start nothing. Every reset step runs in engine.moduleOrder (stage, before / after), before the matching event (session:end) reaches the game
+  - `worldLoad(e: Engine, info: { count: number })` — Session reset, step 2: the world's records were replaced wholesale (any load, new game included), before 'world:load'. Rebuild what is derived from the records
+  - `afterLoad(e: Engine, turn: SaveTurn) → void | Promise<void>` — Session reset, step 3: after a save loaded: rebuild what the loaded state needs nearby; gameplay waits frozen until the returned Promise resolves. turn: as SaveProvider.load
+  - `sessionStart(e: Engine, info: { kind, slot? })` — Session reset, step 4: a new playthrough began (not after a quick load), before 'session:start'
   - `fixed(dt: number, e: Engine)` — Fixed step (60 times per second); dt is in seconds
   - `frame(dt: number, e: Engine)` — Once per frame; dt is in seconds
   - `afterRender(dt: number, e: Engine)` — After rendering

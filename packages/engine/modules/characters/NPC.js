@@ -143,9 +143,10 @@ export class NPCManager {
     /** @internal */ this._byName = new Set();  // NPCs added this run without id, using the name as id (two with one name would be one record)
     // on the event, not in remove(): world.remove(id) and thing.remove take NPCs too, and a later add of that id must not inherit the old model or trip the same-name check
     track(engine.events.on('world:remove', ({ id }) => { this._runtime.delete(id); this._handles.delete(id); this._byName.delete(id); }));
-    // a load or new game is a new run, and it fires no world:remove: setup code adding the same names again is not a clash
-    track(engine.events.on('world:load', () => this._byName.clear()));
   }
+  /** @internal the characters module's worldLoad step: a load or new game is a new run, and it fires no world:remove, so setup code adding the
+   *  same names again is not a clash; the avoidance index is stale too */
+  _worldLoad() { this._byName.clear(); this.avoid._worldLoad(); }
   get world() { return this.engine.world; }
 
   /** Register the NPC model and simulation with world (called in characters init; add calls it first if npcs.add comes earlier)@internal */

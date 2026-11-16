@@ -4,6 +4,7 @@ What changed in each version and how a game upgrades.
 
 ## Unreleased
 
+- Changed: the session reset (newGame / load) runs in one declared order: modules join through sessionEnd(e), worldLoad(e, info) and sessionStart(e, info) on their definition, run in engine.moduleOrder (stage, then before / after), and only then the session:end / world:load / session:start events fire. Before, the order was install order. A game's own world:load listener now always runs after the player is placed back (before, one registered at boot ran before it).
 - Fixed: a module installed before the provider it requires (the order engine.use(x, { replaces }) leaves) now inits during start() and is awaited; before, start() resolved without waiting for it, and a critical one failing there did not block the start.
 - Fixed: on a headless page (tests, shots) a halt taken and removed left the engine running in real time; removing the last halt now gives back the state from before it (an explicit resume still goes live).
 - Fixed: after a WebGL context is restored, the GPU timer behind adaptive resolution starts over (it read the last time from before the loss, so the resolution could stay low).

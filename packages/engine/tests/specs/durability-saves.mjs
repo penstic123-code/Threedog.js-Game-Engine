@@ -42,10 +42,10 @@ export const specs = [
         await c;
         // apply, apply on the next line (a replay in one stretch of code), with afterLoad hooks installed: both apply at once and the hooks rebuild for the last
         let rebuilt = 0;
-        engine.modules.set('rp-count', { name: 'rp-count', afterLoad() { rebuilt++; } }); engine._modState.set('rp-count', 'running');   // a stand-in module: the afterLoad gate runs only modules that run
+        engine.use({ name: 'rp-count', type: 'rules', afterLoad() { rebuilt++; } });   // a real install: reset steps run in moduleOrder
         const c1 = S.apply(save(4, 4), 'C1'), first = state.x, c2 = S.apply(save(5, 5), 'C2');
         out.twice = { first, second: state.x, ok: [await c1, await c2], rebuilt };
-        engine.modules.delete('rp-count'); engine._modState.delete('rp-count');
+        engine.unuse('rp-count');
         // session.newGame asked during a direct apply starts after it, on the same rule
         const log = [], h = engine.events.on('session:end', () => log.push('end'));
         wait = { ...gate(), at: 7 };
@@ -176,9 +176,9 @@ export const specs = [
         out.listener = { ok: await S.load('dur-good'), flag: engine.vars.flag('dur-after'), error: /dur listener boom/.test(engine.error?.message ?? '') };
         h.remove(); clear();
         // 3. a module's afterLoad that throws: same rollback
-        engine.modules.set('dur-after-load', { name: 'dur-after-load', afterLoad() { throw new Error('dur afterLoad boom'); } }); engine._modState.set('dur-after-load', 'running');   // a stand-in module: the afterLoad gate runs only modules that run
+        engine.use({ name: 'dur-after-load', type: 'rules', afterLoad() { throw new Error('dur afterLoad boom'); } });   // a real install: reset steps run in moduleOrder
         out.hook = { ok: await S.load('dur-good'), flag: engine.vars.flag('dur-after'), loadHeld: loadHeld(), error: /dur afterLoad boom/.test(engine.error?.message ?? '') };
-        engine.modules.delete('dur-after-load'); engine._modState.delete('dur-after-load'); clear();
+        engine.unuse('dur-after-load'); clear();
         out.clean = await S.load('dur-good');   // the same save loads once nothing throws
         out.flagAfterClean = engine.vars.flag('dur-after');
         // 4. a null part is a corrupt save: refused before anything changes
@@ -322,9 +322,9 @@ export const specs = [
         bad.parts.durBoom = { bad: true };
         out.sync = { ok: await S.apply(bad, 'dur'), seen }; clear();   // threw before any hold was taken
         seen = [];
-        engine.modules.set('dur-al', { name: 'dur-al', afterLoad() { throw new Error('dur rollback boom'); } }); engine._modState.set('dur-al', 'running');   // a stand-in module: the afterLoad gate runs only modules that run
+        engine.use({ name: 'dur-al', type: 'rules', afterLoad() { throw new Error('dur rollback boom'); } });   // a real install: reset steps run in moduleOrder
         out.hook = { ok: await S.apply(good, 'dur') }; out.hook.seen = seen;   // the parts' hold ended before the hook failed
-        engine.modules.delete('dur-al'); engine._modState.delete('dur-al'); clear();
+        engine.unuse('dur-al'); clear();
         out.released = !held();
         S.providers.delete('durBoom'); S.providers.delete('durSlow');
         await S._put('dur-odd', JSON.stringify({ parts: {} }), undefined);

@@ -273,7 +273,8 @@ export const metadata = {
    "time": {
     "kind": "none",
     "hooks": [
-     "frame"
+     "frame",
+     "sessionStart"
     ]
    }
   },
@@ -354,7 +355,8 @@ export const metadata = {
     "kind": "none",
     "hooks": [
      "fixed",
-     "frame"
+     "frame",
+     "worldLoad"
     ],
     "noSkip": "fixed steps paths, control holders and riders, none of which a time jump moves; schedules read the calendar clock"
    }
@@ -503,7 +505,9 @@ export const metadata = {
    ],
    "time": {
     "kind": "none",
-    "hooks": []
+    "hooks": [
+     "worldLoad"
+    ]
    }
   },
   "debugPanel": {
@@ -609,6 +613,7 @@ export const metadata = {
     "kind": "none",
     "hooks": [
      "frame",
+     "sessionEnd",
      "afterLoad"
     ]
    }
@@ -651,7 +656,10 @@ export const metadata = {
    "saves": [],
    "time": {
     "kind": "none",
-    "hooks": []
+    "hooks": [
+     "sessionEnd",
+     "sessionStart"
+    ]
    }
   },
   "grids": {
@@ -734,7 +742,8 @@ export const metadata = {
    "time": {
     "kind": "none",
     "hooks": [
-     "frame"
+     "frame",
+     "worldLoad"
     ]
    }
   },
@@ -848,7 +857,8 @@ export const metadata = {
    "time": {
     "kind": "none",
     "hooks": [
-     "frame"
+     "frame",
+     "sessionEnd"
     ]
    }
   },
@@ -1010,7 +1020,9 @@ export const metadata = {
    "time": {
     "kind": "none",
     "hooks": [
-     "frame"
+     "frame",
+     "sessionEnd",
+     "sessionStart"
     ],
     "noSkip": "no timers or spatial state"
    }
@@ -1295,7 +1307,8 @@ export const metadata = {
    "time": {
     "kind": "none",
     "hooks": [
-     "frame"
+     "frame",
+     "sessionEnd"
     ]
    }
   },
@@ -1723,7 +1736,8 @@ export const metadata = {
    "time": {
     "kind": "exact",
     "hooks": [
-     "fixed"
+     "fixed",
+     "worldLoad"
     ],
     "noSkip": "auto pickups are spatial; respawn follows the game clock"
    }
@@ -1792,7 +1806,8 @@ export const metadata = {
     "hooks": [
      "fixed",
      "frame",
-     "skip"
+     "skip",
+     "sessionEnd"
     ]
    }
   },
@@ -1924,6 +1939,8 @@ export const metadata = {
     "kind": "none",
     "hooks": [
      "fixed",
+     "sessionEnd",
+     "worldLoad",
      "afterLoad"
     ],
     "noSkip": "bodies rest while time jumps (stepping seconds of physics would only scatter them)"
@@ -2542,6 +2559,7 @@ export const metadata = {
     "kind": "none",
     "hooks": [
      "frame",
+     "sessionEnd",
      "afterLoad"
     ]
    }

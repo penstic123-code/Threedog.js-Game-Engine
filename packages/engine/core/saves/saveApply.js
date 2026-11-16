@@ -1,7 +1,7 @@
 // Applying a save (split out of Saves.js): every part is checked and migrated before anything changes (saveVersions.js), then loaded in order;
 // if anything in the load throws, every part reloads the state from just before the load (rollback), so a game is never left half-loaded.
 // "Anything" is the whole load, not only load() itself: a listener of an event a part emits while loading (world:load) and the modules' afterLoad
-// hooks count too. Reported on their own they let the load carry on: a hand-edited player position threw in a world:load listener and left the game
+// hooks count too. Reported on their own they let the load carry on: a hand-edited player position threw in a worldLoad hook (then a world:load listener) and left the game
 // frozen half-loaded (durability audit 2026-11-02).
 // The capture lasts the whole load, past every await: an async part that emits after `await` (async load(d) { apply(d); await res(); emit(...) })
 // is part of the load as much as its first line. The browser has no async context to tell whose code emitted after an await, so each load
@@ -291,7 +291,7 @@ export function applyAnnounced(s, data, slot, done) {
  *  Returns true when no module has a hook (nothing waited), else a Promise. The hooks start a microtask after the parts, and the marker and the
  *  freeze with them: the lines right after an unawaited apply can still step, run ops and apply again (stateReplace.js, pause). */
 function afterLoad(s, e, slot, scope) {
-  const has = [...e.modules.values()].filter(m => m.afterLoad), q = s._replace;
+  const has = e.moduleOrder.map(n => e.modules.get(n)).filter(m => m?.afterLoad), q = s._replace;   // in module order, like every reset step (session.js)
   if (!has.length) { takeListenerError(scope, 0); return true; }
   const job = q.pause();
   let hooks = [];

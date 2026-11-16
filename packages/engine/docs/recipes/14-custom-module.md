@@ -125,8 +125,9 @@ A module that does two kinds of thing is two definitions returned together (`wea
   on all three paths: save, load, and new game (a new game loads the state captured when `start()` finished), so there is nothing to reset by
   hand. What cannot be saved ends with its playthrough: a background result goes through `ctx.commits` (a load or new game drops old ones;
   keep `ctx.commits.epoch` on a queued request and drop it when that changed), and an effect of a running playthrough (an open dialogue, a
-  running cutscene, the music playing) stops on `ctx.track(e.events.on('session:end', ...))`. What is derived from save parts is rebuilt on
-  `'session:start'` and `'save:loaded'`, and what a rollback took down on `'session:failed'`. A `'session:end'` listener only stops things: it starts nothing for the next state. A module's `describe()` should show such state.
+  running cutscene, the music playing) stops in `sessionEnd(e)`; derived state rebuilds in `worldLoad`, `afterLoad`, `sessionStart` (that order,
+  modules by `stage` / `before` / `after`, never install order; core/saves/session.js). Events are for game code; a rollback restores on
+  `'session:failed'`. `sessionEnd` only stops things. A module's `describe()` should show such state.
 - When you only need a per-frame callback and no module structure: `const h = engine.onFrame(dt => ...)` / `engine.onFixed`, and `h.remove()` cancels it.
 
 ## 3. Extra steps when it goes into the engine

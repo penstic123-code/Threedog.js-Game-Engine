@@ -6,6 +6,8 @@
 //   Stages (first to last): control timeline, camera -> ground terrain, level -> environment weather, sky, water
 //     -> gameplay interactions, dialogue, trigger zones -> effects particles, settings, objective markers
 //     -> late (the default) characters, physics, navigation... -> audio music
+// The session reset steps (sessionEnd, worldLoad, afterLoad, sessionStart: the sequence is declared in core/saves/session.js) run in this same order, so an
+//   order between two modules' resets is declared like any other (stage, before / after), never left to install order or to when a listener was added.
 //   before / after: lists of module or capability names (not-installed names are ignored; a capability means whichever module provides it now, so the order follows a replaces);
 //     they order modules only inside one stage. One that contradicts the stage order (a 'control' module with after: ['sky']) makes use() throw naming both modules and stages;
 //     a cycle makes use() throw on the spot, naming the modules on it. A contradiction reached through provides throws the same way: an order must not turn into a hint after a replaces.
@@ -28,7 +30,7 @@
 //   ctx.mod(point, o) = ctx.track(engine.mod(point, { ...o, owner: ctx.name })): a module's changes to shared values go with it too.
 //   ctx.rule(name, default, names?) = a replaceable rule on a plain shared point: .decide(id, facts) gives a built-in name, false for manual, or what the game's function answered.
 //   ctx.input.define(name, { context }) / ctx.input.bind(name, keys): the module's input declarations and bindings, gone with it too.
-//   ctx.ops.define, ctx.saves.define, ctx.ui.define, ctx.stream.addReadyCheck, ctx.budget.metric, ctx.things.addSource / explainWith, ctx.ground.provide / addColliders:
+//   ctx.ops.define, ctx.saves.define, ctx.ui.define, ctx.stream.addReadyCheck, ctx.budget.metric, ctx.things.addSource / explainWith / recordsLoaded, ctx.ground.provide / addColliders:
 //   the same registrars, recorded in the one scope with kind, id, owner and instance (engine.catalog(name).resources reads it). Built-in modules register only through
 //   these (tools/tests/module-boundaries). A save part leaving keeps its data as unattached data of the save (Saves.define), so a module unloaded for a while loses nothing.
 //   Every install is its own instance (engine._modInst: name -> token): a ctx belongs to one install, not to a name. An async init that resumes after
@@ -290,6 +292,19 @@ export const moduleMethods = {
   /** @internal the one gate for module hooks, the loop's and afterLoad (saveApply.js): registered (init not run yet), initializing, failed, disabled, blocked run none */
   _runsHooks(name) { return this._modState.get(name) === 'running' && !this._modBlocked.has(name); },
   /**
+   * @internal One step of the session reset (session.js declares the sequence): every installed module's hook of that name, in moduleOrder, each run like
+   * an event listener (Events._call: inside a load an error fails the load, outside it is reported). The gate is the one the listeners these hooks
+   * replaced had: a module whose init failed lost its listeners (_dropTracked), so it gets no reset either; one still initializing gets it (it guards itself)
+   */
+  _resetStep(step, ...args) {
+    if (this.events.muted > 0) return;   // an atomic op's rollback puts plain data back and announces nothing (opsAtomic.js): it is no reset either
+    for (const name of this.moduleOrder) {
+      const m = this.modules.get(name), st = this._modState.get(name);
+      if (typeof m?.[step] !== 'function' || st === 'failed' || st === 'disabled' || st === 'disposed') continue;   // disabled: a picture / ui module switched off after a throw lost its listeners too (errors.js disableModule)
+      this.events._call(`${name}.${step}`, () => m[step](this, ...args), []);
+    }
+  },
+  /**
    * @internal may this install (token from engine._modInst) still register? It is the one under its name and not closed. Closed = its signal aborted (_dropTracked:
    * unload, rollback, failed init), set before the cleanup runs, so a late callback and a remove() that calls ctx.track during that cleanup are both refused (design 6.1)
    */
@@ -423,7 +438,9 @@ export const moduleMethods = {
       ui: { define: owned('ui', (n, factory, def) => this.ui.define(n, factory, def)) },
       stream: { addReadyCheck: owned('ready', (n, fn) => this.stream.addReadyCheck(n, fn)) },
       budget: { metric: owned('metric', (n, read, o) => this.budget.metric(n, read, o)) },
-      things: { addSource: ifLive(src => own('source', name, this._things.addSource(src))), explainWith: ifLive(fn => own('explainer', name, this.explainWith(fn))) },
+      things: { addSource: ifLive(src => own('source', name, this._things.addSource(src))), explainWith: ifLive(fn => own('explainer', name, this.explainWith(fn))),
+        // the records source replaced its records wholesale (a load): core runs the worldLoad reset step, then tells the game (session.js step 2)
+        recordsLoaded: info => { this._resetStep('worldLoad', info); this.events.emit('world:load', info); } },
       ground: { provide: provideGround, addColliders: ifLive(fn => own('colliders', name, this.addGroundColliders(fn))) },
     };
   },

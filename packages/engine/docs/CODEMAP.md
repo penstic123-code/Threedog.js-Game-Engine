@@ -220,12 +220,12 @@ Type = what the module may own (core/engine/moduleTypes.js): world, picture, act
 | quest:unpaid | gameplay | — |
 | rigid:rebuilt | rigid | rigid |
 | save:imported | core/saves/saveFiles.js | photo |
-| save:loaded | core/saves/saveApply.js | — |
+| save:loaded | core/saves/saveApply.js | core/ops/control.js |
 | save:written | core/saves/Saves.js | — |
 | season:change | calendar | calendar |
-| session:end | core/saves/session.js | core/time/skip.js, flow, gameplay, hud, music, rigid, timeline |
+| session:end | core/saves/session.js | core/time/skip.js |
 | session:failed | core/saves/saveApply.js, core/saves/session.js | flow, rigid |
-| session:start | core/saves/session.js | core/scene/things.js, camera, flow, gameplay |
+| session:start | core/saves/session.js | — |
 | settings:change | settings | — |
 | settings:shadows | render/shadows.js | vegetation |
 | state:applied | core/inspect/UrlState.js | — |
@@ -251,7 +251,7 @@ Type = what the module may own (core/engine/moduleTypes.js): world, picture, act
 | weather:lightning | weather | weather |
 | world:add | world | gameplay, grid |
 | world:change | world | gameplay, grid |
-| world:load | world | characters, content, gameplay, grid, rigid |
+| world:load | core/engine/modules.js | — |
 | world:remove | world | core/ops/control.js, core/ops/stacks.js, characters, gameplay, grid |
 
 ## Input actions (engine.input)

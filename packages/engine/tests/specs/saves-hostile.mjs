@@ -160,7 +160,7 @@ export const specs = [
         // a part's load / an afterLoad sets up the playthrough being loaded; only what the old one had goes
         let timer = 0, ear = 0, ear2 = 0, oldEar = 0, oldTimer = 0;
         S.define('hsS', { save: () => ({ a: 1 }), load: () => { engine.session.track(engine.events.on('hs:ping', () => ear++)); engine.clock.after(0.1, () => timer++); } });
-        engine.modules.set('hsM', { name: 'hsM', afterLoad() { engine.session.track(engine.events.on('hs:ping', () => ear2++)); } }); engine._modState.set('hsM', 'running');   // a stand-in module: the afterLoad gate runs only modules that run
+        engine.use({ name: 'hsM', type: 'rules', afterLoad() { engine.session.track(engine.events.on('hs:ping', () => ear2++)); } });   // a real install: reset steps run in moduleOrder
         await S.save('hs-s');
         engine.session.track(engine.events.on('hs:ping', () => oldEar++));
         engine.clock.after(0.1, () => oldTimer++);
@@ -168,7 +168,7 @@ export const specs = [
         engine.events.emit('hs:ping');
         engine.step(0.5, { describe: false });
         out.setup = { timer, ear, ear2, oldEar, oldTimer };
-        S.providers.delete('hsS'); engine.modules.delete('hsM'); engine._modState.delete('hsM');
+        S.providers.delete('hsS'); engine.unuse('hsM');
         await S.remove('hs-s');
         // quit whose apply fails: the game goes on, flow comes back, session:failed says so
         const log = [], id = engine.session.id;

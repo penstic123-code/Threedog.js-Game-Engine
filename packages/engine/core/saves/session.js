@@ -8,8 +8,18 @@
 //
 // What ending a playthrough clears: handles passed to track() and clock function timers added after start() (boot-time ones and a module's install-time ones, ctx.track, follow the module: they come back with their original delay while it stays; what a part's load() or an afterLoad sets up belongs to the new playthrough and stays),
 // a running engine.skip (cancelled), background results not yet applied (commits: worker / job results requested in the old playthrough never land), and every
-// save part (the state captured when start() finished is applied). Modules end their own part on 'session:end' (a cutscene is skipped, the music stops),
-// and the camera starts over on 'session:start' (the same rig object, as installed, keeping the view the load left on it). Listeners and hooks the game registered at boot stay: they belong to the game, not the playthrough.
+// save part (the state captured when start() finished is applied). Modules end their own part in their sessionEnd hook (a cutscene is skipped, the music stops),
+// and the camera starts over in its sessionStart hook (the same rig object, as installed, keeping the view the load left on it). Listeners and hooks the game registered at boot stay: they belong to the game, not the playthrough.
+//
+// The reset sequence, one declared order (a module joins with hooks on its definition, never with listeners whose order would be install order):
+//   1. end      core first (control ends the old walks), then every module's sessionEnd(e), then the 'session:end' event
+//   2. apply    the save parts load (saveApply.js); when the records part (world module) replaced its records it calls ctx.things.recordsLoaded, which runs
+//               every module's worldLoad(e, info), then emits 'world:load' (outside a session too: a quick load, a level load; an atomic op's muted rollback runs neither)
+//   3. rebuild  every module's afterLoad(e, turn) (saveApply.js; gameplay frozen until they settle)
+//   4. start    core first (what is added now is setup, things.js), then every module's sessionStart(e, info), then the 'session:start' event
+//   Within a step modules run in engine.moduleOrder (stage, then before / after, then install order: modules.js), so an order that matters is declared there.
+//   The events are notifications for the game, after the modules' step: no module relies on them for its reset. A quick load (saves.load / apply)
+//   runs steps 2 and 3 only.
 // engine.time.tick and every time view (core/time/time.js) start again from 0 or the save's value, and physics (rigid) rebuilds its world (velocities, sleep, solver caches), as on a fresh page.
 // Events: 'session:end' (before the reset; flow returns to its start state), 'session:start' { kind: 'new' | 'load', slot? } (after; flow goes to 'playing').
 // Around a state replacement, one list for every door (saves.apply, saves.load, session.newGame / load / quit):
@@ -196,7 +206,11 @@ export class Session {
   /** @internal end the playthrough, apply, then announce the new one */
   async _begin(fn, apply, info) {
     const ok = await this._reset(fn, apply);
-    if (ok) this._started();
+    if (ok) {
+      this._started();
+      this.engine._things.setupTurn();   // step 4, core first: what the hooks and listeners below add is setup, rebuilt by code every playthrough
+      this.engine._resetStep('sessionStart', info);
+    }
     this.engine.events.emit(ok ? 'session:start' : 'session:failed', info);
     // ?play starts the first run inside engine.start(), so a session:start listener attached after `await engine.start()` misses it silently; hint once.
     // Mark only when fired during start(), and hint only once start() returned (phase 'running') with no tick yet; later listeners are waiting for the next run.
@@ -210,7 +224,9 @@ export class Session {
     if (!this._base) throw codedError('session-early', fmt(DEV.early, { fn }));
     this._busy = true;
     try {
-      e.events.emit('session:end');   // modules end their part: a running engine.skip is cancelled, a cutscene skipped, the music stopped
+      e.events._call('session:end', () => e.control.endTasks(null, 'replaced'), []);   // step 1, core first: no walk runs on into the swap (a throwing task callback is reported, as from the listener it was)
+      e._resetStep('sessionEnd');   // modules end their part: a cutscene skipped, the music stopped
+      e.events.emit('session:end');   // then the game hears it (a running engine.skip listens here and is cancelled)
       await new Promise(r => setTimeout(r, 0));   // main-loop: one macrotask, so what session:end listeners started (a skipped cutscene's last steps) settles first
       if (e.disposed) return false;   // disposed in that macrotask: there is no state left to replace
       // background results die inside apply (saveApply), which gives them back when it fails, before its rollback: a second epoch held here made what the rollback asked for look old

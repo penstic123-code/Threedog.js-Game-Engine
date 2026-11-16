@@ -5,6 +5,43 @@ const PAGE = '/tests/threads/';
 
 export const specs = [
   {
+    name: '[guard] Core modules: the session reset runs in one declared order (end, worldLoad, afterLoad, start; modules by stage / before / after), whatever the install order',
+    url: PAGE,
+    async run({ check, ev }) {
+      const r = await ev(async () => {
+        const { mk, createEngine, world } = threedogThreads;
+        const STEPS = ['sessionEnd', 'worldLoad', 'afterLoad', 'sessionStart'];
+        // shaped like the real ones: a gameplay-stage index (grids), a late module that declares before another (characters before rigid), a control-stage one (camera)
+        const defs = log => {
+          const hooks = n => Object.fromEntries(STEPS.map(k => [k, () => { log.push(`${n}.${k}`); }]));
+          return {
+            rC: { name: 'rC', type: 'rules', ...hooks('rC') },
+            rB: { name: 'rB', type: 'rules', before: ['rC'], ...hooks('rB') },
+            rA: { name: 'rA', type: 'rules', stage: 'gameplay', ...hooks('rA') },
+            rD: { name: 'rD', type: 'rules', stage: 'control', ...hooks('rD') },
+          };
+        };
+        const run = async (order, key) => {
+          const log = [], d = defs(log), E = mk(createEngine, key);
+          E.use(world());
+          for (const n of order) E.use(d[n]);
+          for (const n of ['session:end', 'world:load', 'session:start']) E.events.on(n, () => log.push(`ev:${n}`));   // the game hears each step after the modules
+          await E.start();
+          log.length = 0;
+          await E.session.newGame();
+          E.dispose();
+          return log;
+        };
+        return { a: await run(['rC', 'rB', 'rA', 'rD'], 'cm-reset-a'), b: await run(['rD', 'rA', 'rB', 'rC'], 'cm-reset-b') };
+      });
+      const mods = s => ['rD', 'rA', 'rB', 'rC'].map(n => `${n}.${s}`);
+      const want = [...mods('sessionEnd'), 'ev:session:end', ...mods('worldLoad'), 'ev:world:load', ...mods('afterLoad'), ...mods('sessionStart'), 'ev:session:start'];
+      // why: these steps used to be listeners, so their order was whoever registered first, i.e. install order, declared nowhere (rigid's rebuild vs the player's placement vs grid's index)
+      check('the same reset sequence for two install orders', JSON.stringify(r.a) === JSON.stringify(r.b), JSON.stringify(r));
+      check('steps in the declared order, modules by stage then before / after, each event after its step', JSON.stringify(r.a) === JSON.stringify(want), JSON.stringify(r.a));
+    },
+  },
+  {
     name: 'Core modules: template instances are placed only through engine.content.spawn (no engine.spawn on the root, no engine.entities) [guard]',
     url: PAGE,
     async run({ check, ev }) {

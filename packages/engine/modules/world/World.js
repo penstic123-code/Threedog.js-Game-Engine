@@ -28,6 +28,7 @@ export class World {
   constructor(engine, opts = {}) {
     const { cellSize = 32, radius = 60, farEvery = 1, farMaxPerTick = 500, buildPerFrame = 8 } = opts;
     /** @internal */ this.engine = engine;
+    /** @internal ctx.things.recordsLoaded, set at install (index.js): the worldLoad reset step and 'world:load' after a wholesale replace (persist.js) @type {(info: { count: number }) => void} */ this._recordsLoaded = () => {};
     initState(this, cellSize);
     /** All records: id → record (read-only; use set to change fields, move to change position) @type {Map<string, WorldRecord>} @experimental */
     this.records = new Map();

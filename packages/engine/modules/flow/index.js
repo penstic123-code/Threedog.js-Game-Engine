@@ -27,7 +27,7 @@ const FLOW_PARAMS = keysSchema(['start']);
  */
 export function flow(opts = {}) {
   readParams('flow', FLOW_PARAMS, opts);
-  let e = null, sig = null, chain = Promise.resolve(), held = null, frozen = null, leaving = false, queued = null;
+  let e = null, sig = null, chain = Promise.resolve(), held = null, frozen = null, leaving = false, queued = null, before = null;   // before: the state a playthrough ended in, for a failed replacement to go back to
   const states = new Map([['playing', {}], ['paused', { freeze: true, lockInput: true }]]);
   // turn freeze / input lock on or off for one state
   const hold = (def, on) => {
@@ -105,13 +105,13 @@ export function flow(opts = {}) {
       if (opts.start && opts.start !== 'playing') ctx.track(e.events.once('engine:ready', () => api.go(opts.start)));
       // a playthrough ends (engine.session): back to the start state, so its enter() runs again; a new one starts in 'playing'
       // a failed replacement keeps the old playthrough: back to the state it was in
-      let before = null;
-      // the state goes after every session:end listener: the start state may start things (a title track) that another listener of the same event ends (music stops there), and install order must not decide which won
-      ctx.track(e.events.on('session:end', () => { before = api.state; queueMicrotask(() => { if (!sig.aborted) api.go(opts.start ?? 'playing'); }); }));
-      ctx.track(e.events.on('session:start', () => api.go('playing')));
+      before = null;
       ctx.track(e.events.on('session:failed', ({ kind }) => { if (before && kind !== 'quick') api.go(before); }));   // a quick load ended nothing here
       return api;
     },
+    // the state goes after the whole end step and its event: the start state may start things (a title track) that another module's sessionEnd or a game listener ends (music stops there)
+    sessionEnd() { before = api.state; queueMicrotask(() => { if (!sig.aborted) api.go(opts.start ?? 'playing'); }); },
+    sessionStart() { api.go('playing'); },
     // unloaded (unuse, replaces) in a state that stops the game: nothing else would ever end its freeze or input lock
     dispose() { frozen?.remove(); held?.remove(); frozen = held = null; },
     // ?play / applyState({ play }): leave the start state (a title) the way its Start button does; session:start then goes to 'playing'

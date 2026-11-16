@@ -574,17 +574,17 @@ export function rigid(opts = {}) {
       ctx.budget.metric('rigidBodies', () => r.bodies.length);
       ctx.stream.addReadyCheck('rigid', s => !s.physics || r.ready && r.readyAt(s));   // a physics stream source waits for the collider under it
       ctx.track(e.rays.addProvider((o, d, far) => r._raycast(o, d, far)));   // engine.raycast(..., { targets: 'all' }) includes rigid bodies
-      // a new playthrough / a load is a fresh page for physics too (_fresh), rebuilt once per load: session:end only marks it due. With the world
-      // module the rebuild runs on world:load, after the load removed the records' bodies, so the rebuilt world gets them back in view order; without
-      // it, afterLoad (newGame / load / quit all apply a save) runs it. Rebuilding on both events built the world twice per new game.
       // A refused load (session:failed) leaves the game as it was, physics included: no afterLoad runs after a rollback, so the state its rigid part read back is claimed here.
       ctx.track(e.events.on('ground:change', b => { r._srcPending = true; restandStatics(r, b); }));   // dug or raised ground: colliders follow on the next step, not at the half-second check a body could fall through
-      ctx.track(e.events.on('session:end', () => { r._freshDue = true; }));
       ctx.track(e.events.on('session:failed', () => { r._freshDue = false; r._claimSaved(); }));
-      ctx.track(e.events.on('world:load', () => r._fresh()));
       ctx.saves.define('rigid', { notAtomic: 'the physics world is stepped, not written: a load cannot rewind what the bodies did', save: () => r._saveState(), load: d => r._loadState(d) });
       return r;
     },
+    // a new playthrough / a load is a fresh page for physics too (_fresh), rebuilt once per load: sessionEnd only marks it due. With the world
+    // module the rebuild runs in worldLoad, after the load removed the records' bodies, so the rebuilt world gets them back in view order; without
+    // it, afterLoad (newGame / load / quit all apply a save) runs it. Rebuilding in both steps built the world twice per new game.
+    sessionEnd() { r._freshDue = true; },
+    worldLoad() { r._fresh(); },
     afterLoad() { if (r._freshDue) r._fresh(); r._claimSaved(); },   // after every part loaded and _fresh rebuilt the world (world:load is emitted inside the world part's load)
     async init(e, ctx) { await r.init(ctx.signal); ctx.whileCompiling(() => warmRapier(r.rapier)); },
     counts() { return r.bodies.length; },   // engine.counts().rigid

@@ -53,9 +53,9 @@ export class NpcAvoid {
       shove(this._acc, own.x - o.position.x, own.z - o.position.z, Math.sqrt(d2), this._min, rec.id < o.id ? 1 : -1);
     };
     track(engine.events.on('world:remove', ({ id }) => { const s = this._start.get(id); if (s) { this._grid?.delete(s); this._filed.delete(s); this._start.delete(id); } }));
-    // after load the simulation step count returns to the saved value, so the old index is stale
-    track(engine.events.on('world:load', () => { this._start.clear(); this._filed.clear(); this._grid?.clear(); this._gridN = -1; }));
   }
+  /** @internal after a load the simulation step count returns to the saved value, so the old index is stale (NPCManager._worldLoad) */
+  _worldLoad() { this._start.clear(); this._filed.clear(); this._grid?.clear(); this._gridN = -1; }
 
   /**
    * Change settings: set(false) off, set(true) on, set({ radius, strength }) tune (pass only what changes; passing it means on). Read current values from on /

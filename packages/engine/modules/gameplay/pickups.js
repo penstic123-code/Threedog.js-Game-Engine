@@ -62,7 +62,6 @@ export class Pickups {
     engine.i18n.add(STRINGS);
     // a record gone (taken without respawn, removed, not in a loaded save): its live parts are no longer needed for a rebuild
     track(engine.events.on('world:remove', ({ id, kind }) => { this._live.delete(id); dirty({ kind }); }));
-    track(engine.events.on('world:load', () => { this._autoDirty = true; for (const id of this._live.keys()) if (!engine.world.get(id)) this._live.delete(id); }));
     present(this, track);
   }
 
@@ -364,6 +363,7 @@ export function pickups(opts = {}) {
       return pk;
     },
     fixed() { pk._auto(); },
+    worldLoad(e) { pk._autoDirty = true; for (const id of pk._live.keys()) if (!e.world.get(id)) pk._live.delete(id); },   // records not in the loaded world need no live parts
     describe(e, ctx) {   // use the model if present (same object the interactions module reports, merged into one entry); far away only data
       const w = e.world;
       for (const r of w.query({ kind: 'pickup', near: ctx.center, radius: ctx.radius, where: r => r.until == null })) ctx.near(w.view(r.id) ?? r.position, { name: pk._name(r), kind: 'pickup', id: r.item ?? r.id });

@@ -27,7 +27,7 @@ export const MODULE_TYPES = {
 /** How engine.skip advances a module (the skipKind field): what each word means is on ModuleDefinition in types/core.d.ts */
 export const SKIP_KINDS = ['exact', 'approx', 'step', 'none'];
 /** The time hooks a module definition may carry (engine.catalog and the generated metadata list the ones a module has) */
-export const TIME_HOOKS = ['fixed', 'frame', 'afterRender', 'skip', 'afterLoad'];
+export const TIME_HOOKS = ['fixed', 'frame', 'afterRender', 'skip', 'sessionEnd', 'worldLoad', 'afterLoad', 'sessionStart'];
 
 const STRINGS = {
   badSkip: "module {name} has skipKind '{kind}'. Fix: use one of {list}",

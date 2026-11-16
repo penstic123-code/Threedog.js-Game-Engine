@@ -62,18 +62,15 @@ function inputStep(e, api, p, control, input) {
   };
 }
 
-/** The listeners that keep the record and the player together; returns their handles */
+/** What keeps the record and the player together when world is replaced wholesale: the characters module's worldLoad step calls it (index.js) */
 function watchRecord(e, W, p, id) {
   const begin = p.position.clone(), rest = p.saveMotion();   // a player made after start() is in no new-game state: this is how a new playthrough has it
-  return [
-    // loading: after world is replaced wholesale, place the player back by the record; if the save has no player record (saved before the player was
-    // created), add one from the current state
-    e.events.on('world:load', () => {
-      const rec = W.get(id);
-      if (rec) placeByRecord(e, p, rec, id);
-      else { if (e.session.replacing) { if (p.vehicle) p.exit({ force: true }); p.root.position.copy(begin); p.loadMotion(rest); } W.add({ id, kind: PLAYER, position: p.position, vehicle: null }); p._store(); }
-    }),
-  ];
+  // place the player back by the record; if the save has no player record (saved before the player was created), add one from the current state
+  return () => {
+    const rec = W.get(id);
+    if (rec) placeByRecord(e, p, rec, id);
+    else { if (e.session.replacing) { if (p.vehicle) p.exit({ force: true }); p.root.position.copy(begin); p.loadMotion(rest); } W.add({ id, kind: PLAYER, position: p.position, vehicle: null }); p._store(); }
+  };
 }
 
 /**
@@ -101,17 +98,17 @@ export function addPlayer(e, api, st, opts) {
   if (first) e.player = p;
   if (p.cameraFollow && !p.vehicle) e.cameraRig?.follow(p.root);
   // in the map before control.take: the control lookup finds a held character by id through it
-  const entry = { character: p, input, dispose: null };
+  const entry = { character: p, input, dispose: null, worldLoad: null };
   st.players.set(id, entry);
   p._release = () => entry.dispose();   // player.dispose() from the game is the same teardown as removePlayer
   if (input !== e.input) input.actor = id;
   const held = e.control.take(p, { owner: 'player-input', layer: 'base', step: inputStep(e, api, p, opts.control, input) });
   // what the keys ask of the pedal, while the keys are in charge: the seat reads it each step, so a holder above lets go of it (seat.js)
   p._pedal = () => { if (!held.active) return null; const a = input.autopilot || input.axis; return [a.y, a.x, input.down('brake') ? 1 : 0]; };
-  const watching = watchRecord(e, W, p, id);
+  entry.worldLoad = watchRecord(e, W, p, id);
   // keepRecord: the module is going, not the player; its place stays in world for the next addPlayer
   entry.dispose = (keepRecord = false) => {
-    st.players.delete(id); held.remove(); jump?.remove(); for (const h of watching) h.remove();
+    st.players.delete(id); held.remove(); jump?.remove();
     if (input.actor === id) input.actor = null;
     p.recordId = null; p._release = null; p.dispose(); if (!keepRecord) W.remove(id);
     if (e.player === p) e.player = st.players.values().next().value?.character ?? null;   // the next player is the first now

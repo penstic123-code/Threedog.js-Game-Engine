@@ -50,9 +50,9 @@ export class Control {
     /** @internal the entry whose move is running now (handle.move / a behaviour run): the one caller character.move() lets through */ this._cur = null;
     /** @internal id -> Character; set by the characters module through resolveWith (core names no module) */ this.characterOf = () => null;
     engine.events.on('world:remove', ({ id }) => this.forget(id));
-    // Two moments, and state:replaced is neither. session:end: the old playthrough stops, before anything is replaced, so no walk runs on into the swap. save:loaded: a save landed on a
-    // running playthrough, the only word a direct apply gives. state:replaced comes last, after the save:loaded and session:start listeners that start the new state's walks: it would end them
-    for (const n of ['save:loaded', 'session:end']) engine.events.on(n, () => this.endTasks(null, 'replaced'));
+    // Two moments, and state:replaced is neither. A playthrough ending: session.js calls endTasks first in its end step, before anything is replaced, so no walk runs on into the swap.
+    // save:loaded: a save landed on a running playthrough, the only word a direct apply gives. state:replaced comes last, after the save:loaded and session:start listeners that start the new state's walks: it would end them
+    engine.events.on('save:loaded', () => this.endTasks(null, 'replaced'));
   }
   /**
    * Take a character's control. step (optional): (dt, character) => ({ x, y?, z, run? }) | null | false, called each fixed step while this owner is in
