@@ -178,7 +178,7 @@ try {
     const sw = render.software = await frame('software');
     if (sw.missing) no('Playwright chromium is not installed', BROWSER_FIX.install);
     else if (sw.error) no(`the engine cannot render a frame with software rendering (tests use it): ${sw.error}`, BROWSER_FIX.repair);
-    else if (!sw.drawn) no(`software rendering ran but the frame came out wrong (center pixel ${sw.pixel}, renderer ${sw.renderer})`, 'reinstall the browser: npx playwright install chromium --force');
+    else if (!sw.drawn) no(`software rendering ran but the frame came out wrong (center pixel ${sw.pixel}, renderer ${sw.renderer})`, BROWSER_FIX.reinstall);
     else ok(`engine frame rendered with software rendering (${sw.renderer}, ${sw.frameMs} ms): tests run on this, the same pixels on every machine`);
     const gpu = await frame('gpu');
     const hw = render.hardwareGpu = !gpu.error && gpu.drawn && !SOFTWARE_RENDERER.test(gpu.renderer);

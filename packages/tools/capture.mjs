@@ -96,7 +96,7 @@ try {
   if (file) console.log(`\nSpector capture: ${rel(file)} (${(readFileSync(file).length / 1048576).toFixed(1)} MB; the commands array, or with --full a file the Spector UI can load)`);
   if (spectorNote) console.log(`\n${spectorNote}. The summary above comes from the renderer hook alone.`);
 } catch (e) { failed = String(e?.message ?? e).split('\n')[0]; }
-}, { prefer: 'gpu', server: () => buildAndPreview(dir, { build: !opt['no-build'] }) });
+}, { exitOnFail: true, prefer: 'gpu', server: () => buildAndPreview(dir, { build: !opt['no-build'] }) });
 // Spector probes the canvas for a WebGL 1 context; three.js logs that as an error although nothing is wrong
 const real = errors.filter(e => !/Canvas has an existing context of a different type/.test(e));
 if (real.length) console.log('\nPage errors:\n  ' + real.slice(0, 5).join('\n  '));

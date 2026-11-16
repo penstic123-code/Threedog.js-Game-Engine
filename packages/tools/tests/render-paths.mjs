@@ -38,7 +38,7 @@ export async function run({ check, browser }) {
   check('[guard] withBrowser closes every browser it launched, then the server, when the work throws, and hands the error back', err === 'boom' && closed.join() === 'browser,browser,server', closed.join());
   const { spawnSync } = await import('node:child_process');
   const probe = `import(${JSON.stringify(pathToFileURL(join(TOOLS, 'browser.mjs')).href)}).then(m => m.withBrowser(async ({ launch }) => { await launch(); console.log('not reached'); },
-    { launch: async () => { throw Object.assign(new Error('the headless browser did not start (x): fix'), { code: 'browser-failed' }); }, server: async () => ({ base: '', close: async () => console.error('server closed') }) }))`;
+    { exitOnFail: true, launch: async () => { throw Object.assign(new Error('the headless browser did not start (x): fix'), { code: 'browser-failed' }); }, server: async () => ({ base: '', close: async () => console.error('server closed') }) }))`;
   const p = spawnSync(process.execPath, ['--input-type=module', '-e', probe], { encoding: 'utf8', timeout: 30000 });
   check('[guard] a browser that cannot start ends the command with one line on stderr and exit 1, the server closed first, stdout empty (--json stays clean)',
     p.status === 1 && p.stdout === '' && /server closed\r?\n✗ the headless browser did not start \(x\): fix\r?\n/.test(p.stderr) && !/\n\s+at /.test(p.stderr), JSON.stringify({ status: p.status, out: p.stdout, err: p.stderr.slice(0, 300) }));

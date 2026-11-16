@@ -137,7 +137,7 @@ export function laplacianVariance(rgba, w, h) {
  */
 export async function writeSideBySide(a, b, labels, file) {
   const GAP = 6, w = a.w + GAP + b.w, h = Math.max(a.h, b.h), b64 = d => d.toString('base64');
-  // rethrow: a library call, the command that called it decides how a missing browser ends
+  // a library call: a browser that cannot start comes back as an error, the command that called it decides how that ends
   return withBrowser(async ({ launch }) => {
     const page = await (await launch()).newPage();
     const png = await page.evaluate(([A, B, labels, GAP, w, h]) => {
@@ -159,5 +159,5 @@ export async function writeSideBySide(a, b, labels, file) {
     mkdirSync(dirname(resolve(file)), { recursive: true });
     writeFileSync(resolve(file), Buffer.from(png, 'base64'));
     return { w, h };
-  }, { rethrow: true });
+  });
 }

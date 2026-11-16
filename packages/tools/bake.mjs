@@ -46,8 +46,7 @@ await withBrowser(async ({ base, launch }) => {
       errors.length = 0;
     } catch (e) { errors.push(String(e).split('\n')[0]); }
   }
-// Use its own dependency cache directory: do not fight with a running npm run dev over node_modules/.vite
-}, { server: () => devServer(ROOT, { cacheDir: '.threedog/vite-bake' }) });
+}, { exitOnFail: true, server: () => devServer(ROOT, { cacheDir: '.threedog/vite-bake' }) });   // its own dependency cache: no fight with a running npm run dev over node_modules/.vite
 if (errors.length) { console.log('Bake page error:\n  ' + errors.join('\n  ')); process.exit(1); }
 
 mkdirSync(DIR, { recursive: true });

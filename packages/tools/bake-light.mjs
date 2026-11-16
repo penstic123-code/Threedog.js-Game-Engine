@@ -40,5 +40,5 @@ await withBrowser(async ({ base, launch }) => { try {
     console.log('  In the game: await engine.loadLightmap(path), and turn down the ambient light the bake saw (recipes/34-environment-lighting.md)');
   }
 } catch (e) { console.error('✗ ' + String(e?.message ?? e).split('\n')[0]); code = 1; } },
-{ launch: launchRealGPU, server: () => devServer(ROOT, { cacheDir: '.threedog/vite-bake', fs: { strict: false } }) });
+{ exitOnFail: true, launch: launchRealGPU, server: () => devServer(ROOT, { cacheDir: '.threedog/vite-bake', fs: { strict: false } }) });
 process.exit(code);

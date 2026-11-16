@@ -205,7 +205,7 @@ Pixel diff: ${diff} (0 = identical, 1 = black vs white)`);
   else { result.pictureLines = await ev(`(${PICTURE})(window.engine)`); say('\n' + result.pictureLines.join('\n')); if (perf.notice) say(perf.notice); }   // result.picture holds the numbers
   for (const l of perf.lines) say(l);
 } catch (e) { errors.push(String(e?.message ?? e)); }   // whole message: the wait/loading failures put the reason on the following lines
-}, { prefer: 'gpu', server: live ? null : () => buildAndPreview(dir, { build: !opt['no-build'] }) });
+}, { exitOnFail: true, prefer: 'gpu', server: live ? null : () => buildAndPreview(dir, { build: !opt['no-build'] }) });
 if (errors.length) say('\nPage errors:\n  ' + errors.slice(0, 5).join('\n  '));
 say(`\nTook ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 if (json) console.log(JSON.stringify({ ...result, errors, seconds: +((Date.now() - t0) / 1000).toFixed(1) }, null, 1));

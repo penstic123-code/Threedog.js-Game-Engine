@@ -197,6 +197,6 @@ await withBrowser(async ({ server, launch }) => {
       if (s.notRealWebGPU) { skipped++; console.log(`SKIP  ${s.name}\n      ${s.notRealWebGPU}`); } else await runSpec(browser, server, s);
     }
   }
-}, { launch: () => launchRealGPU({ headless: !flag('headed') }), server: () => buildAndPreview(dir, { build: false }) });
+}, { exitOnFail: true, launch: () => launchRealGPU({ headless: !flag('headed') }), server: () => buildAndPreview(dir, { build: false }) });
 console.log(`${failed ? `\n${failed} page(s) FAILED` : '\nall pages passed on real WebGPU'}${skipped ? `, ${skipped} skipped by their spec` : ''}`);
 process.exitCode = failed ? 1 : 0;

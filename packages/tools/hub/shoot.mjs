@@ -32,7 +32,7 @@ export async function shootProject(dir, { onPoint } = {}) {
   catch (e) { return recordRun(dir, { at, error: `build failed: ${firstLine(e)}` }); }
   finally { if (hadTest === undefined) delete process.env.THREEDOG_TEST; else process.env.THREEDOG_TEST = hadTest; }
   try {
-    // rethrow: the hub keeps running, so a browser that cannot start is recorded below, not the end of the process; withBrowser closes it and the server
+    // the hub keeps running: a browser that cannot start comes back as an error and is recorded below; withBrowser closes it and the server
     await withBrowser(async ({ launch }) => { const browser = await launch(); for (const p of parsed.points) {
       const errors = [];
       let page;
@@ -51,7 +51,7 @@ export async function shootProject(dir, { onPoint } = {}) {
         results.push({ name: p.name, error: firstLine(e) });
         onPoint?.(p.name, false);
       } finally { await page?.close().catch(() => {}); }
-    } }, { prefer: 'gpu', server: async () => server, rethrow: true });
+    } }, { prefer: 'gpu', server: async () => server });
   } catch (e) {
     return recordRun(dir, { at, error: `browser failed: ${firstLine(e)}` });   // anything outside the per-point code: recorded, already closed
   }

@@ -251,6 +251,6 @@ if (want('pages')) {
   console.log('\nmodules, ms median/p95 (worst p95 first):\n' + spikes.map(l => '  ' + l).join('\n'));
 }
 
-}, { prefer: 'gpu', server: () => buildAndPreview(GAME ?? ENGINE) });
+}, { exitOnFail: true, prefer: 'gpu', server: () => buildAndPreview(GAME ?? ENGINE) });
 if (startFail) fail(startFail);
 process.exit(failed ? 1 : 0);

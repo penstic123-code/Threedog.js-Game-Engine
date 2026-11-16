@@ -87,7 +87,7 @@ try {
     say(`stopped: ${stop}`);
   }
 } catch (e) { console.error(String(e?.message ?? e)); code = 1; }
-}, { prefer: 'gpu', launch: GAME ? launchRealGPU : undefined,
+}, { exitOnFail: true, prefer: 'gpu', launch: GAME ? launchRealGPU : undefined,
   server: () => GAME ? devServer(GAME, { cacheDir: '.threedog/vite-stress', fs: { strict: false } }) : buildAndPreview(ENGINE) });
 
 /** Largest measured load under `ms`, the first above it, and (doubling axes) the log-interpolated crossing */

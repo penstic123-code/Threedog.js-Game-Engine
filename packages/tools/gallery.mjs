@@ -67,7 +67,7 @@ ${names.map(n => `<tr><td>${esc(n)}</td>${lights.map(l => cell(rows.find(r => r.
     }
     if (bad.length) { console.log('Failed:\n  ' + bad.map(r => `${r.name}: ${r.error}`).slice(0, 10).join('\n  ')); code = 1; }
   } catch (e) { console.error(String(e?.message ?? e)); code = 1; }
-  }, { prefer: 'gpu', server: async () => ({ base, close }) });
+  }, { exitOnFail: true, prefer: 'gpu', server: async () => ({ base, close }) });
   if (errors.length) console.log('\nPage errors:\n  ' + errors.slice(0, 5).join('\n  '));
   process.exit(code);
 }

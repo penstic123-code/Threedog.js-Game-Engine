@@ -79,7 +79,8 @@ export function reapOrphanBrowsers() {
 /** The fixes for a browser that cannot run, in the words threedog doctor reports them (doctor imports these, so a command and doctor never disagree) */
 export const BROWSER_FIX = {
   install: 'run npx playwright install chromium (once per machine), then try again',
-  repair: 'update the graphics driver; if that fails, reinstall the browser: npx playwright install chromium --force',
+  reinstall: 'reinstall the browser: npx playwright install chromium --force',
+  get repair() { return 'update the graphics driver; if that fails, ' + this.reinstall; },
 };
 /** Codes a launch failure carries: withBrowser turns these into one line, anything else is a bug and keeps its stack */
 const BROWSER_FAILURE = new Set(['no-browser', 'browser-failed']);
@@ -139,23 +140,24 @@ export async function launchRealGPU({ headless = true } = {}) {
 /**
  * The one lifecycle of a command's headless run: start the server (when given), hand fn a launcher, and in finally close every browser it launched,
  * then the server, whatever fn did. Before it each command had its own try/finally, and a launch failure left the preview server open and printed a stack.
- * A browser that could not start ends the command with one line on stderr (stdout stays clean for --json) and exit 1; `rethrow` hands it back instead
- * (the hub records it and keeps running). Long-lived owners (run.mjs's shared browsers, the dev bridge's page) call launchBrowser and close it themselves.
+ * A browser that could not start is handed back (coded no-browser / browser-failed), so a long-lived process (hub, MCP, a library call) never ends by it.
+ * A command's entry passes exitOnFail: true to end with one line on stderr (stdout stays clean for --json) and exit 1 instead of a stack.
+ * Long-lived owners that keep a browser open (run.mjs's shared browsers, the dev bridge's page, picture/pixels.mjs openImage) call launchBrowser and close it themselves.
  * @template T
  * @param {(ctx: { server: { base: string, close(): Promise<void> } | null, base: string, launch: () => Promise<import('playwright').Browser & { render?: object }> }) => Promise<T>} fn
  *   launch() may be called more than once (perf takes a fresh browser per page); closing one early is fine
- * @param {{ prefer?: 'software' | 'gpu', launch?: () => Promise<import('playwright').Browser>, server?: () => Promise<{ base: string, close(): Promise<void> }>, rethrow?: boolean }} [o]
+ * @param {{ prefer?: 'software' | 'gpu', launch?: () => Promise<import('playwright').Browser>, server?: () => Promise<{ base: string, close(): Promise<void> }>, exitOnFail?: boolean }} [o]
  *   launch: another launcher (launchRealGPU); server: started first, e.g. () => buildAndPreview(dir)
  * @returns {Promise<T>}
  */
-export async function withBrowser(fn, { prefer = 'software', launch = () => launchBrowser({ prefer }), server: start, rethrow = false } = {}) {
+export async function withBrowser(fn, { prefer = 'software', launch = () => launchBrowser({ prefer }), server: start, exitOnFail = false } = {}) {
   const open = new Set();
   let server = null, failure = null;
   try {
     server = start ? await start() : null;
     return await fn({ server, base: server?.base ?? '', launch: async () => { const b = await launch(); open.add(b); return b; } });
   } catch (e) {
-    if (rethrow || !BROWSER_FAILURE.has(e?.code)) throw e;
+    if (!exitOnFail || !BROWSER_FAILURE.has(e?.code)) throw e;
     failure = e;
   } finally {
     await Promise.all([...open].map(b => b.close().catch(() => {})));
