@@ -1,12 +1,13 @@
 // @ts-check
 // __NAME__ picture: wiring only, no values. Each part is one file here and writes plain three.js; numbers and colors live in palette.js.
 // The engine hands over signals (engine.uniforms) and writes none of this; recipe 62 lists them and shows how to add parts or shaders/.
-// A neutral start with correct light (a key, a fill, soft shadows, a tone curve, AO and a light bloom) and no style: gray surfaces, white light.
+// A placeholder start with correct light (a key, a fill, soft shadows, a tone curve, AO and a light bloom): a plain temperate day to replace with the game's style.
 // Change anything here, or delete the folder and write your own.
 import { createLights, createFill } from './lights.js';
 import { createSky } from './sky.js';
 import { createPost } from './post.js';
 import { createMaterials } from './materials.js';
+import { createWorldColors } from './world.js';
 
 // A picture module: what it adds goes through ctx, so engine.use(another(), { replaces: 'picture' }) swaps the whole picture and leaves nothing behind (recipe 62).
 /** @returns {import('threedog').ModuleDef} */
@@ -25,6 +26,6 @@ export function createPicture() {
       return { lights, materials };
     },
     /** @param {any} engine @param {any} ctx */
-    init(engine, ctx) { createFill(engine, ctx); },   // after the renderer is ready (lights.js says why)
+    init(engine, ctx) { createFill(engine, ctx); createWorldColors(engine, ctx, engine.picture.materials); },   // after the renderer is ready (lights.js says why); world.js after the terrain and water exist
   };
 }

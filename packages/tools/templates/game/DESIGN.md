@@ -33,9 +33,9 @@ Picture intent (optional): (none)
 | Item | Choice | Options (engine name) |
 |---|---|---|
 | Reference images | (not chosen) | 1-3 images or games whose picture to aim for (art/reference/) |
-| Style | (not chosen) | the game's own picture/ folder (gray now): palette, materials, sky, lights, post |
+| Style | (not chosen) | the game's own picture/ folder (placeholder day now): palette, materials, sky, lights, post |
 | Ground shading | (not chosen) | smooth · texture (color map, clean color borders) · flat (one color per triangle, faceted) — `engine.terrain.material` · own three.js material / shader on the terrain mesh |
-| Character body | (not chosen) | gray capsule (prototype only, not a finished picture) · procedural asset · own GLB from Blender — `{ model }` |
+| Character body | (not chosen) | placeholder capsule (prototype only, not a finished picture) · procedural asset · own GLB from Blender — `{ model }` |
 | Asset sources | (not chosen) | per kind (ground and terrain textures, vegetation, characters, props and buildings, effects, sounds): you make or specify · you provide (anything you choose, from anywhere) · generated (procedural code or tools, you confirm) · mix. The AI recommends with reasons; it does not pick an asset library or someone else's style on its own |
 | Materials and palette | (not chosen) | colors per material, lambert (matte) · toon (banded) · standard (PBR) · unlit · own three.js material / shader (__OWN_SHADER__) — `picture/materials.js` |
 | Sky and time of day | (not chosen) | fixed time or day/night cycle, sky colors, fog — `picture/` reading the signals (recipe 62), `scene.fog`, sky presets · own three.js sky (`engine.sky.replace(mySky)`) |

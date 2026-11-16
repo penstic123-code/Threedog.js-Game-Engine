@@ -8,7 +8,7 @@
 // Which renderer: a new game starts on WebGPU, its shaders in TSL; --webgl starts on WebGLRenderer, its shaders in GLSL. It is chosen here, once, because it decides the
 // language of the game's own shaders; plain three.js materials and lights work on both. createEngine's own default stays WebGL: the choice is written into each new
 // game's main.js. A browser without WebGPU gets createEngine's fallback: 'webgl2', the same game on three's WebGL2 backend, TSL still drawing.
-// Placeholders in text files: __NAME__, __GAMEPLAY_NOTE__, __DEFAULT_LAYER__ (rows of AI.md) and the ROUTE words below. The art always starts in the game's own picture/ folder (neutral: gray surfaces under correct light) (the engine ships no art).
+// Placeholders in text files: __NAME__, __GAMEPLAY_NOTE__, __DEFAULT_LAYER__ (rows of AI.md) and the ROUTE words below. The art always starts in the game's own picture/ folder (a placeholder temperate day under correct light, to restyle) (the engine ships no art).
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -41,7 +41,7 @@ export function gameName(folder) {
 
 const GAMEPLAY = {
   clean: 'This game starts blank (a scene, a camera, a start screen, autosave, an Esc menu) and has no gameplay yet; build what DESIGN.md describes. `npx threedog init --open-world` in a new folder starts on generated ground with a player.',
-  pixel: 'This game starts from `--pixel`: a gray floor, a placeholder sprite character in a pixel-snapped orthographic view (`pixelSize`, `pixelSprite`, `pixelSnap`), an NPC with dialogue, a pickup, a start screen, autosave and an Esc menu, no gameplay yet; build what DESIGN.md describes and replace the placeholder sprite sheet in picture/sprites.js with real art.',
+  pixel: 'This game starts from `--pixel`: a placeholder floor, a placeholder sprite character in a pixel-snapped orthographic view (`pixelSize`, `pixelSprite`, `pixelSnap`), an NPC with dialogue, a pickup, a start screen, autosave and an Esc menu, no gameplay yet; build what DESIGN.md describes and replace the placeholder sprite sheet in picture/sprites.js with real art.',
   sceneOnly: 'This game starts from `--scene-only`: a scene, a camera, picture/, a start screen, autosave and an Esc menu; it has no `content/` and no `assets.js` (add them with `engine.use(content())` when something must be placed and saved); build what DESIGN.md describes.',
   openWorld: 'This game starts from `--open-world`: generated ground, a day/night sky, a follow camera, a player, a start screen, autosave and an Esc menu, no gameplay yet; build what DESIGN.md describes and remove what it does not need.',
 };

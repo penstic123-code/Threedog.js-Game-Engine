@@ -12,8 +12,8 @@ import packs from './assets.js';
 const engine = createEngine({ __RENDERER__bindings: { ...presets.bindings.walk, ...presets.bindings.interact, ...presets.bindings.debug }, canvas: /** @type {HTMLCanvasElement} */ (document.getElementById('view')), lights: false, ui: { loading: { title: '__NAME__' }, title: { title: '__NAME__' } }, saveKey: '__NAME__' });   // sounds are content: content/audio.js
 // openWorld installs the world and environment (terrain, vegetation, sky, weather, water, collision, camera, characters, settings, debug); add gameplay modules yourself.
 // More you can add: interactions() inventory() pickups() (items lying on the ground) hud() dialogue() quests() triggers() timeline() particles() music() photo() grids(), usage in node_modules/threedog/docs/api/<module>.md
-engine.use(openWorld({ camera: followCamera({ pointerLock: true }), seed: 42, terrain: terrainPreset(), time: 0.3, weather: presets.weather.temperate, calendar: presets.calendar.cycle,
-  settings: { freezeWorld: true } }), content());   // the sky gives the signals and draws its dome; lights and fog are picture/'s; settings: Esc pauses and opens the menu
+engine.use(openWorld({ camera: followCamera({ pointerLock: true }), seed: 42, terrain: terrainPreset(), time: 0.375, weather: presets.weather.temperate, calendar: presets.calendar.cycle,
+  settings: { freezeWorld: true } }), content());   // time 0.375: a 09:00 start, sun high enough to light the ground, low enough for shadows; the sky gives the signals and draws its dome; lights and fog are picture/'s; settings: Esc pauses and opens the menu
 engine.saves.autosave(0.5);   // minutes of play; Continue on the start screen loads it. The game's own state joins with engine.saves.define('game', { version: 1, save, load }), recipe 20
 engine.use(createPicture());   // a picture module; to switch looks: engine.use(another(), { replaces: 'picture' })
 const { picture } = engine;   // picture.materials: the game's materials by name

@@ -1,11 +1,12 @@
 // @ts-check
-// __NAME__: pixel 2.5D start (--pixel) — a sprite character in an orthographic, pixel-snapped view; input, interaction, dialogue and saves wired. Gray placeholders, no gameplay: build what DESIGN.md describes.
+// __NAME__: pixel 2.5D start (--pixel) — a sprite character in an orthographic, pixel-snapped view; input, interaction, dialogue and saves wired. Placeholder colors, no gameplay: build what DESIGN.md describes.
 // One start among many (a side view, a grid or a 3D look start from the blank game). Everything here is the engine's: extend it, do not rewrite it:
 // a new key is engine.input.define(...), a talker engine.dialogue.define(...), a thing to use engine.interactions.add(object, ...); pixels: recipe 62 §4b; which modules take a sprite: recipe 13 §3d.
 __TSL_IMPORT__
 import { createEngine, presets, world, content, settings, collision, characters, followCamera, hud, interactions, dialogue, THREE } from 'threedog';
 import { pixelSprite, spriteFrame } from 'threedog/pixel';
 import { createPicture } from './picture/index.js';   // the game's own picture in plain three.js: neutral for now; make it yours, recipe 62
+import { palette } from './picture/palette.js';   // the picture's colors: the hero's placeholder tone comes from there
 import { placeholderSheet, SHEET } from './picture/sprites.js';   // a drawn placeholder sheet: replace with your art
 import data from './content/index.js';
 import packs from './assets.js';
@@ -22,8 +23,8 @@ engine.use(createPicture());   // a picture module; to switch looks: engine.use(
 const { picture } = engine;   // picture.materials: the game's materials by name
 engine.assets.manifest(packs);   // assets.js: the models / sounds / textures content names
 
-// ---- The level: a gray floor, plain three.js. engine.collision keeps the player inside the arena; engine.collision.addObject(mesh) makes a mesh solid.
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 24).rotateX(-Math.PI / 2), picture.materials.default); engine.scene.add(floor);
+// ---- The level: a placeholder floor, plain three.js. engine.collision keeps the player inside the arena; engine.collision.addObject(mesh) makes a mesh solid.
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 24).rotateX(-Math.PI / 2), picture.materials.ground); engine.scene.add(floor);
 engine.collision.addBlocked((x, z) => x < ARENA.minX || x > ARENA.maxX || z < ARENA.minZ || z > ARENA.maxZ);
 
 const grid = engine.cameraRig.pixelSnap.grid;   // the one art-pixel math (threedog/pixel); sprites and the camera share it
@@ -45,7 +46,7 @@ engine.hud.addCounter('coins', { label: 'Coins', value: 0 });
 
 // ---- The player: a character whose model is a pixelSprite. onPose picks the frame from the character's state each frame; the character's position stays exact (saves and physics read it).
 const ROW = /** @type {Record<string, number>} */ ({ idle: 0, walk: 1, run: 1, jump: 2, fall: 2 });   // which row of the sheet is which state: your sheet's layout
-const hero = makeSprite(0x9a9a9a, 'followed');   // 'followed': the one object the camera follows (recipe 62 4b)
+const hero = makeSprite(palette.character.color, 'followed');   // 'followed': the one object the camera follows (recipe 62 4b)
 const player = engine.characters.addPlayer({ ...presets.player.thirdPerson, model: hero, spawn: [0, 0, 0] });
 // facing is an angle (radians around Y), not a left/right sign: mirror when the heading points to the screen's left
 player.onPose(c => {

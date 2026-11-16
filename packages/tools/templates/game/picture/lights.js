@@ -30,6 +30,7 @@ export function createLights(engine, ctx) {
       sun.target.position.copy(engine.focus).divideScalar(SHADOW_SNAP).round().multiplyScalar(SHADOW_SNAP);
       // Without a sky uSunDir points straight up, which lights every top alike and hides shadows under things: a fixed slant from the palette instead
       sun.position.copy(engine.sky ? signals.uSunDir.value : noSky).multiplyScalar(100).add(sun.target.position);
+      if (engine.sky) sun.color.copy(signals.uSunColor.value);   // the sky rows' sun color (palette.sky): warm at dawn and dusk; without a sky palette.sun.color stays
       const day = signals.uDaylight.value;
       sun.intensity = S.noon * day * signals.uWeatherLight.value;   // uWeatherLight: 1 in clear weather, lower under rain
       // The fill dims toward night too, so a night is dark because the light is. Without a sky uDaylight stays 1 and the fill holds
