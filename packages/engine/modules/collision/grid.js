@@ -8,7 +8,7 @@ const CELL = 8, MAX_CELLS = 64, KEY = 1048576;   // colliders too large (coverin
 export const bodyHits = (it, y, body) => !(y >= it.y + it.h || y + body <= it.y);
 /**
  * A mover's passes option (character option; findPath, findPathAsync and walkable option): the collider layers it goes through. Read here for every entry,
- * sorted and without repeats so one set is one navmesh, never two. Left out or empty: undefined, which every reader takes as "stopped by everything", as before
+ * sorted and without repeats so one set is one navmesh, never two. Left out or empty: undefined, which every reader takes as "stopped by everything"
  */
 export function passesOf(where, v) {
   if (v === undefined || v === null) return undefined;

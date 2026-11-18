@@ -1,4 +1,4 @@
-// [guard] Impostor cards for far plants (docs/plans/2026-11-09-impostors.md). Not to be bypassed: beyond lodRing an impostor species is drawn by one
+// [guard] Impostor cards for far plants (docs/plans/done/2026-11-09-impostors.md). Not to be bypassed: beyond lodRing an impostor species is drawn by one
 // card mesh per species (render/impostor.tsl.js, built by modules/vegetation/draw.js updateCards), baked from its own model and materials, and it
 // reads the chunk meshes' instance arrays, so felling (zero-scale slots) reaches the cards with no path of its own. Run: threedog test "impostor"
 export const specs = [

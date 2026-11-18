@@ -8,7 +8,7 @@ import { ts, parse, visit, engineFiles, lineOf, strValue, dtsFiles, P } from './
 
 // Allowlist: [event name, reason]
 const ALLOW_UNDECLARED = [];
-const ALLOW_UNEMITTED = [];
+const ALLOW_UNEMITTED = [['op:rolledBack', 'emitted through a local alias of events (ev.emit in core/ops/opsAtomic.js), which the events.emit search does not see']];
 
 /** EventMap keys → line numbers (whichever d.ts holds interface EventMap) */
 function eventMap() {

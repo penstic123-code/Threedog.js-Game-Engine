@@ -132,7 +132,11 @@ export class Timeline {
       run.error = err?.message ?? String(err);
       this._stop(run, 'failed');   // a parallel branch beside the throw is still waiting
     } finally {
-      if (run.faded && gone(run) && ![...this.runs].some(r => r !== run && r.faded)) fadeScreen(e, 0, { seconds: 0 });   // the steps that would have faded back in will not run
+      if (run.faded) {   // the run still holds the screen dark
+        fadeScreen(e, 0, { seconds: 0, owner: `timeline:${run.id}` });
+        // dropped / failed: the steps that would have faded back in will not run. Finished / skipped on a dark step: the cover is handed to the scene change (owner 'flow'), the next flow.transition lifts it
+        if (!gone(run)) fadeScreen(e, run.faded, { seconds: 0, owner: 'flow' });
+      }
       turn.remove();
       releaseCamera(this, run);
       run.focus.remove();
@@ -230,11 +234,11 @@ export class Timeline {
 
   /** Full-screen fade: jumps to the target when skipped. faded: the run holds the screen, so an ending that drops the later steps gives it back @internal */
   async _fade(seconds, to, run) {
-    const now = () => fadeScreen(this.engine, to, { seconds: 0 });
-    run.faded = to > 0;
+    const owner = `timeline:${run.id}`, now = () => fadeScreen(this.engine, to, { seconds: 0, owner });
+    run.faded = to > 0 ? to : 0;
     if (run.ending) return now();
     run.cancels.add(now);
-    await fadeScreen(this.engine, to, { seconds });
+    await fadeScreen(this.engine, to, { seconds, owner });
     run.cancels.delete(now);
   }
 

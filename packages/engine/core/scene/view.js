@@ -121,6 +121,20 @@ export function setProjection(e, projection = 'perspective', size = 20) {
   swapCamera(e, e._ortho.camera);
 }
 
+/**
+ * engine.renderer.toneMapping as one owned value.
+ * @param {any} e
+ * @param {{ owned: boolean }} o owned: false when the game passed its own renderer
+ */
+export function defineTone(e, { owned }) {
+  // who writes tone mapping now is one owned record like every other picture value (core/ops/owned.js),
+  // not a comparison against a remembered creation value here: a direct renderer.toneMapping write yields it ('three (engine yielded)'), quietly (once),
+  // because that write is the documented way to change the curve. A game-supplied renderer (owned false) starts manual: the engine never wrote it
+  e._oTone = defineOwned(e, { id: 'toneMapping', part: 'tone', key: 'toneMapping', read: () => e.renderer.toneMapping, objects: [e.renderer], once: true,
+    write: v => { e.renderer.toneMapping = v; }, levels: { manual: 'engine.renderer.toneMapping = THREE.AgXToneMapping' } });
+  if (owned) e._oTone.mark(); else e._oTone.manual(true, 'game renderer');
+}
+
 /** @param {any} e */
 export function defineView(e) {
   const cam = () => e.camera;

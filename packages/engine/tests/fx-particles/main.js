@@ -369,7 +369,7 @@ window.fxSoft = async ({ real = false } = {}) => {
   } finally { console.error = keep; console.warn = keepWarn; }
 };
 
-/** Group E (docs/plans/2026-11-09-group-e.md): WebGPU particles keep their size under an orthographic camera, weather is not fogged, the "no texture" stand-in is freed */
+/** Group E (docs/plans/done/2026-11-09-group-e.md): WebGPU particles keep their size under an orthographic camera, weather is not fogged, the "no texture" stand-in is freed */
 window.fxGroupE = async () => {
   const out = {};
   // two equal particles at depth 20 and 30 under an orthographic camera: the same number of lit pixels (WebGL does not shrink them either)

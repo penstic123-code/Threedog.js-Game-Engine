@@ -82,8 +82,6 @@ export interface EventMap extends GameEvents {
   'ui:open': [id: string];
   /** A window was closed */
   'ui:close': [id: string];
-  /** Shadows were toggled */
-  'settings:shadows': [on: boolean];
   /** A value in the settings menu changed (the argument is all setting values) */
   'settings:change': [values: Record<string, any>];
   /** engine.tier changed (device found at start, a preset, a write): resize what was sized from it */
@@ -236,7 +234,7 @@ export interface EventMap extends GameEvents {
   'engine:error': [EngineError];
   /** A picture or ui module errored and was disabled (the game continues) */
   'module:disabled': [{ name: string; message: string }];
-  'module:restored': [{ modules: any[] }];
+  'module:fresh': [{ modules: any[] }];
   /** An atomic op failed and its parts were put back (its own events already went out and stay): read derived state again. Not sent for a load's rollback (that ends in state:replaced) */
   'op:rolledBack': [{ op: string; parts: number }];
   /** @internal The state was replaced by something other than a step, from any door (core/saves/stateReplace.js); undone: a failed load put the old state back */
@@ -2164,7 +2162,7 @@ export declare class Engine {
   loadLightmap(file: string | ArrayBuffer, opts?: { owner?: string }): Promise<Lightmap>;
 
   // ---------- Settings ----------
-  /** Render resolution, and the top adaptive resolution climbs back to. Throws while pixelSize is on */
+  /** Render resolution, and the top adaptive resolution climbs back to. A ratio the player chose in settings below the device default caps it. Throws while pixelSize is on */
   setPixelRatio(p: number): void;
   /**
    * One art pixel becomes k real screen pixels (createEngine({ pixelSize }) at runtime). While on, adaptive resolution stops, engine.setPixelRatio throws and a photo keeps

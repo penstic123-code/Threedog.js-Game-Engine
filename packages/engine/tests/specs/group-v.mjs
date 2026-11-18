@@ -1,4 +1,4 @@
-// Group V guards (vegetation / terrain / streaming review, docs/plans/2026-11-09-group-v.md): one check per root cause, each fails with its fix reverted.
+// Group V guards (vegetation / terrain / streaming review, docs/plans/done/2026-11-09-group-v.md): one check per root cause, each fails with its fix reverted.
 // Run: npm test -- "group V"
 const page = () => {
   const { createEngine, terrain, vegetation, THREE } = threedogTerrain;

@@ -91,7 +91,7 @@ function checkNeeds(name, e, g) {
 }
 
 /** Load an entry as a task in engine.loading; a registered, non-critical file that fails resolves to its fallback */
-export function fetchEntry(a, e) {
+function fetchEntry(a, e) {
   if (a._disposed) return NEVER;
   if (a._stale(e)) retireEntry(a, e);
   if (e.promise) { if (e.load) e.load.waits++; return e.promise; }

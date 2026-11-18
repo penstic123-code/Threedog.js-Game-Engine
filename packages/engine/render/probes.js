@@ -16,8 +16,33 @@ import { codedError, coded } from '../core/base/errorHints.js';
 import { warnOnce, fmt } from '../core/base/validate.js';
 import { vec3 } from '../core/base/math.js';
 import { isWebGPU, webgpuPart, freshFrame, readLayer, onRendererSwap } from './backend.js';
-import { mats, lit } from './lit.js';
-import { litTwice } from '../core/inspect/pictureChecks.js';
+import { mats, lit, noteFillLight, noteEnvironment } from './lit.js';
+
+/**
+ * Baked light (a probe set or a lightmap) plus a light the bake already saw: that light counts twice. Said at load time by
+ * probes.js and lightmap.js, and again by the picture check (the same words). @param {any} e @returns {string | null}
+ */
+export function litTwice(e) {
+  const probes = !!e._probeSets?.size, lightmap = !!e._lightmap;
+  if (!probes && !lightmap) return null;
+  const doubled = [];
+  let mapped = 0;
+  e.scene.traverseVisible(o => {
+    if (noteFillLight(o, doubled)) return;
+    if (lightmap && o.isLightProbeGrid) doubled.push(`probe grid ${o.name}`);   // the lightmap baked the bounce the grid adds again
+    else if (probes && !lightmap && o.isMesh && mats(o).some(m => m?.lightMap)) mapped++;   // a game's own lightMap under a probe grid
+  });
+  noteEnvironment(e.scene, doubled);
+  if (mapped) doubled.push(`material.lightMap on ${mapped} mesh(es)`);
+  if (!doubled.length) return null;
+  const what = [probes && 'probe', lightmap && 'lightmap'].filter(Boolean).join(' and ');
+  const list = doubled.slice(0, 2).join(', ') + (doubled.length > 2 ? ` and ${doubled.length - 2} more` : '');
+  if (!bakeSeenScene(e)) return `${what} light is added on top of ${list}. If the bake saw it, it counts twice (a loaded file does not say which lights it saw). Fix: lower it where the bake takes over, or bake without it.`;
+  return `${what} light is added on top of ${list}, which the bake already saw, so it counts twice. Fix: lower it where the bake takes over, or bake without it.`;
+}
+
+/** True only when every baked light came from a bake made in this session (engine.bakeProbes): it saw this scene's lights. A loaded file or a lightmap carries no record of them */
+export const bakeSeenScene = e => !e._lightmap && [...(e._probeSets ?? [])].every(s => s.source === 'bake');
 
 const FORMAT = 'threedog-probes', VERSION = 2, MAX_PROBES = 4096, SH = 27;
 const CHUNK = 8;        // probes baked per turn of the event loop, so the page keeps drawing during a long bake

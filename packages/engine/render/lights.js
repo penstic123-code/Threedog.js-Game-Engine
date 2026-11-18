@@ -5,7 +5,6 @@
 import { engineOwned } from '../core/scene/things.js';
 import * as THREE from 'three';
 import { defineOwned } from '../core/ops/owned.js';
-import { onTierChange } from '../core/scene/tier.js';
 
 const BOX = 30, SNAP = 0.5;
 
@@ -34,7 +33,7 @@ export function createDefaultLights(engine, { add = true } = {}) {
   // One rule for both tier defaults, size and radius: a value still at the engine's default for the old tier follows the tier, any other value is the
   // game's and stays. Known edge: a game that writes exactly the engine's default reads as untouched and still follows (no accessor: it would hide the
   // value from engine.debug.watch / explain, which only hook plain properties)
-  onTierChange(engine, () => {
+  engine.stacks.get('tier').watch(() => {
     const was = map, next = map = sizeFor(), s = sun.shadow;
     if (next === was) return;
     if (s.mapSize.x === was && s.mapSize.y === was) { if (engine.shadows) engine.shadows.mapSize(sun, next); else s.mapSize.set(next, next); }

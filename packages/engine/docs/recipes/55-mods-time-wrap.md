@@ -41,7 +41,7 @@ engine.wrap(engine.inventory, 'add', (next, id, n = 1, o) =>  // a weight rule o
   carried() + weightOf(id) * n > 30 ? { ok: false, code: 'tooHeavy' } : next(id, n, o), { owner: 'weight' });
 ```
 
-## The rules in full: `engine.mod(point, { owner, set | add | mul | clamp, layer?, for?, id? })`
+## The rules in full: `engine.mod(point, { owner, set | add | mul | clamp, layer?, for?, id? })`; which values are being changed now, `important` points
 
 | Layer (low to high) | Who writes it |
 |---|---|
@@ -109,11 +109,11 @@ checks that need this step's player position). The order never depends on which 
   enter the bag wraps `add` and `transfer`.
 - Meant for public methods (the module's `contract.js` `api` list); a `_private` name warns once in dev and still works. `describe().wraps` lists `{ 'inventory.add': [owners] }`.
 
-## Replacing a module
+## Replacing a module: swap in your own dialogue, camera or inventory system
 
 Two modules that each want to be "the" one (a sky, a tone-mapping stage, an inventory) declare an exclusive slot: `provides: ['inventory']`.
 Other modules `requires: ['inventory']` and work with whichever holds it. `engine.use(myInventory(), { replaces: 'inventory' })` unloads the
-holder (its tracked handles, its `ctx.mod` entries, its `dispose`) before the new install, and puts it back if that fails, with its save data and content sections. Either way the holder is a fresh install, so `module:restored` fires with the fresh modules once their `init` is done: content sections load again, as a `content.load` on a running game would (a newcomer with its own format may refuse a pack written for the old holder: that part stays out, with a warning naming the pack); game code redefines on that event what it defined by hand on the old holder. Level walls and solid props need no event: they go into whichever `collision` or `collider3d` is installed, also one that came late or came back.
+holder (its tracked handles, its `ctx.mod` entries, its `dispose`) before the new install, and puts it back if that fails, with its save data and content sections. Either way the holder is a fresh install, so `module:fresh` fires with the fresh modules once their `init` is done: content sections load again, as a `content.load` on a running game would (a newcomer with its own format may refuse a pack written for the old holder: that part stays out, with a warning naming the pack); game code redefines on that event what it defined by hand on the old holder. Level walls and solid props need no event: they go into whichever `collision` or `collider3d` is installed, also one that came late or came back.
 
 Most replaceable modules have a contract (`modules/gameplay/*.contract.js`, `modules/*/contract.js`; object contract `modules/characters/vehicle.contract.js`; the rest and what cannot be replaced: CONVENTIONS.md "What can be replaced"): the api, fields, ops, events
 and save keys other code relies on, and nothing more (the engine's callers use only that surface). `await runContract(contract, () => myInventory(), { check })`

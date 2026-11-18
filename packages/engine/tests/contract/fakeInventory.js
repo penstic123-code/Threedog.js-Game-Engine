@@ -39,6 +39,7 @@ export function fakeInventory() {
     install(engine) {
       e = engine;
       e.saves.define('inventory', { version: 1, save: () => ({ items: Object.fromEntries(bag('player')) }), load: d => { bags.set('player', new Map(Object.entries(d?.items ?? {}))); } });
+      e.saves.define('containers', { version: 2, save: () => ({}), load() {} });   // the contract lists it: the real inventory keeps its boxes here
       e.ops.define('inventory.transfer', { args: { from: 'string', to: 'string', item: 'string', n: 'int?' }, run: (e, a) => api.transfer(a.from, a.to, a.item, a.n) });
       e.ops.define('inventory.trade', { args: { take: 'any', give: 'any' }, run: (e, a) => api.trade(a.take, a.give) });
       e.ops.define('inventory.use', { args: { item: 'string' }, can: (e, a) => api.has(a.item) || 'notEnough', run: (e, a) => { e.events.emit('item:use', { id: a.item }); return api.remove(a.item, 1); } });

@@ -19,7 +19,7 @@ const isGame = f => P.under(f, P.GAMES_REL) || P.under(f, `${P.TOOLS_REL}/templa
 const ALLOW_SIZE = [
   [reE('(index\\.d\\.ts|types\\/[^/]+\\.d\\.ts)$'), 'API declarations (d.ts): the AI reads the generated packages/engine/docs/api/<module>.md (one module per page), not the d.ts itself; ' +
     'grouped by domain (core / world / gameplay / physics) so types can reference each other and npm run types can check them all; splitting into small files only adds imports without saving context'],
-  [reE('docs\\/AI\\.md$'), 'the AI index: one row per task; R22 caps its size at 20KB (an index grows with the engine, the recipes it points to stay small)'],
+  [reE('docs\\/AI\\.md$'), 'the AI index: one row per task; R22 caps its size at 11.5KB (an index grows with the engine, the recipes it points to stay small)'],
 ];
 // Allowlist (path regex + reason)
 const ALLOW = [

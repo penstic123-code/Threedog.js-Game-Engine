@@ -124,7 +124,7 @@ has keys, unless its bake entry says `source: 'file'`.
 
 Very detailed models (faces, sculpted shapes, hand-painted textures) are faster in Blender: export a GLB and register it (recipe 46).
 
-## 2b. Many copies of one model: automatic batching
+## 2b. Many copies of one model: automatic batching (thousands of trees and rocks)
 Nothing to write for what the engine places: `engine.batching` (core) covers world record views (props, templates, grid items, `world.present`),
 `stream` builds and level files. When the same geometry + material (+ shadow flags) appears at least 8 times in one cell (256 m by default), those meshes are
 drawn by one real `THREE.InstancedMesh` per cell; fewer stay plain meshes. Each placed object stays in the scene with its own userData, record,

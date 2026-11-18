@@ -12,13 +12,13 @@ const DIRS = { uiUp: [0, -1], uiDown: [0, 1], uiLeft: [-1, 0], uiRight: [1, 0] }
 const STICK = 0.5, REPEAT_FIRST = 0.4, REPEAT = 0.15;   // stick: half tilt counts, held it repeats like a key (first after 0.4 s, then every 0.15 s)
 
 /** Visible controls inside root, in DOM order (hidden ones have no client rects) @internal */
-export function navItems(root) {
+function navItems(root) {
   if (!root || root.hidden) return [];
   return [...root.querySelectorAll(SEL)].filter(el => el.getClientRects().length > 0);
 }
 
 /** The direction pressed this frame ([dx, dy], screen y down) from the menu keys or the stick (edge + repeat), or null @internal */
-export function readDir(input, st, dt) {
+function readDir(input, st, dt) {
   for (const [a, d] of Object.entries(DIRS)) if (input.actions.has(a) && input.pressedRaw(a)) return d;
   const s = input.padStick, x = Math.abs(s.x) >= STICK ? Math.sign(s.x) : 0, y = Math.abs(s.y) >= STICK ? -Math.sign(s.y) : 0;   // padStick.y is up-positive
   const d = Math.abs(s.x) > Math.abs(s.y) ? (x ? [x, 0] : null) : (y ? [0, y] : null);

@@ -22,7 +22,7 @@ Which knob changes what on screen, and how to judge it for your picture: [recipe
   since it faces up), and three divides by π, so a total near π shows mid-tone albedos at roughly their own value under `AgXToneMapping`. AgX darkens light colors and pales saturated ones,
   so a pale or vivid palette needs more, or exposure. Walls and faces away from the sun get only their `N·L` share, and the environment (`scene.environment`) adds on top for Standard / Physical materials.
 
-## Atmosphere: fog, sky
+## Atmosphere: fog, sky, view distance and field of view
 
 Fog and the placeholder lights: [recipe 34](34-environment-lighting.md). The sky: plain values and calls on `engine.sky`, [recipe 08](08-weather-sky.md). Shadows: `engine.shadows` and three.js, recipe 45. Water and weather: recipe 44.
 
@@ -46,7 +46,7 @@ engine.shaderTerms.season(kind => ({ glsl: 'diffuseColor.rgb = mix(diffuseColor.
 - `engine.shaderTerms.cloudShadow(spec)` and `engine.shaderTerms.season(spec)` put your own patch (`{ glsl, tsl, uniforms?, pars?, slot? }`, slot `lighting` / `color` by default) in place of the engine's on every material that carries the term, including ones built earlier; `false` removes the term; the handle's `remove()` gives the engine's back. The signals stay bound: `uWeatherCloud, uCloudShadow*` and `threedogCloudShadow(worldPos)`; `uFoliageTint` / `uGroundTint` / `uFoliageMix` / `uGroundMix`, `uGroundCover` (cover amount alone, x foliage, y ground) and `threedogSeason(color, kind)` (TSL: `season(color, kind)`). `season` also takes `kind => spec` (`'foliage'` | `'ground'`). A missing renderer form throws by name.
 - Cloud shadow values are signals: `engine.uniforms.uCloudShadow` (darkest, 0 = none), `uCloudShadowScale`, `uCloudShadowSpeed`. The term sits on engine materials and on what you pass to `applyEffects(mat)`; your own shader calls `threedogCloudShadow(worldPos)` (GLSL) or `cloudShadow(positionWorld)` (`threedog/tsl`). The engine adds it to no other material.
 
-## Post effect chain
+## Post effect chain: your own pass, extra render passes
 
 Post-processing is an ordered list of named effects, and **`engine.post.add(x, { name, slot, order })` is the one way an effect gets
 in**: game code and the game's `plugins/` folder (a file that exports the Pass or effect) go through it, so every

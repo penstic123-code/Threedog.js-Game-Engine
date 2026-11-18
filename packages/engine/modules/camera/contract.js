@@ -9,7 +9,7 @@ export default {
   fields: ['target'],   // what follow() follows: a ragdoll checks it before borrowing the camera, and leaves a camera the game moved elsewhere
   ops: [],
   events: [],
-  saves: {},
+  saves: { cameraRig: 1 },
   describe: true,
   options: {},
   probe: { setup: [], emits: [], state: null },

@@ -1,4 +1,4 @@
-// Resource lifetime (design.md 6.2, docs/plans/2026-11-09-resource-lifetime.md): whoever made a GPU resource frees it, an asset load owns what it loaded,
+// Resource lifetime (design.md 6.2, docs/plans/done/2026-11-09-resource-lifetime.md): whoever made a GPU resource frees it, an asset load owns what it loaded,
 // scene teardown and engine.dispose give back references and leases and free only what the engine made. Model prototypes are engine.assets', held by
 // consumers and given back when the last one lets go, on a palette write and on a hot swap. Headless engines on the loading test page.
 import { readFileSync, readdirSync, statSync } from 'node:fs';

@@ -1,16 +1,15 @@
-// Group Q (docs/plans/2026-11-10-group-q.md): cross-group fixes the post-fix review found, one test item each so one throw stops no other.
+// Group Q (docs/plans/done/2026-11-10-group-q.md): cross-group fixes the post-fix review found, one test item each so one throw stops no other.
 // (Batching's hide / show check is in batching.mjs.) Page: the small town (engine.triggers, a calendar and a sky).
 const url = '/tests/city/index.html';
 
 export const specs = [
   {
-    name: '[guard] group Q 2: engine.tier = tells every onTierChange follower once per real change, and a held post effect follows (small town)',
+    name: '[guard] group Q 2: engine.tier = tells every tier follower once per real change, and a held post effect follows (small town)',
     url,
     async run({ check, ev }) {
       const r = await ev(() => {
         engine.haltLoop();
-        const { onTierChange } = window.internals;
-        let n = 0; const sub = onTierChange(engine, () => n++);
+        let n = 0; const sub = engine.stacks.get('tier').watch(() => n++);
         const fx = engine.post.add({ name: 'fxQ', slot: 'ldr', order: 1, params: { q: 1 }, skipOnLowTier: true,
           fuse: { uniforms: { u_fxQ: 'float' }, values: p => ({ u_fxQ: p.q }), glsl: 'color.rgb *= u_fxQ;', tsl: (color, uv, { tsl: T, p }) => T.vec4(color.rgb.mul(p.q), color.a) } });
         const tier0 = engine._deviceTier;

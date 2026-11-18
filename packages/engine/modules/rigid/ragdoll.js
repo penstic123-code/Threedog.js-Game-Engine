@@ -264,7 +264,7 @@ export class Ragdolls {
     if (rd.anchor) this._anchor(rd);
   }
 
-  /** End: tear down the physics and give every slot back to its owner. gone: the character no longer exists, nothing to give back; place: put the character where the body lies */
+  /** End: tear down the physics and give every slot back to its owner. gone: the character was already removed, nothing to give back; place: put the character where the body lies */
   _end(rd, gone = false, place = true) {
     if (!this.live.delete(rd)) return;
     const { ch, list, anim, anchor, hold } = rd;

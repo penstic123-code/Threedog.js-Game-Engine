@@ -1,4 +1,4 @@
-// Group A (docs/plans/2026-11-09-group-a.md): copies of an asset are torn down by one path, a copy's lease follows a hot swap, a rolled-back LOD or a failed
+// Group A (docs/plans/done/2026-11-09-group-a.md): copies of an asset are torn down by one path, a copy's lease follows a hot swap, a rolled-back LOD or a failed
 // stream preprocess leaves nothing counted. One check per root cause; each fails when its fix is reverted. Headless engines on the loading test page.
 const page = '/tests/loading/index.html';
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';

@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import * as TG from 'three/webgpu';
 import 'threedog/tsl';   // the WebGPU route needs it loaded (webgpu-needs-tsl)
 import { createEngine } from '../../index.js';
-import { litTwice } from '../../core/inspect/pictureChecks.js';
+import { litTwice } from '../../render/probes.js';
 
 const S = 64;   // square view: the sphere's disc is a circle in pixels
 const L = 0.5;  // the environment's radiance: below 1 so a gain is not hidden by anything that clamps

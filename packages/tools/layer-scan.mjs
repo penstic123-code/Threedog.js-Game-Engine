@@ -1,14 +1,14 @@
 // Layer scan: measures which layer depends on which, from the syntax tree, and fills the generated block of the audit's layer-inventory.md.
 //   node packages/tools/layer-scan.mjs           rewrite the block
 //   node packages/tools/layer-scan.mjs --dry     print it, write nothing
-//   node packages/tools/layer-scan.mjs --check   write nothing, fail on a member read across folders that no page, contract or @internal states (tools test module boundaries)
+//   node packages/tools/layer-scan.mjs --check   write nothing, fail on a member read across folders that no page, contract or @internal states, and on a private read across layers that KNOWN_PRIVATE does not list (tools test module boundaries)
 // Why not R25 / R27 / R46: those are gates with allowlists, each matching a few receiver spellings (`e.x._y`, one alias hop), so a green check says nothing about
-// what sits outside the pattern. This counts everything, allowlisted or not, and a person decides what is a violation. Report only: it never fails a build.
+// what sits outside the pattern. This counts everything, allowlisted or not, and a person decides what is a violation. The report itself fails nothing; only --check does, and only on what is new.
 // A private member is `x._name` with `x` not `this`. Its owner is the folder that assigns or declares `_name`; a name declared in several folders counts as
 // "own" when the reader is one of them, so a reach between two same-named privates is missed. Written limit, not a proof of absence.
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { ts, parse, visit, lineOf, walk, abs, resolveImport, P } from './rules/_lib.mjs';
+import { ts, parse, visit, lineOf, walk, abs, resolveImport, isGeneratedFile, P } from './rules/_lib.mjs';
 import { cli } from './paths.mjs';
 
 const { opt } = cli(process.argv.slice(2), { workspace: false, flags: ['dry', 'check'] });
@@ -37,7 +37,7 @@ const band = l => l.startsWith('modules/') ? 'modules' : l.startsWith('core/') ?
 const engineCode = [`${E}/index.js`, `${E}/presets.js`, ...P.ENGINE_CODE_DIRS_REL.flatMap(d => walk(d))];
 const outside = [...walk(`${E}/examples`, ['.js', '.mjs']), ...walk(P.TOOLS_REL, ['.js', '.mjs']).filter(f => !f.includes('/tests/') && !f.includes('/node_modules/')),
   ...['post-effects', 'starter-pictures', 'terrain-noise'].flatMap(p => walk(`packages/${p}`, ['.js', '.mjs']).filter(f => !f.includes('/node_modules/')))];
-const files = [...new Set([...engineCode, ...outside])].filter(f => !/\.generated\.js$/.test(f));
+const files = [...new Set([...engineCode, ...outside])].filter(f => !isGeneratedFile(f));
 const trees = new Map(files.map(f => [f, parse(f)]));
 
 // 1. Imports. One edge per import statement; `import type` and JSDoc imports are not dependencies at run time and are not counted
@@ -182,7 +182,20 @@ function stated(mod, member) {
 }
 const hidden = [...cross].filter(([, v]) => !v.pub).map(([k, v]) => [k, { ...v, stated: stated(...k.split('.')) }]);
 const unstated = hidden.filter(([, v]) => !v.stated).map(([k, v]) => `${k} (${v.site})`);
-if (opt.check) { console.log(unstated.length ? `stated nowhere: ${unstated.join(', ')}` : 'every member read across folders is stated'); process.exit(unstated.length ? 1 : 0); }
+// Private reads across layers that are left on purpose (from|member -> why). The list only shrinks: a new one means reaching into another layer, give it a public member instead
+const KNOWN_PRIVATE = {
+  'tools|_tools': 'the official door of the tools (engine._tools)',
+  'modules/*|_poses': 'R25 allowlist: the pose store is shared state of every module that records poses',
+  'modules/debug|_frameMs': 'R25 allowlist: the panel reads the frame timer it draws',
+  'modules/ambience|_fade': 'skips the per-frame option parse',
+  'modules/ambience|_stop': 'skips the per-frame option parse',
+  'modules/characters|_hook': 'the hook slot a character installs on its own model',
+  'render|_animation': 'the renderer steps the animation a character owns',
+  'tools|_relight': 'decided in commit 2d3adaa2b: the picture tools relight the probes directly',
+};
+const newPrivate = [...new Set(reaches.map(r => `${r.from}|${r.name}`))].filter(k => !(k in KNOWN_PRIVATE) && !(k.replace(/^modules\/[^|]+/, 'modules/*') in KNOWN_PRIVATE));
+const newSites = newPrivate.map(k => `${k} (${reaches.filter(r => `${r.from}|${r.name}` === k).map(r => `${r.file}:${r.line}`).join(', ')})`);
+if (opt.check) { const bad = unstated.length || newPrivate.length; console.log(bad ? [unstated.length && `stated nowhere: ${unstated.join(', ')}`, newPrivate.length && `private read across layers, not in KNOWN_PRIVATE: ${newSites.join('; ')}`].filter(Boolean).join('\n') : 'every member read across folders is stated, no new private read across layers'); process.exit(bad ? 1 : 0); }
 out.push('', '### L9. One module reading another', '', `${cross.size} distinct \`e.<module>.<member>\` reads between folders. ${hidden.length} members appear nowhere in \`docs/api-surface.txt\`: each is stated in a contract or by @internal on its definition, and \`--check\` fails one that is not (${unstated.length} now).`, '', '| Member | Read by | First site | Stated |', '|---|---|---|---|');
 for (const [k, v] of hidden.sort()) out.push(`| \`${k}\` | ${[...v.readers].join(', ')} | ${v.site} | ${v.stated ?? 'NOWHERE'} |`);
 out.push('', `Modules read but not listed in the reader's requires, optional or provides (${undeclared.size}): ${[...undeclared].map(([k, s]) => `${k} (${s})`).join(', ') || 'none'}.`);

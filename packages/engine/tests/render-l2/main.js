@@ -1,4 +1,4 @@
-// Render layer 2 page (tests/specs/render-l2.mjs, docs/plans/2026-11-09-render-l2.md). One WebGPU engine: a ground, a metal ball with no environment
+// Render layer 2 page (tests/specs/render-l2.mjs, docs/plans/done/2026-11-09-render-l2.md). One WebGPU engine: a ground, a metal ball with no environment
 // (so the picture check 'metal-no-env' has something to say), the game's own shadow-casting sun. Each window function answers one finding.
 import * as THREE from 'three';
 import 'threedog/tsl';   // what a WebGPU game imports first (post chain, cascades)

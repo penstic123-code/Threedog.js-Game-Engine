@@ -34,6 +34,7 @@ function postOn(renderer, effects, sc = scene) {
   const e = Object.create(engine, { renderer: { value: renderer }, scene: { value: sc, writable: true }, camera: { value: camera }, tier: { value: 'high' },
     _owned: { value: new Map(), writable: true }, look: { value: undefined, writable: true }, stacks: { value: null, writable: true } });
   e.stacks = new engine.stacks.constructor(e);
+  e.stacks.define('tier', { kind: 'value', base: 'high', save: false });   // the stand-in has no Engine constructor: PostFX follows the tier point
   const post = new PostFX(e, { antialias: false });
   for (const fx of effects) post.add(fx);
   return post;

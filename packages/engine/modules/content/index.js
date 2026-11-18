@@ -100,7 +100,7 @@ function contentApi(st) {
       return done;
     },
     /**
-     * @internal modules a replaces installed fresh, or a failed one put back ('module:restored'): their sections get every pack again, one load each as they came. A fresh install has
+     * @internal modules a replaces installed fresh, or a failed one put back ('module:fresh'): their sections get every pack again, one load each as they came. A fresh install has
      * none of it. A section's format is its holder's, so a newcomer may refuse what was written for the old one: no line of the game asked for this load, so it is told, not thrown
      */
     _replay(mods) {
@@ -227,7 +227,7 @@ export function content() {
       ctx.saves.define('content', { ...marksPart(api, st), atomic: true });
       for (const holder of ['collision', 'collider3d']) ctx.feeds(holder, () => refit(e));
       ctx.track(e.events.on('engine:ready', () => { checkOps(e, st); checkRefs(st); }));
-      ctx.track(e.events.on('module:restored', ({ modules }) => api._replay(modules)));
+      ctx.track(e.events.on('module:fresh', ({ modules }) => api._replay(modules)));
       ctx.track({ remove: () => { for (const m of api.markers.values()) m.remove(); api.markers.clear(); } });   // the marks stay in st.marks and the save part; only what is on screen goes
       st.checkOps = () => { if (e.ready) checkOps(e, st); };
       return api;

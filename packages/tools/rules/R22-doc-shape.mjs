@@ -6,7 +6,7 @@
 //      The game template's "Already here" table is generated from AI.md rows (lib/default-layer.mjs); a key without a row is an error, and so is a row that names
 //      another API than the `check` hint for the same system (handRolled), or a hint kind placed neither in the table nor in OFF_TABLE.
 //   2. Sizes: AI.md over 11.5 KB is an error (an index opened on demand). A new game's first read, its CLAUDE.md plus main.js as new-game writes them (every
-//      placeholder filled, every starting point and renderer), over 12 KB (about 3,000 tokens, docs/plans/2026-11-09-agent-entry.md) is an error: the loop, the table,
+//      placeholder filled, every starting point and renderer), over 12 KB (about 3,000 tokens, docs/plans/done/2026-11-09-agent-entry.md) is an error: the loop, the table,
 //      the three rules and pointers stay; steps and ready lines live in the recipe that owns them, reached with threedog how. A game's DESIGN.md over 12 KB and STATUS.md over 4 KB are warnings.
 //      Plus a size budget for all shipped AI docs: hand-written (recipes and the rest) and generated (API.md, api/, CODEMAP.md).
 //   3. Duplicates (warn): one sentence of 12 or more words in two hand-written docs (AI.md, recipes, READMEs, CLAUDE.md files, .claude/rules,
@@ -32,7 +32,7 @@ import { parseDocRef } from 'threedog/error-hints';
 const AI_REL = `${P.DOCS_REL}/AI.md`, AI_MAX = 11.6 * 1024 /* +0.1 KB on 2026-11-15: the hub's shots.json point in the Picture row */, FIRST_READ_MAX = 12.2 * 1024 /* +0.2 KB on 2026-11-15: the template's shots.json line */, DESIGN_MAX = 12 * 1024,   /* 8 -> 12 KB, owner decision 2026-11-08: a real game's DESIGN.md (Pigforest) needed it */ STATUS_MAX = 4 * 1024, MIN_WORDS = 12;
 // Size budget of what ships to an AI (set a little above the size after the 2026-11-05 cuts; growing past it is a decision, so raise it in the same change as the reason):
 // hand-written = recipes + the docs/*.md that people write (not API.md or CODEMAP.md); generated = API.md + api/ + CODEMAP.md
-const HAND_MAX = 880 * 1024,   /* +1 KB on 2026-11-15: the hub's COMMANDS row and the AI.md Picture row */    /* back to 879 KB on 2026-11-09 (batch 5 docs trim): repeats cut to one line and a pointer, COMMANDS detail left to each command's --help, which paid for a card on every recipe; the 880-884 KB raises of that day are undone. Before: +4 KB on 2026-11-09 (batch 3 step 3): the look-dev section (recipe 05) and the textures-from-nodes section (recipe 56) replace two tools the roadmap chose not to build; +1 KB on 2026-11-09 (batch 3 picture): +1 KB on 2026-11-09 (batch 3 picture): reflections, auto exposure, PCSS, area lights and path-traced photos each need their recipe section, and batch 5 slims the docs; +1 KB on 2026-11-09: the model contract (manifest needs) recipe section; +2 KB on 2026-11-08: five public features (collider layers, hud.button, assets.onModel, { url, node } parts, describe().warnings) each need their recipe section after today's text was trimmed; 66-common-tasks.md: whole examples and existing-game sections that threedog how prints and a test runs; CONVENTIONS.md: the entry rows that let how find every capability (R64) */ GENERATED_MAX = 361 * 1024 /* +1 KB on 2026-11-12: the code map lists one more engine file (render/bindingLimits.js, the texture-bindings check) */, GENERATED_FILES = new Set(['API.md', 'CODEMAP.md']);
+const HAND_MAX = 882 * 1024,   /* +2 KB on 2026-11-18: merging the public 2.0.0 docs (tier:change, session hooks, start sequence) with the entry rows that let how find every capability (R64). +1 KB on 2026-11-15: the hub's COMMANDS row and the AI.md Picture row */    /* back to 879 KB on 2026-11-09 (batch 5 docs trim): repeats cut to one line and a pointer, COMMANDS detail left to each command's --help, which paid for a card on every recipe; the 880-884 KB raises of that day are undone. Before: +4 KB on 2026-11-09 (batch 3 step 3): the look-dev section (recipe 05) and the textures-from-nodes section (recipe 56) replace two tools the roadmap chose not to build; +1 KB on 2026-11-09 (batch 3 picture): +1 KB on 2026-11-09 (batch 3 picture): reflections, auto exposure, PCSS, area lights and path-traced photos each need their recipe section, and batch 5 slims the docs; +1 KB on 2026-11-09: the model contract (manifest needs) recipe section; +2 KB on 2026-11-08: five public features (collider layers, hud.button, assets.onModel, { url, node } parts, describe().warnings) each need their recipe section after today's text was trimmed; 66-common-tasks.md: whole examples and existing-game sections that threedog how prints and a test runs; CONVENTIONS.md: the entry rows that let how find every capability (R64) */ GENERATED_MAX = 368 * 1024 /* 368 KB: api pages list inherited option keys with their sentences (about 6.5 KB for terrain, photo, sky, cameraRig); +1 KB on 2026-11-12: the code map lists render/bindingLimits.js */, GENERATED_FILES = new Set(['API.md', 'CODEMAP.md']);
 const PASSAGE = 30, CARD_MAX = 6, CARD_KEYS = ['Covers', 'Use when', 'Shortest'];
 
 /** What is wrong with a recipe's card, [] when it is fine (exported for the rule tests) @param {string} text */
@@ -112,6 +112,7 @@ export function entryTable(text, namespaces, recipeExists, { routes = ROUTES, re
 }
 
 /** Normalised sentences of 12+ words in a markdown text: [{ key, line }] (code blocks skipped) */
+const isTranslation = (a, b) => a.replace(/[.]zh-CN[.]md$/, '.md') === b.replace(/[.]zh-CN[.]md$/, '.md');   // X.md and X.zh-CN.md say the same thing on purpose
 export function sentences(text) {
   const out = []; let fence = false;
   text.split('\n').forEach((raw, i) => {
@@ -150,7 +151,7 @@ export default {
       const docs = walk(P.DOCS_REL, ['.md']), isGen = f => GENERATED_FILES.has(f.split('/').pop()) || f.startsWith(`${P.API_DIR_REL}/`);
       const isUpgradeNote = f => f.split('/').pop().startsWith('MIGRATING-');   // read once when upgrading, never part of daily reading
       const hand = sizeOf(docs.filter(f => !isGen(f) && !isUpgradeNote(f))), gen = sizeOf(docs.filter(isGen));
-      if (hand > HAND_MAX) out.push({ level: 'error', file: AI_REL, line: 0, msg: `hand-written AI docs (recipes, AI.md, CONVENTIONS, COMMANDS, THREE) are ${kb(hand)} > ${kb(HAND_MAX)}`, fix: 'merge or cut before adding: a fact lives in one place; raise HAND_MAX in R22-doc-shape.mjs only with the reason in the same change' });
+      if (hand > HAND_MAX) out.push({ level: 'error', file: AI_REL, line: 0, msg: `hand-written AI docs (recipes, AI.md, CONVENTIONS, COMMANDS, THREE) are ${kb(hand)} > ${kb(HAND_MAX)}`, fix: 'merge or cut before adding: a fact lives in one place; a raise is recorded in docs/testing/runs.md' });
       if (gen > GENERATED_MAX) out.push({ level: 'error', file: AI_REL, line: 0, msg: `generated docs (API.md, api/, CODEMAP.md) are ${kb(gen)} > ${kb(GENERATED_MAX)}`, fix: 'the public surface grew: see docs/testing/api-count.md; raise GENERATED_MAX in R22-doc-shape.mjs only with the reason' });
       const ns = engineApi().namespaces.map(n => n.name);
       for (const r of entryTable(text, ns, rec => existsSync(join(abs(P.DOCS_REL), rec)))) out.push({ ...r, file: AI_REL });
@@ -172,7 +173,7 @@ export default {
     for (const f of docs) for (const s of sentences(read(f))) {
       const first = seen.get(s.key);
       if (!first) seen.set(s.key, { f, line: s.line });
-      else if (first.f !== f && gameOf(f) === gameOf(first.f)) out.push({ level: 'warn', file: f, line: s.line, msg: `same sentence as ${first.f}:${first.line} ("${s.key.split(' ').slice(0, 8).join(' ')} …")`, fix: 'keep it in the doc that owns the topic and link to it from the other' });
+      else if (first.f !== f && gameOf(f) === gameOf(first.f) && !isTranslation(f, first.f)) out.push({ level: 'warn', file: f, line: s.line, msg: `same sentence as ${first.f}:${first.line} ("${s.key.split(' ').slice(0, 8).join(' ')} …")`, fix: 'keep it in the doc that owns the topic and link to it from the other' });
     }
     // 4. copied passages (the same game scoping as 3: a game's files are compared only with files of the same game)
     const all = [...docs, ...[`${P.DOCS_REL}/COMMANDS.md`, `${P.DOCS_REL}/THREE.md`].filter(f => existsSync(abs(f)))];

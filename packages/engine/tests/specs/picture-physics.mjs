@@ -1,4 +1,4 @@
-// Picture physics: pixels held against answers known without a picture (docs/plans/2026-11-09-picture-physics.md). Both renderers, linear float reads.
+// Picture physics: pixels held against answers known without a picture (docs/plans/done/2026-11-09-picture-physics.md). Both renderers, linear float reads.
 // 不许绕开: every other picture test compares the engine with itself, so light it adds or loses everywhere passes them; these numbers come from
 // physics (a white furnace, twice the light, the BRDF by hand), so the same fault fails here. A miss is reported, never met by a wider tolerance.
 const FURNACE = 0.01;   // relative: PMREM filtering and half floats on a constant world, nothing else; min / max of every channel, not the mean only

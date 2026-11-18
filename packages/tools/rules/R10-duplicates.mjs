@@ -2,9 +2,10 @@
 // Criteria: TypeScript's scanner splits each file into tokens (ignoring whitespace and comments) and hashes every WINDOW consecutive tokens;
 //   equal hashes at two places are extended forward until they differ, giving a "longest identical run". A run spanning ≥ MIN_LINES lines (at either place) or ≥ MIN_TOKENS tokens → warning, listing both places.
 //   Why count tokens too: this project likes many tokens per line (15–25), so "over 6 lines" alone would catch nothing; 50 tokens is about 6–7 lines of ordinary style.
+//   Generated files (`*.generated.js`) are left out, the same test layer-scan uses.
 // Option: ANON = true treats all identifiers as the same (catches copy-paste with renamed variables) at the cost of more false positives; off by default, --r10-anon turns it on temporarily.
 // Limitation: only consecutive verbatim repeats; same structure written differently (argument order, other expression) is missed. Very short repeats (such as a one-line fmt in 4 places) are not reported.
-import { ts, engineFiles, read, reE } from './_lib.mjs';
+import { ts, engineFiles, read, reE, isGeneratedFile } from './_lib.mjs';
 
 const WINDOW = 25, MIN_LINES = 7, MIN_TOKENS = 50;
 const ANON = process.argv.includes('--r10-anon');
@@ -31,7 +32,7 @@ function tokenize(file) {
 export default {
   id: 'R10', title: 'Duplicated code',
   run() {
-    const files = engineFiles().filter(f => !ALLOW.some(([r]) => r.test(f)));
+    const files = engineFiles().filter(f => !ALLOW.some(([r]) => r.test(f)) && !isGeneratedFile(f));
     const T = files.map(tokenize);
     // window hash → list of positions
     const buckets = new Map();

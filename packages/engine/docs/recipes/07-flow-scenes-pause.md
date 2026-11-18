@@ -90,7 +90,7 @@ page's saves, so the title offers no Continue; on a running page it also ends th
 advances only on `engine.step`, so a `weather.set(name, { seconds: 0.1 })` made after `start()` is still changing (use `seconds: 0`), and an `onFrame` copy of a sky
 color is one frame old (share `engine.uniforms.uSkyHorizon` instead, recipe 08).
 
-## 2. Changing scene / teleporting
+## 2. Changing scene / teleporting / spawning at a chosen spot (testing)
 ```js fragment
 // A level-based game: switch to another map
 await engine.flow.transition(async () => {
@@ -113,8 +113,8 @@ is a builder in the assets manifest (recipe 66, "Two areas built in code"); a `l
 
 Saves live in the browser's IndexedDB (falling back to localStorage, with one notice). `save()` / `remove()` / `load()` return a Promise (a failed write shows a notice), while
 `list()` / `export()` are synchronous (saves are read into memory at startup). Attachments, file backup and `storageKey`: `../api/saves.md`.
-For just a fade-to-black, without locking input or saving: `await fadeScreen(engine, 1, { seconds: 0.5 }); ...; await fadeScreen(engine, 0, { seconds: 0.5 });` (import from `threedog`).
-Fades inside a cutscene use the timeline steps `{ fade: 0.5 }`, `{ fade: 0.5, to: 0 }`.
+For just a fade-to-black, without locking input or saving: `await fadeScreen(engine, 1, { seconds: 0.5 }); ...; await fadeScreen(engine, 0, { seconds: 0.5 });` (import from `threedog`). `{ owner }` names who holds the cover (default 'game'); a transition or a cutscene does not clear a cover the game holds.
+Fades inside a cutscene use the timeline steps `{ fade: 0.5 }`, `{ fade: 0.5, to: 0 }`. A cutscene that ends dark hands its cover to the scene change: the next `flow.transition` lifts it (to lift it yourself, `fadeScreen(engine, 0, { owner: 'flow' })`).
 
 ## 2b. Input contexts (menus, vehicles, build mode)
 Who declares an action and who binds its keys: recipe 58.

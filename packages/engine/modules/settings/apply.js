@@ -1,5 +1,6 @@
 import { reportError } from '../../core/base/errors.js';
 import { codedError } from '../../core/base/errorHints.js';
+import { chooseRatio, topRatio } from '../../core/scene/pixelRatio.js';
 // Apply one setting to the engine (helper of Settings.js): the built-in keys (pixel ratio, shadows, post effects, quality tier, audio buses) and the rows of modules and of
 // the game (define). `s` is the Settings instance.
 
@@ -40,7 +41,7 @@ function limitRow(s, key, names, val) {
 /** @internal a row leaves: no control is left to lift its limits, so it gives back every shared value it holds @param {any} s @param {string} key */
 export function releaseRow(s, key) { for (const n of s._held.get(key) ?? []) lift(s.engine, n); s._held.delete(key); }
 /** @internal the module leaves: so does every row, and the tier it chose */
-export function releaseLimits(s) { for (const key of [...s._held.keys()]) releaseRow(s, key); lift(s.engine, 'tier'); }
+export function releaseLimits(s) { for (const key of [...s._held.keys()]) releaseRow(s, key); lift(s.engine, 'tier'); chooseRatio(s.engine, null); }
 /** @internal the row's value fits the points it limits: a switch row (boolean) limits switches or numbers, a number row (a factor) only numbers */
 export function checkLimits(s, key, def, names) {
   const e = s.engine;
@@ -64,10 +65,10 @@ export function applySetting(s, key, val) {
     const limits = builtinLimits(e)[key] ?? s.custom.get(key)?.limits;
     if (limits) limitRow(s, key, limits, typeof val === 'number' ? val : !!val);
     switch (key) {
-      case 'pixelRatio': e.setPixelRatio(val); break;
+      case 'pixelRatio': chooseRatio(e, val); break;   // settings.reset hands the ratio back to the game (chooseRatio(e, null))
       case 'antialias': e.post.nextAntialias(val); break;
       case 'tier': if (val) e.mod('tier', { owner: 'settings', layer: 'settings', set: val }); else e.stacks.get('tier').release('settings'); break;
-      case 'adaptive': if (e.adaptive) { e.adaptive.on = val; if (!val && e.adaptive.max) e.setPixelRatio(e.adaptive.max); } break;
+      case 'adaptive': if (e.adaptive) { e.adaptive.on = val; if (!val) topRatio(e); } break;
       default:
         // a saved slider for a bus this build no longer has is skipped, not an error
         if (key.startsWith('vol.')) { if (key.slice(4) in e.audio.levels) e.audio.setVolume(key.slice(4), val); }

@@ -144,6 +144,31 @@ export const specs = [
     },
   },
   {
+    // 为什么：tiles 只听 level:loaded / level:unloaded / ground:change 三个事件，而 engine.setGround(g) 不发事件，游戏换地面后贴图还画在旧高度上。
+    name: 'grid: tiles follow a ground the game swaps in',
+    url: URL,
+    async run({ check, ev }) {
+      const r = await ev(async (src) => {
+        const G = await (0, eval)(src)();
+        engine.haltLoop();
+        const g = G.add('swap', { cell: 1, origin: [20, 20], size: [3, 3] });
+        const soil = g.layer('soil', { tiles: { color: () => 0x886644 } });
+        soil.set([1, 1], { tilled: true });
+        const mesh = () => engine.scene.getObjectByName('grid:swap.soil');
+        engine.step(1 / 30, { render: false });
+        const before = mesh().geometry.attributes.position.getY(0);
+        const was = engine.ground;
+        engine.setGround({ height: () => 5 });
+        engine.step(1 / 30, { render: false }); engine.step(1 / 30, { render: false });
+        const after = mesh().geometry.attributes.position.getY(0);
+        engine.setGround(was);
+        engine._unhalt();
+        return { before, after };
+      }, setup.toString());
+      check('tiles redraw on the ground the game swapped in (setGround raises it to 5)', Math.abs(r.after - 5.03) < 1e-3 && Math.abs(r.before - 5.03) > 1e-3, JSON.stringify(r));
+    },
+  },
+  {
     name: 'grid: a layer cell and a placed item from play are gone after session.newGame() (grids installed after start)',
     url: URL,
     async run({ check, ev }) {

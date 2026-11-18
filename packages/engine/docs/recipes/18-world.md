@@ -152,7 +152,7 @@ function wander(rec, dt) {
 }
 ```
 
-## 6. Near, far, camera, player
+## 6. Near, far, camera, player: a huge map that loads as you walk
 - **Near / far is decided by the gameplay anchor `world.anchor`**: by default the position of the player record (`engine.focus` when there is no
   player). A cutscene or photo mode moves the camera away, but the player's surroundings are still simulated as near: gameplay results do not depend
   on the camera. For a top-down strategy game centered on a base, set `W.anchor = baseObject`; set it back to `null` to restore the default.

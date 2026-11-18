@@ -22,7 +22,6 @@
 - `save:loaded` [slot: string] A save was loaded onto the running playthrough (saves.load / session.load); the argument is the slot name
 - `ui:open` [id: string] A window was opened (the argument is the window id, e.g. 'inventory')
 - `ui:close` [id: string] A window was closed
-- `settings:shadows` [on: boolean] Shadows were toggled
 - `settings:change` [values: Record<string, any>] A value in the settings menu changed (the argument is all setting values)
 - `tier:change` [{ tier: 'low' | 'high' }] engine.tier changed (device found at start, a preset, a write): resize what was sized from it
 - `post:add` [name: string] A post effect was added (its name)
@@ -97,7 +96,7 @@
 - `net:result` [{ seq: number; name: string; ok: boolean; code: string | null; value… Client (net): the host's answer to an op request (seq from ops.run's return value; tick is the host's), sent after the state it caused
 - `engine:error` [EngineError] A gameplay error: in development / testing gameplay is frozen; a release build keeps running and sends it once per site (engine.error holds the first; error severity levels, see engine.error)
 - `module:disabled` [{ name: string; message: string }] A picture or ui module errored and was disabled (the game continues)
-- `module:restored` [{ modules: any[] }] 
+- `module:fresh` [{ modules: any[] }] 
 - `op:rolledBack` [{ op: string; parts: number }] An atomic op failed and its parts were put back (its own events already went out and stay): read derived state again. Not sent for a load's rollback (that ends in state:replaced)
 - `vehicle:enter` [{ character: Character; vehicle: Rideable }] A character boarded a vehicle
 - `vehicle:exit` [{ character: Character; vehicle: Rideable }] A character exited a vehicle

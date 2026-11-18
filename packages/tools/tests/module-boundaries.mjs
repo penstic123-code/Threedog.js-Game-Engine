@@ -43,8 +43,13 @@ export async function run({ check }) {
   // [guard] R68: the private names the tools used to call are still caught, and the door is not
   const { reaches } = await import(pathToFileURL(join(TOOLS, 'rules', 'R68-tool-door.mjs')).href);
   check('[guard] R67: a tool cannot reach past engine._tools', reaches('e._render(0); engine?._cpuMs; m.userData?._dbgOf').length === 3 && !reaches('e._tools.render(0)').length);
+  // [guard] the inspect layer only reads: render/ never imports core/inspect/, and core/inspect/ defines no owned value (those live with their owner: scene/view.js, render/)
+  const intoInspect = walk(`${P.ENGINE_REL}/render`).filter(f => /from\s+['"][^'"]*core\/inspect\//.test(read(f)));
+  check('[guard] no file in render/ imports core/inspect/', !intoInspect.length, intoInspect.join(' '));
+  const ownsInInspect = walk(`${P.ENGINE_REL}/core/inspect`).filter(f => read(f).split('\n').some(l => /\bdefineOwned\(/.test(l) && !/^\s*(\/\/|\*|\/\*)/.test(l)));
+  check('[guard] core/inspect/ defines no owned value (defineOwned lives with its owner)', !ownsInInspect.length, ownsInInspect.join(' '));
   // [guard] L9: a member one folder reads on another is on a public page, in a contract, or @internal: never a contract by habit
   const scan = spawnSync(process.execPath, [join(TOOLS, 'layer-scan.mjs'), '--check'], { encoding: 'utf8' });
-  check('[guard] layer scan: every member read across folders is stated', scan.status === 0, (scan.stdout + scan.stderr).slice(0, 400));
+  check('[guard] layer scan: every member read across folders is stated, and no private read across layers is new (KNOWN_PRIVATE only shrinks)', scan.status === 0, (scan.stdout + scan.stderr).slice(0, 400));
   check('R50 read the contracts (inventory, particles, camera ... at least 9)', /^(\d+) contracts/.exec(o50.note)?.[1] >= 9, o50.note);
 }

@@ -5,7 +5,7 @@ const J = JSON.stringify;
 
 export const specs = [
   {
-    name: '[guard] Provider caches: a newcomer that refuses a pack written for the old holder is told, the game runs on; a game listener that throws on module:restored is a named error',
+    name: '[guard] Provider caches: a newcomer that refuses a pack written for the old holder is told, the game runs on; a game listener that throws on module:fresh is a named error',
     url: PAGE,
     async run({ check, ev }) {
       const r = await ev(async () => {
@@ -26,7 +26,7 @@ export const specs = [
         const G = mk(createEngine, 'pc-throw');
         G.use(T.content(), mod('oldFormat', () => {}));
         await G.start();
-        G.events.on('module:restored', () => { throw new Error('game listener broke'); });
+        G.events.on('module:fresh', () => { throw new Error('game listener broke'); });
         G.use(mod('newFormat', () => {}), { replaces: 'pcFormat' });
         out.thrown = { where: G.error?.where ?? null, message: G.error?.message ?? null };
         G.dispose();
@@ -36,7 +36,7 @@ export const specs = [
       check('a pack the newcomer refuses stops nothing', r.refused.error === null && !r.refused.frozen, J(r));
       check('the refusal names the pack and the reason', r.refused.told === 1, J(r));
       check('the packs it can read reach it', r.refused.fed.join() === 'b', J(r));
-      check('a game listener that throws is a named error, in dev as on any event', /module:restored/.test(r.thrown.where ?? '') && /game listener broke/.test(r.thrown.message ?? ''), J(r));
+      check('a game listener that throws is a named error, in dev as on any event', /module:fresh/.test(r.thrown.where ?? '') && /game listener broke/.test(r.thrown.message ?? ''), J(r));
     },
   },
   {
@@ -279,7 +279,7 @@ export const specs = [
         const read = () => ({ wall: !E.collision.walkable({ x: 5, z: 0 }), prop: !E.collision.walkable({ x: -5, z: 0 }), boxes: E.modules.get('collision').describe(E).boxes, rigid: E.rigid.world.colliders.len() });
         out.before = read();
         const told = [];
-        E.events.on('module:restored', ({ modules }) => told.push(modules.map(m => m.name).join()));
+        E.events.on('module:fresh', ({ modules }) => told.push(modules.map(m => m.name).join()));
         const old = E.collision;
         E.use(collision(), { replaces: 'collision' });
         out.nextLine = read();
@@ -303,7 +303,7 @@ export const specs = [
       check('the line after the use reads both, frozen or not', r.nextLine.wall && r.nextLine.prop && r.nextLine.boxes === 2, J(r));
       check('... nothing doubled, and rigid mirrors the same colliders', same(r.swapped), J(r));
       check('after a failed replaces the module put back has them too', r.failed.wall && r.failed.prop && same(r.failed), J(r));
-      check('module:restored names who is fresh, once per change', r.told.join('|') === 'collision|collision', J(r));
+      check('module:fresh names who is fresh, once per change', r.told.join('|') === 'collision|collision', J(r));
       check('unloading the level takes the replayed wall away, the prop stays', !r.unloaded.wall && r.unloaded.prop, J(r));
     },
   },

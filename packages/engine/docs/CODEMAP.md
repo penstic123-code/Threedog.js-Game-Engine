@@ -179,7 +179,7 @@ Type = what the module may own (core/engine/moduleTypes.js): world, picture, act
 | engine:ready | core/engine/startup.js | content, flow, rigid |
 | flow:change | flow | — |
 | flow:transition | flow | — |
-| ground:change | terrain | characters, rigid |
+| ground:change | terrain | characters, grid, rigid |
 | i18n:change | core/base/I18n.js | core/input/inputTouch.js, gameplay, hud, settings, timeline, ui/UI.js |
 | input:context | core/input/inputContext.js | — |
 | input:rebind | core/input/Input.js | gameplay, timeline, ui/UI.js |
@@ -194,7 +194,7 @@ Type = what the module may own (core/engine/moduleTypes.js): world, picture, act
 | link:enter | characters | — |
 | link:exit | characters | — |
 | module:disabled | core/base/errors.js | — |
-| module:restored | core/engine/modules.js | content |
+| module:fresh | core/engine/modules.js | content |
 | music:change | music | — |
 | music:stinger | music | — |
 | net:close | net | — |
@@ -227,13 +227,13 @@ Type = what the module may own (core/engine/moduleTypes.js): world, picture, act
 | session:failed | core/saves/saveApply.js, core/saves/session.js | flow, rigid |
 | session:start | core/saves/session.js | — |
 | settings:change | settings | — |
-| settings:shadows | render/shadows.js | vegetation |
 | state:applied | core/inspect/UrlState.js | — |
 | state:placed | core/inspect/UrlState.js | camera |
 | state:replaced | core/engine/startup.js, core/saves/stateReplace.js | calendar |
 | template:stage | content | — |
 | terrain:chunkFailed | terrain | — |
 | terrain:void | rigid, terrain | — |
+| tier:change | core/engine/services.js | — |
 | time:skip | core/time/skip.js | — |
 | timeline:end | timeline | — |
 | timeline:start | timeline | — |

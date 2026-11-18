@@ -40,7 +40,7 @@
 // Exclusive slots: provides: ['inventory'] takes each named slot (a kind 'one' shared point, core/ops/sharedPoint.js) for the module before its install;
 //   a second provider is shared-taken. requires may name a slot instead of a module. engine.use(mine(), { replaces: 'inventory' }) unloads the
 //   holder first (its handles, slot, drawing parts, dispose), and puts it back if the new install fails, with its save data and content sections (_putBack). Either way the holder now is a fresh install that has none of what
-//   others put into the old one, so 'module:restored' tells whoever fed it, once its init is done: they feed it again. The word means "this module is back and holds nothing yet", not that its old state came back; its save data did, its definitions did not.
+//   others put into the old one, so 'module:fresh' tells whoever fed it, once its init is done: they feed it again. The word means "this module is back and holds nothing yet", not that its old state came back; its save data did, its definitions did not.
 // critical: true on a module makes a failed init() stop engine.start() with the reason; without it a failed init is reported (picture / ui: disabled;
 // other types: error tiers in errors.js) and start() goes on.
 // Dependencies: requires must be installed first (throws if missing). optional is a soft dependency: an array is only recorded (for GAMEMAP and rule R16);
@@ -198,19 +198,19 @@ export const moduleMethods = {
     if (removed.length && plan.length) this._tellRestored(plan);
   },
   /**
-   * @internal 'module:restored' for these fresh modules, after their init: what is fed then lands as it does on a running game, where content.load comes after init
+   * @internal 'module:fresh' for these fresh modules, after their init: what is fed then lands as it does on a running game, where content.load comes after init
    * (a level's own url would otherwise overtake the pack's level). Nothing in flight tells at once. One replaced again meanwhile is not told about
    */
   _tellRestored(modules) {
     const tell = () => {
       const live = modules.filter(m => this.modules.get(m.name) === m);
-      if (live.length && !this.disposed) this.events.emit('module:restored', { modules: live });
+      if (live.length && !this.disposed) this.events.emit('module:fresh', { modules: live });
     };
     if (this.loading._inits.size) this.loading.settled().then(tell); else tell();
   },
   /**
    * @internal a failed swap leaves the game as it was: the replaced modules install fresh (their old handles already went), their save parts take back their data as a part registered
-   * late does (Saves.define), and 'module:restored' tells whoever fed them, because a fresh install has no definitions, as after a swap that worked: content sections load again (modules/content).
+   * late does (Saves.define), and 'module:fresh' tells whoever fed them, because a fresh install has no definitions, as after a swap that worked: content sections load again (modules/content).
    * What game code defined by hand it defines again on that event. Colliders of the level and of props need no event: they check the holder themselves.
    * @param {any[]} removed  in install order @param {string[]} order  the module names to go back to @param {string | null} base  the new-game state to go back to
    */

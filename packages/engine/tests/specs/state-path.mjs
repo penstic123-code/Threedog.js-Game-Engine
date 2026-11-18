@@ -1,4 +1,4 @@
-// [guard] One state-application path (docs/plans/2026-11-09-state-path.md): every door that applies saved state goes through the one queue (core/saves/stateReplace.js)
+// [guard] One state-application path (docs/plans/done/2026-11-09-state-path.md): every door that applies saved state goes through the one queue (core/saves/stateReplace.js)
 // and the one part loop (runParts, core/saves/saveApply.js). One row per finding of the layer-2 review; each failed on the code before it.
 // Run: threedog test "state path"
 const PAGE = '/tests/threads/';

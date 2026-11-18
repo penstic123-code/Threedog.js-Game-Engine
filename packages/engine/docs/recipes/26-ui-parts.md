@@ -14,7 +14,7 @@ Each name takes one value: `false` off · `true` default · `{ ...options }` def
 An end screen is a flow state (`engine.flow.define('gameOver', { freeze: true, lockInput: true })`, recipe 07 §1) showing a window with `closable: false` ("A window: results, game over", below).
 Only want different colors / layout? Use "Reskin" below, not a new part.
 
-## Reskin: your picture on every default part, in one place
+## Reskin: change the look of every default part and menu, in one place
 The default parts are neutral gray on purpose. About ten lines give all of them the game's picture; do this before writing your own dialogue box or HUD:
 ```js
 const theme = {  // picture/ui.js
@@ -193,7 +193,7 @@ const still = await engine.photo.trace({ samples: 128 });  // still.pathTraced.u
 ```
 HUD text follows the engine locale (`createEngine({ locale })`, default `'auto'` = the browser language): a game written in English sets `locale: 'en'`, or distance labels read `50 米` on a Chinese browser.
 
-## 6. Settings menu: only the tabs the game needs
+## 6. Settings menu: only the tabs the game needs, quality options that turn off your pass
 ```js
 engine.use(settings({ sections: ['game', 'graphics', 'audio', 'controls', 'camera'] }));  // default: graphics, audio, controls, language, saves
 // optional built-ins by name: 'game' (resume / load / back to title), 'camera' (sensitivity, invert Y, field of view; re-applied on 'camera:change')

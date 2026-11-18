@@ -2,7 +2,21 @@
 
 What changed in each version and how a game upgrades.
 
-## Unreleased
+## 2.1.0 (2026-11-18)
+
+Upgrading from 2.0: nothing to change unless your game listens to `module:restored` (now `module:fresh`) or `settings:shadows` (follow the shared point `shadows.enabled`); the player's render-scale choice is now a ceiling for `engine.setPixelRatio` (see below). The pre-2.0 `Unreleased` notes follow.
+
+- Changed: a render scale the player picks in settings below the device default is now a ceiling: `engine.setPixelRatio` can only go under it, and the player's `settings.reset('pixelRatio')` hands the ratio back to the game (before, the last write won and the menu choice was overridden). Nothing to change in a game; to force a ratio regardless of the player, call three.js `renderer.setPixelRatio` (the engine yields)
+- Changed: event `module:restored` is now `module:fresh` (it fires for modules that are fresh after a `replaces` or a failed one put back; the old name is gone, listen to `module:fresh`)
+- Fixed: a cutscene that ends on a dark step hands its cover to the scene change, so the next `flow.transition` lifts it (a lift of your own: `fadeScreen(engine, 0, { owner: 'flow' })`)
+- Fixed: the api pages and `threedog catalog` now list option keys a module's options interface inherits (terrain, photo, sky, cameraRig showed them as missing)
+- Fixed: grid tiles now redraw on a ground the game swaps in with `engine.setGround` (they only followed level load and unload before)
+- Fixed: `fadeScreen` gains an `owner` option (default `'game'`). Each owner keeps its own cover and the screen shows the darkest, so a `flow.transition` or a cutscene no longer clears a cover the game holds
+- Removed: event `settings:shadows` (follow the shared point `shadows.enabled` instead)
+- Fixed: contract check: a module that registers a save part its contract does not list now fails
+- Fixed: a character with `mover: 'rapier'` but no rigid module now gets a dev warning (`module-requires`) and walks with the simple mover; the rapier mover no longer reads rigid's internals (rigid gains `layered`, `layerOf(collider)`, `fitPlayerCapsule(radius)`, all @internal)
+- Changed: shared points follow changes through one entry (`watch(fn)`, `setBase(v)`, both @internal); the tier follower list and `onTierChange` are gone
+- Fixed: check rules: R2 counts names read through `(await load(file)).name` in tools (no more false "unused" on `handRolled`), R10 skips `*.generated.js`, R22 no longer flags README and README.zh-CN sharing a sentence
 
 ## 2.0.0 (2026-11-16)
 

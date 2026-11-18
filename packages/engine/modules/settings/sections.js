@@ -51,7 +51,7 @@ export function settingsTools(engine, esc) {
 const labelOf = (e, text) => e.i18n.has(text) ? e.t(text) : text;
 /**
  * The rows settings.define() draws itself, in the tab its menu option names (default 'options'). Why the engine draws them: a row defined
- * and drawn by no tab was a setting the player could never reach, and nothing said so (old-mine's two quality rows). menu: false = the game draws it.
+ * and drawn by no tab was a setting the player could never reach, and nothing said so (e.g. a game's own quality rows). menu: false = the game draws it.
  * @param {any} tools @param {any} e @param {any} s @param {string | null} tab @returns {string}
  */
 export function definedRows(tools, e, s, tab) {

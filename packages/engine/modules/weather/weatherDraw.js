@@ -8,7 +8,6 @@ import { readParams, keysSchema } from '../../core/base/params.js';
 import { isOptions } from '../../core/base/util.js';
 import { codedError } from '../../core/base/errorHints.js';
 import { onRendererSwap } from '../../render/backend.js';
-import { onTierChange } from '../../core/scene/tier.js';
 import { makeSystem, updateSystem, dropSystem, RAIN, SNOW } from './particles.js';
 
 const DRAW_PARAMS = keysSchema(['particles', 'area', 'rain', 'snow']);   // the picture options of weather(): the rest are the state's
@@ -144,7 +143,7 @@ export function weatherDrawModule(opts) {
       L = new WeatherDraw(e, opts);
       L._ctx = ctx;   // the weather's entries on the shared points go with this module (ctx.mod)
       ctx.track(onRendererSwap(e, () => L._rebuild()));
-      ctx.track(onTierChange(e, () => L._tierChanged()));   // the default particle count follows the tier
+      ctx.track(e.stacks.get('tier').watch(() => L._tierChanged()));   // the default particle count follows the tier
       ctx.track(e.audio.condition('weather', v => [].concat(v).includes(e.weather.name)));   // audio rule condition { weather: 'rain' | ['rain', 'storm'] }
       for (const k of ['rain', 'snow', 'wind']) ctx.track(e.audio.measure(k, () => e.weather.current[k]));   // data rules: { rain: { lt: 0.2 } }, volume add: { rain: 0.22 }
       builtInSounds(e.assets, { thunder: (audio, p, out) => { const dur = p.duration ?? 3.5, delay = 0.4 + Math.random() * 1.5;   // presentation: thunder delay

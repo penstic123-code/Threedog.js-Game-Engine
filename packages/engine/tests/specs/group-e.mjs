@@ -1,4 +1,4 @@
-// Group E, environment modules (docs/plans/2026-11-09-group-e.md; GPT layer-2 review): a module takes back what it wrote, caches see every change,
+// Group E, environment modules (docs/plans/done/2026-11-09-group-e.md; GPT layer-2 review): a module takes back what it wrote, caches see every change,
 // lifetimes end with the module. The WebGPU/WebGL particle checks are in fx-particles.mjs. Each check fails with its fix reverted.
 const PAGE = '/tests/threads/';
 

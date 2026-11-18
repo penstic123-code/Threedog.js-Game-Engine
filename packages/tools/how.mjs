@@ -312,10 +312,10 @@ export function search(docsDir, q, max = 5, opts = {}) {
   const entry = e => e.task ? 2 : e.src === 'AI.md' || e.src === 'entry' ? 1 : e.src === 'api' ? -1 : e.src === 'line' ? -2 : 0, band = h => Math.round(h.cov * 20);
   hits.sort((a, b) => band(b) - band(a) || (b.e.task ? 1 : 0) - (a.e.task ? 1 : 0) || (b.e.plain ? 1 : 0) - (a.e.plain ? 1 : 0) || entry(b.e) - entry(a.e) || b.s - a.s || a.order - b.order);
   // at most 3 plain three.js hits, so the engine route for the same task (coordination: time, weather, saves...) stays in the list
-  const seen = new Set(), out = [], plainMax = Math.max(1, max - 2);
+  const aiRows = all.filter(e => e.src === 'AI.md'), seen = new Set(), out = [], plainMax = Math.max(1, max - 2);
   let plain = 0;
   for (const { s, e } of hits) {
-    const open = e.src === 'AI.md' ? openSection(sections, e.where, qt) : e.src === 'recipe' ? e : e.src === 'entry' ? entrySection(sections, e, qt) : null;
+    const open = e.src === 'AI.md' ? openSection(sections, e.where, qt) : e.src === 'recipe' ? e : e.src === 'entry' ? entrySection(sections, e, qt, aiRows) : null;
     if (e.src === 'line') { const lk = 'line' + e.title; if (seen.has(lk + 2)) continue; seen.add(seen.has(lk) ? lk + 2 : lk); }   // two text lines per file: five lines of one recipe are not five answers
     if (seen.has(e.where + e.title) || (e.plain && plain >= plainMax)) continue;
     seen.add(e.where + e.title); if (e.plain) plain++;
@@ -383,9 +383,11 @@ export function openSection(sections, where, qt) {
 }
 
 /** The recipe section an entry row points at ("(recipe 20)"): a heading there that answers the query, else the first short example that calls the row's entry. The row stays the answer, the section gives its example */
-function entrySection(sections, e, qt) {
+function entrySection(sections, e, qt, rows = []) {
   const n = /\brecipes? (\d+)/.exec(e.use)?.[1], file = n && sections.find(x => x.at.startsWith(`recipes/${n.padStart(2, '0')}-`))?.at.split('#')[0];
-  const s = file && openSection(sections, file, qt);
+  // AI.md already says which section of that recipe the task lives in (the row's pointer, "12-navmesh.md §2"): read that table first instead of keeping a second list here; a heading that matches the words only when no row names a section
+  const ptr = file && [...rows.filter(r => r.use.includes(/`([\w.]+)/.exec(e.use)?.[1] ?? ' ')), ...rows].flatMap(r => r.where.split(/, (?=(?:recipes\/)?[\w-]+\.md)/)).map(p => p.replace(/^(?:recipes\/)?/, 'recipes/')).find(p => p.startsWith(file + ' '));
+  const s = file && openSection(sections, ptr || file, qt);
   const name = /`([\w.]+)/.exec(e.use)?.[1];
   return s?.at.includes('#') ? s : name ? sections.find(x => x.at.startsWith(file + '#') && x.blocks[0]?.includes(name) && x.blocks[0].split('\n').length <= 12) ?? null : null;
 }

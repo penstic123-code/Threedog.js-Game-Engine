@@ -9,7 +9,7 @@
 that already exist: module definitions (`requires`, `optional`, `stage`, hooks), `engine.ops.define`, `engine.saves.define`,
 `engine.describe.add` and params schemas. There is no second list to keep in sync: a removed op is gone from the catalog at once.
 
-## 1. Ask
+## 1. Ask: which effects, modules and ops exist and can be turned on
 ```js
 engine.catalog();  // short list: [{ id: 'sky', kind: 'module', state: 'running', stage: 'environment', ops: [], saves: ['sky'], time: 'fixed+skip' }, ...]
 engine.catalog('shop');  // one module expanded (below)

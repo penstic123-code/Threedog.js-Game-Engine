@@ -6,7 +6,7 @@
 //   await runContract(contract, () => myInventory(contract.options), { check });       // check(label, ok, detail?) from your test runner
 //   await runContract(cameraContract, () => myCamera(), { check, prepare: e => { e.camera = ... } })   // prepare: add what your module needs to the small engine
 // An object contract (kind: 'object', e.g. characters/vehicle.contract.js) checks one object instead: runContract(contract, () => myBoat, { check }).
-// Order: install -> name -> api methods -> fields (properties other modules read) -> resolves (characters: control can find a character) -> ops defined and listed -> saves registered with their versions -> probe setup -> each probe event fires ->
+// Order: install -> name -> api methods -> fields (properties other modules read) -> resolves (characters: control can find a character) -> ops defined and listed -> saves registered with their versions and none besides -> probe setup -> each probe event fires ->
 //   describe answers -> engine.wrap goes around an api method -> a probed value survives save -> a fresh install -> load -> (probe.copy) and a read -> write into a fresh install
 // What it deliberately does not check: behaviour beyond the contract (stack sizes, UI colors): those are the module's own tests.
 // The engine core parts come from the installed threedog package (found like every other tool: paths.mjs ENGINE), not a copy.
@@ -43,7 +43,7 @@ export function contractEngine() {
   }, Object.getOwnPropertyDescriptors(holdMethods));
   e.saves = contractSaves(e);
   e.ops = new Ops(e);
-  e.stacks = new Stacks(e); e.mod = (n, o) => e.stacks.mod(n, o); defineHoldStacks(e);
+  e.stacks = new Stacks(e); e.mod = (n, o) => e.stacks.mod(n, o); defineHoldStacks(e); e.stacks.define('tier', { kind: 'value', base: 'high', save: false });   // the real engine defines it in its constructor; modules follow it with watch
   e._wraps = new Wraps(e); e.wrap = (t, m, fn, o) => e._wraps.wrap(t, m, fn, o);
   e.control = new Control(e);   // who drives each character (characters installs on it)
   return e;
@@ -82,16 +82,17 @@ export async function runContract(contract, makeModule, { check, label = contrac
   const install = () => {
     const e = contractEngine(); prepare?.(e);
     const mod = makeModule(), nobody = e.control.characterOf;
+    const hadSaves = new Set(e.saves.providers.keys());   // parts a prepare() put there: not the module's own
     const api = mod.install(e, contractCtx(e, mod.name));
     syncOnly(api, `install() of module ${mod.name}`, true);   // the engine's own check (core/engine/modules.js): engine.use() refuses an install that returns a Promise
     e[mod.name] = api; e.modules.set(mod.name, mod);
     for (const c of contract.probe?.setup ?? []) callOn(api, c);
-    return { e, mod, api, nobody };
+    return { e, mod, api, nobody, hadSaves };
   };
   const t = (what, ok, detail) => check(`${label}: ${what}`, !!ok, detail);
   let first;
   try { first = install(); } catch (err) { t('installs on the contract engine', false, err.message); return; }
-  const { e, mod, api, nobody } = first;
+  const { e, mod, api, nobody, hadSaves } = first;
   t(`module name is '${contract.name}'`, mod.name === contract.name, mod.name);
   const missing = contract.api.filter(m => typeof api?.[m] !== 'function');
   t(`api has ${contract.api.join(', ')}`, !missing.length, `missing: ${missing.join(', ')}`);
@@ -108,6 +109,8 @@ export async function runContract(contract, makeModule, { check, label = contrac
   t(`defines ops ${contract.ops.join(', ') || '(none)'}`, !noOp.length, `missing: ${noOp.join(', ')}`);
   const reg = e.saves.providers, badSave = Object.entries(contract.saves).filter(([k, v]) => (reg.get(k)?.version ?? 1) !== v || !reg.has(k));
   t(`registers saves ${JSON.stringify(contract.saves)}`, !badSave.length, `wrong or missing: ${badSave.map(([k]) => `${k} (version ${reg.get(k)?.version})`).join(', ')}`);
+  const extra = [...reg.keys()].filter(k => !hadSaves.has(k) && !(k in contract.saves));
+  t('registers no save part outside the contract', !extra.length, `not in contract.saves: ${extra.join(', ')}`);
   for (const [ev, call] of contract.probe?.emits ?? []) {
     let fired = 0; const h = e.events.on(ev, () => fired++);
     try { callOn(api, call, mod, e); } catch (err) { t(`${call[0]}() runs`, false, err.message); }

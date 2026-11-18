@@ -45,7 +45,7 @@ export const environmentMethods = {
     const e = this.engine, env = this._env = { into, get interval() { return interval ?? (e.tier === 'low' ? DEFAULT_INTERVAL * LOW_TIER_SLOWER : DEFAULT_INTERVAL); }, key: null, since: 0, builds: 0, target: null, deferred: !this._envFramed };
     // an explicit call takes the map back from a game write; the warning's way back then names this `into`
     this._oEnv.manual(false); this._oEnv.levels = { ...this._oEnv.levels, back: `engine.sky.environment({ into: ${into === e.scene ? 'engine.scene' : 'into'} })` };
-    this._oEnv.mark();   // what `into` holds now is the reference: the first build replaces it as before, only a later write by the game is a takeover
+    this._oEnv.mark();   // what `into` holds now is the reference: the first build replaces it, only a later write by the game is a takeover
     if (!env.deferred) this._envBuild();
     // a lost context takes the map's pixels with it, and the key cannot see that: with the sky standing still (a fixed hour) the map would stay black
     env.restored = this.engine.events.on('page:contextrestored', () => { env.key = null; env.deferred = true; });

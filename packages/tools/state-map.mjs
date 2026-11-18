@@ -15,7 +15,7 @@ const { opt } = cli(process.argv.slice(2), { workspace: false, flags: ['check'] 
 const MAP = 'docs/testing/review/2026-11-07-1.0-audit/global-state-map.md';
 const START = '<!-- state-map:generated:start -->', END = '<!-- state-map:generated:end -->';
 const HOOKS = ['install', 'init', 'fixed', 'frame', 'afterRender', 'skip', 'sessionEnd', 'worldLoad', 'afterLoad', 'sessionStart', 'dispose'];
-const LIFE = ['session:end', 'session:start', 'session:failed', 'save:loaded', 'module:restored', 'page:contextlost', 'page:contextrestored'];
+const LIFE = ['session:end', 'session:start', 'session:failed', 'save:loaded', 'module:fresh', 'page:contextlost', 'page:contextrestored'];
 const short = f => f.replace(`${P.ENGINE_REL}/`, '');
 const load = f => import(pathToFileURL(abs(f)).href);
 const cell = list => list.length ? list.join(', ') : '-';

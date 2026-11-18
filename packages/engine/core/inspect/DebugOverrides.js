@@ -1,5 +1,5 @@
-// engine.debug: diagnostic overrides with an owner ("show me this without X") and the diagnostic view modes. They change only what the screen shows,
-// never the game state or a save, and describe().scene.overrides lists them so an AI knows the picture is not the real state. Why an owner: a tool
+// engine.debug: diagnostic overrides with an owner ("show me this without X") and the diagnostic view modes. They change only what the screen shows
+// (and hot-swap an asset or a shader in place, which assetHot.js and hotGlsl.js do), never the game state or a save, and describe().scene.overrides lists them so an AI knows the picture is not the real state. Why an owner: a tool
 // (view mode, probe, AI session) removes everything it set with one clear(owner), whatever it forgot to remove(); a tool never touches another owner's.
 // Generic on purpose: a patch is { visible?, material?, apply? }, and apply(obj) -> undo covers any other picture (the view modes in debugView.js use it).
 // All of engine.debug is core (it works without the debug panel); the F3 panel module only adds engine.debug.panel next to it (composition).

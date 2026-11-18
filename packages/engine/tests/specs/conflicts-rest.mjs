@@ -102,6 +102,48 @@ export const specs = [
     },
   },
   {
+    // 2026-11-17 audit A2: the game's setPixelRatio went through the same entry as the player's choice, so the last write won and the menu was overridden
+    name: "[guard] conflicts V3: the player's pixel ratio is a ceiling the game's setPixelRatio stays under; reset hands it back to the game",
+    url: '/tests/settings/index.html',
+    async run({ check, ev }) {
+      const r = await ev(() => {
+        const w0 = console.warn; console.warn = () => {};
+        try {
+          const S = engine.settings, pr = () => engine.renderer.getPixelRatio(), a = engine.adaptive;
+          S.reset(); localStorage.removeItem(S.storageKey);
+          S.set('pixelRatio', 0.75);
+          engine.setPixelRatio(2);
+          const held = { ratio: pr(), get: S.get('pixelRatio'), max: a.max };
+          engine.setPixelRatio(0.6);
+          const lower = pr();
+          engine.setPixelRatio(2);
+          S.reset('pixelRatio');
+          const reset = { ratio: pr(), get: S.get('pixelRatio'), max: a.max };
+          // the slider applies on 'input', before set() stores the value: the first drag of a fresh file must already hold
+          S.open();
+          const slider = S.win.el.querySelector('[data-range="pixelRatio"]');
+          slider.value = '0.75'; slider.dispatchEvent(new Event('input', { bubbles: true }));
+          const drag = pr();
+          S.close(); S.reset();
+          S.preset('low'); S.reset('pixelRatio');
+          const lowReset = pr();
+          S.preset('high');
+          const high = pr();
+          S.reset(); engine.stacks.get('render.pixelRatio').release('game');
+          return { held, lower, reset, drag, lowReset, high, after: pr(), base: a.base };
+        } finally { console.warn = w0; }
+      });
+      const J = JSON.stringify(r);
+      check('the game asking for 2 stays at the player 0.75: ratio, get() and adaptive top', r.held.ratio === 0.75 && r.held.get === 0.75 && r.held.max === 0.75, J);
+      check('the game may still go under the player', r.lower === 0.6, J);
+      check("reset('pixelRatio') goes back to what the game set", r.reset.ratio === 2 && r.reset.get === 2 && r.reset.max === 2, J);
+      check("the slider's first 'input' on a fresh file caps the game", r.drag === 0.75, J);
+      check("after the 'low' preset, reset('pixelRatio') hands the game its 2", r.lowReset === 2, J);
+      check("the 'high' preset (a share of 1) does not pull the game's 2 down", r.high === 2, J);
+      check('the cleanup leaves no entry: back to the device default', r.after === r.base, J);
+    },
+  },
+  {
     name: "[guard] conflicts D2: a game's mesh.layers write while occlusion hides the mesh stands",
     url: '/tests/perf/index.html?mode=city',
     async run({ check, ev }) {

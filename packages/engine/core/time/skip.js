@@ -115,7 +115,7 @@ export const skipMethods = {
     const end = () => { this._skipping = false; ctx.remove(); fz.remove(); off.remove(); };
     if (!(fade > 0)) { try { go(); } finally { end(); } return Promise.resolve(out); }
     const run = this.flow ? this.flow.transition(go, { fade, autosave: false, music: false })
-      : (async () => { try { await fadeScreen(this, 1, { seconds: fade }); go(); } finally { await fadeScreen(this, 0, { seconds: fade }); } })();
+      : (async () => { try { await fadeScreen(this, 1, { seconds: fade, owner: 'skip' }); go(); } finally { await fadeScreen(this, 0, { seconds: fade, owner: 'skip' }); } })();
     return run.finally(end).then(() => out);
   },
 };

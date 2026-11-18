@@ -115,7 +115,7 @@ export const specs = [
         // the shadows switch reaches plants on this ground, near-only ones too
         E.vegetation.define('tuft', { geometry: new THREE.BoxGeometry(0.2, 0.2, 0.2), nearOnly: true, castShadow: true, shadowRing: 9, rule: { perChunk: 6 } });
         const meshes = () => [...H.chunks.values()].map(c => E.vegetationDraw.mesh(c, 'tuft')).filter(Boolean);
-        const flip = on => { E.renderer.shadowMap.enabled = on; E.events.emit('settings:shadows', on); E.step(0.1, { render: false }); return meshes().map(m => m.castShadow); };
+        const flip = on => { E.mod('shadows.enabled', { owner: 'test', layer: 'system', set: on }); E.step(0.1, { render: false }); return meshes().map(m => m.castShadow); };
         out.shadowOn = flip(true); out.shadowOff = flip(false);
         E.dispose();
         return out;

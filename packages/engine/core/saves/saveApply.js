@@ -211,7 +211,7 @@ export const restoreParts = (s, list, where) => { runParts(s, list, where, [], o
 export function adoptPart(s, key, part) {
   const f = s._foreign, q = s._replace, where = fmt(DEV_STRINGS.adoptAt, { k: key }), L = s.engine.loading;
   // engine.loading.settled() waits for it: use(mod); await loading.settled() says the module runs with its data back, and gameplay is no longer held for it.
-  // Its own set, not the inits': a failed replaces tells module:restored once the inits are done, and its content must land on the line after use() threw
+  // Its own set, not the inits': a failed replaces tells module:fresh once the inits are done, and its content must land on the line after use() threw
   L._track(q.run(null, () => {
     // the provider this data was kept for: one removed meanwhile, or another under the same key, does not get it (review l2 #4)
     if (s._foreign !== f || s.providers.get(key) !== part || !Object.hasOwn(f.parts, key)) return;

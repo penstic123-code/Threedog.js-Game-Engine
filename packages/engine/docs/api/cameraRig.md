@@ -56,6 +56,13 @@ Current camera (one of followCamera / firstPersonCamera / fixedCamera / rtsCamer
   - `trackSmoothing?: number` (experimental) Head-follow smoothing
   - `holdDirection?: boolean` (experimental) Keep the direction when switching shots until the direction key is released
   - `ease?: Ease` Transition easing
+  - `position?: Vec3Like` Camera position
+  - `lookAt?: Vec3Like` Fixed point to look at (if omitted, it turns its head with the player)
+  - `track?: boolean` Turn its head with the player
+  - `fov?: number` Field of view (degrees)
+  - `at?: Vec3Like` Position used to judge the "nearest shot", defaults to position
+  - `projection?: 'perspective' | 'orthographic'` 'orthographic' draws this shot without perspective (isometric / 2.5D); default 'perspective'
+  - `size?: number` With projection 'orthographic' (required there): world units of view height; the width follows the aspect
 - rtsCamera options `RtsCameraOptions`:
   - `height?: number` Camera height above the focus (meters), default 30
   - `minHeight?: number` Zoom range (meters)

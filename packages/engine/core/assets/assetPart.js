@@ -18,7 +18,7 @@ const BONES = 'node "{node}" in {url} holds a skinned mesh whose bones are outsi
  * Geometry and materials are shared with the file (SkeletonUtils clone: a skinned part gets its own bones); the file's scene is not changed.
  * @returns {{ scene: THREE.Group, animations: THREE.AnimationClip[] }}
  */
-export function partOf(gltf, node, url) {
+function partOf(gltf, node, url) {
   const all = [];
   gltf.scene.traverse(o => { if (o !== gltf.scene && o.name) all.push(o.name); });
   const name = all.includes(node) ? node : sanitize(node);

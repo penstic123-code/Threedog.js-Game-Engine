@@ -1,4 +1,4 @@
-// Renderer borrowing (design.md 4.5, docs/plans/2026-11-09-render-borrow.md): one borrow in render/backend.js puts back the same fields on both
+// Renderer borrowing (design.md 4.5, docs/plans/done/2026-11-09-render-borrow.md): one borrow in render/backend.js puts back the same fields on both
 // renderers, also when three's render throws inside it; and engine.rays' BVH is a listed patch that unregistering undoes.
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';

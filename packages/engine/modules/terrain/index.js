@@ -30,7 +30,6 @@ import { loadGray } from '../../core/scene/grayMap.js';
 import { prepareShape, voidWatcher } from './terrainShapeMain.js';
 import { TerrainDraw, checkGround } from './draw.js';
 import { codedError } from '../../core/base/errorHints.js';
-import { onTierChange } from '../../core/scene/tier.js';
 
 const NO_HEIGHT = 'terrain(): no height function or height map was given, so the ground is flat gray at y = 0 (a placeholder, not a picture). '
   + 'Pass terrain({ height, groundType }) or a preset, e.g. terrain({ ...terrainPreset() }) with terrainPreset from @threedog/terrain-noise';
@@ -129,7 +128,7 @@ export function terrain(opts = {}) {
       // the low-tier color map follows the tier (a stored preset arrives after this install). A resolution the game gave in terrain({}) stays; recolor cannot set one
       // (it is not in recolor's keys), so the only other writer is this listener. Followed by reinit, the path recolor takes too: every chunk is generated again, which is
       // fine at a settings change (and before the first frame it is free). Only colorResolution is changed, on the live object: init above may still be loading images into it
-      ctx.track(onTierChange(e, () => {
+      ctx.track(e.stacks.get('tier').watch(() => {
         const c = state.cfg;
         if (cfg.colorResolution != null) return;
         const want = drawConfig(e, { ...c, colorResolution: undefined }).colorResolution;

@@ -1,4 +1,4 @@
-// Group P (docs/plans/2026-11-10-group-p.md): cross-group problems found when the ten fix groups were reviewed together. One check per root cause.
+// Group P (docs/plans/done/2026-11-10-group-p.md): cross-group problems found when the ten fix groups were reviewed together. One check per root cause.
 //   copyOwns is the only copy-ownership test; frame hooks get the game time the fixed steps took; a hot rebuild of any copy is one path; debug views leave by identity.
 // Run: npm test -- group-p
 const PAGE = '/tests/threads/';

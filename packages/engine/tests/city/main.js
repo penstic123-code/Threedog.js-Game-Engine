@@ -4,7 +4,6 @@
 // when switching to a Blender-exported glTF, change only this manifest line ('city-block': '/models/city.glb').
 import { createEngine, presets, world, calendar, sky, collision, rigid, followCamera, characters, interactions, dialogue, level, triggers, particles, timeline, settings, debug, content, flow, THREE, toast } from '../../index.js';
 import { neutralMaterial } from '../../render/neutral.js';
-import { onTierChange } from '../../core/scene/tier.js';
 import { runSections } from '../../core/base/sections.js';
 import { writeDaylight } from '../../render/daylight.js';
 import data from './content/index.js';
@@ -84,4 +83,4 @@ engine.onFrame(() => {
 
 engine.start();
 window.engine = engine;
-window.internals = { onTierChange, runSections, writeDaylight };   // group-q.mjs reaches these engine internals through the page
+window.internals = { runSections, writeDaylight };   // group-q.mjs reaches these engine internals through the page

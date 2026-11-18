@@ -14,7 +14,6 @@ import { warnOnce, fmt } from '../core/base/validate.js';
 import { readParams } from '../core/base/params.js';
 import { defineOwned, dropOwned, ownedRow } from '../core/ops/owned.js';
 import { isWebGPU, onRendererSwap, setShadowUpdate, shadowsOn, webgpuPart } from './backend.js';
-import { onTierChange } from '../core/scene/tier.js';
 import { CASCADE_DEFAULTS, CASCADE_SPLITS, createCascades, dropCascades, includeInCascades } from './cascades.js';
 
 const WHERE = 'engine.shadows.cascades';
@@ -202,7 +201,6 @@ function ownBudget(e, light, first) {
 function switchShadows(e, on) {
   e.renderer.shadowMap.enabled = on;
   e.scene.traverse(o => { if (o.material) [].concat(o.material).forEach(m => { m.needsUpdate = true; }); });
-  e.events.emit('settings:shadows', on);
 }
 
 /** The running handle's cascades. The WebGL half keeps what the game wrote apart from the placement; see the header */
@@ -257,7 +255,7 @@ function ownCascades(e, light, first, gameExtent = () => undefined) {
   };
   sync();   // first, so a request that throws (a bad split callback) returns no handle and leaves no listener behind
   const swap = onRendererSwap(e, () => { if (c?.isCascadeNode) { off(); sync(); } });   // fallback 'webgl': the shadow node has no meaning on the new renderer
-  const tier = onTierChange(e, sync);   // the map count reads engine.tier: a preset switched while running rebuilds once (sync's key skips the rest)
+  const tier = e.stacks.get('tier').watch(sync);   // the map count reads engine.tier: a preset switched while running rebuilds once (sync's key skips the rest)
   return {
     frame() {
       box?.frame();

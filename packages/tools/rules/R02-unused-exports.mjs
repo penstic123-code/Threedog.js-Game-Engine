@@ -4,6 +4,7 @@
 //   import * as ns and dynamic import(): any name in the target file that appears as a same-named word in the importer counts as used (conservative, no false positives).
 //   const { a, b } = await import(<computed path>): tools load engine files by a path built at run time (pathToFileURL(abs(...))), which cannot be
 //   resolved to a file; the destructured names count as used in every engine file (conservative: a same-named export elsewhere also passes).
+//   `(await load(file)).name` in a tool counts the same way.
 // Convention: a module's implementation class (export class Sky) pairs one-to-one with the same-named interface type in the d.ts; exporting it eases cross-reference, so it is not reported (only classes without a same-named type in the d.ts are).
 // Limitation: another project (a game repo) importing engine internals directly is invisible here.
 import { ts, parse, visit, engineFiles, projectFiles, resolveImport, lineOf, read, strValue, dtsFiles, E, P } from './_lib.mjs';
@@ -17,6 +18,10 @@ const ALLOW = [
   [P.CONTENT_RULES_REL, 'mergeRules', 'tools (content check, game map) import it dynamically'],
   [P.CONTENT_RULES_REL, 'describeCond', 'tools (content check, game map) import it dynamically'],
   [P.CONTENT_RULES_REL, 'describeEffect', 'tools (content check, game map) import it dynamically'],
+  [E('core/ops/sharedPoint.js'), 'LAYERS', 'tools/tests/stacks.mjs reads the layer table from this source text (it must stay exported here)'],
+  [E('core/engine/moduleTypes.js'), 'MODULE_TYPES', 'R47 reads the type table from this source text (export const MODULE_TYPES)'],
+  [E('core/scene/pixel.js'), '*', 'public subpath threedog/pixel (package.json exports ./pixel), not through index.js'],
+  [E('modules/vegetation/draw.js'), 'drawnPlants', 'tools/tests/vegetation-thin.mjs loads it through load(), which the import scan does not resolve'],
 ];
 
 function exportsOf(sf) {
@@ -45,6 +50,10 @@ export default {
           const init = ts.isAwaitExpression(n.initializer) ? n.initializer.expression : null;
           if (isImportCall(init) && strValue(init.arguments[0]) == null)
             for (const el of n.name.elements) { const k = el.propertyName ?? el.name; if (ts.isIdentifier(k)) dynNames.add(k.text); }
+        }
+        if (ts.isPropertyAccessExpression(n) && file.startsWith(P.TOOLS_REL + '/')) {
+          let e = n.expression; while (ts.isParenthesizedExpression(e)) e = e.expression;
+          if (ts.isAwaitExpression(e) && ts.isCallExpression(e.expression)) dynNames.add(n.name.text);
         }
         let spec = null, clause = null, star = false, dyn = false;
         if (ts.isImportDeclaration(n)) { spec = strValue(n.moduleSpecifier); clause = n.importClause; }

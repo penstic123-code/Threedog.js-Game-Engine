@@ -41,7 +41,7 @@ import { applySetting, allowed, checkLimits, releaseLimits, releaseRow, ROLE_ROW
 import { readParams, keysSchema } from '../../core/base/params.js';
 import { codedError, coded } from '../../core/base/errorHints.js';
 import { warnOnce } from '../../core/base/validate.js';
-import { pixelSizeOn } from '../../core/scene/pixelRatio.js';
+import { chooseRatio, pixelSizeOn } from '../../core/scene/pixelRatio.js';
 import { trackForModule } from '../../core/engine/moduleTypes.js';
 
 // Graphics presets. Values are performance steps, not art; a game can override with settings({ presets: { low: {...} } })
@@ -272,6 +272,7 @@ export class Settings extends SettingsView {
       if (!(k in this._values) || def(k) === undefined) { if (key !== undefined) warnOnce(`settings.reset('${k}'): no setting with this key (known: ${Object.keys(this._values).join(', ')})`); continue; }
       this.set(k, def(k), { save: false });
       if (!(k in preset)) delete this._changed[k];
+      if (k === 'pixelRatio') chooseRatio(this.engine, null);   // a reset hands the ratio back to the game, also where a kept preset stores the default
     }
     this.save();
   }
@@ -373,7 +374,7 @@ export class Settings extends SettingsView {
     this._ready = true;
     const picked = this._picked(), e = this.engine;
     for (const k of this._early) if (!this._hasRow(k)) warnOnce(coded('settings-row', `settings.set('${k}') before start: no row came for this key, so nothing applied it`));
-    // start() may have learned the real device on the WebGPU route and written its default ratio over the player's
+    // a preset's ratio is a share of the device default, which start() may have learned only now (the WebGPU route): worked out again from it
     this._defaults.pixelRatio = +e.adaptive.base.toFixed(2);
     this._values.pixelRatio = picked.pixelRatio ?? this._defaults.pixelRatio;
     if ('pixelRatio' in picked) this._apply('pixelRatio', picked.pixelRatio);

@@ -21,7 +21,7 @@ const DEFINES = /^define([A-Z]|$)/, NAME_FIRST = /^\??(?:<[^>]*>)?\(\s*\w+\??: s
 const TAKEOUT = /^(clear|forget|release|unload|dispose)([A-Z]|$)/;
 const SYNONYMS = /^(register|create|bind|make|attach|subscribe|listen|declare|mount|hook|insert|append|put)([A-Z]|$)/;
 
-/** name -> why it may break the rule (doc/plans/2026-11-09-one-idea.md lists the doubtful ones for the batch 6 blind test) */
+/** name -> why it may break the rule (doc/plans/done/2026-11-09-one-idea.md lists the doubtful ones for the batch 6 blind test) */
 export const EXCEPTIONS = {
   // returns something other than a handle
   'add': 'mirrors three.js scene.add: returns the object; engine.remove(obj) takes it out',

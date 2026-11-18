@@ -10,5 +10,5 @@ export default {
   api: ['move'],
   fields: ['name'],
   position: { authority: 'solver', writers: { mover: 'move() writes character.root.position while the holder of the control slot drives it; it writes no record' } },
-  optional: { dispose: v => typeof v === 'function', leave: v => typeof v === 'function' },
+  optional: { dispose: v => typeof v === 'function', leave: v => typeof v === 'function', collider: v => typeof v === 'object', world: v => typeof v === 'object' },
 };

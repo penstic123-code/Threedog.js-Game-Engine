@@ -41,7 +41,6 @@ import { defineSkipOp } from '../time/skip.js';
 import { installThings } from '../scene/thingOps.js';
 import { Plugins } from './plugins.js';
 import { watchGameLights } from '../scene/gameLights.js';
-import { tierChanged, tierDefined } from '../scene/tier.js';
 
 /**
  * Create the engine services on `engine` (called once from the Engine constructor, after the renderer, scene and uniforms exist).
@@ -82,9 +81,11 @@ export function createServices(engine, { canvas, validate, locale, strings, save
   engine._urlState = new UrlState(engine, { fromUrl: urlState });
   // who holds the engine still: three named stacks (stacks.js: same owner rules as every shared quantity, holders in describe); haltLoop / freeze / takeCamera in holds.js
   defineHoldStacks(engine);
-  // the one quality value (engine.tier): the device gives the base, the player's preset sets over it. settingsSet: on this point the player's choice is a choice, not a restriction
-  engine.stacks.define('tier', { kind: 'value', base: engine._deviceTier, save: false, settingsSet: true, onChange: () => tierChanged(engine) });   // the post chain and cascades follow it (core/scene/tier.js onTierChange)
-  tierDefined(engine);
+  // the 'tier' shared point is defined in Engine.js right after the stacks, before the lights that follow it (followers: engine.stacks.get('tier').watch(fn))
+  // the public 'tier:change' event (game code sizes what it makes from engine.tier): fires when the tier differs from the last one announced, so a preset equal to the device's tier says nothing.
+  // Nothing during dispose: settings gives its tier back then, and a follower would allocate on an engine being torn down
+  let announced = engine.tier;
+  engine.stacks.get('tier').watch(() => { if (engine.disposed) return; const t = engine.tier; if (t === announced) return; announced = t; engine.events.emit('tier:change', { tier: t }); });
   engine.commits = new Commits(engine);          // background results that affect gameplay take effect on a fixed tick (see Commits.js)
   engine.ops = new Ops(engine);                  // one entry point for actions (define / run / can / list / recent), see Ops.js
   engine.views = new Views(engine);              // named fixed camera views for repeatable screenshots (Views.js)

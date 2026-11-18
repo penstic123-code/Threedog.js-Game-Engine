@@ -76,4 +76,4 @@ Sources: written for this example; no code copied. Background: distance-driven g
 stretch are common practice (David Rosen, "An Indie Approach to Procedural Animation", GDC 2014; the squash-and-stretch principle from
 Thomas and Johnston, *The Illusion of Life*, 1981).
 
-This example is written in GLSL: it is the WebGL route (`threedog new-game --webgl`). A game on the default WebGPU route writes the same ideas in TSL (recipe 56).
+This example is written in GLSL: it is the WebGL route (`threedog new-game --webgl`). TSL version: recipe 56.

@@ -44,11 +44,12 @@ export function worldToScreen(engine: Engine, pos: PositionLike): ScreenPoint;
  * fadeScreen(engine, 1, 0.5) throws in dev: fadeScreen(engine, 1, { seconds: 0.5 })
  * @param {Engine} engine
  * @param {number} to  0 clear ... 1 fully covered
- * @param {{ seconds?: number }} [opts]
+ * @param {{ seconds?: number, owner?: string }} [opts]  owner: who holds this cover (default 'game'); a transition or a cutscene does not clear a cover another owner holds
  * @returns {Promise<void>}
  */
 export function fadeScreen(engine: Engine, to: number, opts?: {
     seconds?: number;
+    owner?: string;
 }): Promise<void>;
 export function iconHTML(def: any): string;
 import type { Engine } from '../../core';

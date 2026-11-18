@@ -92,4 +92,4 @@ Rules (correctness):
 Sources: written for this example; no code copied. Light units and falloff as documented for three.js physically based lights; the bloom pass
 is three's `UnrealBloomPass` through `@threedog/post-effects`.
 
-This example is written in GLSL: it is the WebGL route (`threedog new-game --webgl`). A game on the default WebGPU route writes the same ideas in TSL (recipe 56).
+This example is written in GLSL: it is the WebGL route (`threedog new-game --webgl`). TSL version: recipe 56.

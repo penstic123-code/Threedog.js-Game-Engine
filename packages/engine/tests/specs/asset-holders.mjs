@@ -1,5 +1,5 @@
 // engine.explain({ asset }): a lease says who took it, so "why is this model still in memory" is answered by name
-// (docs/plans/2026-11-10-lease-holders.md). Headless engines on the loading test page.
+// (docs/plans/done/2026-11-10-lease-holders.md). Headless engines on the loading test page.
 const page = '/tests/loading/index.html';
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 

@@ -4,6 +4,7 @@ import { apiCount, GROUPS, surfaceLines } from '../api-count.mjs';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ENGINE } from '../paths.mjs';
+import { renderOptions } from '../apidoc/lib.mjs';
 import { parse, diff, unreleased, breaks, marked } from '../rules/R55-api-lock.mjs';
 
 export const name = 'api count: every group has items; the API lock tells removed, changed and new names apart';
@@ -16,6 +17,12 @@ export async function run({ check }) {
   const lines = await surfaceLines(), has = (g, n) => lines.some(l => l.startsWith(`${g} | ${n} |`));
   check('a class declared only as a type is not an exported value', !has('exports threedog', 'Sky') && !has('exports threedog', 'Weather') && has('exports threedog', 'Engine'));
   check('tuple and array factories count their options and every API', ['weather.rain', 'terrain.viewChunks', 'openWorld.seed'].every(n => has('module options', n)) && ['weather.set', 'terrainDraw.recolor'].every(n => has('module APIs', n)));
+
+  // inherited option fields (extends Partial<…> / extends Pick<…> / extends X) are listed with the description their parent declares
+  for (const [type, key] of [['TerrainOptions', 'seed'], ['PhotoOptions', 'quality'], ['SkyOptions', 'clouds']]) {
+    const L = []; renderOptions(L, type);
+    check(`options of ${type} list the inherited field "${key}" with its description`, L.some(l => l.startsWith(`  - \`${key}?:`) && l.split('` ')[1]?.length > 5), L.join(' ').slice(0, 300));
+  }
 
   const base = parse(['# c', 'g | a | () => void', 'g | b | number', 'g | c | string']);
   const now = parse(['g | a | (x: number) => void', 'g | b | number', 'g | d |']);

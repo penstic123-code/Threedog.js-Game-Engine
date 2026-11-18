@@ -1,10 +1,9 @@
-// The renderer's pixel ratio has one owner, this file: every engine write goes through it, and it decides which request wins, so no two entries fight
-// by "who wrote last". Two modes:
-//   ratio      (the default) writeRatio: the game's and settings' engine.setPixelRatio (askRatio), adaptive resolution under it, the tier's default, a photo's
-//              borrowed ratio.
+// The renderer's pixel ratio has one owner, this file: every engine write goes through it, so no two entries fight by "who wrote last". Two modes:
+//   ratio      (the default) the shared value render.pixelRatio is the ceiling: base the tier's default, the game's engine.setPixelRatio, the player's settings
+//              choice capping it (so their order never matters). Adaptive resolution writes under it, a photo borrows a ratio; writeRatio is the one write.
 //   pixelSize  (createEngine({ pixelSize }), engine.setPixelSize) one art pixel is k real screen pixels: the ratio is devicePixelRatio / k and fitPixelSize
 //              alone sets the drawing buffer. Everything else asking for a ratio is held off, refused or kept for later: adaptive stops (engine.adaptive.on
-//              reads false), the tier only updates what comes back when pixelSize ends, a photo keeps the art pixels, engine.setPixelRatio throws.
+//              reads false), the ceiling only updates what comes back when pixelSize ends, a photo keeps the art pixels, engine.setPixelRatio throws.
 // A direct renderer.setPixelRatio by the game is not refused (hard rule 4): the engine yields in both modes (view.pixelRatio in core/ops/owned.js).
 // tests/specs/pixel-size.mjs guards that no other file calls renderer.setPixelRatio.
 import { DEV, warnOnce } from '../base/validate.js';
@@ -31,26 +30,49 @@ export function writeRatio(e, p) {
   e._oPixelRatio.mark();
 }
 
-/**
- * engine.setPixelRatio. It is the game's (or settings') request: written even when the game took the ratio. It is also the new ceiling, or adaptive
- * resolution would climb back to the old one and undo the engine's own named entry where the raw three.js call stays. Adaptive writes through writeRatio.
- * @param {any} e @param {number} p
- */
+/** The ceiling at its top again: adaptive resolution starts over from it (the ceiling moved, or the player turned adaptive off) @param {any} e */
+export function topRatio(e) {
+  if (e._pixelSize != null) return;
+  writeRatio(e, e.adaptive.max);
+  Object.assign(e.adaptive, { lowered: false, from: null, good: 0 });
+}
+
+/** render.pixelRatio, made with engine.adaptive: its max follows the value (under pixelSize only that, for when pixelSize ends) @param {any} e */
+export function defineRatio(e) {
+  const point = e.stacks.define('render.pixelRatio', { base: e.renderer.getPixelRatio(), save: false,
+    manual: "the settings entry is the player's ceiling: the game's ratio stays under it while the player keeps that choice" });
+  point.watch(() => { e.adaptive.max = point.value(); topRatio(e); });
+}
+
+/** engine.setPixelRatio, a game-layer set: written even when the game took the ratio (the named entry stays where the raw three.js call is) @param {any} e @param {number} p */
 export function askRatio(e, p) {
   if (e._pixelSize != null) throw codedError('pixel-conflict', `engine.setPixelRatio(${p}): pixelSize ${e._pixelSize} decides the ratio now. Keep pixelSize and drop this call, or call engine.setPixelSize(null) first`);
-  writeRatio(e, p);
-  Object.assign(e.adaptive, { max: p, lowered: false, from: null, good: 0 });
+  e.stacks.get('render.pixelRatio').take({ owner: 'game', set: p });
 }
 
 /**
- * The real device became known in start(): the tier's default ratio, unless the game chose one or does not leave the renderer to the engine. Under pixelSize
- * it is kept for when pixelSize ends.
- * @param {any} e @param {string} tier
+ * The player's settings choice; null hands the ratio back to the game (settings.reset). It stands in for the device default (engine layer: the player may
+ * pick above it). Under the default it is also a ceiling on the game (settings layer, which only restricts); at or above it (a 'high' preset is a share of 1)
+ * it limits nothing, so a full-quality choice never pulls the game's higher ratio down. Two entries, so their order does not change the result.
+ * @param {any} e @param {number | null} p
+ */
+export function chooseRatio(e, p) {
+  const point = e.stacks.get('render.pixelRatio');
+  if (p == null || p >= e.adaptive.base) point.release('settings');
+  else point.take({ owner: 'settings', layer: 'settings', clamp: { max: p } });
+  if (p == null) point.release('settings.default');
+  else point.take({ owner: 'settings.default', layer: 'engine', set: p });
+}
+
+/**
+ * The device became known in start(): its default is the new base (the entries stay on top), unless the game chose one at creation or owns the renderer.
+ * engine.adaptive.base is only a mirror of that base, kept for readers (the settings presets' shares). @param {any} e @param {string} tier
  */
 export function tierRatio(e, tier) {
   if (!e._ownsRenderer || e._createParams.pixelRatio != null) return;
-  const p = e.adaptive.base = defaultPixelRatio(dpr(), tier);
-  if (e._pixelSize != null) e.adaptive.max = p; else askRatio(e, p);
+  const p = defaultPixelRatio(dpr(), tier);
+  e.stacks.get('render.pixelRatio').setBase(p);
+  e.adaptive.base = p;
 }
 
 /**

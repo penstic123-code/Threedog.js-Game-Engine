@@ -15,7 +15,7 @@ import { warnOnce } from '../core/base/validate.js';
 import { reportError } from '../core/base/errors.js';
 import { readParams, keysSchema } from '../core/base/params.js';
 import { isWebGPU, webgpuPart, ownMsaa } from './backend.js';
-import { MSAA_KEY, onTierChange } from '../core/scene/tier.js';
+import { MSAA_KEY } from '../core/scene/tier.js';
 import { defineOwned } from '../core/ops/owned.js';
 import { watchOwnFrame } from './ownFrame.js';
 import { runsHere, OUTPUT_TWICE } from './postRuns.js';
@@ -123,7 +123,7 @@ export class PostFX {
       // handed back: the kept WebGPU stages go too, the game may have edited those nodes while it owned them, so the declared chain is rebuilt whole
       levels: { manual: 'engine.post.own()' }, onChange: o => { if (!o.on) return; if (this._pipe) { this._pipe.key = null; this._pipe.stages = []; } this._sync(); } });
     this._sync();
-    onTierChange(engine, () => this._sync());   // effects held by tier (skipOnLowTier) follow it; after the first sync, so a throw there leaves no listener
+    engine.stacks.get('tier').watch(() => this._sync());   // effects held by tier (skipOnLowTier) follow it; after the first sync, so a throw there leaves no listener
   }
 
   /**
@@ -214,8 +214,8 @@ export class PostFX {
     if (odd.length) throw codedError('post-effect', `post effect '${effect.name}': cheaper names ${odd.join(', ')}, not in its params (${Object.keys(effect.params ?? {}).join(', ') || 'none'}); cheaper holds lower values of its own params`);
     finiteParams(effect.name, effect.params, 'params');
     const post = this, point = this.switchPoint(`post.${effect.name}.enabled`);
-    point.release('game'); point.base = effect.enabled ?? true;   // only the game's own word starts over: the player's off and any other owner's hold stay on the effect that comes back
-    let on = !!point.value();
+    point.release('game'); point.setBase(effect.enabled ?? true);   // only the game's own word starts over: the player's off and any other owner's hold stay on the effect that comes back
+    let on = !!point.value(), follow = /** @type {{ remove(): void } | null} */ (null);   // follow is set after this effect's own setBase: no extra sync here
     const h = {
       name: effect.name, slot: s, order: effect.order ?? 0, seq: this._place(effect.name),
       params: { ...effect.params }, _def: effect, _impl: /** @type {any} */ (null), _removed: false, _entry: /** @type {any} */ (null), _on: () => on,
@@ -252,7 +252,7 @@ export class PostFX {
       remove() {
         if (h._removed) return;
         h._removed = true;
-        point.onChange = null; point.release('game');
+        follow?.remove(); follow = null; point.release('game');
         post._change(() => {
           freeImpl(h);
           post._list = post._list.filter(e => e !== h);
@@ -262,10 +262,10 @@ export class PostFX {
       },
     };
     // a settings restriction or a hold ending turns it on or off here; a rebuild that throws leaves it as it was
-    point.onChange = () => { const was = on, now = !!point.value(); if (now !== was) this._change(() => { on = now; }, () => { on = was; }); };
+    follow = point.watch(() => { const was = on, now = !!point.value(); if (now !== was) this._change(() => { on = now; }, () => { on = was; }); });
     // a create() that throws or an order that breaks depth leaves no half-added effect behind
     try { this._change(() => this._list.push(h), () => { freeImpl(h); this._list = this._list.filter(e => e !== h); }); }
-    catch (err) { point.onChange = null; if (!this._kept.has(h.name)) this._seq.delete(h.name); throw err; }
+    catch (err) { follow?.remove(); follow = null; if (!this._kept.has(h.name)) this._seq.delete(h.name); throw err; }
     this.engine._picture?.added('post effect', h, h.name);   // dev: a picture part removed with this still on is reported (core/inspect/pictureWriters.js)
     this.engine.events.emit('post:add', h.name);   // the settings rows follow an effect by its role, so one added after them still gets the player's choice
     return h;

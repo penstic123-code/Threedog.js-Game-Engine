@@ -103,4 +103,4 @@ Rules (correctness):
 Sources: written for this repository, no code copied. Background: three.js `RectAreaLight` and `LightProbe` docs and examples (0.187), general
 architectural-visualization and game-lighting writing on window light, bounce and eye adaptation.
 
-This example is written in GLSL: it is the WebGL route (`threedog new-game --webgl`). A game on the default WebGPU route writes the same ideas in TSL (recipe 56).
+This example is written in GLSL: it is the WebGL route (`threedog new-game --webgl`). TSL version: recipe 56.

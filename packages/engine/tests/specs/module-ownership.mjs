@@ -1,4 +1,4 @@
-// Module ownership and shared values (docs/plans/2026-11-09-module-ownership.md, group N of the layer-2 review): the "do not bypass" checks.
+// Module ownership and shared values (docs/plans/done/2026-11-09-module-ownership.md, group N of the layer-2 review): the "do not bypass" checks.
 //   - a closed install (failed init, unload) registers nothing more: ctx verbs after it, and a ctx.track inside a remove() of its own cleanup
 //   - a borrow gives a value back only while it still holds it; a setter that throws halfway undoes the batch
 //   - a module name and another module's provides cannot claim one name (requires / has / engine.<name> would reach different modules)

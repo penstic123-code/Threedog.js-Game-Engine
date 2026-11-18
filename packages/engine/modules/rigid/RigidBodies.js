@@ -167,6 +167,19 @@ export class RigidBodies {
     for (const s of this._solids) this._buildSolid(s);
   }
 
+  /** @internal some collider has a collision layer: the rapier mover only builds its pass-through filter then */
+  get layered() { return this._layered.size > 0; }
+  /** @internal the collision-module data behind a collider that has a layer, or undefined */
+  layerOf(collider) { return this._layered.get(collider); }
+  /** @internal The rapier mover asks for the player capsule to follow the character's radius; a radius the game set in rigid({ playerCapsule }) wins. Returns the radius in use */
+  fitPlayerCapsule(radius) {
+    if (this._capsuleRadiusGiven || radius === this.playerCapsule.radius) return this.playerCapsule.radius;
+    // Written back, so a rebuilt world (_newWorld) makes the same capsule
+    this.playerCapsule = { ...this.playerCapsule, radius };
+    this.playerCollider.setRadius(radius); this.playerCollider.setTranslationWrtParent({ x: 0, y: this.playerCapsule.halfHeight + radius, z: 0 });
+    return radius;
+  }
+
   /** @internal Copies of what others own are current, as any read needs them. Every step runs it; a frozen engine runs no step, and queries still ask */
   _upkeep() { if (syncStatics(this) | syncLevel(this) | syncFloor(this) | dropChunks(this)) this._behind = true; }
   /**

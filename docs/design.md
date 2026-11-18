@@ -312,7 +312,7 @@ The settings layer sits above the system layer and can only restrict. A player w
 
 "One owner" is meant literally. When a value has several legitimate reasons to change, the reasons route through its owner, and the owner decides.
 
-Pixel ratio shows the pattern. An option, a method, adaptive resolution, the quality tier, a renderer swap and a photo's borrowed ratio all want to set it. All of them go through one owner (`core/scene/pixelRatio.js`). `pixelSize` is a mode of that owner, not another writer: while it is on, the others are held off or refused with a named error. A direct `renderer.setPixelRatio` still wins, by section 4.2.
+Pixel ratio shows the pattern. An option, a method, adaptive resolution, the quality tier, a renderer swap and a photo's borrowed ratio all want to set it. All of them go through one owner (`core/scene/pixelRatio.js`), which keeps the requests as entries on the shared value `render.pixelRatio`, so the player's choice caps the game's whatever order they come in. `pixelSize` is a mode of that owner, not another writer: while it is on, the others are held off or refused with a named error. A direct `renderer.setPixelRatio` still wins, by section 4.2.
 
 Other concerns with this shape: post effects enter through `engine.post.add` only, time speeds change through shared points only, and a game's module classification comes from `type` only.
 

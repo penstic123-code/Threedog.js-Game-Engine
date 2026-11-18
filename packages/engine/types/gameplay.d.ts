@@ -1703,8 +1703,13 @@ export interface Photo {
 // Ambience (engine.ambience) is generated from the JSDoc in modules/ambience/Ambience.js (npm run map); only the type is re-exported here
 import type { Ambience } from './generated/modules/ambience/Ambience';
 export type { Ambience };
-/** ambience() options: rules (the rule table; added after createEngine({ audio: { ambience } })), interval seconds between rule checks (0.25) */
-export interface AmbienceOptions { rules?: import('./core').AmbienceRule[]; interval?: number }
+/** ambience() options */
+export interface AmbienceOptions {
+  /** Rules added after the ones in createEngine({ audio: { ambience } }) */
+  rules?: import('./core').AmbienceRule[];
+  /** Seconds between rule checks, default 0.25 */
+  interval?: number;
+}
 // DebugPanel (engine.debug) is generated from the JSDoc in modules/debug/DebugPanel.js (npm run map); only the type is re-exported here
 import type { DebugPanel } from './generated/modules/debug/DebugPanel';
 export type { DebugPanel };

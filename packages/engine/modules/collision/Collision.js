@@ -22,7 +22,7 @@ function slab(S, o, d, h) {
 
 const BOX_KEYS = ['halfWidth', 'halfDepth', 'rotation', 'height', 'y', 'occluder', 'layer'], CIRCLE_KEYS = ['radius', 'height', 'occluder', 'layer'], SEG_KEYS = ['thickness', 'height', 'y', 'occluder', 'layer'], BLOCK_KEYS = ['bounds'];
 
-/** A collider's layer option: one name, or undefined for "stops every mover" (what every collider did before layers) */
+/** A collider's layer option: one name, or undefined for "stops every mover" */
 function layerOf(where, v) {
   if (v === undefined || (typeof v === 'string' && v)) return v;
   throw codedError('collision-misuse', `${where}: layer is one name, e.g. { layer: 'gate' } (movers with passes: ['gate'] go through it, every other mover is stopped); got ${JSON.stringify(v)}`, TypeError);

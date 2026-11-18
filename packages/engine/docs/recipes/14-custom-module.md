@@ -68,7 +68,7 @@ No subtypes: inside a type the differences are declarations (`provides`, `requir
 A module that does two kinds of thing is two definitions returned together (`weather()` returns the `weather` state and the `weatherDraw` drawing part;
 `engine.use(weather())` installs both). The warning comes once and refuses nothing: it names the module, its type, what it did, why not, and the fix. A game's own module may do what it needs; a split into two modules is usually the fix.
 
-## 2. Hooks and order cheat sheet
+## 2. Hooks and order cheat sheet; who frees materials and textures when a module goes
 - `install(e, ctx)` returns the public object; `init(e, ctx)` (may be async) prepares at start; `ctx.track(handle)` ties a listener or timer to
   the module (next bullet but four); while `isReady(e)` returns false the loading screen waits for it
   (the hook is called isReady; `ready` is always a boolean property in the engine); `afterLoad(e, turn)` (may be async; recipe 20 says what `turn` is for) runs after a save loaded, to rebuild

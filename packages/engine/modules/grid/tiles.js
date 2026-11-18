@@ -1,13 +1,14 @@
 // Crisp per-cell tiles for a layer (a painted floor, a buildable zone, tilled soil): one mesh per layer, each non-empty cell a quad
 // whose four corners sit on engine.surface + lift, so tiles hug a ramp or terrain and work on any ground provider
 // (procedural terrain, a Blender level, a flat greenhouse floor). One merged mesh = one draw call; it is rebuilt only when
-// the layer version or the ground (level:loaded, a terrain edit's ground:change) changes.
+// the layer version or the ground changes: another ground provider (a level, or engine.setGround) or a terrain edit's ground:change.
 // Picture: layer option tiles.color(data, cell) -> color | null, else tiles.colors = { field: color }, else the module's table grids({ tiles: { layer: { field: color } } })
 // (first truthy field in the table's order wins), else neutral gray. tiles: false = off; a function = your own part. layer.material is the three.js material they draw with.
 import * as THREE from 'three';
 import { neutralMaterial } from '../../render/neutral.js';
 import { surfaceOr } from '../../core/scene/ground.js';
 import { readParams, keysSchema } from '../../core/base/params.js';
+import { follows } from '../../core/base/follows.js';
 
 const GAP = 0.03;   // fraction of a cell left between tiles: keeps tiles visibly separate (crisp edges)
 const FALLBACK = 0x9a9a9a;
@@ -34,7 +35,8 @@ export function layerTiles(e, layer, st) {
   mesh.name = `grid:${layer.grid.name}.${name}`; mesh.receiveShadow = true; mesh.frustumCulled = false;
   e.add(mesh, { owner: 'engine:grid' });
   let ver = -1, ground = 0, built = -1;
-  const offs = ['level:loaded', 'level:unloaded', 'ground:change'].map(n => e.events.on(n, () => { ground++; }));   // new ground heights: a level came or left, or dug / raised terrain
+  const off = e.events.on('ground:change', () => { ground++; });   // dug / raised terrain: the same ground, new heights
+  const src = follows(() => e.ground, G => G.staticVersion?.());   // another ground provider (a level came or left, setGround): the same check the ground chunks use
   const col = new THREE.Color(), g = layer.grid;
   function rebuild() {
     const cells = layer.query(), pos = [], clr = [], idx = [];
@@ -59,9 +61,10 @@ export function layerTiles(e, layer, st) {
     mesh,
     frame() {
       mesh.visible = e.world?.inZone(g) ?? true;
+      if (src.sync(() => {})) ground++;
       if (layer._ver !== ver || ground !== built) { ver = layer._ver; built = ground; rebuild(); }
     },
-    dispose() { for (const o of offs) o.remove(); mesh.material = own; e.remove(mesh); },   // one free through e.remove (design 6.2): the part's own geometry and material go with it; a material the game set is taken off first, so it stays the game's
+    dispose() { off.remove(); mesh.material = own; e.remove(mesh); },   // one free through e.remove (design 6.2): the part's own geometry and material go with it; a material the game set is taken off first, so it stays the game's
   };
 }
 

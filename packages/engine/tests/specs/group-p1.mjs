@@ -1,4 +1,4 @@
-// Group P1 (docs/plans/research/2026-11-10-health-check-b-picture.md items 1, 8, 10; plan docs/plans/2026-11-10-group-p1.md): one colour rule for the
+// Group P1 (docs/plans/research/2026-11-10-health-check-b-picture.md items 1, 8, 10; plan docs/plans/done/2026-11-10-group-p1.md): one colour rule for the
 // picture, one test item each so one throw stops no other. Numbers are the largest channel difference (0-255) between two patches of a shot.
 const PAGE = '/tests/group-p1/index.html';
 

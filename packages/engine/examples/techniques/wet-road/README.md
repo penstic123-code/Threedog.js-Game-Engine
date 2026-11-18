@@ -99,4 +99,4 @@ Sources: written for this example; no code copied. Background: the mirror-image 
 the common darken + lower-roughness approach discussed in Sébastien Lagarde, "Water drop 2a / 2b – Dynamic rain and its effects" (2013);
 `Reflector` and SSR as found in the three.js examples (`webgl_mirror`, `webgl_postprocessing_ssr`).
 
-This example is written in GLSL: it is the WebGL route (`threedog new-game --webgl`). A game on the default WebGPU route writes the same ideas in TSL (recipe 56).
+This example is written in GLSL: it is the WebGL route (`threedog new-game --webgl`). TSL version: recipe 56.

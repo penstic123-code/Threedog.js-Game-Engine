@@ -1048,7 +1048,7 @@ events | link:enter |
 events | link:exit |
 events | mod:end |
 events | module:disabled |
-events | module:restored |
+events | module:fresh |
 events | music:change |
 events | music:stinger |
 events | net:close |
@@ -1082,7 +1082,6 @@ events | session:end |
 events | session:failed |
 events | session:start |
 events | settings:change |
-events | settings:shadows |
 events | state:applied |
 events | state:placed |
 events | state:replaced |
@@ -1145,7 +1144,7 @@ exports threedog | createTerrain | (cfg?: Partial<TerrainConfig>) => TerrainGen
 exports threedog | debug | (opts?: { open?: boolean; }) => ModuleDef<DebugPanel>
 exports threedog | dialogue | (opts?: DialogueOptions) => ModuleDef<Dialogue>
 exports threedog | ease | (e: Ease) => (t: number) => number
-exports threedog | fadeScreen | (engine: Engine, to: number, opts?: { seconds?: number; }) => Promise<void>
+exports threedog | fadeScreen | (engine: Engine, to: number, opts?: { seconds?: number; owner?: string; }) => Promise<void>
 exports threedog | fakeNetwork | (opts?: { latency?: number; jitter?: number; loss?: number; seed?: number; manual?: boolean; }) => { host(): any; connect(opts?: { key?: string; heartbeat?: number; }): any; advance(ms: number): void; readonly now: number; loss: number; latency: number; jitter: number; } @experimental
 exports threedog | firstPersonCamera | (opts?: FirstPersonCameraOptions) => ModuleDef<CameraRig>
 exports threedog | fixedCamera | (opts?: FixedCameraOptions) => ModuleDef<CameraRig>

@@ -6,7 +6,8 @@
 // drawn picture could prove it (a top-down view never shows the horizon, a metal can glow on its own): the facts, never "must fix".
 // Never taste ("too dark", "too much bloom"), never a target value. Runs on describe() and at load, never per frame: some walk the scene.
 import * as THREE from 'three';
-import { mats, noteFillLight, noteEnvironment } from '../../render/lit.js';
+import { mats } from '../../render/lit.js';
+import { litTwice, bakeSeenScene } from '../../render/probes.js';
 import { cameraFrustum } from '../base/math.js';
 import { drawnAFrame } from '../../render/backend.js';
 import { fogLook } from '../../render/fogLook.js';
@@ -29,32 +30,6 @@ function metalNoEnv(e, out) {
   const bg = s.background?.isTexture ? ' (scene.background is not one: it lights nothing)' : '';
   note(out, 'metal-no-env', `no environment reflection on ${metal.size} metal mesh(es) (${[...metal][0]}): what metal reflects comes from scene.environment or material.envMap, and neither is set${bg}.`);
 }
-
-/**
- * Baked light (a probe set or a lightmap) plus a light the bake already saw: that light counts twice. Exported for the load-time warning of
- * render/probes.js and render/lightmap.js (the same words there). @param {any} e @returns {string | null}
- */
-export function litTwice(e) {
-  const probes = !!e._probeSets?.size, lightmap = !!e._lightmap;
-  if (!probes && !lightmap) return null;
-  const doubled = [];
-  let mapped = 0;
-  e.scene.traverseVisible(o => {
-    if (noteFillLight(o, doubled)) return;
-    if (lightmap && o.isLightProbeGrid) doubled.push(`probe grid ${o.name}`);   // the lightmap baked the bounce the grid adds again
-    else if (probes && !lightmap && o.isMesh && mats(o).some(m => m?.lightMap)) mapped++;   // a game's own lightMap under a probe grid
-  });
-  noteEnvironment(e.scene, doubled);
-  if (mapped) doubled.push(`material.lightMap on ${mapped} mesh(es)`);
-  if (!doubled.length) return null;
-  const what = [probes && 'probe', lightmap && 'lightmap'].filter(Boolean).join(' and ');
-  const list = doubled.slice(0, 2).join(', ') + (doubled.length > 2 ? ` and ${doubled.length - 2} more` : '');
-  if (!bakeSeenScene(e)) return `${what} light is added on top of ${list}. If the bake saw it, it counts twice (a loaded file does not say which lights it saw). Fix: lower it where the bake takes over, or bake without it.`;
-  return `${what} light is added on top of ${list}, which the bake already saw, so it counts twice. Fix: lower it where the bake takes over, or bake without it.`;
-}
-
-/** True only when every baked light came from a bake made in this session (engine.bakeProbes): it saw this scene's lights. A loaded file or a lightmap carries no record of them */
-const bakeSeenScene = e => !e._lightmap && [...(e._probeSets ?? [])].every(s => s.source === 'bake');
 
 /**
  * A glow before the exposure that applies after it: its threshold acts on light the screen shows scaled. A note: how much of the picture passes the

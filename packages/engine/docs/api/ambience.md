@@ -3,8 +3,8 @@
 Ambience (ambience() module)
 
 - Options `AmbienceOptions`:
-  - `rules?: import('./core').AmbienceRule[]`
-  - `interval?: number`
+  - `rules?: import('./core').AmbienceRule[]` Rules added after the ones in createEngine({ audio: { ambience } })
+  - `interval?: number` Seconds between rule checks, default 0.25
 
 ## Methods and properties
 - `ambience.add(rule: AmbienceRule) → { remove(): void }` — Add one rule; returns a handle whose remove() fades the sound out and drops the rule. Example: `const h = engine.ambience.add({ sound: 'storm-wind', when: { weather: 'storm' }, volume: 0.5 });`

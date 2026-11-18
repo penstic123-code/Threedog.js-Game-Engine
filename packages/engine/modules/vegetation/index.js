@@ -54,7 +54,7 @@ export function vegetation(opts = {}) {
     install(e, ctx) {
       e.i18n.add({ 'zh-CN': { 'module.vegetation': '植被' }, en: { 'module.vegetation': 'vegetation' } });
       v = new Vegetation(e, opts, ctx);
-      ctx.track(e.events.on('settings:shadows', () => v.host.refreshLevels()));   // whichever chunks it grows on: each level pass rereads the shadow switch
+      ctx.track(e.stacks.get('shadows.enabled').watch(() => v.host.refreshLevels()));   // whichever chunks it grows on: each level pass rereads the shadow switch
       if (v.host !== e.terrain) {
         own = v.host;
         ctx.ground.addColliders((x, z, range, fn) => own.forEachCollider(x, z, range, fn));   // collision and path planning see the trees

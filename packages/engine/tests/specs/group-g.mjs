@@ -1,4 +1,4 @@
-// Group G guards (gameplay modules review, docs/plans/2026-11-09-group-g.md): one check per root cause, each fails with its fix reverted.
+// Group G guards (gameplay modules review, docs/plans/done/2026-11-09-group-g.md): one check per root cause, each fails with its fix reverted.
 // Run: npm test -- "group G"
 const PAGE = '/tests/threads/';
 const T = () => threedogThreads;

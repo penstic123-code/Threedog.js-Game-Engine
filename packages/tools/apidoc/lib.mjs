@@ -141,9 +141,9 @@ export function members(node) {
 // A @deprecated alias or an @internal member is not listed: the pages teach the current name, and the CHANGELOG lists every rename
 const hidden = m => (m.jsDoc || []).some(d => (d.tags || []).some(t => t.tagName.text === 'deprecated' || t.tagName.text === 'internal'));
 // Interface members are split into methods (overloads merged) and properties
-export function split(node, owner) {
+export function split(node, owner, ms = members(node)) {
   const methods = new Map(), props = [];
-  for (const m of members(node)) {
+  for (const m of ms) {
     if (ts.isConstructorDeclaration(m) || ts.isConstructSignatureDeclaration?.(m) || ts.isIndexSignatureDeclaration(m)) continue;
     const name = m.name?.getText();
     if (!name || hidden(m)) continue;
@@ -184,11 +184,22 @@ export function renderApi(lines, typeName, prefix, { skipProps = [] } = {}) {
   if (ps.length) lines.push('- Properties:', ...fieldLines(ps));
   return { methods, props };
 }
+// Fields a type gets from extends / Partial<> / Pick<> are read with the compiler's own property set (own fields first, then inherited), so the
+// parent's JSDoc shows here too and no sub-interface has to repeat it. Built on first use: most types have no heritage
+let program;
+function withInherited(node, typeName) {
+  program ??= ts.createProgram(files, { noEmit: true, skipLibCheck: true, types: [], target: ts.ScriptTarget.Latest });
+  const checker = program.getTypeChecker();
+  const own = program.getSourceFile(node.getSourceFile().fileName).statements.find(st => st.name?.text === typeName);
+  const syms = checker.getPropertiesOfType(checker.getDeclaredTypeOfSymbol(checker.getSymbolAtLocation(own.name)));
+  return { ms: syms.flatMap(sy => sy.declarations?.filter(d => ts.isPropertySignature(d)) ?? []), optional: new Set(syms.filter(sy => sy.flags & ts.SymbolFlags.Optional).map(sy => sy.name)) };
+}
 export function renderOptions(lines, typeName, label = 'Options') {
   if (!decls.has(typeName)) return;
   const node = get(typeName);
-  const { props } = split(node, typeName);
-  const x = ext(node);
+  const x = ext(node), inh = x && ts.isInterfaceDeclaration(node) ? withInherited(node, typeName) : null;
+  const { props } = split(node, typeName, inh?.ms);
+  if (inh) for (const p of props) p.optional = inh.optional.has(p.name);   // Partial<> makes a required parent field optional here
   lines.push(`- ${label} \`${typeName}\`${x ? ` (also includes the fields of ${x})` : ''}${props.length ? ':' : ''}`, ...fieldLines(props));
 }
 export function renderStruct(lines, typeName) {

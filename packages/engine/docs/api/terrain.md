@@ -11,6 +11,25 @@ Procedural terrain, data part (terrain() module: chunks, heights, edits, collisi
   - `effects?: boolean` With material: false = draw it exactly as given, no cloud shadow / season / detail patch
   - `detail?: MaterialDetail | null` Detail layer over the ground: a noise, a texture asset name or your own glsl; defaults scale 0.25, strength 0.35, top-down world projection, multiply. Change it with engine.terrain.recolor({ detail })
   - `variation?: TerrainVariation` Ground color noise, baked into the chunks
+  - `seed?: number` Random seed; the same seed gives the same terrain
+  - `chunkSize?: number` Chunk edge length (meters), default 64
+  - `resolution?: number` Cells per chunk; smaller is more "low poly", default 16
+  - `waterLevel?: number` Water level (meters), default -Infinity = no water (terrainPreset() from
+  - `flatten?: FlattenZone[]` Flattened plots
+  - `biomeColors?: Record<string, string[]>` Ground type → palette color names (two are blended by noise); a type left out is neutral gray
+  - `steep?: SteepRule[]` Steep-slope color rule
+  - `heightmap?: { url?, size?, min?, max?, center?, outside?, … } | null` Heightmap (used when there is no height function): url grayscale image, size [width m, length m], min/max height (meters), center [x, z]
+  - `height?: ((x, z, n) => number) | string | null` Height generator: (x, z, n) => meters. Without one (and without a heightmap) the ground is flat at y = 0, a placeholder (dev warning). Runs in workers, so it must be pure (only its parameters and globals like Math); an outside variable throws at terrain() naming it. n = { fbm(x, z, octaves?), noise(x, z), hash(x, z, salt?), seed, waterLevel, params }. Example: `terrain({ height: (x, z, n) => 4 + 12 * n.fbm(x * 0.01, z * 0.01) })`
+  - `groundType?: ((x, z, h, slope, n) => string | null) | string | null` Ground type: (x, z, h, slope, n) => type name (null = 'default'). Pure, like height. Colors come from biomeColors[type]; vegetation rules and footsteps match by name. Example: `terrain({ groundType: (x, z, h, slope) => slope > 0.7 ? 'rock' : h < 2 ? 'beach' : 'grass' })`
+  - `params?: Record<string, any> | null` Plain data handed to height / groundType as n.params (a preset's settings); must be serializable
+  - `shading?: 'flat' | 'smooth' | 'texture'` How the ground gets its color: 'smooth' (default) blended per grid point / 'flat' one color and normal per triangle (low poly) / 'texture' per-chunk color map sampled per pixel, so color borders (a river bank) are not confined to triangle edges and the mesh can stay coarse. See recipes/53-ground-up-close.md.
+  - `colorResolution?: number` Texture shading: color map pixels per chunk edge (default 128, 64 on low-tier devices; independent of `resolution`)
+  - `normals?: 'smooth' | 'flat' | null` Texture shading only: lighting normals 'smooth' (default) / 'flat'
+  - `normalFn?: ((i, j, h, cell) => number[]) | string | null` Replace the smooth normal at grid point (i, j): (i, j, h, cell) => [nx, ny, nz] (any length; the engine normalizes). h(i, j) is a grid-point height, cell the grid spacing in meters. Pure, like height (workers get its source). Default: central difference of the neighbors. Example: `terrain({ normalFn: (i, j, h, cell) => [(h(i - 1, j) - h(i + 1, j)) / (2 * cell), 2, (h(i, j - 1) - h(i, j + 1)) / (2 * cell)] })   // flatter lighting`
+  - `diagonal?: 'fixed' | 'adaptive' | 'alternate'` How each cell is cut into two triangles: 'fixed' (default, the same diagonal everywhere) / 'adaptive' (along the diagonal with the smaller height difference, fewer zigzag ridges on slopes) / 'alternate' (flips every other cell). It is shape: engine.surface follows it
+  - `boundsPad?: { up?: number; radius?: number }` Chunk bounding sphere margin in meters (default { up: 3, radius: 8 }): center raised by `up`, radius grown by `radius`. Raise it when a shader moves vertices far
+  - `shape?: TerrainShape | null` World outline (default null = ground everywhere): an island, a floating rock, a coastline that ends
+  - `colors?: Record<string, ColorLike>` Palette: color name → color
 
 ## Methods and properties
 - `terrain.recolor(o?: TerrainRecolor)` — Change at run time what terrain({...}) baked in. colors, biomeColors, steep, variation, shading, normals rebuild every chunk (edits stay); detail only patches the engine's material. Throws under a draw part that replaced 'terrain-draw'. Example: `engine.terrain.recolor({ colors: { grass: 0x6a8a3a }, biomeColors: { meadow: ['grass'] } });`

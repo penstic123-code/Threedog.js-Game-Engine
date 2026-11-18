@@ -11,38 +11,6 @@ export function forcedTier(search = typeof location === 'undefined' ? '' : locat
   return TIERS.includes(t) ? t : null;
 }
 
-/** @type {WeakMap<any, Set<() => void>>} per engine: the parts that rebuild when engine.tier changes */
-const FOLLOWERS = new WeakMap();
-/**
- * Follow engine.tier while running: fn runs once after every change (a preset, the device found at start). Why one notice: the post chain followed
- * the tier and the cascades read it only when made, so a preset changed one and not the other (GPT review l2-render 2). Pixel ratio does not follow
- * here: a settings preset writes its own ratio, and a second writer would undo the player's. @param {any} e @param {() => void} fn @returns {{ remove(): void }}
- */
-export function onTierChange(e, fn) {
-  if (!FOLLOWERS.has(e)) FOLLOWERS.set(e, new Set());
-  FOLLOWERS.get(e).add(fn);
-  return { remove: () => { FOLLOWERS.get(e)?.delete(fn); } };
-}
-/** @type {WeakMap<any, string>} per engine: the tier last announced by 'tier:change' */
-const ANNOUNCED = new WeakMap();
-/** The tier stack was just defined (core/engine/services.js): its first value is the baseline the first 'tier:change' differs from @param {any} e */
-export function tierDefined(e) { ANNOUNCED.set(e, e.tier); }
-/**
- * The tier stack's onChange (core/engine/services.js). The engine's own parts first, then the public 'tier:change' event: game code sizes what it
- * makes from engine.tier and follows this event (a shadow map, a pool), so a preset reaches it like it reaches the post chain.
- * The stack calls this on every take and release, also when the value stays (a preset equal to the device's tier, engine.tier written under a
- * preset), so the event fires only when the tier differs from the last one announced. Nothing during dispose: settings, disposed first, gives
- * its tier back then, and a follower would allocate (particles, a shadow map) on an engine being torn down. @param {any} e
- */
-export function tierChanged(e) {
-  if (e.disposed) return;
-  for (const fn of [...(FOLLOWERS.get(e) ?? [])]) fn();
-  const t = e.tier;
-  if (t === ANNOUNCED.get(e)) return;
-  ANNOUNCED.set(e, t);
-  e.events?.emit('tier:change', { tier: t });
-}
-
 /** The name under engine.saves.storageKey of a player's MSAA choice */
 export const MSAA_KEY = 'msaa';
 /**
@@ -55,7 +23,8 @@ export function storedMsaa(saveKey) {
 
 /**
  * Default render scale. High tier: the display scale up to 1.5. Low tier: at least 0.75 x display scale (1.5 on a 2x screen; a fixed 1 there
- * would be an upscaled blurry picture), never above 1.5 or the display scale.
+ * would be an upscaled blurry picture), never above 1.5 or the display scale. It is the base of render.pixelRatio (core/scene/pixelRatio.js), set from the
+ * device, not from tier changes while running: a preset's ratio is already a share of it.
  * @param {number} dpr @param {string} tier
  */
 export function defaultPixelRatio(dpr, tier) {

@@ -166,4 +166,27 @@ export async function run({ check }) {
   check('changed: a per-record point uses the base it is read with (6 → 3, not 1 → 0.5)', mvRow?.text === 'mv[hero] 6 → 3 (default 6 × mud 0.5)', JSON.stringify(mvRow));
   C.get('mv').dropId('hero');
   check('changed: more than 5 shows 5, the important point kept, furthest from base first', rows.map(r => r.name).join() === 'p6,p5,p4,p3,alarm', rows.map(r => r.name).join());
+
+  // watch / setBase: several parts follow one point (the tier: lights, post chain, cascades, terrain, weather), in the order they registered,
+  // and the base changes through one entry that tells them; a second notice path beside these is what this replaced
+  const we = fake(), wp = we.stacks.define('w', { kind: 'value', base: 'low' }), heard = [];
+  const w1 = typeof wp.watch === 'function' ? wp.watch(() => heard.push(1)) : null;
+  if (w1) wp.watch(() => heard.push(2));
+  if (typeof wp.setBase === 'function') wp.setBase('high');
+  check('watch: setBase tells every follower once, in registration order', heard.join() === '1,2', heard.join());
+  w1?.remove(); w1?.remove(); heard.length = 0;
+  if (typeof wp.setBase === 'function') { wp.setBase('mid'); wp.setBase('mid'); }
+  check('watch: remove() stops one follower (twice is safe); setBase to the same value tells nobody', heard.join() === '2' && wp.value() === 'mid', heard.join());
+  check('setBase: a number point rejects a non-finite base (shared-value)', code(() => we.stacks.define('wn', { base: 1 }).setBase(NaN)) === 'shared-value');
+
+  // guard: no part bumps a point's change path or writes its base by hand; setBase / watch are the entries
+  const offenders = [];
+  const scanJs = d => { for (const f of readdirSync(d, { withFileTypes: true })) {
+    const p = join(d, f.name);
+    if (f.isDirectory()) { scanJs(p); continue; }
+    if (!f.name.endsWith('.js') || f.name === 'sharedPoint.js' || f.name === 'stacks.js') continue;
+    readFileSync(p, 'utf8').split('\n').forEach((l, i) => { if (l.includes('._changed(') || (l.includes('.stacks.get(') && /\.base\s*=[^=]/.test(l))) offenders.push(`${p}:${i + 1}`); });
+  } };
+  for (const d of ['core', 'render', 'modules']) scanJs(join(ENGINE, d));
+  check('guard: no ._changed( or hand-written stacks base outside sharedPoint.js / stacks.js (use point.setBase / point.watch)', offenders.length === 0, offenders.join(' '));
 }

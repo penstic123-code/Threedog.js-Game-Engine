@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { markEngineMade } from './patches.js';
 
 /** The gray of everything the engine draws until the game gives it a picture */
-export const NEUTRAL = 0x8c8c8c;
+const NEUTRAL = 0x8c8c8c;
 
 /**
  * A plain MeshLambertMaterial for engine code: neutral gray unless params say otherwise. params are three.js material properties.

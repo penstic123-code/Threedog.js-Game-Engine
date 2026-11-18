@@ -71,12 +71,14 @@ export const metadata = {
     "rules": {
      "type": "any",
      "optional": true,
-     "docType": "import('./core').AmbienceRule[]"
+     "docType": "import('./core').AmbienceRule[]",
+     "desc": "Rules added after the ones in createEngine({ audio: { ambience } })"
     },
     "interval": {
      "type": "any",
      "optional": true,
-     "docType": "number"
+     "docType": "number",
+     "desc": "Seconds between rule checks, default 0.25"
     }
    },
    "page": true,
@@ -1617,23 +1619,33 @@ export const metadata = {
     },
     "scale": {
      "type": "any",
-     "optional": true
+     "optional": true,
+     "docType": "number",
+     "desc": "Resolution multiplier, default 1.6"
     },
     "shadowMapSize": {
      "type": "any",
-     "optional": true
+     "optional": true,
+     "docType": "number",
+     "desc": "Shadow resolution (pixels), default 4096"
     },
     "bloom": {
      "type": "any",
-     "optional": true
+     "optional": true,
+     "docType": "boolean | null",
+     "desc": "Bloom for the shot: null (default) keeps what the game's post has; true / false forces it for that shot only"
     },
     "quality": {
      "type": "any",
-     "optional": true
+     "optional": true,
+     "docType": "number",
+     "desc": "Image quality 0–1"
     },
     "format": {
      "type": "any",
-     "optional": true
+     "optional": true,
+     "docType": "string",
+     "desc": "Image format, e.g. 'image/jpeg'"
     }
    },
    "page": true,
@@ -2051,43 +2063,63 @@ export const metadata = {
     },
     "clouds": {
      "type": "any",
-     "optional": true
+     "optional": true,
+     "docType": "SkyCloudOptions",
+     "desc": "Clouds in the sky (cloud cover follows the weather); see SkyCloudOptions"
     },
     "backdrop": {
      "type": "any",
-     "optional": true
+     "optional": true,
+     "docType": "ColorLike",
+     "desc": "A flat background color in place of the dome (no gradient, horizon line, sun / moon disk, stars or clouds). Drawn as written (no tone mapping); a fog asked for in the default horizon color takes it (a fog.color of your own still wins). Leave out for the dome. recipes/08. Example: `backdrop: 0xefebe4`"
     },
     "keyframes": {
      "type": "any",
-     "optional": true
+     "optional": true,
+     "docType": "SkyKeyframe[]",
+     "desc": "Rows [time, zenith, horizon, sunColor, ambient]. time: share of the day (0 = 00:00, 0.5 = noon), sorted, first row 0, last 1 (midnight again: same values as 0). They color the dome and the signals uSkyTop / uSkyHorizon, and light nothing: sunColor is the sun disk and the signal uSunColor, ambient dims a skybox and the weather's sky tint (recipe 08). Example: `[[0, 0x0b1030, 0x1c2440, 0x8090c0, 0.25], [0.5, 0x5a8fd0, 0xbcd4ea, 0xfff4e0, 1.1], [1, 0x0b1030, 0x1c2440, 0x8090c0, 0.25]]`"
     },
     "sunSize": {
      "type": "any",
-     "optional": true
+     "optional": true,
+     "docType": "number",
+     "desc": "Sharpness exponent of the sun disk, default 900 (about 2 deg); larger = smaller. Not a size in degrees: 10 is ~20 deg, under ~3 the \"disk\" washes most of the sky toward the sun color"
     },
     "sunGlow": {
      "type": "any",
-     "optional": true
+     "optional": true,
+     "docType": "number",
+     "desc": "Sun glow, default 0.18"
     },
     "sunBrightness": {
      "type": "any",
-     "optional": true
+     "optional": true,
+     "docType": "number",
+     "desc": "(experimental) Sun brightness, default 6"
     },
     "moonColor": {
      "type": "any",
-     "optional": true
+     "optional": true,
+     "docType": "ColorLike",
+     "desc": "(experimental) Color of the moon disk drawn at night, default 0xdcdcdc"
     },
     "moonBrightness": {
      "type": "any",
-     "optional": true
+     "optional": true,
+     "docType": "number",
+     "desc": "(experimental) Brightness of the moon disk drawn at night, default 3"
     },
     "starDensity": {
      "type": "any",
-     "optional": true
+     "optional": true,
+     "docType": "number",
+     "desc": "Share of the sky grid cells (0-1) that hold a star at night, default 0.0025 (0 = no stars). A probability, not a brightness: near 1 every cell is lit and the upper sky turns into a white sheet."
     },
     "dim": {
      "type": "any",
-     "optional": true
+     "optional": true,
+     "docType": "{ tint?: boolean; stars?: boolean }",
+     "desc": "What the sky dims for every game unless the style says no (each default true; false turns that one off, the rest stay). The one place these picture decisions are switched: - tint: a sky.tint color (weather grey, a cave tint) dims with the sky's own light, so a grey rain tint stays dark at night. Example: `sky({ dim: { stars: false } })   // live: engine.sky.dim.tint = false`"
     }
    },
    "page": true,
@@ -2228,77 +2260,107 @@ export const metadata = {
     "seed": {
      "type": "any",
      "optional": true,
-     "default": 1337
+     "default": 1337,
+     "docType": "number",
+     "desc": "Random seed; the same seed gives the same terrain"
     },
     "chunkSize": {
      "type": "any",
      "optional": true,
-     "default": 64
+     "default": 64,
+     "docType": "number",
+     "desc": "Chunk edge length (meters), default 64"
     },
     "resolution": {
      "type": "any",
      "optional": true,
-     "default": 16
+     "default": 16,
+     "docType": "number",
+     "desc": "Cells per chunk; smaller is more \"low poly\", default 16"
     },
     "waterLevel": {
      "type": "any",
      "optional": true,
-     "default": null
+     "default": null,
+     "docType": "number",
+     "desc": "Water level (meters), default -Infinity = no water (terrainPreset() from"
     },
     "flatten": {
      "type": "any",
      "optional": true,
-     "default": []
+     "default": [],
+     "docType": "FlattenZone[]",
+     "desc": "Flattened plots"
     },
     "heightmap": {
      "type": "any",
      "optional": true,
-     "default": null
+     "default": null,
+     "docType": "{ url?, size?, min?, max?, center?, outside?, … } | null",
+     "desc": "Heightmap (used when there is no height function): url grayscale image, size [width m, length m], min/max height (meters), center [x, z]"
     },
     "height": {
      "type": "any",
      "optional": true,
-     "default": null
+     "default": null,
+     "docType": "((x, z, n) => number) | string | null",
+     "desc": "Height generator: (x, z, n) => meters. Without one (and without a heightmap) the ground is flat at y = 0, a placeholder (dev warning). Runs in workers, so it must be pure (only its parameters and globals like Math); an outside variable throws at terrain() naming it. n = { fbm(x, z, octaves?), noise(x, z), hash(x, z, salt?), seed, waterLevel, params }. Example: `terrain({ height: (x, z, n) => 4 + 12 * n.fbm(x * 0.01, z * 0.01) })`"
     },
     "groundType": {
      "type": "any",
      "optional": true,
-     "default": null
+     "default": null,
+     "docType": "((x, z, h, slope, n) => string | null) | string | null",
+     "desc": "Ground type: (x, z, h, slope, n) => type name (null = 'default'). Pure, like height. Colors come from biomeColors[type]; vegetation rules and footsteps match by name. Example: `terrain({ groundType: (x, z, h, slope) => slope > 0.7 ? 'rock' : h < 2 ? 'beach' : 'grass' })`"
     },
     "params": {
      "type": "any",
      "optional": true,
-     "default": null
+     "default": null,
+     "docType": "Record<string, any> | null",
+     "desc": "Plain data handed to height / groundType as n.params (a preset's settings); must be serializable"
     },
     "shading": {
      "type": "any",
      "optional": true,
-     "default": "smooth"
+     "default": "smooth",
+     "docType": "'flat' | 'smooth' | 'texture'",
+     "desc": "How the ground gets its color: 'smooth' (default) blended per grid point / 'flat' one color and normal per triangle (low poly) / 'texture' per-chunk color map sampled per pixel, so color borders (a river bank) are not confined to triangle edges and the mesh can stay coarse. See recipes/53-ground-up-close.md."
     },
     "colorResolution": {
      "type": "any",
      "optional": true,
-     "default": 128
+     "default": 128,
+     "docType": "number",
+     "desc": "Texture shading: color map pixels per chunk edge (default 128, 64 on low-tier devices; independent of `resolution`)"
     },
     "normals": {
      "type": "any",
      "optional": true,
-     "default": null
+     "default": null,
+     "docType": "'smooth' | 'flat' | null",
+     "desc": "Texture shading only: lighting normals 'smooth' (default) / 'flat'"
     },
     "normalFn": {
      "type": "any",
      "optional": true,
-     "default": null
+     "default": null,
+     "docType": "((i, j, h, cell) => number[]) | string | null",
+     "desc": "Replace the smooth normal at grid point (i, j): (i, j, h, cell) => [nx, ny, nz] (any length; the engine normalizes). h(i, j) is a grid-point height, cell the grid spacing in meters. Pure, like height (workers get its source). Default: central difference of the neighbors. Example: `terrain({ normalFn: (i, j, h, cell) => [(h(i - 1, j) - h(i + 1, j)) / (2 * cell), 2, (h(i, j - 1) - h(i, j + 1)) / (2 * cell)] })   // flatter lighting`"
     },
     "diagonal": {
      "type": "any",
      "optional": true,
-     "default": "fixed"
+     "default": "fixed",
+     "docType": "'fixed' | 'adaptive' | 'alternate'",
+     "desc": "How each cell is cut into two triangles: 'fixed' (default, the same diagonal everywhere) / 'adaptive' (along the diagonal with the smaller height difference, fewer zigzag ridges on slopes) / 'alternate' (flips every other cell). It is shape: engine.surface follows it"
     },
     "shape": {
      "type": "any",
      "optional": true,
-     "default": null
+     "default": null,
+     "docType": "TerrainShape | null",
+     "desc": "World outline (default null = ground everywhere): an island, a floating rock, a coastline that ends"
     },
     "boundsPad": {
      "type": "any",
@@ -2306,22 +2368,30 @@ export const metadata = {
      "default": {
       "up": 3,
       "radius": 8
-     }
+     },
+     "docType": "{ up?: number; radius?: number }",
+     "desc": "Chunk bounding sphere margin in meters (default { up: 3, radius: 8 }): center raised by `up`, radius grown by `radius`. Raise it when a shader moves vertices far"
     },
     "colors": {
      "type": "any",
      "optional": true,
-     "default": {}
+     "default": {},
+     "docType": "Record<string, ColorLike>",
+     "desc": "Palette: color name → color"
     },
     "biomeColors": {
      "type": "any",
      "optional": true,
-     "default": {}
+     "default": {},
+     "docType": "Record<string, string[]>",
+     "desc": "Ground type → palette color names (two are blended by noise); a type left out is neutral gray"
     },
     "steep": {
      "type": "any",
      "optional": true,
-     "default": []
+     "default": [],
+     "docType": "SteepRule[]",
+     "desc": "Steep-slope color rule"
     }
    },
    "page": true,

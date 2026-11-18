@@ -157,7 +157,7 @@ function explainBuildError(message) {
 }
 
 let consoleHooked = false;
-/** Wrap three's console function once per page: three's message as before, then the explanation for a pipeline failure */
+/** Wrap three's console function once per page: three's own message first, then the explanation for a pipeline failure */
 function hookThreeConsole() {
   if (consoleHooked) return;
   consoleHooked = true;

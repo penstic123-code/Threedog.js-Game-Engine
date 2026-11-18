@@ -10,7 +10,7 @@ After changing code, ask the running game instead of writing a playwright script
 What the bridge changes lives in this session only: `op`, `step`, `state` and `js` alter the running game and its saves, never the level. To change
 the level, edit `content/*.js` (templates, props, npcs…) or the level model and reload the page.
 
-## 1. Usage
+## 1. Usage: run a scripted check on the running game
 ```
 npm run dev -- my-game          # terminal A: start the dev server first (for the engine example just npm run dev)
 threedog describe -w my-game     # terminal B: look at the scene (inside the game folder you can omit -w)

@@ -36,7 +36,7 @@ function partsOf(root, frame) {
  * Cached per prototype by the parts themselves (geometry and matrix): copies whose setup only swapped materials share the prototype's base, while a setup that
  * thickened the trunk under the same crown gets its own. Overall bounds would not tell those two apart. @internal
  */
-export function baseOf(m) {
+function baseOf(m) {
   if (m.base) return m.base;
   if (!m.parts) { m.obj.updateMatrix(); m.parts = partsOf(m.obj, m.obj.matrix.clone()); }   // a prototype: never placed, its root matrix is its frame
   const cache = ((m.owner ?? m).bases ??= new Map());

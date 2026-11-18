@@ -7,7 +7,7 @@
 // Frames that compiled shaders (ApplyCost.rendered reports them) and the first GRACE seconds after ready are not judged: startup hitches are
 // one-off costs that lowering cannot fix, and a step that rebuilds the post chain must not judge its own compile.
 //
-// The ladder (engine.adaptive.steps; docs/plans/2026-11-09-quality-ladder.md): the game says what may be lowered and in which order. Default, cheapest
+// The ladder (engine.adaptive.steps; docs/plans/done/2026-11-09-quality-ladder.md): the game says what may be lowered and in which order. Default, cheapest
 // to see first (Unity's Adaptive Performance lowers low-visual-impact scalers first): each post effect's own `cheaper` params (live uniforms: no
 // recompile), then the resolution, then the effects that declare skipOnLowTier held off (a chain rebuild and a compile: last, and never back and forth,
 // see FLAP). No list of expensive effects lives here: an effect declares cheaper / skipOnLowTier itself, the engine follows. Only downward: nothing is
@@ -58,7 +58,8 @@ function checkSteps(v) {
 const keyOf = s => (typeof s === 'string' ? s : `game.${s.name}`);
 
 /**
- * The engine.adaptive state object: the public fields (on, target, min, max, base, lowered, from, steps; base is what this device or game starts at, the settings presets' base) plus the
+ * The engine.adaptive state object: the public fields (on, target, min, max, base, lowered, from, steps; max follows the shared value render.pixelRatio and base mirrors its base,
+ * the device default the settings presets take shares of) plus the
  * controller's own counters. on is an accessor because every reader (the loop's GPU timer, describe, settings) must see false under pixelSize; what was asked for stays and returns with setPixelSize(null).
  * held: what the ladder lowers now besides the resolution, key -> { text, undo }; the resolution needs no entry (renderer ratio against max says it).
  * @param {{ on: boolean, target: number, max: number, held: () => boolean }} o held: pixelSize decides the ratio now

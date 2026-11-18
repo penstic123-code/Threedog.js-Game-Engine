@@ -26,7 +26,7 @@ thing that only changes pixels is a write on the module's three.js material. The
 separate package, `@threedog/terrain-noise`, because the shape of the world is gameplay. Post effects such as `bloom` / `ao` / `outline` come from
 `@threedog/post-effects` and go in as `plugins/` files (recipe 40 §1, chain order: recipe 52).
 
-## 1. Materials are plain three.js
+## 1. Materials are plain three.js: which kind for which look
 `new THREE.MeshStandardMaterial(...)`, `MeshToonMaterial`, your own shading in TSL (WebGPU, recipe 56) or GLSL (WebGL only, recipe 43): all work as in any three.js project, and a plain material gets fog and
 cascaded shadows by itself. Keep them in `picture/materials.js` by name, and let other code ask for `picture.materials.wall`, so a change of picture touches one folder.
 

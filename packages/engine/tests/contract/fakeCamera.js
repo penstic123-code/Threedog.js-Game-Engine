@@ -22,7 +22,7 @@ export function fakeCamera({ heading = 0, distance = 8, height = 5 } = {}) {
   };
   return {
     name: 'cameraRig', type: 'picture', provides: ['cameraRig'], stage: 'control',
-    install(engine) { e = engine; return api; },
+    install(engine) { e = engine; e.saves.define('cameraRig', { version: 1, save: () => ({}), load() {} }); return api; },
     frame() {
       const cam = e.camera; if (!cam || !target || e.cameraOverride) return;
       const p = target.position;

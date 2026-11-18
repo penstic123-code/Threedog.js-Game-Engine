@@ -14,7 +14,7 @@
 // Renderer: the hardware GPU when headless can reach it, else SwiftShader (--gpu / --software force one); the first line says which. Under SwiftShader
 // GPU work counts as CPU time, so only look at relative differences. Pages section route: --renderer=webgl|webgpu|both (default both).
 // Resolution: --size WxH (default 1280x720, as in shot / capture), e.g. npm run perf -- --size 1920x1080. A game: threedog perf -w my-game --size 1920x1080.
-// Impostor cards (docs/plans/2026-11-09-impostors.md): --impostor adds a row of the world example with its trees as baked cards (?impostor), WebGPU route only.
+// Impostor cards (docs/plans/done/2026-11-09-impostors.md): --impostor adds a row of the world example with its trees as baked cards (?impostor), WebGPU route only.
 // Frame count: npm run perf -- 120. Load ramps per axis: threedog stress
 process.env.THREEDOG_TEST = '1';
 import { rmSync, existsSync, readdirSync } from 'node:fs';

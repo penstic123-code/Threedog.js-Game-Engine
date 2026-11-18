@@ -11,7 +11,7 @@ export default {
     'contents', 'setContents', 'renameIds'],   // contents / setContents: net syncs containers through these; renameIds: content renames move goods
   ops: ['inventory.transfer', 'inventory.trade', 'inventory.use', 'inventory.drop'],
   events: ['item:add', 'item:remove', 'item:use'],   // item:add / item:remove carry { container, actor } for every container
-  saves: { inventory: 1 },
+  saves: { inventory: 1, containers: 2 },
   describe: true,
   options: {},
   probe: {

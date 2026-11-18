@@ -74,7 +74,7 @@ export function flow(opts = {}) {
         const lock = lockInput ? e.input.push('transition') : null;
         let shown = false, turn = null;
         try {
-          await fadeScreen(e, 1, { seconds: fade });
+          await fadeScreen(e, 1, { seconds: fade, owner: 'flow' });
           if (sig?.aborted || await gone()) return;   // unloaded, or the state replaced, during the fade: no scene swap for what is gone (the finally gives the screen and input back)
           const m = music === 'fade' ? e.music : null, prev = m?.current;
           m?.stop({ fade });
@@ -84,10 +84,10 @@ export function flow(opts = {}) {
           await whenSettled(e, undefined, true);
           if (sig?.aborted) return;
           if (m && prev && !m.current && !m.ruled && !replaced()) m.play(prev);   // no track rule: resume the previous track after the switch. A new game or load has its own music, however fn started it; a level load nobody awaited is still this playthrough
-          await fadeScreen(e, 0, { seconds: fade });
+          await fadeScreen(e, 0, { seconds: fade, owner: 'flow' });
           shown = true;
         } finally {
-          if (!shown) fadeScreen(e, 0, { seconds: 0 });   // fn threw: don't leave the screen black, fade back in at once (the error still propagates to the caller)
+          if (!shown) fadeScreen(e, 0, { seconds: 0, owner: 'flow' });   // fn threw: don't leave the screen black, fade back in at once (the error still propagates to the caller)
           turn?.remove();
           lock?.remove();
           api.transitioning = false;

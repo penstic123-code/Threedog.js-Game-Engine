@@ -127,7 +127,7 @@ tower.levels[1].object;  // a plain THREE.LOD: read, replace, tower.addLevel(...
   then `skipOnLowTier` effects held off (a rebuild, so last; one that drops straight back waits longer). Your own knob: `{ name, down, up }`
   (down: false at its floor). `['resolution']` = scale only, `[]` = nothing.
   Only downward: what the game or player has off is no step, settings stay above it, `adaptive.on = false` puts every effect back.
-- `engine.setPixelRatio(p)` = the top it climbs back to; a direct `renderer.setPixelRatio` drops the resolution step; `pixelSize` stops it all (recipe 62 4b).
+- `engine.setPixelRatio(p)` = the top it climbs back to, never above a ratio the player chose in settings below the device default (the slider, or a preset share under 1; `settings.reset('pixelRatio')` hands it back); a direct `renderer.setPixelRatio` drops the resolution step; `pixelSize` stops it all (recipe 62 4b).
 - `describe().render.scale`: `{ current, devicePixelRatio, upscaled, pixelSize, autoLowered, adaptive, floor, max }`. `upscaled: true` means current < devicePixelRatio, the picture
   is softer than the screen: if that looks wrong in a screenshot, check this before the style. Fixed quality: `pixelRatio: n` plus `adaptiveResolution: false`.
 

@@ -13,7 +13,7 @@ Every root added with `engine.add` or `engine.scene.add` is registered: an id, w
 keeps. World records (template instances, props, pickups, NPCs, level nodes) share the same id space and the same query, so one question works for a
 plain three.js mesh and for a template instance alike. Only `engine.add(obj, { id })` gives it a stable id.
 
-## 1. Two doors into one scene
+## 1. Two doors into one scene: add a mesh the save remembers, or plain scene.add
 A scene object comes in either of two ways, and both end up in the same scene:
 
 - **Plain three.js.** Build a mesh or group, `engine.scene.add(obj)` (or `engine.add(obj)`, the same registration). Nothing else is required. This is the right way for anything your code rebuilds

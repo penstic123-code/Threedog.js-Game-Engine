@@ -50,7 +50,6 @@ import { isOptions, isUnder } from '../../core/base/util.js';
 import { codedError } from '../../core/base/errorHints.js';
 import { borrowRenderer } from '../../render/backend.js';
 import { ParticleLights } from './lit.js';
-import { onTierChange } from '../../core/scene/tier.js';
 // one schema per public entry (unknown keys throw in dev with did-you-mean). Effect param values come in many shapes (number or [min, max], color), so most are only checked by key name
 const FX_PARAMS = keysSchema(KEYS, {}, {
   ratePerMeter: { type: 'number', optional: true, min: 0, desc: 'particles per meter the emitter moves' },
@@ -286,7 +285,7 @@ export function particles(opts = {}) {
   }
   if (opts.default) readFx('particles({ default })', opts.default);
   let p = null;
-  return { name: 'particles', skipKind: 'none', type: 'picture', provides: ['particles'], label: 'Particles', params: PARTICLES_PARAMS, options: opts, stage: 'effects', install(e, ctx) { e.i18n.add({ 'zh-CN': { 'module.particles': '粒子' }, en: { 'module.particles': 'particles' } }); p = new Particles(e, opts); ctx.track(onTierChange(e, () => p._tierChanged())); return p; }, frame(dt) { p.update(dt); },
+  return { name: 'particles', skipKind: 'none', type: 'picture', provides: ['particles'], label: 'Particles', params: PARTICLES_PARAMS, options: opts, stage: 'effects', install(e, ctx) { e.i18n.add({ 'zh-CN': { 'module.particles': '粒子' }, en: { 'module.particles': 'particles' } }); p = new Particles(e, opts); ctx.track(e.stacks.get('tier').watch(() => p._tierChanged())); return p; }, frame(dt) { p.update(dt); },
     dispose() { for (const fx of p.effects.values()) fx.dispose(); p.effects.clear(); p.emitters.clear(); p._depth?.target.depthTexture.dispose(); p._depth?.target.dispose(); p._depth?.material.dispose(); },
     counts() { return { alive: p.count(), emitters: p.emitters.size }; },   // engine.counts().particles
     // "did the dust burst fire": live particles in total and per effect that has any (idle effects left out to stay short). Kept under `alive`

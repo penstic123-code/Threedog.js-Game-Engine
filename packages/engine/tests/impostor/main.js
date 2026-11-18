@@ -1,4 +1,4 @@
-// Impostor cards (vegetation.define({ impostor }), docs/plans/2026-11-09-impostors.md), tests/specs/impostor.mjs. Two WebGPU engines plant the same
+// Impostor cards (vegetation.define({ impostor }), docs/plans/done/2026-11-09-impostors.md), tests/specs/impostor.mjs. Two WebGPU engines plant the same
 // red trees on flat ground; one draws them as meshes everywhere, the other as baked cards beyond lodRing 0. The camera stands in ring 0 and
 // looks over the far rings, so what it sees of the trees is the far drawing: draws, tree pixels and their colour are compared, then every far
 // tree is felled on the card engine and its cards must go.

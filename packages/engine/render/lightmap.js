@@ -9,7 +9,7 @@ import { readParams } from '../core/base/params.js';
 import { codedError, coded } from '../core/base/errorHints.js';
 import { warnOnce, fmt } from '../core/base/validate.js';
 import { mats } from './lit.js';
-import { litTwice } from '../core/inspect/pictureChecks.js';
+import { litTwice } from './probes.js';
 
 const FORMAT = 'threedog-lightmap', VERSION = 1, MAGIC = 0x4d4c4454;   // 'TDLM'
 const LOAD = { owner: { type: 'string', default: 'game', desc: 'who loaded it (describe().render.lightmap)' } };

@@ -80,7 +80,8 @@ export class Stack {
     if (kind === 'number' && !Number.isFinite(this.base)) throw codedError('shared-value', `engine.stacks.define('${name}', { base }): base is a finite number, got ${shown(this.base)}. Fix: { base: 1 }`);
     for (const [k, b] of [['min', min], ['max', max]]) if (typeof b !== 'number' || Number.isNaN(b)) throw codedError('shared-value', `engine.stacks.define('${name}', { ${k} }): ${k} is a number (leave it out for no bound), got ${shown(b)}`);
     if (min > max) throw codedError('shared-value', `engine.stacks.define('${name}', { min, max }): min must be <= max, got min ${min} > max ${max}. Fix: { min: ${max}, max: ${min} }`);
-    this.min = min; this.max = max; this.save = save; this.per = per; this.onChange = onChange;
+    this.min = min; this.max = max; this.save = save; this.per = per;
+    /** @type {Set<(id: string | null) => void>} define's onChange is the first follower */ this._watchers = new Set(); if (onChange) this._watchers.add(onChange);
     /** the copyable "take it over on purpose" call the conflict error offers (a module's own takeover entry); default: a set on the system layer */
     this.manual = manual;
     /** the settings layer may set here (key bindings: the player's rebinding replaces the game's keys, it is not a restriction) */
@@ -219,7 +220,15 @@ export class Stack {
     return true;
   }
   /** @internal */
-  _changed(id) { this._ver++; this.all._version++; this.onChange?.(id ?? null); }
+  _changed(id) { this._ver++; this.all._version++; for (const fn of [...this._watchers]) fn(id ?? null); }
+  /** @internal Follow every change, in registration order: several parts follow one point (the tier: lights, post chain, cascades, terrain, weather) @param {(id: string | null) => void} fn @returns {{ remove(): void }} */
+  watch(fn) { this._watchers.add(fn); return { remove: () => { this._watchers.delete(fn); } }; }
+  /** @internal The one way to change the base: it tells the followers, which a bare write to .base did not @param {any} v */
+  setBase(v) {
+    if (Object.is(this.base, v)) return;
+    if (this.kind === 'number' && !Number.isFinite(v)) throw codedError('shared-value', `engine.stacks.get('${this.name}').setBase(v): v is a finite number, got ${shown(v)}. Fix: setBase(1)`);
+    this.base = v; this._changed();
+  }
   /** @internal End owner's entry by name (engine holds: the halt handle); games end theirs with the handle's remove(). false when it held none @param {string} owner @param {{ id?: string }} [o] */
   release(owner, { id } = {}) { return this._drop(owner, id); }
   /** Drop every entry for record id (world.remove does it, so no orphan entries) @param {string} id */

@@ -535,8 +535,10 @@ export interface SkyPictureOptions {
   sunGlow?: number;
   /** Sun brightness, default 6 @experimental */
   sunBrightness?: number;
-  /** @experimental */ moonColor?: ColorLike;
-  /** @experimental */ moonBrightness?: number;
+  /** Color of the moon disk drawn at night, default 0xdcdcdc @experimental */
+  moonColor?: ColorLike;
+  /** Brightness of the moon disk drawn at night, default 3 @experimental */
+  moonBrightness?: number;
   /** Share of the sky grid cells (0-1) that hold a star at night, default 0.0025 (0 = no stars). A probability, not a brightness: near 1 every cell is lit and the upper sky turns into a white sheet. */
   starDensity?: number;
   /**

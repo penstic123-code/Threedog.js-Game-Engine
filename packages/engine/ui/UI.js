@@ -11,7 +11,7 @@ import { injectUICSS } from './theme.js';
 import { codedError } from '../core/base/errorHints.js';
 import { uiAfter } from '../core/time/uiClock.js';
 import { readParams, keysSchema } from '../core/base/params.js';
-const FADE_SCREEN_KEYS = ['seconds'];
+const FADE_SCREEN_KEYS = ['seconds', 'owner'];
 /** @import { Engine } from '../types/core' */
 /** @import { PositionLike, Object3D } from '../types/common' */
 /** @import { UIWindow, WindowOptions, ScreenPoint } from '../types/gameplay' */
@@ -142,36 +142,40 @@ export function placeAt(el, x, y) {
   if (el.style.top !== top) el.style.top = top;
 }
 
-const fades = new WeakMap();   // engine → { el, value, from, to, t, d, done }
-// color --threedog-fade-bg. Follows engine frames (step() advances it too; stops while the loop is halted). A new fade interrupts the old (the old Promise resolves at once).
+const fades = new WeakMap();   // engine → { el, by: Map<owner, { owner, value, from, to, t, d, done }> }
+// color --threedog-fade-bg. Follows engine frames (step() advances it too; stops while the loop is halted). Each owner has its own cover; the screen shows the darkest. A new fade by the same owner interrupts its own old one (that Promise resolves at once).
 // Scene transitions use engine.flow.transition and cutscenes use the timeline's { fade: seconds, to } step; both go through here.
 /**
  * Fade the whole screen to `to` (0 clear ... 1 fully covered) over `seconds` (default 0.5); the Promise resolves when the fade ends.
  * fadeScreen(engine, 1, 0.5) throws in dev: fadeScreen(engine, 1, { seconds: 0.5 })
  * @param {Engine} engine
  * @param {number} to  0 clear ... 1 fully covered
- * @param {{ seconds?: number }} [opts]
+ * @param {{ seconds?: number, owner?: string }} [opts]  owner: who holds this cover (default 'game'); a transition or a cutscene does not clear a cover another owner holds
  * @returns {Promise<void>}
  */
 export function fadeScreen(engine, to, opts) {
-  const { seconds = 0.5 } = readParams('fadeScreen()', keysSchema(FADE_SCREEN_KEYS), opts);
+  const { seconds = 0.5, owner = 'game' } = readParams('fadeScreen()', keysSchema(FADE_SCREEN_KEYS), opts);
   injectUICSS();
-  let f = fades.get(engine);
-  if (!f) {
+  let s = fades.get(engine);
+  if (!s) {
     const el = document.createElement('div'); el.className = 'threedog-fade'; engine.uiRoot.appendChild(el);
-    f = { el, value: 0, from: 0, to: 0, t: 0, d: 0, done: null };
-    fades.set(engine, f);
-    engine.onFrame(dt => { if (f.done) { f.t += dt; set(f, f.t >= f.d ? 1 : f.t / f.d); } });
+    s = { el, by: new Map() };
+    fades.set(engine, s);
+    engine.onFrame(dt => { for (const f of [...s.by.values()]) if (f.done) { f.t += dt; set(s, f, f.t >= f.d ? 1 : f.t / f.d); } });
   }
+  let f = s.by.get(owner);
+  if (!f) s.by.set(owner, f = { owner, value: 0, from: 0, to: 0, t: 0, d: 0, done: null });
   f.done?.();
   Object.assign(f, { from: f.value, to, t: 0, d: seconds, done: null });
   const p = new Promise(res => { f.done = () => { f.done = null; res(); }; });
-  if (seconds <= 0) set(f, 1);
+  if (seconds <= 0) set(s, f, 1);
   return p;
 }
-function set(f, k) {
+function set(s, f, k) {
   f.value = f.from + (f.to - f.from) * k;
-  f.el.style.setProperty('--threedog-fade', f.value);
-  f.el.classList.toggle('is-on', f.value > 0.01);
+  if (k >= 1 && f.value <= 0) s.by.delete(f.owner);   // a cleared owner holds nothing
+  const top = Math.max(0, ...[...s.by.values()].map(x => x.value));
+  s.el.style.setProperty('--threedog-fade', top);
+  s.el.classList.toggle('is-on', top > 0.01);
   if (k >= 1) f.done?.();
 }

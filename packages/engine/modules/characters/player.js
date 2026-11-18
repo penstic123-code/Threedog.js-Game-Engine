@@ -8,7 +8,7 @@ import { DEV_STRINGS, validControl } from './playerStrings.js';
 import { vehicleById, seatFromRecord } from './seat.js';
 
 /** The player's world record: its id and its kind */
-export const PLAYER = 'player';
+const PLAYER = 'player';
 
 /** Everything addPlayer refuses, before it touches the old player */
 function checkOptions(e, st, opts) {

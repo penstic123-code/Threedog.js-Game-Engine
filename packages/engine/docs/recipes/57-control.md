@@ -39,7 +39,7 @@ What to remember:
 - **Inside a module** use `ctx.control.take(ch, { ... })`: the owner defaults to the module, and everything it holds is handed back when the
   module goes (unloaded, rolled back, replaced).
 
-## Who takes what
+## Who takes what: who drives the player body
 
 | Driver | Layer | Owner | Notes |
 |---|---|---|---|

@@ -5,6 +5,11 @@ Photo mode (photo() module)
 - Options `PhotoOptions` (also includes the fields of PhotoTakeOptions):
   - `maxAlbum?: number` (experimental) How many photos the album keeps at most, default 50
   - `pathTracer?: (() => Promise<any>) | null` (experimental) The game's import of its optional path tracer, called on the first photo.trace(): () => import('three-gpu-pathtracer/webgpu')
+  - `scale?: number` Resolution multiplier, default 1.6
+  - `shadowMapSize?: number` Shadow resolution (pixels), default 4096
+  - `bloom?: boolean | null` Bloom for the shot: null (default) keeps what the game's post has; true / false forces it for that shot only
+  - `quality?: number` Image quality 0–1
+  - `format?: string` Image format, e.g. 'image/jpeg'
 
 ## Methods and properties
 - `photo.take(opts?: PhotoTakeOptions) → PhotoShot` — Capture a photo now without checks. Gameplay takes photos through the op: engine.ops.run('photo.take') (checks canTake, logged)

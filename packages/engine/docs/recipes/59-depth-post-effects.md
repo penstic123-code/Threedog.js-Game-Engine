@@ -8,7 +8,7 @@
 Fog you march through, light shafts, haze that thickens with distance, edge or focus effects: they all read the scene depth behind each pixel
 and turn it into a distance or a world position. This recipe writes one such effect with both forms, a three.js `Pass` (GLSL) for
 WebGLRenderer and a TSL node for WebGPURenderer, in one effect object. How effects are ordered, switched and tuned is recipe 52's
-[Post effect chain](52-around-the-picture.md#post-effect-chain); the TSL side in general is [recipe 56](56-webgpu-tsl.md#post-effects-as-nodes).
+[Post effect chain](52-around-the-picture.md#post-effect-chain-your-own-pass-extra-render-passes); the TSL side in general is [recipe 56](56-webgpu-tsl.md#post-effects-as-nodes).
 For plain distance or height fog on materials, `engine.scene.fog` is enough (recipe 34).
 
 ## One effect, both renderers

@@ -147,7 +147,7 @@ const PROTO_COMPILE = THREE.Material.prototype.onBeforeCompile, PROTO_KEY = THRE
 // carries this key: a function handing back the game's part it wraps (null / three's method when the game had none). The WebGPU route names
 // only the game's GLSL hook by it (render/backend.js), and cloneMaterial carries the game's part instead of a wrapper bound to the original
 /** @internal */
-export const WRAPPED = Symbol.for('threedog.patchWrapper');
+const WRAPPED = Symbol.for('threedog.patchWrapper');
 
 function apply(shader, list, m, renderer) {
   for (const p of list) for (const d of p.needs?.data || []) if (!shader[d]) {
@@ -450,8 +450,8 @@ export function unpatchMaterial(material, name) {
 
 // What three's clone leaves behind. NodeMaterial.copy (and Material.copy's fixed list) carries only properties a fresh instance of the class
 // already has, so what a game set on the instance itself was dropped: its own lighting (mat.setupLightingModel = celLighting, the cel.tsl.js
-// example), its own onBeforeCompile, a field its class never declares. The copy then drew with three's plain lighting (Pigforest: every
-// vegetation model tree lost its toon look). Skipped as three's copy skips them: '_' internals, is* flags, ids, userData (copied by three)
+// example), its own onBeforeCompile, a field its class never declares. The copy then drew with three's plain lighting (a game's own toon
+// lighting on every cloned model was lost). Skipped as three's copy skips them: '_' internals, is* flags, ids, userData (copied by three)
 const NOT_CARRIED = /^(?:is[A-Z]|_)|^(?:id|uuid|version|type|userData|clippingPlanes)$/;
 /** The game's part under engine wrappers (WRAPPED), else the value itself */
 const gamePart = v => { while (typeof v === 'function' && v[WRAPPED]) v = v[WRAPPED](); return v; };

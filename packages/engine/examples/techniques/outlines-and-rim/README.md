@@ -38,7 +38,7 @@ How to judge it: a shot at the real camera, with the busiest background the game
 - **Selection highlight**: a colored hull or `OutlinePass` on the selected object only.
 
 ## The engine helper (optional convenience)
-Copy `outlines.js` into a game; `main.js` (shapes) and `picture/` (this page's whole picture, plain three.js: lights, materials by name, the post pass) are only the demo. It gives `trackResolution(engine)` (the drawing-buffer size for screen-unit hulls),
+Copy `outlines.js` into a game; only the demo around it is not part of the tool (`main.js` shapes; `picture/` has the lights, materials by name and the post pass). It gives `trackResolution(engine)` (the drawing-buffer size for screen-unit hulls),
 `addHull(mesh, { thickness, units: 'world' | 'screen', color })`, and `rimPatch({ color, strength, power, shadowSide })`.
 
 | route | how | width | cost |

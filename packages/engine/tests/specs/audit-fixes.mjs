@@ -87,13 +87,11 @@ export const specs = [
       check('patches: hot reload with an Object3D (cycle) in uniforms does not recurse into it, and swaps string glsl, pars and object glsl',
         !err && changed?.length === 1 && !vs.includes('auditOld') && (vs.match(/auditNew/g) ?? []).length >= 3, err || vs.split('\n').filter(l => /audit/.test(l)).join(' | '));
 
-      // 5. 游戏自带渲染器（owned false）：色调曲线是游戏的，不是 engine。518b27ee 起"谁在写"由 owned 记录说（_oTone 交给 manual，
-      //    describeRender 的 tone.writer 读它出 'game'），_renderBase 只记渲染器是不是引擎建的
+      // 5. A game-supplied renderer (owned false): recordRender only notes whether the engine built the renderer. Who writes the tone curve is the owned value
+      //    made in core/scene/view.js (S7), checked where it lives
       const e1 = { renderer: { toneMapping: 4 } }; recordRender(e1, { owned: false });
       const e2 = { renderer: { toneMapping: 4 } }; recordRender(e2, { owned: true });
-      check("describeRender: a game-supplied renderer's tone mapping is the game's (owned record manual -> writer 'game'); the engine's own renderer is owned",
-        e1._oTone.on === false && e2._oTone.on === true && e1._renderBase.owned === false && e2._renderBase.owned === true,
-        JSON.stringify([e1._renderBase, e1._oTone.on, e2._renderBase, e2._oTone.on]));
+      check("describeRender: recordRender notes whether the engine built the renderer", e1._renderBase.owned === false && e2._renderBase.owned === true, JSON.stringify([e1._renderBase, e2._renderBase]));
 
       // 3. mount 一株不剩：数据里的记录和碰撞清空并告诉外观；外观把旧网格拆掉并释放
       let disposed = 0;

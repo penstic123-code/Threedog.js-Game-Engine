@@ -4,6 +4,16 @@ Sky dome and the sun / daylight / sky-color signals, from the calendar's time; i
 
 - Options `SkyOptions` (also includes the fields of Pick<SkyPictureOptions, 'clouds' | 'backdrop' | 'keyframes' | 'sunSize' | 'sunGlow' | 'sunBrightness' | 'moonColor' | 'moonBrightness' | 'starDensity' | 'dim'>):
   - `time?: string | number` The fixed time of day drawn while no calendar() is installed: 'HH:MM' or 0–1 (0.5 noon), default 0.33 (a sunset arena: sky({ time: '18:30' })). With calendar() the sky draws engine.calendar.timeOfDay and this option throws (start the day with calendar({ time }))
+  - `clouds?: SkyCloudOptions` Clouds in the sky (cloud cover follows the weather); see SkyCloudOptions
+  - `backdrop?: ColorLike` A flat background color in place of the dome (no gradient, horizon line, sun / moon disk, stars or clouds). Drawn as written (no tone mapping); a fog asked for in the default horizon color takes it (a fog.color of your own still wins). Leave out for the dome. recipes/08. Example: `backdrop: 0xefebe4`
+  - `keyframes?: SkyKeyframe[]` Rows [time, zenith, horizon, sunColor, ambient]. time: share of the day (0 = 00:00, 0.5 = noon), sorted, first row 0, last 1 (midnight again: same values as 0). They color the dome and the signals uSkyTop / uSkyHorizon, and light nothing: sunColor is the sun disk and the signal uSunColor, ambient dims a skybox and the weather's sky tint (recipe 08). Example: `[[0, 0x0b1030, 0x1c2440, 0x8090c0, 0.25], [0.5, 0x5a8fd0, 0xbcd4ea, 0xfff4e0, 1.1], [1, 0x0b1030, 0x1c2440, 0x8090c0, 0.25]]`
+  - `sunSize?: number` Sharpness exponent of the sun disk, default 900 (about 2 deg); larger = smaller. Not a size in degrees: 10 is ~20 deg, under ~3 the "disk" washes most of the sky toward the sun color
+  - `sunGlow?: number` Sun glow, default 0.18
+  - `sunBrightness?: number` (experimental) Sun brightness, default 6
+  - `moonColor?: ColorLike` (experimental) Color of the moon disk drawn at night, default 0xdcdcdc
+  - `moonBrightness?: number` (experimental) Brightness of the moon disk drawn at night, default 3
+  - `starDensity?: number` Share of the sky grid cells (0-1) that hold a star at night, default 0.0025 (0 = no stars). A probability, not a brightness: near 1 every cell is lit and the upper sky turns into a white sheet.
+  - `dim?: { tint?: boolean; stars?: boolean }` What the sky dims for every game unless the style says no (each default true; false turns that one off, the rest stay). The one place these picture decisions are switched: - tint: a sky.tint color (weather grey, a cave tint) dims with the sky's own light, so a grey rain tint stays dark at night. Example: `sky({ dim: { stars: false } })   // live: engine.sky.dim.tint = false`
 
 ## Methods and properties
 - `sky.keyframes(rows?: any[][]) → any[][]` — The day's colors, live: rows [time, zenith, horizon, sunColor, ambient] sorted from 0 to 1 (the same rows as sky({ keyframes })). Throws, changing nothing, on rows that are not sorted from 0 to 1. No argument: a copy of the rows in use (a picture gives them back on leaving). Example: `engine.sky.keyframes([[0, 0x101828, 0x202838, 0x8090b0, 0.3], [0.5, 0x4080c0, 0xc0d8e8, 0xffffff, 1.2], [1, 0x101828, 0x202838, 0x8090b0, 0.3]]);`

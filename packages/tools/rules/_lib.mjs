@@ -198,6 +198,8 @@ export function engineApi() {
 
 /** Generated docs (not edited by hand, exempt from size checks etc.) */
 export const GENERATED = P.GENERATED;
+/** A generated source file (layer-scan and R10 both leave these out) */
+export const isGeneratedFile = f => /[.]generated[.]js$/.test(f);
 
 /** Path inside the engine package (relative to the repo root): E('modules/x.js') → 'packages/engine/modules/x.js' */
 export const E = sub => `${P.ENGINE_REL}/${sub}`;

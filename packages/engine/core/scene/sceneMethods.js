@@ -111,7 +111,7 @@ export const sceneMethods = {
       drawOnce(this.renderer, this.scene, camera, target);
     } finally { if (own) own.inside--; }
   },
-  /** Render resolution, and the top adaptive resolution climbs back to. Throws while pixelSize is on (core/scene/pixelRatio.js) @param {number} p */
+  /** Render resolution, and the top adaptive resolution climbs back to. A ratio the player chose in settings below the device default caps it. Throws while pixelSize is on (core/scene/pixelRatio.js) @param {number} p */
   setPixelRatio(p) { askRatio(this, p); },
   /**
    * One art pixel becomes k real screen pixels, every one the same width at any display scale, and it stays so through a page zoom or a move to another display.

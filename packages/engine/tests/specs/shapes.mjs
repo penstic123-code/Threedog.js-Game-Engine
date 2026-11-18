@@ -177,7 +177,7 @@ export const specs = [
       check('a registered mesh picks', r.pickRegistered, JSON.stringify(r));
       check('its shadow falls through the engine shadow map', r.shadowed[0] < r.open[0] - 40, JSON.stringify(r));
       check('post runs over it, through the own camera', r.posted[0] < r.corner[0] - 5, JSON.stringify(r));
-      // whoever made a resource frees it (docs/plans/2026-11-09-resource-lifetime.md, design 6.2): engine.dispose() lets go of the game's mesh and frees none of it
+      // whoever made a resource frees it (docs/plans/done/2026-11-09-resource-lifetime.md, design 6.2): engine.dispose() lets go of the game's mesh and frees none of it
       check('dispose leaves its geometry and material to the game', r.freed === 0, String(r.freed));
     },
   },

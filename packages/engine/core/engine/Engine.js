@@ -28,7 +28,7 @@ import { recordSweep } from '../../render/recordSweep.js';
 import { dressNodeTwins } from '../../render/patches.js';
 import { lifecycleMethods, clearHooks, checkCanvasUsable } from './lifecycle.js';
 import { createAdaptive, GpuTimer } from '../scene/adaptive.js';
-import { firstRatio, noteDeviceBox, pixelSizeOn } from '../scene/pixelRatio.js';
+import { firstRatio, defineRatio, noteDeviceBox, pixelSizeOn } from '../scene/pixelRatio.js';
 import { watchRejections } from '../base/errors.js';
 import { createMovement } from '../scene/movement.js';
 import { moduleMethods } from './modules.js';
@@ -43,7 +43,7 @@ import { installPictureWriters } from '../inspect/pictureWriters.js';
 import { ownHook } from './moduleTypes.js';
 import { defineShadows } from '../../render/shadows.js';
 import { defineTerms } from '../../render/terms.js';
-import { defineView, checkCamera } from '../scene/view.js';
+import { defineView, defineTone, checkCamera } from '../scene/view.js';
 import { nameShaderErrors } from '../../render/shaderErrors.js';
 import { probeMethods } from '../../render/probes.js';
 import { lightmapMethods } from '../../render/lightmap.js';
@@ -165,10 +165,14 @@ export class Engine {
     /** @internal */ this.baseBackgroundHex = this.baseBackground.getHex();
     this.scene.background = this.baseBackground;
     this.stacks = new Stacks(this);   // shared points: before the lights, whose shadow size reads engine.tier, and the first engine.shadows / engine.post point
+    // the one quality value (engine.tier): the device gives the base, the player's preset sets over it; settingsSet: here the player's choice is a choice, not a
+    // restriction. Defined before the lights, the first part that follows it (stacks.get('tier').watch: lights, post chain, cascades, terrain, weather)
+    this.stacks.define('tier', { kind: 'value', base: this._deviceTier, save: false, settingsSet: true });
     /** Placeholder lights { sun: DirectionalLight, hemi: HemisphereLight }: neutral and still; createEngine({ lights: false }) leaves them out of the scene @type {{ sun: any, hemi: any }} */
     this.lights = createDefaultLights(this, { add: lights !== false });
     // the engine's own renderer gets soft shadows by default; tone curve and environment stay three.js's defaults
     defineShadows(this, { owned });   // engine.shadows: master switch, cascades, box, budget on the lights a game hands in (render/shadows.js)
+    defineTone(this, { owned });   // engine.renderer.toneMapping as one owned value (core/scene/view.js)
     recordRender(this, { owned });   // baseline for describe().render (after the shadow defaults are written): which values the engine set
     // Dev server only. A bundled build (npm test, threedog shot, release) is one minified file, so a stack there names assets/index-x.js:1 for every value: a
     // wrong answer. Written as the literal, not DEV_SERVER: only the literal folds at build time, so the tracker leaves a release bundle altogether
@@ -248,6 +252,7 @@ export class Engine {
     this.ui.get('loading')?.show({});
     const adaptiveOn = adaptiveResolution && !headless;
     this.adaptive = createAdaptive({ on: adaptiveOn, target: targetFps, max: r.getPixelRatio(), held: () => pixelSizeOn(this) });
+    defineRatio(this);                          // render.pixelRatio: base, the game's setPixelRatio and the player's choice as entries; adaptive.max follows it
     this._gpu = adaptiveOn ? new GpuTimer(timerContext(r)) : null;   // GPU frame time for adaptive resolution where the browser offers the timer query
     // follow the canvas's own CSS box, not the window: a canvas in a page section or editor panel renders at its own size.
     // The window event stays for a canvas outside the page (no box, falls back to the window) and for moves that do not resize the canvas
@@ -285,12 +290,11 @@ export class Engine {
 
   get waterLevel() { return this.ground.waterLevel; }
   /** The one quality value, 'low' | 'high', what everything that scales by quality reads: the device's tier, unless the player's preset says otherwise (shared point 'tier') @type {'low' | 'high'} */
-  get tier() { return this.stacks.has('tier') ? this.stacks.get('tier').value() : this._deviceTier; }
+  get tier() { return this.stacks.get('tier').value(); }
   /** The device's tier, the base under a player's preset */
   set tier(t) {
     this._deviceTier = t;
-    const st = this.stacks.has('tier') ? this.stacks.get('tier') : null;
-    if (st && st.base !== t) { st.base = t; st._changed(); }   // through the stack's change path: onTierChange followers (post, cascades) run once; writing base alone told nobody
+    this.stacks.get('tier').setBase(t);   // setBase tells the tier's followers once; a bare write to base told nobody
   }
   /** True once the world is built (phase 'ready' or 'running'): fixed steps, ops and rendering run from here on @type {boolean} */
   get ready() { return this.phase === 'ready' || this.phase === 'running'; }

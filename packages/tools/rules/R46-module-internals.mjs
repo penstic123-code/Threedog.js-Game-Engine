@@ -7,7 +7,7 @@ import { lines, walk, importSpecs, moduleTarget, P } from './_lib.mjs';
 
 // [importing module, target path prefix, why]
 const ALLOW = [
-  ['characters', 'collision/grid.js', 'the path worker (characters/pathJob.js) rebuilds the collider grid with the same code collision uses'],
+  ['characters', 'collision/grid.js', 'the path worker (characters/pathJob.js) rebuilds the collider grid with the same code collision uses, and the main thread (Character.js, NPC.js, index.js, pathAsync.js, movers/rapier.js) takes passesOf / passesThrough from there too'],
   ['nav', 'collision/grid.js', 'collider layers: the navmesh cut for a layer list skips the colliders walking and A* skip, through the same passesOf / passesThrough'],
   ['characters', 'nav/navPath.js', 'the path worker runs the one navmesh search on its imported copy of the mesh (navPath.js says so)'],
 ];

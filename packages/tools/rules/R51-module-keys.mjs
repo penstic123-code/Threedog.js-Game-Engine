@@ -35,8 +35,10 @@ const literalOption = (o, key) => {
   return p && ts.isStringLiteralLike(p.initializer) ? p.initializer.text : undefined;
 };
 
+// A template's placeholders (scaffold fills __RENDERER__ with "renderer: 'webgpu', " or nothing, so `__RENDERER__bindings:` is a bindings key) are dropped before parsing.
+const parseTemplate = f => /__[A-Z_]+__/.test(read(f)) ? ts.createSourceFile(f, read(f).replace(/__[A-Z_]+__/g, ''), ts.ScriptTarget.Latest, true, ts.ScriptKind.JS) : parse(f);
 /** Scan the files of one game: { needs: [{ action, file, line, module }], bound: Set (with .unknown) } */
-export function scanGame(files, groups, parseFile = parse) {
+export function scanGame(files, groups, parseFile = parseTemplate) {
   const needs = [], bound = new Set();
   for (const f of files) {
     const sf = parseFile(f), imported = new Set();

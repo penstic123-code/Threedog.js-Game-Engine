@@ -1,4 +1,4 @@
-// Adaptive quality's ladder (core/scene/adaptive.js, docs/plans/2026-11-09-quality-ladder.md). 不许绕开: one controller lowers the steps in order and
+// Adaptive quality's ladder (core/scene/adaptive.js, docs/plans/done/2026-11-09-quality-ladder.md). 不许绕开: one controller lowers the steps in order and
 // raises them back in reverse, says what it lowered in the one perf notice, never back and forth on a step that rebuilds the chain, and what the game
 // or the player decided (steps, an effect off) holds. Frames are fed by hand (engine._adapt), so no GPU and no timing luck decide the run.
 

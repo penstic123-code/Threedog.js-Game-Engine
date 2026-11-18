@@ -17,7 +17,7 @@ const SHOWN = 5;   // the untraced list names this many, then "+N more": a line,
 /** What the tracer will not draw as the game does: it reads Standard / Physical fields by name (any other model becomes a plain Standard surface),
  *  ignores TSL node slots (colorNode, positionNode…) and onBeforeCompile, needs normals, and traces meshes only (on WebGL one instance per InstancedMesh).
  *  skip: the drawOnly parts traceSnapshot hides; each one's own words say what the photo lacks */
-export function untracedLine(scene, skip, gpu) {
+function untracedLine(scene, skip, gpu) {
   const why = new Map(), flat = new Set(); let other = 0, inst = 0;
   scene.traverseVisible(o => {
     if (skip.includes(o)) return;

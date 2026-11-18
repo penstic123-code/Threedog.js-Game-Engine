@@ -1,4 +1,4 @@
-// [守] 第二层复核 T 组（docs/plans/2026-11-09-group-t.md）：时间、声音的结束 / 卸载 / 身份 / 基线 / 时间契约。每条在对应修复撤掉时会红。
+// [守] 第二层复核 T 组（docs/plans/done/2026-11-09-group-t.md）：时间、声音的结束 / 卸载 / 身份 / 基线 / 时间契约。每条在对应修复撤掉时会红。
 const PAGE = '/tests/threads/';
 const run = (name, body, extra = []) => ({
   name: `[守] group T: ${name}`, url: PAGE,

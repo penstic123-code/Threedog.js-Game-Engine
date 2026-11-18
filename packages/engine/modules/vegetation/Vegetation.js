@@ -168,7 +168,7 @@ export class Vegetation {
     if (o.positions != null) checkPositions(`vegetation.define('${name}')`, o.positions, o.rule);
     const density = o.densityMap != null ? makeDensity(o.densityMap, `vegetation.define('${name}')`) : null;
     // distance fade band of near-only species (nearFade.js), checked here so a bad band throws at define; the draw part draws it
-    // impostor and lodGeometry both say what is drawn beyond lodRing: one owner (docs/plans/2026-11-09-impostors.md)
+    // impostor and lodGeometry both say what is drawn beyond lodRing: one owner (docs/plans/done/2026-11-09-impostors.md)
     if (o.impostor && o.lodGeometry) throw codedError('vegetation-option', `vegetation.define('${name}'): impostor and lodGeometry both say what is drawn beyond lodRing; keep one`);
     if (o.impostor != null) checkImpostor(`vegetation.define('${name}')`, o.impostor);
     if (o.fade && typeof o.fade === 'object') readParams(`vegetation.define('${name}').fade`, keysSchema(['start', 'end']), o.fade);
