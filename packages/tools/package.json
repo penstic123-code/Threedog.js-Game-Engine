@@ -1,6 +1,6 @@
 {
   "name": "@threedog/tools",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "The threedog commands (init, shot, check, how, dev, test...), vite preset, rules, doc generators, bake; run them as npx threedog (the command comes with the threedog package)",
   "license": "MIT",
   "repository": {
@@ -46,6 +46,7 @@
     "lib",
     "panel",
     "editor",
+    "expect",
     "gallery",
     "gamemap",
     "hub",
@@ -56,7 +57,7 @@
     "vite"
   ],
   "peerDependencies": {
-    "threedog": "^2.2.0",
+    "threedog": "^2.2.1",
     "@gltf-transform/cli": "^4.5.1",
     "tweakpane": "^4.0.5"
   },

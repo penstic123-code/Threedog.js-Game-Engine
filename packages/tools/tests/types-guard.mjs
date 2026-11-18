@@ -47,6 +47,8 @@ import { uniformArray, instancedBufferAttribute } from 'three/tsl';
 const el = uniformArray([new THREE.Vector4()]).element(0); console.log(el.xy, el.mul(2));
 console.log(instancedBufferAttribute(new THREE.InstancedBufferAttribute(new Float32Array(2), 2)).x);
 eng.time.pause();
+const lost = /** @type {never} */ (/** @type {any} */ (globalThis).lost); console.log(lost.x);   // never as three's TSL declarations give vec2(positionWorld.x, …).add(uniform(…).setGroup(…))
+/** @param {{ repeat?: [number, number] }} o */ function pairOf({ repeat = [1, 1] } = {}) { return repeat[0]; } function setOf(repeat = [2, 2]) { return pairOf({ repeat }); } setOf();
 `;
 
 export async function run({ check }) {
@@ -83,6 +85,9 @@ export async function run({ check }) {
     check('[guard] valid TSL is no error: a swizzle or method three\'s declarations leave out (36, 37) is a hint that does not claim every name runs',
       [36, 37].every(n => hints.some(l => l.includes(`probe.js:${n} `) && /TSL name/.test(l) && !/does not affect running/.test(l)) && !errs.some(l => l.includes(`probe.js:${n} `))), errs.concat(hints).join(' | '));
     check('a guessed pause (engine.time.pause) points to engine.freeze in the same line (38)', errs.some(l => /probe\.js:38 .*engine\.freeze\(owner\)/.test(l)), errs.join(' | '));
+    check('a member read on a value inference typed never (39) is a hint that does not claim it runs; an array literal passed where a pair is declared (40) is a plain JS hint',
+      hints.some(l => /probe\.js:39 .*lost this value's type/.test(l) && !/does not affect running/.test(l)) && hints.some(l => /probe\.js:40 .*plain JS/.test(l))
+      && !errs.some(l => /probe\.js:(39|40) /.test(l)), errs.concat(hints).join(' | '));
     check('no other errors (declarations themselves are clean)', errs.length === 12, errs.join(' | '));
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }

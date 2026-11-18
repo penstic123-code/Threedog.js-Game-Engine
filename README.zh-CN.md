@@ -27,7 +27,7 @@ Threedog 让 AI 用普通 JavaScript 和 three.js 做游戏。引擎负责时间
 
 画面和玩法由项目决定。材质、灯光、模型和场景对象都是 three.js 的，引擎只管多个系统要一起遵守的事。这样 AI 容易找到正确的接口，能验证自己做的结果，遇到复杂需求时仍然可以直接用 three.js。
 
-> **版本：2.2.0，已发布到 npm。** 从 2.1 升级请看 [2.2.0 更新说明](packages/engine/CHANGELOG.md#220-2026-11-19) 里的“Upgrading from 2.1”；从 1.x 升级请看 [2.0.0 更新说明](packages/engine/CHANGELOG.md#200-2026-11-16) 里的“Upgrading from 1.x”。可以从 npm 安装，也可以[从源码运行](#修改引擎本身)。发布之后的新改动列在 [CHANGELOG](packages/engine/CHANGELOG.md) 的“Unreleased”下。
+> **版本：2.2.1，已发布到 npm。** 从 2.1 升级请看 [2.2.0 更新说明](packages/engine/CHANGELOG.md#220-2026-11-19) 里的“Upgrading from 2.1”；从 1.x 升级请看 [2.0.0 更新说明](packages/engine/CHANGELOG.md#200-2026-11-16) 里的“Upgrading from 1.x”。可以从 npm 安装，也可以[从源码运行](#修改引擎本身)。发布之后的新改动列在 [CHANGELOG](packages/engine/CHANGELOG.md) 的“Unreleased”下。
 
 ## 看看它能做什么
 

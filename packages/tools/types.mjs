@@ -225,10 +225,16 @@ const tslType = text => /\b(?:\w*Node<|Number<"|NodeBuilder\b)/.test(text);
  */
 const isTslMember = d => d.code === 2339 && tslType(d.msg + ' ' + d.more.join(' ')) && isPlainJs(d);
 /**
+ * A member read on a value TypeScript typed as never in a game's own code: inference lost the value (three's TSL declarations do this to
+ * vec2(…).add(uniform(…))), so every member of it is reported, right or wrong. A hint without "does not affect running": a misspelled member is
+ * reported the same way and cannot be told apart.
+ */
+const isLostType = d => d.code === 2339 && !d.file.startsWith('packages/') && / on type 'never'\./.test(d.msg);
+/**
  * Plain JS that TypeScript cannot follow, in a game's own code: a field added to the game's own object after it was made (fx.density = …),
  * a property read on a union the game's own ternary built (gpu ? nodeMaterial : shaderMaterial), a default `{}` parameter, a call that leaves
  * out a name the game's own untyped function destructures, a TSL node whose
- * type TypeScript narrowed by inference (let s = float(0); s = s.add(…)), a call of a function made with Fn(...), two geometry classes in one variable, a name declared and never read (noUnusedLocals). It runs fine, so it is a hint, not an error. Why not stricter: an AI
+ * type TypeScript narrowed by inference (let s = float(0); s = s.add(…)), a call of a function made with Fn(...), two geometry classes in one variable, an array literal where a fixed-length pair is declared, a name declared and never read (noUnusedLocals). It runs fine, so it is a hint, not an error. Why not stricter: an AI
  * that gets errors for ordinary JS turns the check off for the whole file (// @ts-nocheck) and loses the engine checks with it. Anything that
  * names an engine type stays an error, and so does the engine's own code (packages/, examples included).
  */
@@ -243,20 +249,23 @@ function isPlainJs(d) {
   // a function made with Fn(...) is typed as taking no arguments although it takes the ones its callback destructures
   if (d.code === 2554) return fnCallOnLine(d);
   if (d.code === 2339) { const t = d.msg.match(/^Property '.+?' does not exist on type '(.+?)'\./)?.[1] ?? ''; return t.startsWith('{') || t.includes(' | ') || tsl; }
+  // an array literal where a fixed-length pair is declared ({ repeat = [1, 1] } passed on): TypeScript widens it to number[], the array runs the same
+  const widenedTuple = (d.code === 2322 || d.code === 2345) && /'(?:number|string|boolean)\[\]' is not assignable to (?:parameter of )?type '\[/.test(d.msg);
   // the game's own function that destructures its parameter with no JSDoc: TypeScript makes every name required ({ w: any; rough: any })
   const ownParam = d.code === 2345 && /parameter of type '\{ (?:[\w$]+(?:: any|\?: [^;{}]+); )*[\w$]+: any; /.test(d.msg);
   // 2488 (not iterable) only for a Fn callback's destructuring: on any other TSL node it is a real mistake, a node is not an array
-  return ownParam || siblingGeometry || ((d.code === 2322 || d.code === 2345 || d.code === 2769) && tsl) || (d.code === 2488 && /\bNodeBuilder\b/.test(all));
+  return ownParam || siblingGeometry || widenedTuple || ((d.code === 2322 || d.code === 2345 || d.code === 2769) && tsl) || (d.code === 2488 && /\bNodeBuilder\b/.test(all));
 }
 
 const RUNS_ANYWAY = ', not a misuse of the engine API, does not affect running';
+const LOST_TYPE = "TypeScript lost this value's type (never) and cannot check its members, not a misuse of the engine API";
 const TSL_MEMBER = "TSL name three's declarations leave out, not a misuse of the engine API: valid swizzles and methods run, a misspelled one fails when the shader builds";
 const errors = [], hints = [];
 for (const d of diags) {
   if (d.line && P.notGameSource(resolve(P.ROOT, d.file), P.ROOT, false)) continue;   // an error inside a dependency is not the game's
   const at = d.line ? `${d.file}:${d.line}` : d.file;
   const text = d.code ? translate(d) : d.msg;
-  const hint = !d.code ? null : !STRICT_DOM && isDom(d) ? 'web (DOM) type hint' + RUNS_ANYWAY : isTslMember(d) ? TSL_MEMBER : isPlainJs(d) ? 'plain JS TypeScript cannot follow' + RUNS_ANYWAY : null;
+  const hint = !d.code ? null : !STRICT_DOM && isDom(d) ? 'web (DOM) type hint' + RUNS_ANYWAY : isTslMember(d) ? TSL_MEMBER : isLostType(d) ? LOST_TYPE : isPlainJs(d) ? 'plain JS TypeScript cannot follow' + RUNS_ANYWAY : null;
   if (SCOPE?.mine(d.file) === false) SCOPE.other(d.line && d.file, hint ? 'warn' : 'error');
   else if (hint) { hints.push(`${at}  ${text}  ← ${hint}`); jsonItems.push(item({ code: d.code ? 'TS' + d.code : undefined, level: 'warn', file: d.file, line: d.line, message: `${text}  ← ${hint}` })); }
   else { errors.push(`${at}  ${text}`); jsonItems.push(item({ code: d.code ? 'TS' + d.code : undefined, file: d.file, line: d.line, message: text })); }

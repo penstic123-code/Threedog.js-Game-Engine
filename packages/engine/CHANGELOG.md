@@ -2,6 +2,13 @@
 
 What changed in each version and how a game upgrades.
 
+## 2.2.1 (2026-11-19)
+
+Upgrading from 2.2.0: install `@threedog/tools@2.2.1` (the other packages only move with it). Nothing else changes.
+
+- Fixed (tools): the published 2.2.0 tools package left out its `expect/` folder, so `threedog check`, `shot`, `test` and `expect` crashed on start after `npm install`. A test now packs every package and fails when shipped code imports a file the package leaves out
+- Fixed (tools): two kinds of plain JS that TypeScript cannot follow were `✗` errors and failed `check`; they are now `!` reminders: a member read on a value whose type inference lost (`never`, as three's TSL declarations give for some `vec2(…).add(uniform(…))`), and an array literal passed where a fixed pair is declared (`repeat = [1, 1]` into a `[number, number]` option)
+
 ## 2.2.0 (2026-11-19)
 
 Upgrading from 2.1: a game changes code only if it uses one of these. `engine.settings.open()` / `close()` / `toggle()` / `isOpen()` become `engine.ui.open('settings')` / `ui.close('settings')` / `ui.isOpen('settings')`, and an input binding on context `win-settings` moves to `ui-settings`. `engine.ui.open` / `close` with a name that is not a full-screen part now throws (fix the name). `engine.mod(point, { id })` on a point that is not per record throws (drop the id, or define the point `{ per: 'optional' }`). `engine.post.add` throws `post-effect` on an unknown key or a wrong type in the definition. Your own CSS that layered over the title screen by z-index: the title is now at 22 (was 80), and the layers are the `--threedog-z-*` variables. Tools: `--no-build` needs one earlier build of the same kind on this machine, and a `threedog test` spec's timeout starts when the engine is up (nothing to change: specs only get more time).
