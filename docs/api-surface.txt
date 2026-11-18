@@ -13,6 +13,7 @@ CLI commands | dev |
 CLI commands | doctor |
 CLI commands | errors |
 CLI commands | examples |
+CLI commands | expect |
 CLI commands | explain |
 CLI commands | gallery |
 CLI commands | hold |
@@ -91,6 +92,7 @@ CLI options | --ignore-ui |
 CLI options | --image |
 CLI options | --impostor |
 CLI options | --in |
+CLI options | --is |
 CLI options | --jobs |
 CLI options | --json |
 CLI options | --keep |
@@ -106,6 +108,7 @@ CLI options | --lod |
 CLI options | --lod-shares |
 CLI options | --material |
 CLI options | --max |
+CLI options | --min |
 CLI options | --minutes |
 CLI options | --mode |
 CLI options | --n |
@@ -123,6 +126,7 @@ CLI options | --path-trace |
 CLI options | --pixel |
 CLI options | --play |
 CLI options | --plug |
+CLI options | --point |
 CLI options | --port |
 CLI options | --pos |
 CLI options | --preview |
@@ -169,6 +173,7 @@ CLI options | --view |
 CLI options | --wait |
 CLI options | --weather |
 CLI options | --webgl |
+CLI options | --why |
 CLI options | --width |
 CLI options | --write |
 createEngine options | adaptiveResolution | ?boolean
@@ -386,6 +391,7 @@ engine sub-objects | assets.texture | (nameOrUrl: string, opts?: { color?: boole
 engine sub-objects | assets.trim | () => string[]
 engine sub-objects | assets.useTexture | (nameOrUrl: string, use: (texture: Texture) => void, o?: { where?: string; instead?: string; opts?: { color?: boolean; pixelated?: boolean; repeat?: number[]; }; }) => Promise<boolean>
 engine sub-objects | audio.addBus | (name: string, opts?: { level?: number; owner?: string; }) => { owner?: string; remove(): void; }
+engine sub-objects | audio.addNode | (bus: string, make: (ctx: AudioContext) => AudioNode) => { remove(): void; }
 engine sub-objects | audio.buses | Record<string, any>
 engine sub-objects | audio.condition | (name: string, test: (value: any, e: any) => boolean) => { remove(): void; }
 engine sub-objects | audio.config | { sounds: any; ambience: any; music: any; footsteps: any; }
@@ -670,7 +676,7 @@ engine sub-objects | saves.exportFile | (slot?: string, opts?: { files?: boolean
 engine sub-objects | saves.flush | () => Promise<void>
 engine sub-objects | saves.import | (text: string, slot?: string) => Promise<boolean>
 engine sub-objects | saves.importFile | (file?: Blob, slot?: string) => Promise<string | null>
-engine sub-objects | saves.list | () => { slot: string; savedAt: number; }[]
+engine sub-objects | saves.list | () => { slot: string; savedAt: number; summary: Record<string, any>; }[]
 engine sub-objects | saves.load | (slot?: string, { turn }?: { turn?: object; }) => Promise<boolean>
 engine sub-objects | saves.putAttachment | (group: string, id: string, blob: Blob | (() => Promise<Blob>), meta?: any) => Promise<void> @experimental
 engine sub-objects | saves.ready | boolean
@@ -1372,7 +1378,7 @@ module APIs | music.rules | (list: MusicRule[] | null, opts?: { hold?: number; f
 module APIs | music.state | { current: string | null; playing: string | null; pending: string | null; override: string | null; intensity: number; gain: number; stems: number[]; }
 module APIs | music.stinger | (name: string, opts?: { duck?: number; volume?: number; }) => void
 module APIs | music.stop | (opts?: { fade?: number; }) => void
-module APIs | music.tracks | Map<string, { url?: string; volume?: number; loop?: boolean; stems?: { url: string; at?: number[]; volume?: number; }[]; }>
+module APIs | music.tracks | Map<string, { url?: string; volume?: number; loop?: boolean; stems?: MusicStem[]; generate?: MusicGenerate; }>
 module APIs | nav.agent | { radius: number; height: number; maxClimb: number; maxSlope: number; } @experimental
 module APIs | nav.crowd | any @experimental
 module APIs | nav.dispose | () => void
@@ -1454,11 +1460,8 @@ module APIs | rigid.waterDrag | number @experimental
 module APIs | rigid.world | any @experimental
 module APIs | settings.actionList | () => any[] @experimental
 module APIs | settings.addSection | (id: string, section?: SettingsSection) => Settings
-module APIs | settings.close | () => void
 module APIs | settings.define | <T = any>(key: string, def: T, apply?: ((value: T, e: Engine) => void) | { apply?: (value: T, e: Engine) => void; limits?: string | string[]; menu?: string | false; label?: string; options?: (T | [T, string])[]; min?: number; max?: number; step?: number; }) => Settings
 module APIs | settings.get | (key: string) => any
-module APIs | settings.isOpen | boolean
-module APIs | settings.open | () => void
 module APIs | settings.preset | (name: "low" | "medium" | "high" | (string & {})) => void @experimental
 module APIs | settings.presets | Record<string, QualityPreset>
 module APIs | settings.rebind | (action: string, code: string) => void
@@ -1467,7 +1470,6 @@ module APIs | settings.resetBindings | () => void @experimental
 module APIs | settings.save | () => void
 module APIs | settings.sections | Map<string, any> @experimental
 module APIs | settings.set | (key: string, value: any, opts?: { save?: boolean; }) => void
-module APIs | settings.toggle | (on?: boolean) => void
 module APIs | settings.values | Record<string, any>
 module APIs | sky.backdrop | any
 module APIs | sky.clouds | (spec: string | { glsl?: string; tsl?: Function; uniforms?: object; } | null) => void

@@ -203,9 +203,9 @@ keep('read-only fact for debugging, UI or tests', 'slope', 'stateApplied', 'play
   'startup.startMs', 'startup.preloadMs', 'startup.streamMs', 'startup.modules', 'cameraOverride.focus', 'lightPool.lights', 'lightPool.focus',
   'vegetation.get', 'vegetation.list', 'vegetation.isRemoved', 'rigid.stats', 'dialogue.speaking', 'inventory.list', 'inventory.get', 'quests.state', 'interactions.current', 'interactions.get',
   'triggers.list', 'grids.list', 'water.bodies', 'net.actor', 'net.pending', 'net.stats', 'ambience.position', 'particles.has', 'music.current', 'music.ready', 'music.pick',
-  'timeline.playing', 'hud.markers', 'content.ready', 'content.markers', 'nav.agent', 'settings.values', 'settings.isOpen', 'views.current', 'views.has', 'batching.root');
+  'timeline.playing', 'hud.markers', 'content.ready', 'content.markers', 'nav.agent', 'settings.values', 'views.current', 'views.has', 'batching.root');
 keep('the other half of a pair (do / undo, set / get)', 'terrain.rebuild', 'vegetation.rebuild', 'player.addJumps', 'player.resetJumps', 'player.dispose', 'assets.release', 'views.release',
-  'plugins.on', 'settings.close', 'settings.save', 'settings.rebind', 'triggers.clear', 'particles.clear', 'batching.refresh', 'ambience.rules', 'content.run');
+  'plugins.on', 'settings.save', 'settings.rebind', 'triggers.clear', 'particles.clear', 'batching.refresh', 'ambience.rules', 'content.run');
 keep('runtime tuning knob', 'interactions.radius', 'pickups.radius', 'pickups.size', 'photo.scale', 'stream.radius', 'events.historySize', 'ops.historySize', 'budget.enabled', 'rigid.gravity',
   'uniforms.uSkyCloudSpeed');
 keep('taught in a recipe (prose), not dead', 'quests.isDone', 'quests.isActive', 'quests.isFailed', 'quests.check', 'level.markersWith', 'triggers.byTag');

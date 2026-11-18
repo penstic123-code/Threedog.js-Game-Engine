@@ -49,7 +49,7 @@ engine.cameraRig.shoulder = -0.7;  // switch shoulders at any time (plain proper
 engine.cameraRig.frame(enemy.root);  // lock-on: turn to "behind the player, looking at the enemy"; frame(null) lets go
 ```
 - **`shoulder`**: meters the aim point (and so the camera) moves to the right along `right()`; negative = left, 0 = centered (default).
-- **`pointerLock`** (default false): a click on the canvas locks the mouse, so moving it turns the view with no dragging; Esc releases, and `engine.page.releaseLock()` releases from code without opening the pause menu. Not on phones. If the browser refuses the lock the camera falls back to dragging; `describe().camera.pointerLock` has `state` (`off` / `unsupported` / `waiting-click` / `requesting` / `locked` / `refused`), `covered` (what sits on the canvas centre and eats the click), `cameraOverride` (a takeover blocks locking) and `lastFailure { reason, agoSec }`; the text line shows the same.
+- **`pointerLock`** (default false): a click on the canvas locks the mouse, so moving it turns the view with no dragging; Esc releases, and `engine.page.releaseLock()` releases from code without opening the pause menu. Not on phones. If the browser refuses the lock the camera falls back to dragging; `describe().camera.pointerLock` says why it is not locked (`state`, `covered`, `lastFailure`).
   The press that locks is swallowed (no `Mouse0`, no click) so it cannot attack or fire; `swallowLockClick: false` delivers it.
   Leave it off when the mouse buttons are for UI or clicking the ground.
 - **`yaw` is which side of the player the camera is on**: `camera = focus + (sin yaw, cos yaw) * distance`, looking along `forward() = -(sin yaw, cos yaw)`; prefer `frame(target)` to computing it.
@@ -138,9 +138,8 @@ function steer(player, input, dt) {  // called once per fixed step while the inp
   current target and its own rules, such as "let go beyond 20 m" or "target died, pick the next".
 - The engine already calls `player.animate(dt)` every frame; a module with its own loop over characters must skip the player, or the walk cycle runs
   twice as fast.
-- Test without a keyboard: `engine.input.simulate('lockOn'); engine.step(1 / 60); engine.input.simulate('lockOn', false)`.
 
-## 6. Orthographic view, and taking the camera over yourself
+## 6. Orthographic view, and taking the camera over yourself (a title background camera)
 
 **Orthographic (isometric / 2.5D) with the built-in rigs.** `projection: 'orthographic'` plus `size` (world units of view height) on the fixed and follow cameras.
 The default stays perspective. On resize the view height stays `size` and the width follows the aspect.
@@ -167,7 +166,7 @@ A `setCamera` before play (boot code, or with the title up) is the camera every 
 - Limits: on the follow camera the mouse wheel changes `size` (clamped to the `minDistance`/`maxDistance` ratio of the starting `distance`).
   The `fov` slider in the settings menu has no effect. Cascaded shadows, `dof` and `outline` handle orthographic depth; a custom post pass that assumes perspective depth must do the same.
 
-**Placing the camera yourself (cutscene, photo mode, your own rig).** Take it with `engine.takeCamera(owner, { focus })`; the camera module leaves the camera alone until you `remove()` the handle.
+**Placing the camera yourself (cutscene, photo mode, your own rig).** Take it with `engine.takeCamera(owner, { focus })`; the camera module leaves the camera alone until you `remove()` the handle. A camera script of yours steps aside the same way while `engine.cameraOverride` is set; otherwise `shot --cam` / `--view` fails with "the game's camera code moved the camera away from the requested view".
 Several holders can take it (a cutscene, then a named view on top): the latest is in charge, and removing it hands the camera back to the previous one, not to nobody.
 
 ```js fragment

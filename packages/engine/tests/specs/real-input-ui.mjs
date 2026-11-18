@@ -9,7 +9,7 @@ export const specs = [
       await ev(() => { engine.input.define('audit', { keys: ['KeyO'] }); window.pressed = 0; engine.onFixed(() => { if (engine.input.pressed('audit')) window.pressed++; }); });
       await page.keyboard.down('KeyW'); await frames(3);
       const held = await ev(() => engine.input.down('moveForward'));
-      await ev(() => { engine.settings.open(); }); await frames(3);
+      await ev(() => { engine.ui.open('settings'); }); await frames(3);
       await page.keyboard.up('KeyW');                // let go while the menu holds input: nothing may stay held behind it
       const tab = await ev(() => { const t = [...document.querySelectorAll('[data-tab]')].find(b => /key|control|按键|操作/i.test(b.dataset.tab + b.textContent)); t?.click(); return t?.dataset.tab; });
       await frames(3);
@@ -26,14 +26,14 @@ export const specs = [
       const nav = await ev(() => ({ cap: engine.settings.capturing, keys: engine.input.keysOf('audit') }));
       check('confirm on a row waits for a key', nav.cap === 'audit' && nav.keys[0] === 'KeyK', JSON.stringify(nav));
       await page.keyboard.press('Escape'); await frames(4);
-      check('Esc cancels the wait and leaves the menu open', await ev(() => !engine.settings.capturing && engine.settings.isOpen && engine.input.keysOf('audit')[0] === 'KeyK'));
+      check('Esc cancels the wait and leaves the menu open', await ev(() => !engine.settings.capturing && engine.ui.isOpen('settings') && engine.input.keysOf('audit')[0] === 'KeyK'));
       await page.locator('[data-rebind="audit"]').click(); await frames(2);
       await ev(() => { engine.settings.win.toggle(false); }); await frames(3);
       check('a window closed while waiting holds no focus', await ev(() => !engine.settings.capturing && engine.settings.focus.top === null), String(await ev(() => engine.settings.focus.top)));
-      await ev(() => { engine.settings.open(); }); await frames(3);
+      await ev(() => { engine.ui.open('settings'); }); await frames(3);
       await page.keyboard.press('KeyO'); await frames(3);
-      await ev(() => { engine.settings.close(); }); await frames(4);
-      const s = await ev(() => ({ open: engine.settings.isOpen, pressed: window.pressed, fwd: engine.input.down('moveForward'), enabled: engine.input.enabled, contexts: engine.input.contexts.join() }));
+      await ev(() => { engine.ui.close('settings'); }); await frames(4);
+      const s = await ev(() => ({ open: engine.ui.isOpen('settings'), pressed: window.pressed, fwd: engine.input.down('moveForward'), enabled: engine.input.enabled, contexts: engine.input.contexts.join() }));
       check('a key held into the menu was really held', held === true);
       check('the menu kept its presses from the game, and nothing stays held or locked', !s.open && s.pressed === 0 && !s.fwd && s.enabled, JSON.stringify(s));
       await page.keyboard.press('KeyO'); await frames(4);
@@ -91,9 +91,9 @@ export const specs = [
         e.dialogue.end();
         e.quests.win.toggle(true); await wait(3); e.quests.win.toggle(false); await wait(2);
         e.ui.open('inventory'); await wait(3); o.bagShown = !!document.querySelector('.threedog-win-inventory .threedog-row'); e.ui.close('inventory'); await wait(2);
-        e.settings.open(); await wait(3);
+        e.ui.open('settings'); await wait(3);
         for (const t of document.querySelectorAll('[data-tab]')) { t.click(); await wait(2); }
-        e.settings.close(); await wait(2);
+        e.ui.close('settings'); await wait(2);
         o.xss = window.__xss ?? 0;
         o.imgs = document.querySelectorAll('body img[src="x"]').length;
         o.bold = document.querySelectorAll('[data-x]').length;
@@ -122,7 +122,7 @@ export const specs = [
         e.dialogue.end(); await wait(2);
         e.quests.win.toggle(true); await wait(3); fits('quests', '.threedog-win'); e.quests.win.toggle(false); await wait(2);
         e.ui.open('inventory'); await wait(3); fits('bag', '.threedog-win-inventory'); e.ui.close('inventory'); await wait(2);
-        e.settings.open(); await wait(3); fits('settings', '.threedog-win'); e.settings.close(); await wait(2);
+        e.ui.open('settings'); await wait(3); fits('settings', '.threedog-win'); e.ui.close('settings'); await wait(2);
         return { bad, reach, width: document.documentElement.scrollWidth };
       });
       check('every box stays on the screen', !r.bad.length, JSON.stringify(r.bad));
@@ -141,16 +141,16 @@ export const specs = [
         const f0 = facts(), r0 = JSON.stringify(E.random.state ?? null);
         E.describe(); E.inspect?.perf?.(); E.inspect?.scene?.();
         await E.ops.run('photo.take', {}, { source: 'test' }).value;
-        E.settings.open(); E.step(0.1, { render: false }); E.settings.close();
+        E.ui.open('settings'); E.step(0.1, { render: false }); E.ui.close('settings');
         const a = JSON.parse(f0), b = JSON.parse(facts()); delete a.parts.photo; delete b.parts.photo;
         for (const d of [a, b]) { delete d.parts.time; delete d.parts.world?.step; delete d.parts.world?.time; delete d.parts.clock; }   // the 0.1 s the menu stepped
         o.same = JSON.stringify(a.parts.vars) === JSON.stringify(b.parts.vars) && JSON.stringify(a.parts.quests?.state) === JSON.stringify(b.parts.quests?.state) && JSON.stringify(a.parts.random) === JSON.stringify(b.parts.random);
         o.random = JSON.stringify([a.parts.vars, b.parts.vars, a.parts.quests, b.parts.quests]).slice(0, 400);
-        E.settings.open();
+        E.ui.open('settings');
         await E.session.newGame();
         E.step(0.1, { render: false });
-        o.after = { open: E.settings.isOpen, frozen: E.frozen, enabled: E.input.enabled, ctx: E.input.contexts.join(), top: E.settings.focus.top };
-        E.settings.close(); E.step(0.1, { render: false });
+        o.after = { open: E.ui.isOpen('settings'), frozen: E.frozen, enabled: E.input.enabled, ctx: E.input.contexts.join(), top: E.settings.focus.top };
+        E.ui.close('settings'); E.step(0.1, { render: false });
         o.closed = { frozen: E.frozen, enabled: E.input.enabled, ctx: E.input.contexts.join(), top: E.settings.focus.top };
         return o;
       }, facts.toString());
@@ -168,7 +168,7 @@ export const specs = [
         await E.start(); E.haltLoop();
         const P = E.stacks.get('shadows.enabled');
         E.settings.set('shadows', false, { save: false });
-        E.settings.open(); E.settings.capturing = 'confirm';
+        E.ui.open('settings'); E.settings.capturing = 'confirm';
         E.step(0.05, { render: false });
         const during = { held: P.has('settings'), frozen: E.frozen, enabled: E.input.enabled };
         const focus = E.settings.focus;

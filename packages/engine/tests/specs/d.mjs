@@ -355,12 +355,12 @@ export const specs = [
       await ev(() => { window.dSaid = engine.dialogue.say('测试台词'); });
       await frames(2);
       await page.keyboard.press('Escape'); await frames(3);
-      check('Esc during dialogue: settings menu does not open, dialogue stays', await ev(() => !engine.settings.isOpen && !!engine.dialogue.active));
+      check('Esc during dialogue: settings menu does not open, dialogue stays', await ev(() => !engine.ui.isOpen('settings') && !!engine.dialogue.active));
       await ev(() => engine.dialogue.end()); await frames(2);
       await page.keyboard.press('Escape'); await frames(3);
-      check('Esc after dialogue ends: settings menu opens', await ev(() => engine.settings.isOpen));
+      check('Esc after dialogue ends: settings menu opens', await ev(() => engine.ui.isOpen('settings')));
       await page.keyboard.press('Escape'); await frames(3);
-      check('Esc again: menu closes, input unlocked', await ev(() => !engine.settings.isOpen && engine.input.enabled));
+      check('Esc again: menu closes, input unlocked', await ev(() => !engine.ui.isOpen('settings') && engine.input.enabled));
       const r = await ev(() => {
         let ended = 0;
         engine.dialogue.start('写错的对话名', 'start', () => ended++);

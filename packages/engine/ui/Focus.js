@@ -12,7 +12,7 @@
 //   h.onTop      this entry is the top of the stack (a window without a cursor over a dialogue never uses confirm, so consumed alone would let the dialogue advance)
 //   h.fresh      pushed this frame: the key press that opened it (E, Space) must not count as its own action
 //   h.remove()   pop (safe to call repeatedly)
-//   f.setRoot(() => settings.open())                             // what the back key does on an empty stack; returns a handle { remove() }
+//   f.setRoot(() => engine.ui.open('settings'))                             // what the back key does on an empty stack; returns a handle { remove() }
 //   f.top        top name or null; f.list() names from bottom to top; f.cursor { id, index } of the top entry when it has a nav, else null
 // Picture: none (behavior only); the cursor marks the selected DOM control with .is-cursor.
 import { stepCursor, forgetNav } from './cursor.js';

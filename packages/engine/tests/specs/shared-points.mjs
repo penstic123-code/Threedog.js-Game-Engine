@@ -175,4 +175,30 @@ export const specs = [
         r[slot]?.api === slot && r[slot].holder === 'my-' + slot && r[slot].held && r[slot].dependent && r.ran[slot], JSON.stringify(r));
     },
   },
+  {
+    // an id on a point that is not per record was kept and never read: the call looked like it worked. A save written then must still load
+    name: '[guard] a plain point refuses { id } with the fix; an old save carrying such an entry loads, the value unchanged, one warning',
+    url: PAGE,
+    async run({ check, ev }) {
+      const r = await ev(() => {
+        const { mk, createEngine } = threedogThreads, out = {};
+        const E = mk(createEngine, 'sp-id'), S = E.stacks, err = f => { try { f(); return null; } catch (x) { return x.message; } };
+        S.define('spPlain', { base: 1, min: 0 }); S.define('spOpt', { base: 1, per: 'optional' });
+        out.plain = err(() => E.mod('spPlain', { owner: 'a', id: 'x', mul: 0.5 }));
+        out.optional = err(() => E.mod('spOpt', { owner: 'a', id: 'x', mul: 0.5 }));
+        const warns = [], was = console.warn; console.warn = (...a) => warns.push(a.join(' '));
+        try {
+          const e = (owner, id, value) => ({ owner, id, op: 'mul', value, layer: 'game', clock: 'real', left: null });
+          S._load({ spPlain: [e('old', 'x', 0.1), e('keep', null, 0.5)] });
+          out.value = S.get('spPlain').value();
+          out.size = S.get('spPlain').size();
+        } finally { console.warn = was; }
+        out.warns = warns.filter(w => w.includes("'spPlain'") && w.includes('per record')).length;
+        return out;
+      });
+      check('a plain point given { id }: throws, saying to define it as per: optional', /not per record/.test(r.plain ?? '') && r.plain.includes("per: 'optional'"), String(r.plain));
+      check('a point defined per: optional still takes an id', r.optional === null, String(r.optional));
+      check('a save with the old id entry loads: the entry is dropped, the value reads as before, said once', r.value === 0.5 && r.size === 1 && r.warns === 1, JSON.stringify({ v: r.value, n: r.size, w: r.warns }));
+    },
+  },
 ];

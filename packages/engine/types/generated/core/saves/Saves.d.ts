@@ -158,10 +158,15 @@ export class Saves {
     load(slot?: string, { turn }?: {
         turn?: object;
     }): Promise<boolean>;
-    /** All slots, newest first (synchronous, reads the in-memory index) @returns {{ slot: string, savedAt: number }[]} */
+    /**
+     * All slots, newest first (synchronous). summary: the parts marked `summary: true` in saves.define, read from the stored save and migrated; {} if none.
+     * @returns {{ slot: string, savedAt: number, summary: Record<string, any> }[]}
+     * @example for (const { slot, summary } of engine.saves.list()) console.log(slot, summary.hero?.level);
+     */
     list(): {
         slot: string;
         savedAt: number;
+        summary: Record<string, any>;
     }[];
     /**
      * Delete a slot. Returns a Promise (disk write done); awaiting is optional. A newer save another tab wrote meanwhile is kept: the slot lists again, with a toast (save-stale).

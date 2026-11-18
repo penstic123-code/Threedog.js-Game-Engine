@@ -19,7 +19,7 @@ For an AI that wants water or weather particles to look a way the defaults do no
 none of `depthColor`, `foam`, `surface` keeps the plain shader and pays nothing. Four exits: a material write, a
 uniform, a GLSL function you replace, or your own material.
 
-## Water: material and uniforms
+## Water: material and uniforms (sea, lake or river around an island: `engine.water`)
 `engine.water.material` is shared by every water mesh and is a `MeshLambertMaterial` by default: color, opacity and anything else three.js has on it are
 plain writes. Lambert has no highlight; for `shininess` / `specular` set your own Phong material (below). `engine.water.uniforms` are `{ value }` objects:
 `uWave` multiplies the wave function (0 = flat), `uWaveScale` scales the world position fed to it, `uWaveSpeed` the time; all three default to 1. `uFresnel` (default 0.5, 0 = off) blends grazing angles toward the fog color, or the sky's horizon with no fog.

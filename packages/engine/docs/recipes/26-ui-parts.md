@@ -167,12 +167,13 @@ engine.events.on('session:start', () => results.toggle(false));  // a new run or
 results.toggle(true);  // when the run ends; results.refresh() after the data changes
 ```
 
-## 5. Title screen and "back to title"
+## 5. Title screen: your own title part (the title text, a background camera) and "back to title"
 ```js
 createEngine({ canvas, ui: { title: { title: 'My Game', items: ['continue', 'start', { label: 'Credits', run: e => showCredits() }] } } });
 engine.events.on('ui:close', id => { if (id === 'title') startIntro(); });  // the player left the title screen
 engine.ui.open('title');  // show it again (the settings 'game' tab has a "Back to title" button)
 ```
+A custom title part gets the title text and items in `show({ title, items })` (section 2); its backdrop is the theme's `loadingBg`, or hold the camera with `engine.takeCamera` and move it in `engine.onFrame` (recipe 21).
 While the title is open gameplay is frozen, input is locked, and Esc goes to it (the settings menu does not open).
 
 **A custom item closes the title itself.** The built-in `continue` / `start` call `e.ui.close('title')` after loading; yours does not, so `flow` can reach `playing` with the title still on top, no warning. End every item that leaves the title with `e.ui.close('title')`:
@@ -193,7 +194,7 @@ const still = await engine.photo.trace({ samples: 128 });  // still.pathTraced.u
 ```
 HUD text follows the engine locale (`createEngine({ locale })`, default `'auto'` = the browser language): a game written in English sets `locale: 'en'`, or distance labels read `50 米` on a Chinese browser.
 
-## 6. Settings menu: only the tabs the game needs, quality options that turn off your pass
+## 6. Settings menu: add a row with a label (`settings.define`), only the tabs the game needs, quality options that turn off your pass
 ```js
 engine.use(settings({ sections: ['game', 'graphics', 'audio', 'controls', 'camera'] }));  // default: graphics, audio, controls, language, saves
 // optional built-ins by name: 'game' (resume / load / back to title), 'camera' (sensitivity, invert Y, field of view; re-applied on 'camera:change')

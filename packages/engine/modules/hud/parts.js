@@ -8,7 +8,7 @@ import { keyed } from '../../core/input/inputPad.js';   // "E · Talk", the same
 /** @import { Engine } from '../../types/core' */
 
 export const CSS = `
-.threedog-hud{position:fixed;inset:0;pointer-events:none;z-index:12;font:13px/1.4 var(--threedog-font);color:var(--threedog-hud-fg)}
+.threedog-hud{position:fixed;inset:0;pointer-events:none;z-index:var(--threedog-z-hud);font:13px/1.4 var(--threedog-font);color:var(--threedog-hud-fg)}
 .threedog-hud-stats{position:absolute;display:flex;flex-direction:column;gap:6px;--hx:calc(12px + env(safe-area-inset-left,0px));--hy:calc(12px + env(safe-area-inset-top,0px))}
 .threedog-hud-top-left,.threedog-hud-left,.threedog-hud-bottom-left{left:var(--hx)}
 .threedog-hud-top-right,.threedog-hud-right,.threedog-hud-bottom-right{right:calc(12px + env(safe-area-inset-right,0px));align-items:flex-end}

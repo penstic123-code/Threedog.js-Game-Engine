@@ -67,7 +67,7 @@ Terrain, water, plants, rain and snow, pickups and grid layers keep their engine
 
 Each piece's own recipe has its details: water and weather 44, terrain 28, plants 36, pickups 03, grids 29.
 
-## 1b. Lights and stalls
+## 1b. Lights and stalls, street lamps (`lightPool`)
 The placeholder lights and your own: recipe 34. This section is what a changing light setup costs.
 
 three.js builds one shader program per material for each light setup. `engine.start()` compiles everything visible behind the
@@ -95,7 +95,7 @@ source's `glow` stand-in keeps the far room reading as lit); give the few lights
 enough that the light dies before the next room. Plain three.js lights of your own with a shadow map work beside the pool.
 
 `describe().lightPool` lists which source each real light holds; `focus` measures from the player instead of the
-camera. Options and handle: `../api/lightPool.md`. Windows and signs that light up at night need no real light each: see below.
+camera. Options and handle: `../api/lightPool.md`. Lit windows and signs need no real light: see below.
 
 ### Night glow: emissive that follows daylight
 Lit windows, neon signs, lamp bulbs, glowing mushrooms, screens. `engine.uniforms.uNight` is 0 by day and 1 at night, on the curve `dusk` lamps fade on

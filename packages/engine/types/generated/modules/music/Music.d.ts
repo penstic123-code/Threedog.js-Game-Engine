@@ -9,23 +9,14 @@
 export function music(opts?: MusicOptions): ModuleDef<Music>;
 /** engine.music */
 export class Music {
-    /** Registered tracks @type {Map<string, { url?: string, volume?: number, loop?: boolean, stems?: { url: string, at?: number[], volume?: number }[] }>} */
-    tracks: Map<string, {
-        url?: string;
-        volume?: number;
-        loop?: boolean;
-        stems?: {
-            url: string;
-            at?: number[];
-            volume?: number;
-        }[];
-    }>;
+    /** Registered tracks @type {Map<string, Exclude<MusicTrack, string>>} */
+    tracks: Map<string, Exclude<MusicTrack, string>>;
     /** Name of the track playing (or wanted) @type {string | null} */
     current: string | null;
     /** 0-1: how loud each stem of the playing track is (see the stems `at` range); fades in about half a second @type {number} */
     intensity: number;
     /**
-     * Define a track: a url, or { url, volume, loop, stems }. The same name again replaces it
+     * Define a track: a url, { url, volume, loop, stems }, or { generate } (your own Web Audio nodes). The same name again replaces it
      * @example engine.music.define('town', '/music/town.ogg')
      * @param {string} name
      * @param {MusicTrack} track
@@ -111,5 +102,5 @@ export class Music {
 }
 import type { MusicOptions } from '../../../gameplay';
 import type { ModuleDef } from '../../../core';
-import type { MusicRule } from '../../../gameplay';
 import type { MusicTrack } from '../../../gameplay';
+import type { MusicRule } from '../../../gameplay';

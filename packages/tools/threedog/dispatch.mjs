@@ -34,7 +34,7 @@ const plain = (cmd, args) => {
 };
 
 /** Options of the commands dispatch runs itself (the others are parsed by commands.mjs run()); an unknown one fails with the parser's list of valid ones */
-const OWN = { play: { flags: ['stop'] }, status: {}, verify: { flags: ['freeze-reload', 'save-baseline'], positional: true }, scenario: { flags: ['freeze-reload'], positional: true } };
+export const OWN = { play: { flags: ['stop'] }, status: {}, verify: { flags: ['freeze-reload', 'save-baseline'], positional: true }, scenario: { flags: ['freeze-reload'], positional: true } };
 
 export async function execute(dir, cmd, args = [], { page, onShot } = {}) {
   // a mistyped command name is answered as that, not as "no dev server" (which is what the bridge check below would say first)

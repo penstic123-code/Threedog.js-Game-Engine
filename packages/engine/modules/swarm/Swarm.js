@@ -353,4 +353,4 @@ export function swarm() {
     dispose() { for (const s of [...list]) s.dispose(); list = []; } };
 }
 
-export const handRolled = [{ kind: 'pool', seen: 'a pool or list of many shots of its own', use: 'engine.swarm: thousands of shots, crowds and debris in one draw, with reuse and hits (recipe 65)', quiet: /\b(engine|e|eng|ctx)\.swarm\b|\bswarm\(\s*[{)]/, code: /(?:\b(?:const|let|var)\s+|\bthis\.)(?:pool|\w*(?:bullet|projectile|shot|enemy|particle|mesh|object)pool|bullets|projectiles)\s*=\s*(?:\[\s*\]|new Map\b|new Set\b)/i }];
+export const handRolled = [{ kind: 'pool', docRef: 'recipes/65-swarm.md', seen: 'a pool or list of many shots of its own', use: 'engine.swarm: thousands of shots, crowds and debris in one draw, with reuse and hits', quiet: /\b(engine|e|eng|ctx)\.swarm\b|\bswarm\(\s*[{)]/, code: /(?:\b(?:const|let|var)\s+|\bthis\.)(?:pool|\w*(?:bullet|projectile|shot|enemy|particle|mesh|object)pool|bullets|projectiles)\s*=\s*(?:\[\s*\]|new Map\b|new Set\b)/i }];

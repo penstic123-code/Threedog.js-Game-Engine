@@ -324,7 +324,7 @@ export class Input {
   }
   /**
    * Why a game action cannot be read right now, for a driver about to press it or that pressed it and saw nothing happen; [] when it is readable. Every cause,
-   * top down: an opaque input context above the action's own ('win-settings', 'dialogue'...), 'shadowed-by:<context>' (a pass-through context above binds
+   * top down: an opaque input context above the action's own ('ui-settings', 'dialogue'...), 'shadowed-by:<context>' (a pass-through context above binds
    * the same key), or 'context-off:<context>' alone (its own context is not on the stack); then the owners of the action's gate. Pushes and removes
    * count at once, as in holders. A real key is blocked the same way, so this is the game's rule, not the driver's.
    * Without an action: every opaque context, which is runState.blockedBy's input part (one list, so the two never disagree)
@@ -377,6 +377,6 @@ export class Input {
 }
 
 export const handRolled = [
-  { kind: 'keys', seen: 'a raw keydown / keyup listener', use: "engine.input.define('jump', { label, keys }) in a module, the game binds keys with engine.input.bind (rebinding, contexts, gamepad); read engine.input.pressed(name) (recipe 58)", raw: /(?:^|[^\w.])(?:(?:window|document|self|globalThis|canvas|document\.body|[\w.]*domElement)\.)?(?:addEventListener\s*\(\s*['"]|on)key(?:down|up)\b/, yields: { kind: 'pause', raw: /['"]Escape['"]/ } },
-  { kind: 'lock', seen: 'an input lock of its own', use: "engine.input.push('ride', { owner }) takes the keys and h.remove() gives them back: no key sticks, and describe().holds.input shows who holds them (recipe 07 §2b)", quiet: /\b(engine|e|eng|ctx)\.input\.(push|gate)\b|\blockInput\b/, code: /\b(?:let|var)\s+(?:input|controls?|keys)(?:Locked|Disabled|Enabled|Frozen)\s*=/i, tags: false },
+  { kind: 'keys', docRef: 'recipes/58-input.md §1', seen: 'a raw keydown / keyup listener', use: "engine.input.define('jump', { label, keys }) in a module, the game binds keys with engine.input.bind (rebinding, contexts, gamepad); read engine.input.pressed(name); a menu that must read keys while the world is frozen reads engine.input.pressedRaw(name) in a frame hook, or toggleOnKey(engine, win, action) for a window", notRaw: /\bcode\s*===?\s*['"]F\d+['"]/, raw: /(?:^|[^\w.])(?:(?:window|document|self|globalThis|canvas|document\.body|[\w.]*domElement)\.)?(?:addEventListener\s*\(\s*['"]|on)key(?:down|up)\b/, yields: { kind: 'pause', raw: /['"]Escape['"]/ } },
+  { kind: 'lock', docRef: 'recipes/07-flow-scenes-pause.md §2b', seen: 'an input lock of its own', use: "engine.input.push('ride', { owner }) takes the keys and h.remove() gives them back: no key sticks, and describe().holds.input shows who holds them", quiet: /\b(engine|e|eng|ctx)\.input\.(push|gate)\b|\blockInput\b/, code: /\b(?:let|var)\s+(?:input|controls?|keys)(?:Locked|Disabled|Enabled|Frozen)\s*=/i, tags: false },
 ];

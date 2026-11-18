@@ -19,7 +19,7 @@ import { DEV, warnOnce, fmt } from '../base/validate.js';
 import { readParams } from '../base/params.js';
 import { reportError } from '../base/errors.js';
 import { codedError, coded } from '../base/errorHints.js';
-import { checkPartVersion, readSave } from './saveVersions.js';
+import { checkPartVersion, readSave, summarize } from './saveVersions.js';
 import { exportSaveFile, importSaveFile, importText, SAVE_STRINGS } from './saveFiles.js';
 import { applyAnnounced, loadSlot, adoptPart, collectParts, partData } from './saveApply.js';
 import { autosaveHook } from './session.js';
@@ -43,7 +43,7 @@ const DEV_STRINGS = {
 };
 
 /** What saves.define takes: without a working save and load the failure would wait for the player's first save or load */
-const PROVIDER = { save: 'function', load: 'function', first: 'any?', version: 'any?', migrate: 'any?', atomic: 'any?', notAtomic: 'string?', checkNewGame: 'any?' };
+const PROVIDER = { save: 'function', load: 'function', first: 'any?', version: 'any?', migrate: 'any?', atomic: 'any?', notAtomic: 'string?', checkNewGame: 'any?', summary: 'bool?' };
 
 /** Save data as a save file would hold it: no reference into the part's live state stays behind */
 const copyData = d => JSON.parse(JSON.stringify(d));
@@ -61,6 +61,7 @@ export class Saves {
     /** @internal */ this._auto = null;
     /** @internal Slot -> JSON text (all saves stay in memory: list / check / export are synchronous) */ this._json = new Map();
     /** @internal Slot -> savedAt */ this._meta = new Map();
+    /** @internal Slot -> list() summary parsed from that slot's text; dropped when the text or the set of parts changes */ this._summaries = new Map();
     /** @internal Disk-write queue: earlier saves are written first */ this._queue = Promise.resolve();
     /** @internal Slot -> rev of the copy in memory (a slot without a record is absent) */ this._rev = new Map();
     /** @internal Slot -> rev this tab may overwrite: the one it read at boot, last wrote or last loaded (absent = expects no record) */ this._mine = new Map();
@@ -114,20 +115,20 @@ export class Saves {
     readParams(`saves.define('${key}')`, PROVIDER, provider);
     if (provider.first !== undefined && typeof provider.first !== 'boolean' && !Number.isFinite(provider.first)) throw codedError('module-params', fmt(DEV_STRINGS.badFirst, { key, got: JSON.stringify(provider.first) }));
     if (key === '__proto__') throw codedError('module-params', DEV_STRINGS.protoName);
-    const { save, load, first = false, version = 1, migrate = {}, atomic = false, checkNewGame = null } = provider;
+    const { save, load, first = false, version = 1, migrate = {}, atomic = false, checkNewGame = null, summary = false } = provider;
     // shortcut: only a load declared async is known here; a plain function that returns a Promise is refused when the rollback meets it (restoreParts, saveApply.js)
     if (atomic === true && load.constructor?.name === 'AsyncFunction') throw codedError('module-params', fmt(DEV_STRINGS.asyncAtomic, { key }));
     checkPartVersion(key, version, migrate);
     const f = this._foreign, held = Object.hasOwn(f.parts, key) ? { data: copyData(f.parts[key]), version: f.versions[key] ?? 1 } : null;
-    const part = { save, load, first, version, migrate, atomic: atomic === true, checkNewGame };
+    const part = { save, load, first, version, migrate, atomic: atomic === true, checkNewGame, summary: summary === true };
     if (DEV && this.providers.has(key)) warnOnce(fmt(DEV_STRINGS.owner, { key }), `save-owner-${key}`);   // the newer owner takes it, as a replaced module does; the older one stops being saved
-    this.providers.set(key, part);
+    this.providers.set(key, part); this._summaries.clear();   // which parts are summaries changed
     try { this.engine.session._late(key); }   // a part registered after start() (a module installed later) joins the new-game state as it is now
     catch (err) { this.providers.delete(key); this.engine.session._lateParts.delete(key); throw err; }   // define() hands back no handle on a throw, so the key must not stay taken
     if (held) adoptPart(this, key, part);
     return { remove: ({ keep = true } = {}) => {
       if (this.providers.get(key) !== part) return;   // a stale handle: the key belongs to someone newer
-      this.providers.delete(key);
+      this.providers.delete(key); this._summaries.clear();
       let left = held;   // removed while its late data loads (adoptPart): that data goes back unattached, not the half-loaded state
       if (keep && !part.adopting && !Object.hasOwn(this._foreign.parts, key)) try { const d = partData(key, part); left = d == null ? null : { data: copyData(d), version }; }
       catch (err) { reportError(this.engine, err, `save() of part '${key}' while it was removed`, { soft: true }); }
@@ -148,7 +149,7 @@ export class Saves {
     try {
       for (const r of await this.store.slots()) {
         this._rev.set(r.slot, r.rev ?? ''); this._mine.set(r.slot, r.rev ?? '');   // also for a save made before this ran: its write comes after and expects this record
-        if (!this._json.has(r.slot)) { this._json.set(r.slot, r.json); this._meta.set(r.slot, r.savedAt); }
+        if (!this._json.has(r.slot)) { this._json.set(r.slot, r.json); this._meta.set(r.slot, r.savedAt); this._summaries.delete(r.slot); }
       }
       this._sawBlobs(await this.store.blobs());
     } catch (e) { this._fail(e); }
@@ -275,7 +276,7 @@ export class Saves {
   /** @internal Put a save in memory and queue the disk write; returns Promise<boolean> (write succeeded) */
   _put(slot, json, savedAt) {
     const rev = this._newRev();
-    this._json.set(slot, json); this._meta.set(slot, savedAt);
+    this._json.set(slot, json); this._meta.set(slot, savedAt); this._summaries.delete(slot);
     // expect is read when the write runs, not now: an earlier queued save of this tab moves _mine first
     return this._enqueue(() => this.store.putSlot(slot, savedAt, json, rev, this._mine.get(slot) ?? null)).then(() => {
       this._rev.set(slot, rev); this._mine.set(slot, rev);
@@ -307,6 +308,7 @@ export class Saves {
   _newRev() { return `${this._tab}:${++this._n}`; }
   /** @internal Memory shows a stored record (null = none); a stored record leaves the rev this tab may overwrite as it was */
   _show(slot, r) {
+    this._summaries.delete(slot);
     if (!r) { this._json.delete(slot); this._meta.delete(slot); this._rev.delete(slot); this._mine.delete(slot); return; }   // deleted: no newer progress to protect, so the next save may write
     this._json.set(slot, r.json); this._meta.set(slot, r.savedAt); this._rev.set(slot, r.rev ?? '');
   }
@@ -359,9 +361,19 @@ export class Saves {
   load(slot = 'auto', { turn } = {}) { return this._replace.run(null, () => this._load(slot), { turn }); }
   /** @internal Load a slot inside a turn already taken; with base (a collect() result) the save goes on top of it, so a part missing from the save gets base's state (session.load) */
   _load(slot, base) { return loadSlot(this, slot, base); }
-  /** All slots, newest first (synchronous, reads the in-memory index) @returns {{ slot: string, savedAt: number }[]} */
+  /**
+   * All slots, newest first (synchronous). summary: the parts marked `summary: true` in saves.define, read from the stored save and migrated; {} if none.
+   * @returns {{ slot: string, savedAt: number, summary: Record<string, any> }[]}
+   * @example for (const { slot, summary } of engine.saves.list()) console.log(slot, summary.hero?.level);
+   */
   list() {
-    return [...this._meta].map(([slot, savedAt]) => ({ slot, savedAt })).sort((a, b) => b.savedAt - a.savedAt);
+    return [...this._meta].map(([slot, savedAt]) => ({ slot, savedAt, summary: this._summary(slot) })).sort((a, b) => b.savedAt - a.savedAt);
+  }
+  /** @internal One slot's summary, parsed once per stored text: every place that changes the text (_init, _put, _show, remove) drops it. Cached results are copied so a caller's edit cannot change the next list() */
+  _summary(slot) {
+    let s = this._summaries.get(slot);
+    if (!s) this._summaries.set(slot, s = summarize(this._json.get(slot), this.providers));
+    return structuredClone(s);
   }
   /**
    * Delete a slot. Returns a Promise (disk write done); awaiting is optional. A newer save another tab wrote meanwhile is kept: the slot lists again, with a toast (save-stale).
@@ -369,7 +381,7 @@ export class Saves {
    * @param {string} slot @returns {Promise<void>}
    */
   remove(slot) {
-    this._json.delete(slot); this._meta.delete(slot);
+    this._json.delete(slot); this._meta.delete(slot); this._summaries.delete(slot);
     // the revs are cleared when the delete runs, not now: a save queued before this remove sets _mine when its write lands,
     // and a _mine left over for a deleted record would refuse every later save of this slot as "another tab saved"
     // what it expects is what this tab lists (_rev): a save the note from another tab brought in is the player's to delete
@@ -433,4 +445,4 @@ export class Saves {
   dispose() { this._auto?.remove(); this._bc?.close(); this._bc = null; this._queue.then(() => this.whenReady).catch(() => {}).finally(() => this.store.close()); }   // close the database only after queued writes finish and the open (which sets store.db later) is done
 }
 
-export const handRolled = [{ kind: 'save', seen: 'a save of its own in localStorage', use: "engine.saves: autosave(minutes), define('game', { version: 1, save, load }), and Continue on the start screen (recipe 63); versions, slots and a corrupt save are handled", quiet: /\bengine\.saves\b/, code: /\blocalStorage\.setItem\s*\(/, notRaw: /setItem\s*\(\s*(?![^,)]*(?:save|progress))[^,)]*(?:volume|mute|lang|locale|theme|music|sfx|quality|sensitiv|brightness|fullscreen|tutorial|dismiss|setting|pref|option|keybind)/i }];
+export const handRolled = [{ kind: 'save', docRef: 'recipes/20-content-actions-save.md §4', seen: 'a save of its own in localStorage', use: "engine.saves: autosave(minutes), define('game', { version: 1, save, load }), and Continue on the start screen; versions, slots and a corrupt save are handled", quiet: /\bengine\.saves\b/, code: /\blocalStorage\.setItem\s*\(/, notRaw: /setItem\s*\(\s*(?![^,)]*(?:save|progress))[^,)]*(?:volume|mute|lang|locale|theme|music|sfx|quality|sensitiv|brightness|fullscreen|tutorial|dismiss|setting|pref|option|keybind)/i }];

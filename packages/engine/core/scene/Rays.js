@@ -218,4 +218,4 @@ function toHit(h) {
   return { ...h, normal };
 }
 
-export const handRolled = [{ kind: 'picking', seen: 'a pointer-to-object raycast of its own', use: 'engine.pick(x, y), or engine.raycast / engine.rays: colliders and moving things are in the same query (recipe 19)', quiet: /\b(engine|e|eng|ctx)\.(rays|raycast|pick)\b/, code: /\.setFromCamera\s*\(/ }];
+export const handRolled = [{ kind: 'picking', docRef: 'recipes/19-shooting-picking.md', seen: 'a pointer-to-object raycast of its own', use: 'engine.pick(x, y), or engine.raycast / engine.rays: colliders and moving things are in the same query', quiet: /\b(engine|e|eng|ctx)\.(rays|raycast|pick)\b/, code: /\.setFromCamera\s*\(/ }];

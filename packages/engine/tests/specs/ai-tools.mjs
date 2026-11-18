@@ -48,11 +48,13 @@ export const specs = [
         const { warns } = await __t.warns(() => { engine.input.pressed('jupm'); engine.input.pressed('jupm'); });
         engine.events.on('hint:test', () => { throw new Error('world data must be plain values (number, string, boolean, array, plain object): x is a function [world-plain]'); });   // as the engine writes it: tagged
         engine.events.emit('hint:test');
-        return { warns, error: engine.error, text: engine.describeText().split('\n')[0] };
+        const froze = engine.freeze('menu'), frozenLine = engine.describeText().split('\n').find(l => l.startsWith('[Game state]')); froze.remove();
+        return { warns, error: engine.error, text: engine.describeText().split('\n')[0], frozenLine };
       });
       check('warnOnce: the warning ends with "Possible cause" and a Read line, and repeats are not printed again', r.warns.length === 1 && /Possible cause: .*\n\s+Read: .*api\//.test(r.warns[0]), JSON.stringify(r.warns));
       check('engine.error has a code, the fix and docs (recipes/18-world.md)', r.error?.code === 'world-plain' && /JSON-like/.test(r.error?.fix ?? '') && r.error.docs.some(d => d.startsWith('recipes/18-world.md')), JSON.stringify(r.error));
       check('engine.error.at: the first stack line, also on the describeText error line', /^at |@\S+:\d+/.test(r.error?.at ?? '') && r.text.includes(`(${r.error.at})`), JSON.stringify(r.error?.at));
+      check('describeText state line names who froze gameplay (an earlier error freeze may be listed first)', /frozen by (.*, )?menu/.test(r.frozenLine ?? ''), r.frozenLine);
       // 为什么：一次试玩里 world.present 只调 modelNow 拿代码生成的模型，一直是 null 也没有说明
       const m = await ev(async () => {
         engine.assets.manifest({ name: 'mn', models: { mnBox: { build: () => new __threedogThree.Mesh(new __threedogThree.BoxGeometry(1, 1, 1)) } } });

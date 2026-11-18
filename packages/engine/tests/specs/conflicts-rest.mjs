@@ -34,9 +34,9 @@ export const specs = [
     async run({ page, check, ev }) {
       const r = await ev(() => {
         const S = engine.settings, ratio = () => engine.renderer.getPixelRatio(), start = ratio();
-        S.open();
+        engine.ui.open('settings');
         const set = [...S.win.el.querySelectorAll('[data-set], [data-range]')].map(c => c.dataset.set ?? c.dataset.range);
-        S.close();
+        engine.ui.close('settings');
         S.preset('low'); const low = ratio(), shadows = S.get('shadows'); S.reset();
         localStorage.setItem(S.storageKey, JSON.stringify({ v: 2, values: { pixelRatio: 0.5, antialias: true } }));
         return { start, low, reset: ratio(), shadows, set };
@@ -120,11 +120,11 @@ export const specs = [
           S.reset('pixelRatio');
           const reset = { ratio: pr(), get: S.get('pixelRatio'), max: a.max };
           // the slider applies on 'input', before set() stores the value: the first drag of a fresh file must already hold
-          S.open();
+          engine.ui.open('settings');
           const slider = S.win.el.querySelector('[data-range="pixelRatio"]');
           slider.value = '0.75'; slider.dispatchEvent(new Event('input', { bubbles: true }));
           const drag = pr();
-          S.close(); S.reset();
+          engine.ui.close('settings'); S.reset();
           S.preset('low'); S.reset('pixelRatio');
           const lowReset = pr();
           S.preset('high');

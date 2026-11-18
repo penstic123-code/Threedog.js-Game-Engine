@@ -8,7 +8,7 @@
 //   If the job is not done by the due tick, the remaining steps run to completion on the spot, so such a job must be a plain function or generator (it cannot return a Promise).
 //   Those steps are capped by maxSteps too: a generator that never ends would hang the fixed step, so past the cap its promise rejects with jobs-endless and apply does not run.
 //   With apply, the returned Promise resolves when the work finishes, which may be before apply runs (it waits for the fixed tick); put anything that needs "state already changed" inside apply, do not assume it after await.
-// A single step that is too slow (one next() over slowStepMs in the real-time loop) warns once in dev: add more yields to a loop to slice it, since the budget only limits how many steps run, it cannot split one step.
+// Steps are packed by time, not by count: a frame runs as many next() calls as fit in budgetMs (3 ms), so one yield per unit of work is enough and there is no row count to guess. One step over slowStepMs (8 ms, real-time loop) is only a reminder: it warns once in dev, so add more yields to slice that step (the budget cannot split one step).
 // Two ways to advance:
 //   Real-time loop: at most budgetMs per frame (loadingMs while the loading screen is up), always at least one step so a slow job cannot starve.
 //   Deterministic (engine.step(), headless loading): ignores real time and drains the queue on each run (generators run to the end);

@@ -1,12 +1,12 @@
 // Shoot every point of a project's shots.json for the hub wall: one build, one headless browser, one fresh page per point.
 // Why a fresh page per point: a point's scene (time, weather, a started game) must not leak into the next one, the same as separate `threedog shot` runs.
 // Why it reuses lib/shot-page.mjs: the wall's pictures must be what `threedog shot` would give for the same options.
-import { readFileSync, existsSync, mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { buildAndPreview, withBrowser, newGamePage } from '../browser.mjs';
 import { openShotPage } from '../lib/shot-page.mjs';
 import { viewSize } from '../lib/shot-name.mjs';
-import { parsePoints, pointQuery } from './points.mjs';
+import { readPoints, namedPage, pointQuery } from './points.mjs';
 import { newShotPath, recordRun } from './wall.mjs';
 
 const firstLine = e => String(e?.message ?? e).split('\n')[0];
@@ -16,8 +16,7 @@ const firstLine = e => String(e?.message ?? e).split('\n')[0];
  * @returns {Promise<object>} the wall after this run (errors are recorded in it, never thrown)
  */
 export async function shootProject(dir, { onPoint } = {}) {
-  const at = Date.now(), file = join(dir, 'shots.json');
-  const parsed = parsePoints(existsSync(file) ? readFileSync(file, 'utf8') : null);
+  const at = Date.now(), parsed = readPoints(dir);
   // a broken shots.json is a project-level error: no build, the old pictures stay (an AI is probably mid-edit)
   if (parsed.error) return recordRun(dir, { at, error: parsed.error });
   const results = parsed.pointErrors.map(e => ({ name: e.name ?? `point ${e.index + 1}`, error: e.message }));
@@ -27,8 +26,7 @@ export async function shootProject(dir, { onPoint } = {}) {
   const hadTest = process.env.THREEDOG_TEST;
   process.env.THREEDOG_TEST = '1';
   let server;
-  // its own build folder: shot / test / perf run beside the hub and rebuild .threedog/tool-build under it
-  try { server = await buildAndPreview(dir, { outDir: '.threedog/hub-build' }); }
+  try { server = await buildAndPreview(dir); }
   catch (e) { return recordRun(dir, { at, error: `build failed: ${firstLine(e)}` }); }
   finally { if (hadTest === undefined) delete process.env.THREEDOG_TEST; else process.env.THREEDOG_TEST = hadTest; }
   try {
@@ -39,8 +37,7 @@ export async function shootProject(dir, { onPoint } = {}) {
       try {
         const [W, H] = viewSize(p.size);
         page = await newGamePage(browser, { errors, viewport: { width: W, height: H } });
-        const url = /^[\p{L}\p{N}_-]+$/u.test(p.page ?? '/') ? `/${p.page}.html` : (p.page ?? '/');
-        await openShotPage(page, server.base, url, pointQuery(p), { errors });
+        await openShotPage(page, server.base, namedPage(p.page ?? '/'), pointQuery(p), { errors });
         await page.evaluate(() => engine.step(1 / 30, { render: true }));
         const out = newShotPath(dir, p.name, at);
         mkdirSync(dirname(out), { recursive: true });

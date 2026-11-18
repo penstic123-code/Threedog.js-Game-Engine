@@ -58,7 +58,12 @@ export default function threedogEditor() {
         // JSON has no undefined: the page says "the file has no such field" with null, which contentWrite's expect spells as undefined
         const set = op === 'write' && { op: 'set', expect: Object.fromEntries(Object.entries(req.expect ?? {}).map(([k, v]) => [k, v === null ? undefined : v])) };
         const { path, ...out } = await contentWrite(root, { op, ...req, ...set });
-        if (out.ok) written.set(normalizePath(path), readFileSync(path, 'utf8'));
+        if (out.ok) {
+          written.set(normalizePath(path), readFileSync(path, 'utf8'));
+          // The page may reload the moment this reply lands (an NPC), while the file watcher waits for the write to settle (awaitWriteFinish, gameConfig.js)
+          // before it tells Vite: that reload would be served the module's old text. Vite is told here, at the write, so the next request reads the file as it is
+          server.environments.client.moduleGraph.onFileChange(path);
+        }
         return out;   // without the path: the page has no use for it
       };
       server.middlewares.use('/__threedog/design', (req, res) => {

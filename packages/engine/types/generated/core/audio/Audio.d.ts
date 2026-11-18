@@ -38,6 +38,16 @@ export class Audio {
         remove(): void;
     };
     /**
+     * Your Web Audio node in a bus's path, after volume and duck, before master and reverb, in call order ('master': before the speakers).
+     * `make(ctx)` returns the node; it runs once audio is unlocked; taps you add to it stay
+     * @param {string} bus
+     * @param {(ctx: AudioContext) => AudioNode} make
+     * @returns {{ remove(): void }} remove() takes the node out and links the path back (repeat calls do nothing)
+     */
+    addNode(bus: string, make: (ctx: AudioContext) => AudioNode): {
+        remove(): void;
+    };
+    /**
      * Set a bus volume 0-1 ('master' for the total)
      * @param {string} bus
      * @param {number} v

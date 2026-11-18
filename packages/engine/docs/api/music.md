@@ -12,7 +12,7 @@ Background music (music() module)
   - `interval?: number` Rule check interval (seconds), default 1
 
 ## Methods and properties
-- `music.define(name: string, track: MusicTrack)` — Define a track: a url, or { url, volume, loop, stems }. The same name again replaces it. Example: `engine.music.define('town', '/music/town.ogg')`
+- `music.define(name: string, track: MusicTrack)` — Define a track: a url, { url, volume, loop, stems }, or { generate } (your own Web Audio nodes). The same name again replaces it. Example: `engine.music.define('town', '/music/town.ogg')`
 - `music.play(name: string | null, opts?: { fade?: number; force?: boolean })` — Play a track (cross-fade over fade seconds). Does nothing if it is already playing; force replays it
 - `music.stop(opts?: { fade?: number })` — Fade out and stop (fade over fade seconds; default the music({ fade }) option). An options object like play's: stop(3) throws in dev
 - `music.stinger(name: string, opts?: { duck?: number; volume?: number })` — Layer a one-shot piece (victory, discovered place...); the background dips to `duck` while it plays
@@ -20,7 +20,7 @@ Background music (music() module)
 - `music.override(name: string | null, opts?: { fade?: number; force?: boolean })` — Pick a track by hand, pausing the rules; override(null) hands control back
 - `music.pick() → string | null | undefined` — Which track the current rules would pick (without switching)
 - Properties:
-  - `tracks: Map<string, { url?: string; volume?: number; loop?: boolean…` Registered tracks
+  - `tracks: Map<string, Exclude<MusicTrack, string>>` Registered tracks
   - `current: string | null` Name of the track playing (or wanted)
   - `intensity: number` 0-1: how loud each stem of the playing track is (see the stems `at` range); fades in about half a second
   - `ready: boolean` Whether audio is usable

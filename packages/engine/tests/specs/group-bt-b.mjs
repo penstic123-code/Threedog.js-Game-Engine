@@ -58,9 +58,9 @@ export const specs = [
         return { mid, clock: ctx.currentTime - t0 };
       });
       check('a place wet change leaves a send fade running', fades.clock >= 0.3 && fades.mid > 0.5, JSON.stringify(fades));
-      // off / on cycles cut the bus -> send link too: count the live edges out of the sfx bus tap
+      // off / on cycles cut the bus -> send link too: count the live edges out of the sfx bus tail (where the send taps, after any inserts)
       const edges = await ev(() => {
-        const a = engine.audio, tap = a._duckNodes.sfx, P = AudioNode.prototype, live = new Set(), con = P.connect, dis = P.disconnect;
+        const a = engine.audio, tap = a._tails.sfx, P = AudioNode.prototype, live = new Set(), con = P.connect, dis = P.disconnect;
         P.connect = function (d, ...x) { if (this === tap) live.add(d); return con.call(this, d, ...x); };
         P.disconnect = function (d, ...x) { if (this === tap) { if (d) live.delete(d); else live.clear(); } return dis.call(this, d, ...x); };
         try { for (let i = 0; i < 3; i++) { a.reverb(null); a.reverb({ sends: { sfx: 0 }, decay: 1.5 }); } } finally { P.connect = con; P.disconnect = dis; }

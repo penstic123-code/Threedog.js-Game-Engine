@@ -160,6 +160,7 @@ if (engine.saves.check('auto') === null) await engine.session.load('auto');  // 
   record id, not the mesh, and look it up again on `save:loaded`: `engine.world.get(id)` for the record, `engine.world.view(id)` for its model
   now (null while not built or far away).
 - Main menu: show "Continue" only when `engine.saves.check(slot) === null`; "New game" is `await engine.session.newGame()`.
+- Start screen rows: mark the part with the numbers `summary: true` (`saves.define('hero', { save, load, summary: true })`); `saves.list()` rows then carry `summary.hero`, read from the stored save and migrated, `{}` if none is marked.
 - During development, to jump straight into a save: URL `?save=slot1` (`threedog state` also understands `save=`).
 - In tests, `engine.saves.save('x'); await engine.saves.flush();` writes before reading back.
 

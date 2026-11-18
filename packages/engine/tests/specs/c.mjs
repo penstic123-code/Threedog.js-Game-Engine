@@ -129,11 +129,11 @@ export const specs = [
       check('timeOfDay 0.3 reads back exactly and shows 07:12 (no float drift to 07:11)', r.exact.tod === 0.3 && r.exact.clock === '07:12', JSON.stringify(r.exact));
       check('weather rain applies immediately and turns off auto weather', r.weather === 'rain' && r.rain > 0.5 && !r.auto, JSON.stringify(r));
       await page.mouse.click(640, 360);
-      await ev(() => engine.settings.open()); await frames(2);
+      await ev(() => engine.ui.open('settings')); await frames(2);
       // frozen: frame hooks still run, fixed steps (engine.time.now('real')) do not
       const frozen = await ev(async () => { const t = engine.time.now('real'), f = engine.frozen; await __t.frames(15); return { f, same: engine.time.now('real') === t }; });
       check('freezeWorld: gameplay frozen and time stopped while the menu is open', frozen.f && frozen.same, JSON.stringify(frozen));
-      await ev(() => engine.settings.close()); await frames(2);
+      await ev(() => engine.ui.close('settings')); await frames(2);
       check('unfrozen after the menu closes', await ev(async () => { const t = engine.time.now('real'); await __t.until(() => engine.time.now('real') > t, 10000).catch(() => {}); return !engine.frozen && engine.time.now('real') > t; }));
     },
   },

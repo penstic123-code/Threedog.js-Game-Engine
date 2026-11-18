@@ -357,4 +357,4 @@ export function quests(opts = {}) {
   };
 }
 
-export const handRolled = [{ kind: 'quests', seen: 'a quest list of its own', use: 'engine.quests (quests()): steps, rewards, markers and the log, saved with the game (recipe 04)', quiet: /\b(engine|e|eng|ctx)\.quests\b|\bquests\(\s*[{)]/, code: /(?:\b(?:const|let|var)\s+|\bthis\.)(?:quests?|questLog|missions?|objectives?)(?:List|Log|Data|s)?\s*=\s*(?:\[\s*\]|\{\s*\}|new Map\b)/i }];
+export const handRolled = [{ kind: 'quests', docRef: 'recipes/04-quests.md §1', seen: 'a quest list of its own', use: 'engine.quests (quests()): steps, rewards, markers and the log, saved with the game', quiet: /\b(engine|e|eng|ctx)\.quests\b|\bquests\(\s*[{)]/, code: /(?:\b(?:const|let|var)\s+|\bthis\.)(?:quests?|questLog|missions?|objectives?)(?:List|Log|Data|s)?\s*=\s*(?:\[\s*\]|\{\s*\}|new Map\b)/i }];

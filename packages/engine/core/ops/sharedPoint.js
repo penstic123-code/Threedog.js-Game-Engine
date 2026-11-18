@@ -137,6 +137,7 @@ export class Stack {
     } else value = o.value ?? (this.kind === 'top' ? null : true);   // any / one: optional data beside the hold; top: the holder's value
     if (layer === 'settings') this._restricts(op, value, `engine.mod('${at}', { owner: '${owner}', layer: 'settings', ${op}: ${JSON.stringify(value)} })`);
     if (this.per === true && o.id == null) throw fail(`engine.mod('${this.name}'): this point is per record, pass { id }, e.g. { owner: '${owner}', id: 'slime_3', ... }`);
+    if (!this.per && o.id != null) throw fail(`engine.mod('${at}'): '${this.name}' is not per record, so { id } would be kept but never read; define it as { per: 'optional' } to hold one value per id, or drop the id`);
     const clock = o.clock ?? 'real';
     if (o.for != null && !(o.for >= 0 && Number.isFinite(o.for))) throw fail(`engine.mod('${at}', { for }): for is seconds >= 0 on clock '${clock}', got ${JSON.stringify(o.for)}`);
     return { owner, layer, op, value, clock, at };
@@ -150,7 +151,11 @@ export class Stack {
   _fromSave(list, layerOf) {
     if (!Array.isArray(list)) throw fail(`'${this.name}': a list of entries, got ${shown(list)}`);
     const seen = new Map();   // id -> owner -> entry: the list's own conflict check
-    return list.map(e => {
+    // An old save may hold an id on a point that is not per record: engine.mod accepted it, but value() never read it, so dropping it changes no value.
+    // Dropped here (not rejected in _entry) so one such entry does not refuse the whole list.
+    const stale = !this.per && list.some(e => e && typeof e === 'object' && e.id != null);
+    if (stale) warnOnce(`'${this.name}': a saved entry carried an id although the point is not per record; it never changed the value and was dropped. Define the point as { per: 'optional' } if the id matters.`);
+    return (stale ? list.filter(e => !(e && typeof e === 'object' && e.id != null)) : list).map(e => {
       if (!e || typeof e !== 'object') throw fail(`'${this.name}': an entry is an object, got ${shown(e)}`);
       const op = e.op, left = e.left == null ? undefined : Math.max(0, e.left);   // a timer already due loads as due
       const o = { owner: e.owner, id: e.id ?? undefined, layer: layerOf(e.layer), clock: e.clock ?? 'real', for: left, ...(NUM_OPS.includes(op) ? { [op]: e.value } : {}) };

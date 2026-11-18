@@ -26,7 +26,7 @@ const DEV = {
   badPart: "ui part '{name}': the function must return an object { show, update, hide, dispose } (any may be omitted). Got {got}.",
   badVerb: "ui part '{name}': {verb} must be a function.",
   unknown: "engine.ui.set('{name}'): no UI part has that name. Known parts: {known}. (A module's parts exist only after engine.use(module).)",
-  notModal: "engine.ui.open('{name}'): only full-screen parts can be opened ({known}).",
+  notModal: "engine.ui.{verb}('{name}'): only full-screen parts can be opened and closed ({known}).",
 };
 const kind = v => v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v;
 
@@ -87,7 +87,7 @@ export class UIParts {
     this.defs.set(name, d);
     return { remove: () => {
       if (this.defs.get(name) !== d) return;
-      this.close(name);
+      this._close(name);
       this.live.get(name)?.dispose?.();
       this.live.delete(name); this.defs.delete(name);
     } };
@@ -155,6 +155,13 @@ export class UIParts {
    */
   create(name) { return this._make(name); }
 
+  /** @internal The full-screen definition of name; throws ui-misuse listing the known ones */
+  _modal(verb, name) {
+    const d = this.defs.get(name);
+    if (!d?.modal) throw codedError('ui-misuse', fmt(DEV.notModal, { verb, name, known: [...this.defs].filter(([, x]) => x.modal).map(([n]) => n).join(', ') }));
+    return d;
+  }
+
   /**
    * Open a full-screen part (the title screen): shows it, pushes the UI focus stack (Esc goes to it; the choice cursor moves over the controls inside the
    * part's el), locks gameplay input, emits ui:open.
@@ -164,8 +171,7 @@ export class UIParts {
    * @example engine.ui.open('title')
    */
   open(name, data) {
-    const d = this.defs.get(name);
-    if (!d?.modal) throw codedError('ui-misuse', fmt(DEV.notModal, { name, known: [...this.defs].filter(([, x]) => x.modal).map(([n]) => n).join(', ') }));
+    const d = this._modal('open', name);
     const p = this.get(name);
     if (!p) return false;
     if (this.opened.has(name)) return true;
@@ -177,17 +183,23 @@ export class UIParts {
     const fr = typeof m.freeze === 'function' ? m.freeze(e) : m.freeze;
     const freeze = fr ? e.freeze('ui-' + name, { kind: typeof fr === 'string' ? fr : undefined }) : null;
     this.opened.set(name, { freeze, focus: uiFocus(e).push('ui-' + name, { cancel: m.cancel ? () => m.cancel(e) : null, nav: () => p.el ?? null }), ctx: e.input.push('ui-' + name) });   // own opaque context: gameplay actions stop responding
-    try { p.show(shown); } catch (err) { this.close(name); throw err; }
+    try { p.show(shown); } catch (err) { this._close(name); throw err; }
     e.events.emit('ui:open', name);
     return true;
   }
 
   /**
-   * Close a full-screen part opened with open().
+   * Close a full-screen part opened with open(). A name that is not a full-screen part throws, like open().
    * @param {string} name
    * @returns {void}
    */
   close(name) {
+    this._modal('close', name);
+    this._close(name);
+  }
+
+  /** @internal Close without checking the name: define().remove and a failed show() reach parts that may not be full-screen or already gone */
+  _close(name) {
     const f = this.opened.get(name);
     if (!f) return;
     const e = this.engine;
@@ -198,7 +210,7 @@ export class UIParts {
   }
 
   /**
-   * Whether a full-screen part is open
+   * Whether a full-screen part is open (false for a name nobody defined: a game may ask about a module it did not install)
    * @param {string} name
    * @returns {boolean}
    */

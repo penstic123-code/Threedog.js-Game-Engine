@@ -6,7 +6,8 @@ import { killTree } from '../lib/proc.mjs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TIME } from './runtime.mjs';
-import { item, result, parseResult, HINTS_SHOWN } from '../lib/result.mjs';
+import { item, result, parseResult } from '../lib/result.mjs';
+import { remind, BUDGET } from '../lib/remind.mjs';
 
 const str = description => ({ type: 'string', description });
 
@@ -88,12 +89,12 @@ export const pairs = args => Object.entries(args
 
 const isHint = i => i.code === 'R40' && i.level === 'warn';
 const place = i => `${i.code ? i.code + ' ' : ''}${i.file ? i.file + (i.line ? ':' + i.line : '') + '  ' : ''}`;
-/** A `check --json` result (lib/result.mjs) as lines: every error with its fix, the first `hints` bypass hints in the order `check` prints them, then the summary. Capped, and the
+/** A `check --json` result (lib/result.mjs) as lines: every error with its fix, the first `hints` reminders as `check` prints them (lib/remind.mjs), then the summary. Capped, and the
  *  summary survives the cap (the full run is `npm run check` in a terminal). A hint never changes the verdict: ok is the exit code */
-export const checkDigest = (r, max, hints = HINTS_SHOWN) => {
-  const all = r.items.filter(isHint), shown = all.slice(0, hints), more = all.length - shown.length;
+export const checkDigest = (r, max, hints = BUDGET.check) => {
+  const all = r.items.filter(isHint);
   const body = [...r.items.filter(i => i.level === 'error').map(i => `✗ ${place(i)}${i.message}${i.fix ? `\n    Fix: ${i.fix}` : ''}`),
-    ...shown.map(i => `! ${place(i)}${i.message}\n    ${i.short ?? i.fix}`), ...(more ? [`… ${more} more hints: ask with hints: ${all.length}`] : [])].join('\n');
+    ...remind(all, { max: hints, rest: `ask with hints: ${all.length}` }).lines].join('\n');
   const room = max - r.summary.length - 1;
   return [...(!body ? [] : [body.length > room ? body.slice(0, room - 40) + `\n… (${body.length - room + 40} more characters)` : body]), r.summary].join('\n');
 };
@@ -136,8 +137,8 @@ export const STATIC_TOOLS = {
     },
   },
   check: {
-    description: 'Run npm run check on this game (rules R*, content, types, GAMEMAP) from the files alone (no game needed): errors, counts, the first bypass hints (hints never fail it).',
-    schema: { type: 'object', properties: { rule: str('Optional: only these rules, e.g. "R33,R18"'), max: { type: 'number', description: 'Output cap in characters (default 2000)' }, hints: { type: 'number', description: `Bypass hints to list (default ${HINTS_SHOWN}; every one when rule names R40)` } }, required: [] },
+    description: 'Run npm run check on this game (rules R*, content, types, GAMEMAP) from the files alone (no game needed): errors, counts, the first reminders (reminders never fail it).',
+    schema: { type: 'object', properties: { rule: str('Optional: only these rules, e.g. "R33,R18"'), max: { type: 'number', description: 'Output cap in characters (default 2000)' }, hints: { type: 'number', description: `Reminders to list (default ${BUDGET.check}; every one when rule names R40)` } }, required: [] },
     run: (dir, a) => new Promise(res => {
       const args = [join(HERE, '..', 'check.mjs'), '--json', ...(a.rule ? ['--rule', String(a.rule)] : [])];
       // a check that hangs would hold every tool call queued behind it; its whole tree goes (spawn's own timeout ends check.mjs only, and tsc it started ran on)
@@ -150,7 +151,7 @@ export const STATIC_TOOLS = {
       c.on('close', (code, signal) => {
         clearTimeout(timer); if (timedOut) signal ??= 'SIGTERM';
         const r = parseResult(out) ?? result([item({ code: 'check', message: signal ? `check stopped after ${CHECK_MS / 60000} minutes` : 'check did not print a result' })], 'check failed', false);
-        const hints = a.hints >= 0 ? a.hints : /\bR40\b/.test(String(a.rule ?? '')) ? Infinity : HINTS_SHOWN;   // what check --rule R40 prints
+        const hints = a.hints >= 0 ? a.hints : /\bR40\b/.test(String(a.rule ?? '')) ? Infinity : BUDGET.check;   // what check --rule R40 prints
         res({ ok: code === 0, text: (code === 0 ? '✓ check passed\n' : '✗ check failed\n') + checkDigest(r, a.max > 0 ? a.max : 2000, hints), data: { exit: code, errors: r.items.filter(i => i.level === 'error'), hints: r.items.filter(isHint).slice(0, hints) } });
       });
     }),

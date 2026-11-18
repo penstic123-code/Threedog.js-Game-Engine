@@ -137,11 +137,11 @@ export const specs = [
         const change = () => document.dispatchEvent(new Event('pointerlockchange')), o = {};
         const locked = () => { Object.defineProperty(document, 'pointerLockElement', { value: engine.renderer.domElement, configurable: true }); change(); };
         const lost = () => { delete document.pointerLockElement; change(); };
-        locked(); engine.page.releaseLock(); lost(); o.byEngine = engine.settings.isOpen;
-        locked(); lost(); o.byPlayer = engine.settings.isOpen;
-        locked(); lost(); o.again = engine.settings.isOpen;   // the menu is on the stack: a second end of a lock changes nothing
-        engine.settings.close();
-        const h = engine.freeze('test'); locked(); lost(); o.frozen = engine.settings.isOpen; h.remove();   // a game's own frozen screen keeps the mouse free, no menu over it
+        locked(); engine.page.releaseLock(); lost(); o.byEngine = engine.ui.isOpen('settings');
+        locked(); lost(); o.byPlayer = engine.ui.isOpen('settings');
+        locked(); lost(); o.again = engine.ui.isOpen('settings');   // the menu is on the stack: a second end of a lock changes nothing
+        engine.ui.close('settings');
+        const h = engine.freeze('test'); locked(); lost(); o.frozen = engine.ui.isOpen('settings'); h.remove();   // a game's own frozen screen keeps the mouse free, no menu over it
         return o;
       });
       const J = JSON.stringify(r);

@@ -10,6 +10,12 @@ import { TOOLS, ROOT, ENGINE, viteOptions } from '../paths.mjs';
 import { readFileSync } from 'node:fs';
 import { TIME } from '../threedog/runtime.mjs';
 import { pairs, STATIC_TOOLS } from '../threedog/mcp-extra.mjs';
+import { TOOLS as MCP_TOOLS, JS_TOOL } from '../threedog/mcp-tools.mjs';
+import { COMMANDS, EXTRA } from '../threedog/command-table.mjs';
+import { options } from '../threedog/commands.mjs';
+import { OWN } from '../threedog/dispatch.mjs';
+import { pictureArgs } from '../picture.mjs';
+import { parseOptions } from '../lib/cli-args.mjs';
 
 export const name = 'MCP server: threedog mcp wraps the dev bridge over stdio';
 
@@ -31,6 +37,37 @@ function mcp(...args) {
     .then(r => { child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n'); return r; });
   return { init, rpc, close: () => { child.stdin.end(); child.kill(); } };
 }
+
+/**
+ * Every field of every MCP tool schema reaches the command line and its help line (the three tables are hand-written and drifted before: shot --time vs state time=).
+ * Reads the real tables: the tool's own args() turns a sample value into command line words; the real option parser must accept them; the help line must show them.
+ * Returns the list of mismatches.
+ */
+export function toolFieldGaps() {
+  const SAMPLE = 'zzsample', NUM = 7771, gaps = [], help = { ...COMMANDS, ...EXTRA };
+  for (const [name, t] of Object.entries({ ...MCP_TOOLS, js: JS_TOOL })) {
+    if (t.run) continue;   // static tools read files, no command line
+    const cmd = t.cmd || name, line = help[cmd];
+    if (!line) { gaps.push(name + ': no help line for command ' + cmd); continue; }
+    const required = Object.fromEntries((t.schema.required || []).map(k => [k, sampleOf(t.schema.properties[k])]));
+    for (const [field, def] of Object.entries(t.schema.properties)) {
+      const base = t.args(required).join(' '), argv = t.args({ ...required, [field]: sampleOf(def) }), joined = argv.join(' '), why = m => gaps.push(name + '.' + field + ': ' + m);
+      if (def.additionalProperties === true) continue;   // free-form key=value pairs (op arguments): nothing named to look up
+      // optional field: it must change the command line; required one is in base already, so its sample value must appear in it
+      if (field in required ? !joined.includes(String(required[field])) : joined === base) { why('args() drops it'); continue; }
+      try {
+        if (cmd.startsWith('picture-')) pictureArgs(argv); else if (OWN[cmd]) parseOptions(argv, OWN[cmd]); else options(cmd, argv);
+      } catch (e) { why('the command line refuses it: ' + e.message); continue; }
+      for (const w of argv) {
+        const named = w.match(/^([a-zA-Z]+)=/), word = w.startsWith('--') ? w : named ? named[0] : /^[0-9]+$/.test(w) || w.includes(SAMPLE) || w.includes(String(NUM)) ? null : w;
+        if (word && !line.includes(word)) why('the help line of ' + cmd + ' does not show "' + word + '"');
+      }
+    }
+  }
+  return gaps;
+  function sampleOf(d) { return d.enum ? d.enum[0] : d.type === 'number' ? NUM : d.type === 'boolean' ? true : d.type === 'array' ? [SAMPLE] : d.type === 'object' ? { [SAMPLE]: SAMPLE } : SAMPLE; }
+}
+
 const names = r => r.tools.map(t => t.name).sort();
 
 export async function run({ check }) {
@@ -65,6 +102,9 @@ async function steps(check, plain) {
     const unknown = await plain.rpc('nope/method').then(() => 'answered', e => e.message);
     check('unknown method: JSON-RPC "Method not found" error', unknown.includes('Method not found'), unknown);
   } finally { withJs.close(); }
+
+  const gaps = toolFieldGaps();
+  check('[guard] every MCP tool field is accepted by the command line and shown in its help line (the three tables cannot drift apart)', !gaps.length, gaps.join('; '));
 
   // 1b. Static tools answer from the files, with or without a dev server
   const how = await plain.rpc('tools/call', { name: 'how', arguments: { task: 'tone mapping' } });

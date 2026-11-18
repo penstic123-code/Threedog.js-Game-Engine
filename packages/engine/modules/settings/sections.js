@@ -168,7 +168,7 @@ export const OPTIONAL_SECTIONS = {
     bind(el, e, s) {
       for (const b of el.querySelectorAll('[data-game]')) b.onclick = async () => {
         const act = b.dataset.game;
-        s.close();
+        e.ui.close('settings');
         if (act === 'load') await e.session.load(b.dataset.slot);   // a clean playthrough from the save, not a quick load onto this one
         else if (act === 'title') await e.session.quit();
       };

@@ -89,6 +89,11 @@ const SLOTS = ['scene', 'hdr', 'tone', 'ldr', 'final'];
 // slots one effect at a time: each replaces an engine stage (the scene render, the tone-mapping output), two replacements of one stage cannot both run
 const EXCLUSIVE = { scene: 'replace the scene render', tone: 'replace the tone-mapping output' };
 const ADD_KEYS = ['name', 'slot', 'order'];
+// The keys and types of an effect object the game defines ({ name, create | node | fuse, ... }); checked in effectOf before the engine adds its own keys (_auto, output)
+const EFFECT_SCHEMA = {
+  name: 'string', create: 'function?', node: 'function?', fuse: 'object?', slot: 'string?', order: 'number?', params: 'object?', enabled: 'bool?', update: 'function?',
+  needsDepth: 'bool?', needsBuffers: 'array?', backend: 'string?', skipOnLowTier: 'bool?', cheaper: 'object?', facts: 'function?', about: 'object?',
+};
 
 export class PostFX {
   /**
@@ -512,7 +517,8 @@ function effectOf(post, x, { name, slot, order }) {
     return pick({ name: `${cls}#${n}`, slot: s, order: 1000 + n, create: () => x, _pass: x, _auto: slot == null && (s === 'hdr' || s === 'ldr') });
   }
   if (x && typeof x === 'object' && typeof x.name === 'string' && (typeof x.create === 'function' || typeof x.node === 'function' || (x.fuse && typeof x.fuse === 'object')))
-    return name != null || slot != null || order != null ? pick(x) : x;
+    { try { readParams('engine.post.add(effect)', EFFECT_SCHEMA, x); } catch (e) { throw codedError('post-effect', e.message); }   // same code as every other wrong effect shape
+      return name != null || slot != null || order != null ? pick(x) : x; }
   throw codedError('post-effect', 'engine.post.add(x): x is a three.js Pass (has render(); WebGL), a node function (input, ctx) => node (WebGPU), ' +
     "or an effect { name: 'myEffect', create: ctx => pass, node: (input, ctx) => node } / { name, fuse: { glsl } } (both renderers, see PostEffect)");
 }

@@ -174,7 +174,7 @@ export async function run({ check, browser }) {
     check('[guard] a title the game wrote by hand is out of the way too: the canvas takes the clicks', await page.evaluate(() => { const r = window.engine.renderer.domElement.getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === window.engine.renderer.domElement; }));
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => r(true)))));
-    check('[guard] Esc does not open the game\'s menu over the scene', await page.evaluate(() => !window.engine.settings.isOpen));
+    check('[guard] Esc does not open the game\'s menu over the scene', await page.evaluate(() => !window.engine.ui.isOpen('settings')));
 
     // 1. the loop: select, drag, saved
     await dragEntry(page, 'crate', 'x', 2);

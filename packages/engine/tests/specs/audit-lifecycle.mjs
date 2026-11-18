@@ -566,10 +566,10 @@ export const specs = [
         engine.use(mod);
         S.set('auditGlow', false);
         out.on = rows();
-        S.open(); S.current = 'auditTab'; S.win.refresh();
+        engine.ui.open('settings'); S.current = 'auditTab'; S.win.refresh();
         engine.unuse('audit-row');
         out.left = { ...rows(), game: S.custom.has('auditGame'), showing: S.current };
-        S.close();
+        engine.ui.close('settings');
         const calls = applied.length;
         let refused = null; try { S.set('auditGlow', true); } catch (err) { refused = err.code; }
         out.deadRow = { calls: applied.length - calls, held: point.has('settings'), refused };

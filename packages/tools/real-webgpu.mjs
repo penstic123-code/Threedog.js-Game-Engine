@@ -3,18 +3,17 @@
 // WebGPURenderer's WebGL2 backend, so a "WebGPU" pass there proves the node path, never the WGSL, the bind groups or the device.
 //   node packages/tools/real-webgpu.mjs [spec name words...]            the engine's tests/specs whose name or url holds a word, on real WebGPU
 //   node packages/tools/real-webgpu.mjs --urls=/a.html,/b.html?x=1      open pages, wait, report (with --shots=dir, one PNG each)
-//   --game=<dir>  build and serve this folder instead of packages/engine   --no-build  serve the last tool build
+//   --game=<dir>  build and serve this folder instead of packages/engine   --no-build  serve the last successful real-webgpu build (with --webgl: the plain one shot / test build, the same build)
 //   --eval=<file> with --urls: run this script in each page once it stands, print what it returns (JSON)
 //   --webgl       with --urls: no backend demand, for the WebGL picture to compare with   --headed  a visible window
 //   --all-webgpu  examples and tests that ask for no renderer get renderer: 'webgpu' too (a build-time rewrite of createEngine)
 // A spec with notRealWebGPU: '<why>' is listed as SKIP: its page holds no device of its own for this run to judge.
 // Each page prints its adapter, three's backend and its contexts; a page that is not on real WebGPU fails loudly, it never passes on the fallback.
 // Why build-time rewrites: test pages say forceWebGL: true so that headless runs agree, and that one word would hide the whole point of this run.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
-import { build } from 'vite';
-import { withBrowser, buildAndPreview, launchRealGPU, newGamePage, IGNORED_CONSOLE, TOOL_BUILD, collect, specContext } from './browser.mjs';
-import { viteOptions, ENGINE } from './paths.mjs';
+import { withBrowser, buildAndPreview, launchRealGPU, newGamePage, IGNORED_CONSOLE, collect, specContext } from './browser.mjs';
+import { ENGINE } from './paths.mjs';
 import { workspaceSpecs } from './lib/specs.mjs';
 import { waitEngine, waitLoaded } from './wait-engine.mjs';
 
@@ -182,8 +181,6 @@ async function runUrl(browser, server, url) {
   await page.close().catch(() => {});
 }
 
-if (!flag('no-build')) await build(await viteOptions(dir, { plugins: flag('webgl') ? [] : [rewrites], build: TOOL_BUILD, logLevel: 'error' }));
-if (!existsSync(join(dir, TOOL_BUILD.outDir))) throw new Error(`${dir} has no ${TOOL_BUILD.outDir}: drop --no-build`);
 await withBrowser(async ({ server, launch }) => {
   const browser = await launch();
   const cdp = await browser.newBrowserCDPSession();
@@ -197,6 +194,6 @@ await withBrowser(async ({ server, launch }) => {
       if (s.notRealWebGPU) { skipped++; console.log(`SKIP  ${s.name}\n      ${s.notRealWebGPU}`); } else await runSpec(browser, server, s);
     }
   }
-}, { exitOnFail: true, launch: () => launchRealGPU({ headless: !flag('headed') }), server: () => buildAndPreview(dir, { build: false }) });
+}, { exitOnFail: true, launch: () => launchRealGPU({ headless: !flag('headed') }), server: () => buildAndPreview(dir, { build: !flag('no-build'), kind: flag('webgl') ? 'plain' : 'real-webgpu', plugins: flag('webgl') ? [] : [rewrites] }) });
 console.log(`${failed ? `\n${failed} page(s) FAILED` : '\nall pages passed on real WebGPU'}${skipped ? `, ${skipped} skipped by their spec` : ''}`);
 process.exitCode = failed ? 1 : 0;

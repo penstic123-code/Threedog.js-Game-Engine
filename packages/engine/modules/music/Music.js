@@ -9,6 +9,8 @@
 //   engine.music.intensity = 0.8          // stems fade in as it rises through their `at` range (0-1)
 //   engine.music.stinger('win')           // a short piece over the music; the music dips under it
 //   engine.music.stop({ fade: 3 })        // fade out over 3 s
+// A track may be made by the game's own nodes instead of a file: { generate({ ctx, output, start, end }) { ...; return { stop(at) {} }; } } (recipes/31 §4a);
+// it goes through the same play / rules / fade / duck / stinger as a file track.
 //
 // Rules (checked about once a second; the highest-priority match wins; a new result must hold `hold` seconds before switching):
 //   engine.music.rules([
@@ -44,7 +46,7 @@ export class Music {
     /** @internal */ this.engine = engine;
     const st = readParams('createEngine({ audio: { music } })', MUSIC_PARAMS, engine.audio.config.music);   // core keeps this table for music() and does not read it, so its spelling is checked here
     /** @internal */ this.opts = { ...st, ...opts };
-    /** Registered tracks @type {Map<string, { url?: string, volume?: number, loop?: boolean, stems?: { url: string, at?: number[], volume?: number }[] }>} */
+    /** Registered tracks @type {Map<string, Exclude<MusicTrack, string>>} */
     this.tracks = new Map();
     this._defineAll(st.tracks || {});
     this._defineAll(opts.tracks || {});
@@ -88,7 +90,7 @@ export class Music {
   }
 
   /**
-   * Define a track: a url, or { url, volume, loop, stems }. The same name again replaces it
+   * Define a track: a url, { url, volume, loop, stems }, or { generate } (your own Web Audio nodes). The same name again replaces it
    * @example engine.music.define('town', '/music/town.ogg')
    * @param {string} name
    * @param {MusicTrack} track
@@ -96,7 +98,9 @@ export class Music {
    */
   define(name, track) {
     const tr = typeof track === 'string' ? { url: track } : { ...track };
-    if (tr.url == null && !tr.stems?.length) throw codedError('music-track', `music track '${name}' needs url or stems, e.g. { url: '/music/${name}.ogg' }`, TypeError);
+    const file = tr.url != null || tr.stems?.length;
+    if (tr.generate != null && (file || typeof tr.generate !== 'function')) throw codedError('music-track', `music track '${name}': generate is a function and replaces url / stems, give one of them`, TypeError);
+    if (!file && tr.generate == null) throw codedError('music-track', `music track '${name}' needs url, stems or generate, e.g. { url: '/music/${name}.ogg' }`, TypeError);
     this.tracks.set(name, tr);
   }
   /** @internal */
@@ -152,6 +156,7 @@ export class Music {
       if (this._token !== token || this.playing !== slot) { g.disconnect(); return; }   // another track was chosen while loading
       const t = ctx.currentTime + 0.02, loop = tr.loop !== false;
       bufs.forEach((buf, i) => { const src = ctx.createBufferSource(); src.buffer = buf; src.loop = loop; src.connect(parts[i].out); src.start(t); slot.srcs.push(src); });
+      if (tr.generate) { const gen = this._generate(tr, ctx, g, t); slot.srcs.push(gen.src); slot.stop = gen.stop; }   // a throw lands in the catch below, like a file that fails to decode
       if (fade > 0) { g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + fade); }
       if (slot.srcs[0]) slot.srcs[0].onended = () => this._ended(slot);   // a looping source ends only when a fade stops it
     }).catch(err => { warnOnce(err.message); if (this.playing === slot) this.playing = null; });   // a missing file is said once; the game goes on silent
@@ -176,8 +181,19 @@ export class Music {
     p.gain.gain.cancelScheduledValues(t);
     p.gain.gain.setValueAtTime(p.gain.gain.value, t);
     p.gain.gain.linearRampToValueAtTime(0, t + f);
+    p.stop?.(t + f);   // a generated track's own nodes end with the fade; its marker source below frees the track
     for (const s of p.srcs) { try { s.stop(t + f + 0.05); } catch { /* already stopped */ } }
     if (p.srcs[0]) p.srcs[0].onended = () => this._ended(p);   // free the nodes once the fade has really ended
+  }
+  /**
+   * @internal Start a generated track: the game's generate() gets the track's gain node. A silent ConstantSource on that node stands for the track
+   * (srcs[0]): its `ended` is the one end every track has (fade done, or end() called), so generated tracks need no second lifetime path and no timer
+   */
+  _generate(tr, ctx, g, start) {
+    const src = ctx.createConstantSource(); src.offset.value = 0; src.connect(g);
+    const res = tr.generate({ ctx, output: g, start, end: () => src.stop() });
+    src.start(start);
+    return { src, stop: res?.stop?.bind(res) };
   }
   /** @internal The one end of a track's nodes, natural or faded (a fade-out already took it off `playing`): free them, and if it is still the playing one, say the music ended */
   _ended(slot) {
@@ -218,6 +234,7 @@ export class Music {
     const live = a.running && this._ensureOutput();
     this.engine.events.emit('music:stinger', { name, played: !!live });
     if (!live) return;                                         // a one-shot piece is not worth queueing
+    if (tr.generate) return this._generatedStinger(tr, volume ?? tr.volume ?? 1, duck);
     a.play(tr.url, { bus: 'music', volume: volume ?? tr.volume ?? 1 }).then(h => {
       if (this._gone) { h.remove(); return; }   // the file loaded after the module went
       this._stingers.add(h); h.source.addEventListener?.('ended', () => this._stingers.delete(h));
@@ -227,6 +244,21 @@ export class Music {
       g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(duck, t + 0.15);
       g.setValueAtTime(duck, t + d); g.linearRampToValueAtTime(1, t + d + 0.3);
     }).catch(err => warnOnce(err.message));
+  }
+
+  /** @internal a stinger made by generate(): same dip as a file's, but its length is unknown, so the background comes back when the piece ends */
+  _generatedStinger(tr, volume, duck) {
+    const a = this.engine.audio, ctx = a.ctx, g = ctx.createGain(), t = ctx.currentTime;
+    g.gain.value = volume; g.connect(a.buses.music);
+    const gen = this._generate(tr, ctx, g, t + 0.02);
+    const h = { remove: () => { gen.stop?.(ctx.currentTime); gen.src.stop(); } };
+    this._stingers.add(h);
+    const bed = this.output.gain;
+    if (duck < 1) { bed.cancelScheduledValues(t); bed.setValueAtTime(bed.value, t); bed.linearRampToValueAtTime(duck, t + 0.15); }
+    gen.src.onended = () => {
+      this._stingers.delete(h); g.disconnect();
+      const now = ctx.currentTime; bed.cancelScheduledValues(now); bed.setValueAtTime(bed.value, now); bed.linearRampToValueAtTime(1, now + 0.3);
+    };
   }
 
   // ---------- rules ----------

@@ -73,10 +73,10 @@ export const specs = [
       const n = await ev(async () => {
         const S = engine.settings, c = { n: 0 }, orig = S._apply.bind(S);
         S._apply = (k, v) => { if (k === 'vol.music') c.n++; return orig(k, v); };
-        S.current = 'audio'; S.open(); S.win.refresh();
+        S.current = 'audio'; engine.ui.open('settings'); S.win.refresh();
         const r = document.querySelector('[data-range="vol.music"]');
         r.value = 0.3; r.dispatchEvent(new Event('input', { bubbles: true })); r.dispatchEvent(new Event('change', { bubbles: true }));
-        S.close();
+        engine.ui.close('settings');
         engine.input.rebind('interact', []); S.save();
         return c.n;
       });

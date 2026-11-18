@@ -51,7 +51,7 @@ const markOf = list => ({ id: list.at(-1)?.id ?? 0, counts: Object.fromEntries(l
 const after = (list, { id, counts }) => list.filter(r => r.id > id || r.count > (counts[r.id] ?? 1));
 
 const reloadFile = dir => join(dir, '.threedog/errors-reload');
-/** threedog reload: errors logged so far belong to the page that is about to go. Ids restart with the log, so the log's first line is kept with the position */
+/** threedog reload and every hot update (vite-error-relay.js): errors logged so far belong to the code that is about to go. Ids restart with the log, so the log's first line is kept with the position */
 export function markReload(dir) {
   const text = readLog(dir);
   mkdirSync(join(dir, '.threedog'), { recursive: true });

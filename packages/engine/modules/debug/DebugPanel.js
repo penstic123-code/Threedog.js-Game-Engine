@@ -18,7 +18,7 @@ export class DebugPanel {
     el.className = 'threedog-debug'; el.hidden = !open;   // collapsed by default so it does not cover the game HUD
     el.innerHTML = `<style>
       .threedog-debug{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));left:max(12px,env(safe-area-inset-left,0px));width:min(290px,calc(100% - 24px));max-height:calc(100% - 24px);overflow:auto;
-        background:rgba(17,23,20,.82);color:#e9ece0;border:1px solid rgba(226,232,214,.14);border-radius:10px;font:12px/1.5 system-ui,"PingFang SC","Microsoft YaHei",sans-serif;z-index:10;backdrop-filter:blur(8px)}
+        background:rgba(17,23,20,.82);color:#e9ece0;border:1px solid rgba(226,232,214,.14);border-radius:10px;font:12px/1.5 system-ui,"PingFang SC","Microsoft YaHei",sans-serif;z-index:var(--threedog-z-debug,10);backdrop-filter:blur(8px)}
       .threedog-debug .g{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 10px;padding:10px 12px}
       .threedog-debug .s b{display:block;font:600 15px ui-monospace,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
       .threedog-debug .s span{color:#a2ad9b;font-size:11px}

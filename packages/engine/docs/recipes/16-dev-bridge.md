@@ -3,7 +3,7 @@
 > **Covers:** driving the running game from the terminal: describe, step, press, state, scenarios, snapshots, MCP.
 > **Use when:** checking a change without a screenshot or a browser script.
 > **Shortest:** `threedog describe -w my-game`.
-> **Sections:** 1 Usage · 2 Notes · 2b A scripted playthrough · 3 Windows / PowerShell · 3b Speed, a session · 4 Let describe see · 5 Safety · 6 Reuse in scenario · 7 Describe snapshots instead · 8 Errors carry a · 9 Reusable scenarios · 10 MCP server Claude · 11 When something happens
+> **Sections:** 1 Usage · 2 Notes · 2b A scripted playthrough · 3 Windows / PowerShell · 3b Speed, a session · 4 Let describe see · 5 Safety · 6 Reuse in scenario · 7 Describe snapshots instead · 8 Errors carry a · 9 Reusable scenarios · 10 MCP server Claude · 11 When something happens · 12 Expectations
 
 After changing code, ask the running game instead of writing a playwright script or taking a screenshot: look, advance time, press keys, change state. Output is a few English lines.
 
@@ -24,36 +24,44 @@ Every command and its options are in `../COMMANDS.md`. What each does to the gam
 |---|---|---|
 | `step`, `press`, `hold`, `skip`, and `scenario` / `verify`, which use them | `op`, `state` (only its `wait=` moves the clock), `js` | `describe`, `ops`, `inspect`, `pick`, `explain`, `errors`, `loading`, `snap`, `snap-describe` |
 
-- `describe` is one line: position, time and weather, nearby, quest. `describe player.position` or any dotted path of `engine.describe()` reads one item (`--max characters`). `describe --full` is the state as text in at most 30 lines (`engine.describeText()`: nearest things, the game's `describe.add` sections, one line per module, engine tables as one count line, how to expand); `--all` is large, prefer a path. In code: `engine.describe('picture')`, `describe({ only: ['picture', 'shared'] })`. `describe render` lists how the picture is set; it informs and never warns.
+- `describe` is one line: position, time and weather, nearby, quest. `describe player.position` or any dotted path of `engine.describe()` reads one item (`--max characters`). `describe --full` is the state as text in at most 30 lines; `--all` is large, prefer a path. In code: `engine.describe('picture')`, `describe({ only: ['picture', 'shared'] })`.
 - `step 2` is deterministic; a real-time page is halted first.
 - `press interact` takes an action name or key (`KeyE`, `e`, `Escape`). **It advances game time**: 0.1 s held + one rendered frame of 1/60 s, about 0.117 s; shorten the hold with `--for 0.02` when timing matters.
 - `op shop.buy shop=trader item=medkit n=2` runs as source `bridge`. Values follow the op's `args` shape (`n=2` a number, `position=3,0,-2` an array). **Change state with this, not `js`**: `js` writes skip the op log.
 - `ops` lists every offer checked with `can`; `inspect [id | x,z]` adds what is around, with reasons (recipes/23-ops.md section 8); `explain op ...` / `explain quest ...` says why one cannot run or where a quest is stuck (`--full` adds the last attempt and events around it).
-- `state view=gate` or `state view=0,5,12,0,1,0,50` (a pose: position, target, fov) places the camera for the next `snap`.
-- `state time=18:30 weather=rain pos=40,-20` sets the scene like URL parameters (`engine.applyState`). A weather name must be in the game's table (`describe weather`; `weather({ types: presets.weather.temperate })`, which `--open-world` games start with): what could not be applied fails with the reason and exit 1.
-- `js "engine.calendar.timeOfDay"`: `engine` is available directly and `await` works inside; multi-line statements need their own `return` (`js "const p = engine.player.position; return p.x + p.z"`). Long scripts: `js --file script.js`.
 - `scenario barter` runs `tests/scenarios/barter.json` (recipes/23-ops.md section 7), prints failed checks and leaves the loop halted.
 
+## 1b. `state` from the CLI (`time=17:40 weather=rain`) and a multi-line `js` script
+- `state view=gate` or `state view=0,5,12,0,1,0,50` (a pose: position, target, fov) places the camera for the next `snap`.
+- `state time=18:30 weather=rain pos=40,-20` sets the scene like URL parameters (`engine.applyState`); `state` takes only key=value words (`time= weather= pos= wait= cutscene= save= state= view=`), not `--time`. A weather name must be in the game's table (`describe weather`; `weather({ types: presets.weather.temperate })`, which `--open-world` games start with): what could not be applied fails with the reason and exit 1.
+- `js "engine.calendar.timeOfDay"`: `engine` is available directly and `await` works inside; it prints the value of one expression (a trailing `;` or `// comment` is fine); a multi-line script prints only what it returns, so it needs its own `return` (`js "const p = engine.player.position; return p.x + p.z"`). Long scripts: `js --file script.js`.
+
 ## 2. Notes
-- **Smallest scenario** (`tests/scenarios/coins.json` <!-- r18-ignore-line -->, then `threedog verify coins` or `scenario coins`; `verify` with no file says "Have: none"):
-  `{ "name": "coins", "url": "/", "state": { "pos": "6,4" }, "steps": [ { "step": 1 }, { "expect": { "inventory.items.coin": 1 } } ] }`
-- **Position formats**: `pos=x,z` (state, shot, `applyState`) is two numbers on the ground plane, and the height is looked up; an op argument such as `position=3,0,-2` is `x,y,z`. Both are meters, north is -z. `describe` reports the player as `{ x, y, z }` (`describe player.position`).
-- **Teleport the player**: `threedog state "pos=40,-20"`, or `await engine.applyState({ pos: '40,-20' })` in a test or `js` (both wait for the ground to load). A bare
-  `player.placeAt` outside an op prints the ops-guard warning. `step 1` after it collects `auto` pickups.
+- **Position formats**: `pos=x,z` (state, shot, `applyState`) is two numbers on the ground plane, and the height is looked up; an op argument such as `position=3,0,-2` is `x,y,z`. Both are meters, north is -z.
+- **Teleport the player** with `state "pos=40,-20"` or `await engine.applyState({ pos: '40,-20' })` (both wait for the ground); a bare `player.placeAt` outside an op prints the ops-guard warning. `step 1` after it collects `auto` pickups.
 - **Ops with a reach** (`interaction.use`, `pickup.take`) check the player's distance as a key press would, also from the bridge: put the player next
   to the thing first (`threedog state "pos=x,z"`), then `threedog op interaction.use id=gate`. A `tooFar` result carries `facts: { distance, radius, at }`.
 - **`shot` always starts a fresh game** (`?save=slot1` loads one); after playing use `snap name`. Every shot prints the picture numbers and hints (recipes/35 "Picture check after every shot").
 - **`step` / `press` halt the real page's loop**; resume with `threedog resume` when done (they halt as owner `threedog`, so nothing of the game's is touched). A headless page only advances on step anyway.
-- **Run state** is printed after `step` / `press` / `skip` / `resume` and by `threedog status`: `running`, `title-frozen` (title screen waiting for start), `halted` (loop stopped by the bridge, a test or a headless page), `frozen(by owners)` (every `freeze` owner, e.g. `ui-inventory` or `page`) or `loading`. The same object is `engine.runState` and `describe().time.run`: `{ state, owners, blockedBy }`, where `blockedBy` lists what keeps input from driving the game (opaque input contexts such as `win-settings`, `ui-title`, `dialogue`, `cutscene`, plus `error` and `loading`); the bridge and the MCP tools copy it as-is.
+- **Run state** is printed after `step` / `press` / `skip` / `resume` and by `threedog status`: `running`, `title-frozen` (title screen waiting for start), `halted` (loop stopped by the bridge, a test or a headless page), `frozen(by owners)` (every `freeze` owner, e.g. `ui-inventory` or `page`) or `loading`. The same object is `engine.runState` and `describe().time.run`: `{ state, owners, blockedBy }`, where `blockedBy` lists what keeps input from driving the game (opaque input contexts, `error`, `loading`).
 - **Who holds what**: `describe().holds` lists every holder in one place: `halt / freeze / camera / debugView` as `[{ owner, at }]` (`at` = game clock time of the take, `engine.clock.now`), `input` (pushed contexts `[{ context, owner, pass }]`), `gates` (`input.gate` owners by action) and `stacks` (every other `engine.mod` quantity), so a stuck pause, jump or camera has a name.
 - **`snap` on a real page captures only the canvas** (not the HTML UI); on a headless page it captures the whole page. To see UI state use `describe`
   (`ui.windows`, dialogue).
+- `describe` by default gives only the 3 nearest things and the first quest; for detail use a path (`quests.active`, `nearby`, `world`) or `--full`.
+
+## 2a. Hold a button down in a headless shot or test (`engine.input.simulate`)
+- **In your own page scripts and tests use `engine.input.simulate(action, down = true)`** (the same path as `press`): `engine.input.simulate('jump'); engine.step(1 / 60); engine.input.simulate('jump', false)`.
 - **Keys go through `engine.input` like a real keyboard**: action names are translated to keyboard keys (gamepad buttons are ignored); when a window
   locks input, menu-type actions (`pressedRaw`) are still received.
-- **In your own page scripts and tests use `engine.input.simulate(action, down = true)`** (the same path as `press`): `engine.input.simulate('jump'); engine.step(1 / 60); engine.input.simulate('jump', false)`.
-- `describe` by default gives only the 3 nearest things and the first quest; for detail use a path (`quests.active`, `nearby`, `world`) or `--full`.
+
+## 2c. Start the game from the command line: leave the title screen (`state play=1`, `--play`), open the page with URL parameters (`--page`)
+- **Start clean.** Enter on a title picks Continue when a save exists, so a rerun by keys plays the last autosave. `state fresh=1` deletes the saves and
+  goes back to the title, `play=1` starts the run; `?fresh&play` does the same in a URL. `session.newGame()` alone leaves the title open.
+- `snap --play` and `shot --play` leave the title first; `--page "/?play&time=17:40"` opens that URL (kept on reload).
 - Several pages: `--page /<page>.html` picks the path; `-w name` picks the workspace.
-- Another port (`npm run dev -- my-game --port 5000`) is found through `.threedog/dev.json`.
+
+## 2d. Import a game module inside a test page (`window.game`)
+- A test page runs the bundled game, so `import('/game/x.js')` is a 404: use `window.game` or `engine` (set next to `window.engine = engine`).
 - Never ready: the dev server attaches `window.engine` itself, but a bundled build (npm test) needs `window.engine = engine;` before `await engine.start()`; the timeout error says which is missing.
 
 ## 2b. A scripted playthrough, and three kinds of check
@@ -73,15 +81,12 @@ The same steps as a file: `tests/scenarios/<name>.json` with `{ "press": … }`,
 
 **Script the failures, not only the win.** Every end state gets a scenario: lose, die and respawn, retry, reload mid-run (`threedog reload` between bridge commands; a scenario file has no reload step). Read `ops never run` in the `verify` report (rules no script reached), then check what the player stands in after the failure: a closed-off respawn point, a hit landing after the blow that should end contact, a timer or lock left from the last attempt.
 
-Playing a game through from a script, the five things that cost the most time:
-- **Start clean.** Enter on a title picks Continue when a save exists, so a rerun by keys plays the last autosave. `state fresh=1` deletes the saves and
-  goes back to the title, `play=1` starts the run; `?fresh&play` does the same in a URL. `session.newGame()` alone leaves the title open.
+Playing a game through from a script, the four things that cost the most time:
 - **Advance time yourself.** On a headless page the clock moves only on `step`, `press` and `hold`, so `await player.walkTo(spot)` never returns. Start it,
   step, then await: `const w = engine.player.walkTo(spot); step(5); return await w`. A `js` script whose page clock stands still for 20 s ends with that reason.
 - **Continue finishes after `press` returns.** The load is async, so the first lines of `press` on a title still say `windows open title`; the `Changed:` line and the next command show it closed. A load that waits on frames needs a `step` on a halted page.
 - **Read why it was refused.** `interaction.use` fails with `inputLocked` and `facts: { by }` (`title`, `dialogue`, `settings`...), `tooFar` with the distance.
-- **Press real keys when input is the question**: the title menu, whether a key reaches the action, a hold. For rules use `op` and `state`: faster and exact.
-  Neither tells you how the game feels or sounds, and a headless picture falls back to software WebGL2 where no hardware GPU is reachable (the `shot` / `snap` line says): report those as not verified.
+- **Press real keys when input is the question** (title menu, a hold); rules go through `op` and `state`. Neither shows how the game feels or sounds, and a headless picture is software WebGL2 where no hardware GPU is reachable (the `shot` / `snap` line says): report those as not verified.
 
 ## 3. Windows / PowerShell notes
 - **Quote commas**: PowerShell splits `pos=1,-8` into two arguments and the coordinates become NaN. Write `threedog state "pos=1,-8"` (the bridge
@@ -89,11 +94,10 @@ Playing a game through from a script, the five things that cost the most time:
 - Wrap the whole `js` expression in **double quotes** and use single quotes for strings inside: `threedog js "engine.vars.counter('score')"`.
   PowerShell expands `$variables` inside double quotes; to pass `$` literally wrap the whole thing in single quotes.
 - **Write a command on a single line** (a multi-line here-string to a native command often returns nothing): separate statements with semicolons, or use `threedog js --file script.js`.
-- Some terminal sandboxes (Bash) block commands containing the word `eval`: use `js`, not `eval`.
 
 ## 3b. Speed, a session, and checks in one call
 
-The bin called directly is the fastest route (COMMANDS.md, first lines); `threedog session` saves a little more per command. Commands behave identically with or without it.
+The bin called directly is the fastest route (COMMANDS.md, first lines); `threedog session` saves a little more per command.
 
 - `threedog js --file steps.js`: the whole test in one file, one round trip. Inside: `assert(cond, msg)`, `expect(v).toBe(x)` (also `toEqual`, `toBeCloseTo(x, tol)`, `toBeGreaterThan`), `step(seconds)`, `log(...)`, and `engine`. It prints the failures and one summary line, exit code 1 on failure:
 
@@ -103,6 +107,10 @@ const before = engine.time.tick;
 step(1);
 expect(engine.time.tick).toBeGreaterThan(before, 'time advanced');
 ```
+
+## 3c. Several agents building at the same time: one worktree or folder each
+- Each agent uses its own worktree / folder (`-w name`); a tool build is private to its run, so it cannot break another session's page.
+- Another port (`npm run dev -- my-game --port 5000`) is found through `.threedog/dev.json`.
 
 ## 4. Let describe see the game's own state
 A game's own state (score, number of targets, crops) is not in `describe` by default. **Small games use this**: register it in one line, no module needed:
@@ -117,9 +125,7 @@ The bridge exists only in the dev server (`apply: 'serve'`); built and preview o
 be localhost, and anything carrying an Origin (sent from a web page) is rejected.
 
 ## 6. Reuse in scenario tests
-The bridge commands are built on one small driver, `{ evaluate(src, arg), screenshot(), reload?() }`. The dev bridge's driver forwards the three to
-the dev server. For your own tests, `import { pageDriver, runScenario } from '@threedog/tools/scenario'` (the public entry; the command runner behind
-the bridge is internal) gives the same driver for a Playwright `page` and runs a scenario file through it.
+The bridge commands are built on one small driver, `{ evaluate(src, arg), screenshot(), reload?() }`. For your own tests, `import { pageDriver, runScenario } from '@threedog/tools/scenario'` gives the same driver for a Playwright `page` and runs a scenario file through it.
 
 ## 7. Describe snapshots instead of screenshots
 A baseline is the gameplay part of `engine.describe()` saved as JSON (`<workspace>/tests/snapshots/<name>.describe.json`, commit it). `perf`, `loading`, `picture.writers` and the clock counters `time.tick` / `time.real` / `time.ambient` are dropped; numbers compare within a tolerance (default 0.5); a list of things with an `id` or `name` is compared by that key, so a
@@ -129,8 +135,6 @@ reordered `nearby` is not a change. A difference comes out as text, e.g. `player
 threedog snap-describe save market-noon --only player,quests,nearby     # write / overwrite the baseline
 threedog snap-describe diff market-noon --only player,quests,nearby     # compare the running page with it (exit code 1 if different)
 ```
-Options: `--only a,b.c` (compare just these fields; dotted paths allowed), `--ignore x.y` (extra fields to skip), `--tolerance 1`. Use the same
-`--only` for save and diff.
 
 In a test, one line (the page must already be in the state to freeze; use `engine.haltLoop()` and `engine.step()` first):
 ```
@@ -139,22 +143,19 @@ await expectDescribe({ check, ev }, 'market-noon', { only: ['player', 'quests', 
 ```
 Update after an intended change: `threedog test <name> --update-snapshots` or `threedog snap-describe save <name>`, and review the JSON diff before committing.
 
-## 8. Errors carry a code, a fix and a doc page
+## 8. Show the latest errors: they carry a code, a fix and a doc page
 Every error and warning the engine raises carries a stable **code**: `err.code`, `err.fix` (what to do) and `err.docs` (pages to read), and its message
-ends with `[code]` (e.g. `clock.every(seconds): ... [clock-interval]`), so logs show it too. Messages the engine does not write (JavaScript's
-`Cannot read properties of undefined`, `... is not a function`, a frozen definition, a browser resource 404) get the code of the hint whose pattern matches. Dev text adds `Code: …`
-(when the message has no tag), `Possible cause: …` and `Read: recipes/…, api/…`. The same data shows in `engine.error`
-(`{ where, message, code, fix, docs }`), the first line of `describeText()`, `.threedog/errors.log` and `threedog errors`. A code never changes meaning.
+ends with `[code]` (e.g. `clock.every(seconds): ... [clock-interval]`), so logs show it too. Messages the engine does not write (JavaScript's `... is not a function`, a browser 404) get the code of the hint whose pattern matches. The same data shows in `engine.error`
+(`{ where, message, code, fix, docs }`), the first line of `describeText()`, `.threedog/errors.log` and `threedog errors` (`errors latest 3` = the last 3). A code never changes meaning.
 
 ## 9. Reusable scenarios
 `engine.applyState({ time, weather, pos, ... })` (also URL parameters) sets up a scenario in one call; `engine.defineState(name, params)` names a
 combination so tests and scenarios reuse it.
 
 ## 10. MCP server: Claude Code, Cursor and other MCP clients
-`threedog mcp` runs the dev bridge as an MCP server over stdio. Each command becomes a tool (`play`, `status`, `describe`, `step`, `press`, `hold`, `skip`, `state`, `ops`,
-`op`, `catalog`, `inspect`, `scene`, `pick`, `thing`, `explain`, `errors`, `loading`, `snap`, `snap_describe`, `picture_palette`, `picture_compare`, `scenario`, `verify`, `reload`, `resume`, and the static `how`, `check`, `art_list` and `lib_list`) and returns the same text as the
-command line (every default answer fits in about 4 KB; a `data` payload over 3 KB keeps its small fields and names `threedog <cmd> --json` for the rest); `snap` also returns the PNG as an image, 480 px wide by default (`size` for more; the full file is saved). `picture_palette` and `picture_compare` need no game (recipe 35). It finds the dev server through `.threedog/dev.json` like the CLI; with none running, call the `play` tool (it starts the server and waits for the bridge)
-(or start `npm run dev` yourself; a tool call without a server answers with that fix). It is only a local client of the bridge and opens no port; every check in section 5 still applies. As
+`threedog mcp` runs the dev bridge as an MCP server over stdio. Each command becomes a tool of the same name (`play`, `status`, `describe`, `step`, `snap`, `snap_describe`, `scene`, `reload`, `how`, `check`, `catalog`, `art_list`, `lib_list`...) and returns the same text as the
+command line (every default answer fits in about 4 KB; a bigger `data` payload names `threedog <cmd> --json`); `snap` also returns the PNG as an image, 480 px wide by default (`size` for more; the full file is saved). `picture_palette` and `picture_compare` need no game (recipe 35). It finds the dev server through `.threedog/dev.json` like the CLI; with none running, call the `play` tool (it starts the server and waits for the bridge)
+(or `npm run dev`; a call without a server says so). It is only a local client of the bridge and opens no port; every check in section 5 still applies. As
 with the command line, the `op` and `step` tools change the current session and its saves; the level itself changes only by editing content files.
 
 Claude Code (in the game folder; in the engine repository add `-w name` after `mcp`):
@@ -184,3 +185,12 @@ Tools: MCP, or `node node_modules/@threedog/tools/bin/threedog.mjs <cmd>` (`COMM
 - Models made in code -> hot swap, `threedog gallery --shots` (recipe 05 §2c); another game's art -> `threedog art copy`.
 - Verifying a change -> `describeText()` for logic, shots for the picture, `threedog verify <scenario>` (read "not proven").
 - Saves or time skips broken -> `checkSave`, `checkSkip`.
+- This must stay so (a range, with the reason) -> `threedog expect` (section 12).
+
+## 12. Expectations: keep a number or threshold in range, with the reason (a guard so a value does not change again)
+```sh
+threedog expect shot.dark --max 0.35 --point night-view --why "path lost at 0.5"
+threedog expect economy.gold --min 0 --why "negative = price ran twice"
+threedog expect loading.failed.length --is 0 --why "a missing model hid the item"
+```
+A `describe()` path (`shot.*` needs `--point`); `threedog shot --point night-view` and `threedog test` check it: **holds**, **fails** (reason printed), **missing** (no such path) or **unmeasured** (another renderer's `shot.*`, listed). Snapshots (7) compare a whole run, scenarios (6) drive a play, `Picture intent` states a look; this keeps one number and why. The same value and point again edits it, showing the old reason; `expect drop` removes it.

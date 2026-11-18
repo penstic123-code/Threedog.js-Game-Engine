@@ -29,10 +29,10 @@ export async function run({ check }) {
     const pic = await execute(dir, 'picture-palette', ['no-such-picture.png']);
     check('[guard] a picture command with a bad file is a command error, not "page not ready"', !pic.ok && pic.code === 'command-error', JSON.stringify(pic));
   } finally { srv.closeAllConnections?.(); srv.close(); rmSync(dir, { recursive: true, force: true }); }
-  // [guard] the server misses the first ping and answers the next: the answer status acted on stands. A second look found it free, had nothing to say, and execute threw
+  // [guard] the server misses the probe's two pings (it asks twice) and answers the next: the answer status acted on stands. A second look found it free, had nothing to say, and execute threw
   const dir2 = mkdtempSync(join(tmpdir(), 'td-busy-'));
   let pings = 0;
-  const slow = createServer((req, res) => { if (pings++) res.end('{"ok":true,"value":false}'); });
+  const slow = createServer((req, res) => { if (++pings > 2) res.end('{"ok":true,"value":false}'); });
   await new Promise(r => slow.listen(0, '127.0.0.1', r));
   try {
     mkdirSync(join(dir2, '.threedog'));

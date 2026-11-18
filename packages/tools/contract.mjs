@@ -20,7 +20,7 @@ const [{ Events }, { Ops }, { Stacks }, { defineHoldStacks, holdMethods }, { Wra
 
 // The save parts go through the real Saves.define (no storage behind it: save() does nothing), so a part the engine refuses (a key taken twice, a field it
 // does not know, a bad first or version) is refused here too. A copy of those checks would drift from the engine and pass a module that engine.use() throws on.
-const contractSaves = e => Object.assign(Object.create(Saves.prototype), { engine: e, providers: new Map(), _foreign: { parts: {}, versions: {} }, _replace: new StateReplace(e), save() {} });
+const contractSaves = e => Object.assign(Object.create(Saves.prototype), { engine: e, providers: new Map(), _summaries: new Map(), _foreign: { parts: {}, versions: {} }, _replace: new StateReplace(e), save() {} });
 
 /** A minimal engine with the real core parts a gameplay module talks to; everything with a screen is a stand-in that records calls */
 export function contractEngine() {

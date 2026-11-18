@@ -55,6 +55,9 @@ export class Audio {
     this.packs = new Map();
     /** @internal */ this._packWatch = new Set();
     /** @internal */ this._duckNodes = {};
+    /** @internal bus name -> the node after the bus's insert chain: where its reverb send taps and where master is fed from */ this._tails = {};
+    /** @internal audio.addNode() registrations in call order: { bus, make, node } (node is null until the context exists) */ this._inserts = [];
+    /** @internal bus name (or 'master') -> the nodes the engine linked in a row, head to tail: relinking cuts exactly these links, never one the game made itself */ this._chains = {};
     /** @internal */ this._ducks = new Set();
     /** @internal */ this._voices = new Map();      // name -> live voices (voice limit, info)
     /** @internal */ this._last = new Map();        // name -> { at, variant } (cooldown, no-repeat)
@@ -70,7 +73,7 @@ export class Audio {
   /** @internal page.js: the page froze the game, or let it go */
   _hold(on) { this._held = on; if (this.ctx) (on ? this.ctx.suspend() : this.ctx.resume()).catch(() => {}); }
   /** @internal Close the audio context (engine.dispose calls it): playing sounds and nodes modules attached stop together */
-  dispose() { this.ctx?.close(); this.ctx = null; }
+  dispose() { this.ctx?.close(); this.ctx = null; this._inserts.length = 0; this._chains = {}; }
 
   /** @internal */
   _init() {
@@ -81,6 +84,8 @@ export class Audio {
     /** The master GainNode (every bus ends here) @type {any} */
     this.master = this.buses.master = ctx.createGain(); this.master.gain.value = this.levels.master; this.master.connect(ctx.destination);
     for (const name of Object.keys(this.levels)) if (name !== 'master') this._makeBus(name);
+    for (const e of this._inserts) e.node = e.make(ctx);   // asked for before the first click: built now that the buses exist
+    for (const bus of new Set(this._inserts.map(e => e.bus))) this._relink(bus);
     this._applyDucks(0);
     this._reverb?.build();
     const len = ctx.sampleRate * 2, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
@@ -90,11 +95,12 @@ export class Audio {
     const ready = () => { if (ctx.state === 'running' && !this._readySent) { this._readySent = true; this.engine.events.emit('audio:ready'); } };
     ctx.addEventListener('statechange', ready); ready();
   }
-  /** @internal a bus is two gains: its level (what setVolume sets) then its duck (what duck() lowers), so the two never fight */
+  /** @internal a bus is two gains: its level (what setVolume sets) then its duck (what duck() lowers), so the two never fight; then the game's inserts, then a tail gain
+   * that is the fixed point reverb sends and master are fed from (inserts come and go without the reverb having to be re-linked) */
   _makeBus(name) {
-    const ctx = this.ctx, g = ctx.createGain(), d = ctx.createGain();
-    g.gain.value = this.levels[name]; g.connect(d).connect(this.master);
-    this.buses[name] = g; this._duckNodes[name] = d;
+    const ctx = this.ctx, g = ctx.createGain(), d = ctx.createGain(), tail = ctx.createGain();
+    g.gain.value = this.levels[name]; g.connect(d).connect(tail).connect(this.master);
+    this.buses[name] = g; this._duckNodes[name] = d; this._tails[name] = tail;
     this._reverb?.busMade(name);
   }
   /** Is audio usable (the player has clicked/pressed a key)? @returns {boolean} @experimental */
@@ -127,12 +133,49 @@ export class Audio {
       if (handles.get(name) !== h) return;
       handles.delete(name);
       delete this.levels[name];
-      if (this.ctx) { this.buses[name].disconnect(); this._duckNodes[name].disconnect(); }   // sounds still playing on this bus are cut with the node (bus gone, no sound should linger)
+      for (const e of this._inserts.filter(e => e.bus === name)) this._unwire(e, false);
+      this._cut(name);
+      if (this.ctx) { this.buses[name].disconnect(); this._duckNodes[name].disconnect(); this._tails[name].disconnect(); }   // sounds still playing on this bus are cut with the node (bus gone, no sound should linger)
       this._reverb?.busGone(name);
-      delete this.buses[name]; delete this._duckNodes[name];
+      delete this.buses[name]; delete this._duckNodes[name]; delete this._tails[name];
     } };
     handles.set(name, h);
     return h;
+  }
+  /**
+   * Your Web Audio node in a bus's path, after volume and duck, before master and reverb, in call order ('master': before the speakers).
+   * `make(ctx)` returns the node; it runs once audio is unlocked; taps you add to it stay
+   * @param {string} bus
+   * @param {(ctx: AudioContext) => AudioNode} make
+   * @returns {{ remove(): void }} remove() takes the node out and links the path back (repeat calls do nothing)
+   */
+  addNode(bus, make) {
+    if (bus !== 'master' && !(bus in this.levels)) this._bus(bus);   // throws, listing the buses
+    const e = { bus, make, node: null };
+    this._inserts.push(e);
+    if (this.ctx) { e.node = make(this.ctx); this._relink(bus); }
+    return { remove: () => this._unwire(e) };
+  }
+  /** @internal take one insert out; relink false when its whole bus is going */
+  _unwire(e, relink = true) {
+    const i = this._inserts.indexOf(e); if (i < 0) return;
+    this._inserts.splice(i, 1);
+    if (e.node && relink) this._relink(e.bus);   // the old chain still names e.node, so relinking cuts its links
+  }
+  /** @internal undo the links the engine made for a bus's chain (default: the plain head -> tail link that _makeBus / _init made) */
+  _cut(bus) {
+    const c = this._chains[bus]; delete this._chains[bus];
+    if (c) for (let i = 1; i < c.length; i++) c[i - 1].disconnect(c[i]);
+  }
+  /** @internal link a bus (or master) as head -> its inserts in call order -> tail. Only the engine's own links are cut first (disconnect(next), not disconnect()):
+   * master is public, and a game's analyser on it, or a tap it made from its own insert node, must survive another insert coming or going */
+  _relink(bus) {
+    const master = bus === 'master', head = master ? this.master : this._duckNodes[bus], tail = master ? this.ctx.destination : this._tails[bus];
+    this._chains[bus] ??= [head, tail];
+    this._cut(bus);
+    const chain = [head, ...this._inserts.filter(e => e.bus === bus && e.node).map(e => e.node), tail];
+    for (let i = 1; i < chain.length; i++) chain[i - 1].connect(chain[i]);
+    this._chains[bus] = chain;
   }
   /**
    * Set a bus volume 0-1 ('master' for the total)
@@ -325,4 +368,8 @@ export class Audio {
   play(url, opts = {}) { return playFile(this, url, opts); }
 }
 
-export const handRolled = [{ kind: 'audio', seen: 'an AudioContext / Audio element of its own', use: 'engine.audio: engine.audio.play(url, { bus, volume }) or named sounds, with buses and volume settings (recipe 31)', code: /\bnew\s+(?:window\.)?(?:AudioContext|webkitAudioContext)\b|\bnew\s+Audio\s*\(/ }];
+export const handRolled = [{ kind: 'audio', docRef: 'recipes/31-audio.md §2', seen: 'an AudioContext / Audio element of its own', use: 'engine.audio: engine.audio.play(url, { bus, volume }) or named sounds, with buses and volume settings', code: /\bnew\s+(?:window\.)?(?:AudioContext|webkitAudioContext)\b|\bnew\s+Audio\s*\(/ },
+  // Writing into the live config skips the content pack; taking master apart skips the chain the engine relinks when a node is added or a bus changes
+  { kind: 'sounds', docRef: 'recipes/31-audio.md §8', seen: 'a sound written straight into audio.config.sounds', use: "createEngine({ audio: { sounds } }) or a content pack's sounds section: engine.audio reads them once, with voices and distance", code: /\bconfig\??\.sounds\s*(?:\[|=(?!=))|\bObject\.assign\(\s*[\w.?]*config\??\.sounds\b/ },
+  { kind: 'audiochain', docRef: 'recipes/31-audio.md §2', seen: 'master taken apart and rewired by hand', use: 'engine.audio.addNode(bus, ctx => node): the engine puts your node in the chain and relinks it when buses change', code: /\bmaster\??\.disconnect\s*\(/ },
+];

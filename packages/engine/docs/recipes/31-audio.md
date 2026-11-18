@@ -37,8 +37,8 @@ Code may hold functions (a `volume: e => ...`); the same config as data goes in 
 
 ## 2. Buses and sounds by name
 Buses are real Web Audio `GainNode`s: `master`, `music`, `sfx`, `ambience`, `ui`, plus the game's own (`levels: { voice: 1 }` or
-`engine.audio.addBus('voice')`). `engine.audio.setVolume('music', 0.3)` sets one; `engine.audio.buses.sfx` is the node to connect your own nodes to, and `buses.master` (also `audio.master`) is the total. `buses` is empty until audio
-unlocks on the player's first click or key: build your own nodes on the `audio:ready` event. A name that is no bus warns once and gives `master`, so the sound still plays.
+`engine.audio.addBus('voice')`). `engine.audio.setVolume('music', 0.3)` sets one; `buses.sfx` is the node to connect to, and `buses.master` is the total. `buses` is empty until audio
+unlocks on the player's first click or key: build your own nodes on the `audio:ready` event. A name that is no bus warns once and gives `master`.
 
 ```js fragment
 engine.audio.sfx('door');  // plays on its bus (default sfx)
@@ -56,6 +56,12 @@ Built-in synth parameters (`params`): `wind` / `water` take `freq` (filter Hz), 
 until the rules load again, instead of refetching.
 
 A synth with default params is `{ build: synthFn, params }` in the manifest.
+
+### 2a. Your node on a bus
+`audio.addNode(bus, ctx => node)` puts your node after the bus's volume and duck, before master and the reverb send (`'master'`: before the speakers).
+```js fragment
+engine.audio.addNode('sfx', ctx => Object.assign(ctx.createBiquadFilter(), { type: 'lowpass' }));  // underwater: only effects go dull
+```
 
 ## 3. Ambience: sounds by place (a rule table)
 Drips in a cave, a river near water, birds by day: one rule each, no per-frame code, naming a sound, when and how loud. A rule with `every` is a one-shot at random gaps; without, a loop that fades in and out (and stops
@@ -90,6 +96,16 @@ The same `when` keys as ambience. Tracks cross-fade (`fade`, default 2 s); a new
 `engine.music.override('boss')` picks by hand; `override(null)` hands back to the rules. `engine.music.stinger('win')` plays a short piece over the music.
 Decoded music is large (about 21 MB a stereo minute): `assets.release(name)` and `assets.trim()` (a level change calls it) free it, the longest-unused long sounds go by themselves over a memory budget, playing sounds play on, a freed sound loads again when played; effects under 10 s stay cached, and `preload: true` keeps a track.
 
+### 4a. Music made by code
+`{ generate({ ctx, output, start, end }) }` instead of `url` / `stems` (code only) runs per play: connect to `output`, start at `start`; `end()` finishes it
+(a stinger must call it, or the music stays dipped); a returned `{ stop(at) }` hears the fade-out.
+```js fragment
+engine.music.define('drone', { generate({ ctx, output, start }) {
+  const o = ctx.createOscillator(); o.connect(output); o.start(start);   // layer by engine.music.intensity
+  return { stop: at => o.stop(at) };
+} });
+```
+
 ## 5. Footsteps by surface
 The player's footstep rhythm follows its speed (one step per foot landing). Each step plays the sound named by `footsteps[groundType]`, else
 `footsteps.default`, else `footstep`. The ground type is the terrain's `groundType` or, in a Blender level, the material name (or `groundType` custom
@@ -101,7 +117,7 @@ const d = engine.audio.duck({ music: 0.3, ambience: 0.5 }, { fade: 0.3 });  // l
 engine.events.once('dialogue:end', () => d.remove());  // restore
 ```
 Ducks stack (levels multiply) and never touch the player's volume setting. `music({ duckDialogue: 0.35 })` ducks the music bus during dialogue for
-you; it is off by default (whether talking lowers the music is the game's choice).
+you; it is off by default.
 
 ## 7. Settings
 The default settings menu has a volume slider per bus, the game's own buses included, saved with the other settings. A game bus's label is the text

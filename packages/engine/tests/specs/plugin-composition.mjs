@@ -48,7 +48,7 @@ export const specs = [
         const err = async f => { try { await f(); return ''; } catch (e) { return e.message; } };
         const mk = (plugins, key) => { const e = createEngine({ canvas: document.createElement('canvas'), headless: true, ui: { loading: false }, saveKey: key + performance.now() });
           e.plugins.add(plugins); return e; };
-        const effect = tag => ({ name: 'tint', tag, create: () => new ShaderPass(CopyShader) });
+        const effect = tag => ({ name: 'tint', params: { tag }, create: () => new ShaderPass(CopyShader) });
         const red = () => effect('red'), blue = () => effect('blue');
         // two plugins naming one effect, neither says it replaces the other: a dev conflict naming both
         const c = mk({ './plugins/10-a.js': { default: red() }, './plugins/20-b.js': { default: blue() } }, 'pc-conflict');
@@ -57,7 +57,7 @@ export const specs = [
         // B declares it replaces A: B wins while on; B off gives A's red back (A still on); both off gives the base
         const e = mk({ './plugins/10-a.js': { default: red() }, './plugins/20-b.js': { default: blue(), replaces: '10-a' } }, 'pc-replace');
         await e.start();
-        const hex = () => e.post._list.find(h => h.name === 'tint')?._def.tag ?? 'none';
+        const hex = () => e.post._list.find(h => h.name === 'tint')?.params.tag ?? 'none';
         out.both = hex();
         out.offB = e.plugins.off('20-b'); out.afterB = hex(); out.aOn = e.plugins.list().find(p => p.name === '10-a')?.on;
         e.plugins.on('20-b'); out.backB = hex();

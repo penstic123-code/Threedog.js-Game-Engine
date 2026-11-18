@@ -1,5 +1,5 @@
 // The one reverb (helper of Audio.js, engine.audio.reverb): a send/return on the bus graph. Each bus that sends taps its own output (after its
-// level and duck, so the settings slider and a duck lower the echo with the dry sound) into one ConvolverNode, whose return goes into master
+// level, duck and the game's inserts, so the settings slider and a duck lower the echo with the dry sound) into one ConvolverNode, whose return goes into master
 // (the master slider covers it). Off until the game calls reverb(); nothing is built before that, and nothing plays through it the game did not send.
 // Why one convolver with a generated impulse: decaying noise is the classic cheap room (Moorer; Tone.js Reverb does the same), the convolution
 // runs on the audio thread at a fixed cost however many sounds send, and no impulse file has to ship. One reverb, not one per zone: a place
@@ -77,7 +77,7 @@ export class Reverb {
   /** One bus's send toward its amount. The node is made once per bus and kept (with its tap, so off() can cut both ends); a bus with no node
    * yet (added later) is linked when it is made */
   _send(bus, fade) {
-    const n = this.nodes, tap = this.audio._duckNodes[bus]; if (!tap) return;
+    const n = this.nodes, tap = this.audio._tails[bus]; if (!tap) return;
     let s = n.sends[bus];
     if (!s) { const g = this.audio.ctx.createGain(); g.gain.value = 0; tap.connect(g).connect(n.input); s = n.sends[bus] = { g, tap }; }
     this._to(s.g.gain, this.set.sends[bus], fade);

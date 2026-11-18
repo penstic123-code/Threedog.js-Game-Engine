@@ -28,7 +28,7 @@ What to remember:
   it. You never pick a layer by hand unless you want to: game code and game modules write `'game'` (the default); effects pass `layer: 'effect'`.
 - **`mul` / `add` to cooperate, `set` to decide.** Any number of owners can multiply and add. Two owners `set` the same value on the same layer is
   an error (in development and release alike) that names both lines and gives three copyable fixes; copy one. The earlier value stays.
-- **`replaces` to swap an engine part** that `provides` a slot; a second provider without it is the error `shared-taken`. What the old part issued goes with it: read `engine.<slot>` where you use it, and keep the issuer beside any handle so you can compare (`if (from !== engine.rigid) { from = engine.rigid; crate = from.addBox(mesh); }`). Version numbers count per module, so they cannot tell two modules apart. The engine's own props, NPCs, pickups, cars and movers do this; a rider leaves a rigid car when rigid goes. `world` is the exception: it owns every record, so install your world before the modules that need it; once they are installed, or after `start()`, `replaces: 'world'` and `unuse('world')` are refused (`module-replaces`, `module-unuse`). A factory that gives two modules goes in whole: `engine.use(terrain(o), { replaces: 'terrain' })` swaps its drawing part too. A module of your own wraps `world.present`, `world.simulate`, `rays.addProvider`, `input.touchButton` and `assets.onSwap` in `ctx.track(...)`, so they leave with it.
+- **`replaces` to swap an engine part** that `provides` a slot; a second provider without it is the error `shared-taken`. What the old part issued goes with it: read `engine.<slot>` where you use it, and keep the issuer beside any handle so you can compare (`if (from !== engine.rigid) { from = engine.rigid; crate = from.addBox(mesh); }`). Version numbers count per module, so they cannot tell two modules apart. `world` is the exception: it owns every record, so install your world before the modules that need it; once they are installed, or after `start()`, `replaces: 'world'` and `unuse('world')` are refused (`module-replaces`, `module-unuse`). A factory that gives two modules goes in whole: `engine.use(terrain(o), { replaces: 'terrain' })` swaps its drawing part too. A module of your own wraps what it registers in `ctx.track(...)` (recipe 14), so it leaves with it.
 - Every handle ends with `h.remove()` (`engine.mod`, `ctx.mod`, `input.gate`, `wrap`, `freeze`, `takeCamera`); it drops only your own entry.
 
 Only things several parties write are shared values (time speeds, holders, move stats, input gates, shadow and post parameters); your own
@@ -69,6 +69,10 @@ engine.wrap(engine.inventory, 'add', (next, id, n = 1, o) =>  // a weight rule o
   read from `engine.stacks.changed()` (the dev panel shows the same list): the points off their base or capped by a setting, furthest first, at most five.
   `engine.stacks.define(name, { important: true })` keeps a point on that line even at its base and before the cap, for the few values a reader must always see.
 - Saved: `engine` to `effect` entries. Not saved: `settings` (the settings module re-applies the player's choices), `system`, `debug`.
+
+## A stale handle after loading a save; an additive stat that reads 1 with no `base`
+- A point reads its `base` (default 1) while nothing is set: write `engine.stacks.define(name, { base: 0 })` for an additive stat.
+- A loaded save rewrites each entry in place, so an old handle's `remove()` still works; with none, `engine.mod` again with the same owner and `remove()` that.
 
 ## Picture points follow the same rule
 `shadows.enabled`, `post.<name>.enabled`, `sky.tint`, `sky.flash` and `ground.cover` are shared points like the rest.

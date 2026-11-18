@@ -436,8 +436,6 @@ export interface Settings {
   presets: Record<string, QualityPreset>;
   /** Tabs @experimental */
   sections: Map<string, any>;
-  /** Whether the menu is open */
-  readonly isOpen: boolean;
   /** Read a setting, e.g. get('vol.music') */
   get(key: string): any;
   /** Change a setting (takes effect immediately + saved) */
@@ -456,9 +454,6 @@ export interface Settings {
   }): this;
   /** Add a tab of your own, or a built-in / optional one by name: addSection('camera') */
   addSection(id: string, section?: SettingsSection): this;
-  open(): void;
-  close(): void;
-  toggle(on?: boolean): void;
   /** Put one setting (or all, with no key) back to its default: the engine's start value, or the default the game gave define(). Keys: resetBindings */
   reset(key?: string): void;
   /** Restore all keys to defaults @experimental */
@@ -475,8 +470,12 @@ export interface Settings {
 // Music music()
 // ======================================================================
 
-/** Track: a path, or { url, volume 0-1, loop, stems }. Stems are extra layers started in sync; each fades in as music.intensity rises through its `at` range */
-export type MusicTrack = string | { url?: string; volume?: number; loop?: boolean; stems?: MusicStem[] };
+/**
+ * Track: a path, { url, volume 0-1, loop, stems }, or { generate } (code only, replaces url / stems). Stems are extra layers started in sync; each fades in as music.intensity rises through its `at` range
+ */
+export type MusicTrack = string | { url?: string; volume?: number; loop?: boolean; stems?: MusicStem[]; generate?: MusicGenerate };
+/** `output`: the track's gain node; `start`: audio-clock time to begin; `end()` finishes the track; return { stop(at) } to hear when a fade-out ends */
+export type MusicGenerate = (g: { ctx: AudioContext; output: AudioNode; start: number; end(): void }) => void | { stop?(at: number): void };
 /** A layer of a track: silent below at[0], full at at[1] and above (intensity 0-1) */
 export interface MusicStem { url: string; at?: number[]; volume?: number }
 /** Auto-selection condition: an object of condition keys ({ state: 'combat', time: 'night', zone: 'cave' }) or (e, music) => boolean */

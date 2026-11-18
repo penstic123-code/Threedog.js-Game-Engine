@@ -65,7 +65,7 @@ The rest of this file maps tasks to recipe sections.
 - Many lights (torches); windows, signs at night: docs/recipes/09-materials-lights-models.md §1b
 - Picture from a reference; judge: docs/recipes/35-picture-from-reference.md §"The loop", 60-judge-the-picture.md
 - Reuse effects, models of old games: docs/recipes/05-props-bake.md
-- Sound, music, ambience: docs/recipes/31-audio.md
+- Sound, music, ambience, bus nodes: docs/recipes/31-audio.md
 
 ## Rules, state, time
 

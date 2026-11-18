@@ -1,0 +1,57 @@
+// Code-shape bank for the reminders (R40): one snippet, whether a strong reminder must fire, and which kind. Used by tests/discover-patterns.mjs.
+// Why a bank: a reminder is worth reading only when it is rare and right, so every "must stay quiet" line is a real line that once fired wrongly,
+// and every "must fire" line is a shape an AI really wrote instead of using the engine system.
+// Sources: 'Fisher' = a line copied from the Fisher game (game/<file>:<line>); 'rewritten' = rebuilt from the old-mine blind-test report (the game folder is gone);
+// 'plain' = ordinary code written for the bank.
+// Entry: { id, code, fires: 'kind' | null, src }. Strong only: there is no weak tier (roadmap ruling).
+export const PATTERNS = [
+  // ---- must fire ----
+  { id: 'audio-config-sounds', fires: 'sounds', src: 'Fisher audio.js:31',
+    code: "  if (A.config?.sounds) for (const k of Object.keys(SFX)) A.config.sounds[`fx.${k}`] ??= { src: `fx.${k}`, voices: SFX[k].cap ?? 4, distance: { ref: 6, max: SFX[k].far ?? 140 } };" },
+  { id: 'audio-master-rewire', fires: 'audiochain', src: 'Fisher audio.js:103',
+    code: '    try { A.master.disconnect(c.destination); } catch { /* already moved */ }' },
+  { id: 'ready-url-flag', fires: 'ready', src: 'Fisher decor.js:112',
+    code: "const FLUSH = (() => { try { return new URLSearchParams(location.search).get('decorflush') === '1'; } catch { return false; } })();" },
+  { id: 'ready-window-finish', fires: 'ready', src: 'Fisher textures.js:307',
+    code: "if (typeof window !== 'undefined') /** @type {any} */ (window).fisherTextures = { registry, stats: textureStats, finish: finishTextures };" },
+  { id: 'keys-map', fires: 'keys', src: 'Fisher ui-map.js:127',
+    code: "  window.addEventListener('keydown', e => { if (raf && e.code === 'KeyC') cam.follow = true; }, { signal: engine.signal });" },
+  { id: 'keys-cards', fires: 'keys', src: 'Fisher ui-cards.js:105', code: "  window.addEventListener('keydown', e => {\n    if (e.code === 'Tab') toggle();\n  });" },
+  { id: 'keys-kit', fires: 'keys', src: 'Fisher ui-kit.js:230', code: "  window.addEventListener('keydown', e => {\n    if (e.code === 'KeyI') open();\n  });" },
+  { id: 'inventory-gear-box', fires: 'inventory', src: 'Fisher gear.js:85-91',
+    code: "    if (byU(inst.u)) return byU(inst.u);\n    if (S.bag.length >= ITEM_TUNE.gear.bagCap) {\n      const v = Math.round(instanceValue(inst) * ITEM_TUNE.gear.sellRate); G.sys.economy?.addGold(v);\n      toast('full'); return null;\n    }\n    S.bag.push(inst);" },
+  { id: 'inventory-bag-sell', fires: 'inventory', src: 'rewritten: old mine, own bag array with selling',
+    code: 'const bag = [];\nfunction mine(vein) { bag.push(vein.ore); }\nfunction sellAll() { gold += bag.reduce((s, o) => s + o.price, 0); bag.length = 0; }' },
+  { id: 'reach-distance-key', fires: 'reach', src: 'rewritten: old mine, distance + pressed + hint',
+    code: "const near = player.position.distanceTo(vein.position) < 2.5;\nif (near) engine.hud.hint('Mine the vein');\nif (near && engine.input.pressed('mine')) dig(vein);" },
+  { id: 'reach-hypot-keyE', fires: 'reach', src: 'plain: the usual hand-made press-E check',
+    code: "if (Math.hypot(p.x - door.x, p.z - door.z) < 2 && keys.has('KeyE')) openDoor();" },
+  { id: 'collision-box-overlap', fires: 'collision', src: 'plain: a hand-written box overlap',
+    code: 'if (Math.abs(a.x - b.x) <= a.hw + b.hw && Math.abs(a.z - b.z) <= a.hd + b.hd) hit(a, b);' },
+  { id: 'collision-minmax', fires: 'collision', src: 'plain: a point in a box',
+    code: 'if (p.x > box.minX && p.x < box.maxX && p.z > box.minZ && p.z < box.maxZ) blocked = true;' },
+  { id: 'timers-interval', fires: 'timers', src: 'plain', code: 'setInterval(() => spawnWave(), 5000);' },
+  { id: 'random-drop', fires: 'random', src: 'plain', code: "const drop = Math.random() < 0.2 ? 'gem' : 'coal';" },
+
+  // ---- must stay quiet ----
+  { id: 'q-collision-color-patch', fires: null, src: 'Fisher textures.js:249 (was a collision false positive)',
+    code: '      const px = u - 0.62, py = v - 0.35, patch = Math.abs(px) < 0.09 && Math.abs(py) < 0.07 ? 1 : 0;' },
+  { id: 'q-collision-rebase-threshold', fires: null, src: 'Fisher core.js:54 (was a collision false positive)',
+    code: '      if (Math.abs(lx) < REBASE_AT && Math.abs(lz) < REBASE_AT) return false;' },
+  { id: 'q-collision-label-avoid', fires: null, src: 'Fisher pirateHud.js:61 (was a collision false positive)',
+    code: '      for (let k = 0; k < placed.length; k++) { const r = placed[k]; if (Math.abs(r.x - sx) < 150 && Math.abs(r.y - sy) < 46) { sy = r.y - 48; k = -1; } }' },
+  { id: 'q-keys-f8-dev-toggle', fires: null, src: 'Fisher tuning.js:128',
+    code: "  window.addEventListener('keydown', e => { if (e.code === 'F8') { e.preventDefault(); root.style.display = root.style.display === 'none' ? '' : 'none'; } });" },
+  { id: 'q-random-noise-buffer', fires: null, src: 'Fisher audio-synth.js:29',
+    code: '  if (!white) { white = ctx.createBuffer(1, n, ctx.sampleRate); const w = white.getChannelData(0); for (let i = 0; i < n; i++) w[i] = Math.random() * 2 - 1; }' },
+  { id: 'q-url-camera-pose', fires: null, src: 'Fisher camera.js:16',
+    code: "  try { const q = new URLSearchParams(location.search).get('cam'); if (q) { const v = q.split(',').map(Number); if (v.length >= 6) pose = v; } } catch {}" },
+  { id: 'q-url-debug-spawn', fires: null, src: 'Fisher creatures.js:293',
+    code: "  try { const q = new URLSearchParams(location.search).get('creature'); if (q) for (const part of q.split(';')) api.debugSpawn(part); } catch {}" },
+  { id: 'q-bump-function', fires: null, src: 'Fisher terrainLook.js:51,253', code: 'function bumpWorld(h) {\n  return h;\n}\nmaterial.normalNode = bumpWorld(bumpH);' },
+  { id: 'q-bag-no-game-meaning', fires: null, src: 'plain: a shuffle bag', code: 'function refill(bag, pieces) { bag.push(...shuffle(pieces)); }' },
+  { id: 'q-distance-no-key', fires: null, src: 'plain: an aggro range', code: "if (enemy.position.distanceTo(player.position) < 12) enemy.state = 'chase';" },
+  { id: 'q-engine-sounds-in-config', fires: null, src: 'plain: sounds given to createEngine', code: "const engine = createEngine({ audio: { sounds: { pick: { src: 'pick.ogg' } } } });" },
+  { id: 'q-audio-disconnect-own-node', fires: null, src: 'plain', code: 'filter.disconnect();' },
+  { id: 'q-plain-math', fires: null, src: 'plain', code: 'const a = Math.abs(x - y) < eps;\nconst d = Math.max(0, Math.min(1, t));' },
+];

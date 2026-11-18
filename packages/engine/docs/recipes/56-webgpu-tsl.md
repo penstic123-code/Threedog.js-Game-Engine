@@ -51,10 +51,10 @@ A node material is lit, shadowed and fogged by three like its plain twin; you re
 
 Node names come from `three/tsl` (`Object.keys(await import('three/tsl'))` lists them, `node_modules/three/src/nodes/` has the source). Noise: `mx_noise_float`, `mx_fractal_noise_float` (MaterialX, also `_vec3`), or `noise` / `hash` below.
 
-## The engine's values as nodes: `uniforms(engine)`
+## The engine's values as nodes: `uniforms(engine)`, a uniform of your own that changes every frame (`setGroup`)
 `uniforms(engine)` returns `engine.uniforms` as TSL nodes with the same names: `uTime`, `uWind`, `uWeatherCloud`, `uSunDir`, `uSunColor`, `uDaylight`
 (0 at night, 1 at noon), `uTimeOfDay`, `uFoliageTint`, `uGroundTint` ... (the list: `uniforms` in [the engine API](../api/engine.md)). The node reads the
-engine's value each render: no per-frame code.
+engine's value each render: no per-frame code. A value of your own that changes every frame: `uniform(x).setGroup(renderGroup)`, because the default `objectGroup` re-uploads it for every draw.
 ```js
 import * as THREE from 'three';
 import { MeshStandardNodeMaterial } from 'three/webgpu';
@@ -69,7 +69,7 @@ lantern.emissiveNode = color(0xffa040).mul(night.mul(glow)).mul(sin(u.uTime.mul(
 engine.add(new THREE.Mesh(new THREE.OctahedronGeometry(0.3), lantern));
 ```
 
-## The engine's shader functions: `threedog/tsl`
+## The engine's shader functions: `threedog/tsl` (`detailBump`: a bumped normal from a procedural height, where `bumpMap` needs a texture)
 Each is a TSL `Fn` with the same arguments and meaning as its GLSL twin in recipe 43, reading the same `engine.uniforms`; full signatures are
 in the package's `types/tsl.d.ts`. Call them on nodes, put the result where it belongs:
 
@@ -145,9 +145,10 @@ engine.add(new THREE.Mesh(new THREE.DodecahedronGeometry(1), rock));
 ## Half-transparent surfaces differ from plain WebGL, fog does not
 Fog is mixed in linear space before tone mapping on every path (WebGPU, WebGL with an effect on, and WebGL straight to the canvas, where the engine's `fog-linear` patch moves three's fog mix before the tone curve), so fog does not change colour when the first post effect turns on. Half-transparent and additive surfaces still differ: WebGL straight to the canvas blends them in display values after tone mapping; WebGPU, and WebGL with any `engine.post` effect on, blend in linear and tone-map once. They shift a little on the straight WebGL path (more in dim scenes), and the first post effect can move them there. This is three.js's own model, not a fault in your scene.
 
-## Sky and fog hooks
+## Sky and fog hooks: replace the fog function (`fogNode`)
 The engine's sky dome has a node version; nothing changes in how you set it (recipe 08). The GLSL hooks (`engine.sky.clouds`, `engine.sky.layer`
 clouds and layers) take `{ glsl, tsl }` on this route: see 52's [tsl forms](52-around-the-picture.md#tsl-forms).
+Replace the fog function with `scene.fogNode = fog(color, factor)`; the dome's horizon fog band reads that colour only from a `THREE.Color`, `color(..)` or `uniform(Color)`.
 A sky of your own: three's `SkyMesh` (`three/addons/objects/SkyMesh.js`) through `engine.sky.replace`.
 
 ## Post effects as nodes
@@ -227,9 +228,6 @@ emissive lines; a storybook is soft ramp edges (`rampTexture(ramp, soften)`) wit
 - Look at the picture in gray. Do the shapes still separate? Color cannot rescue forms that have the same value.
 - Cover the object you just changed. If the rest of the frame tells you the same story about light, the style is holding; if one material looks lit by another sun, its answers differ.
 - Is every shade in the frame leaning the same way? A cast shadow and a turned-away side that disagree read as two renderers.
-- A flat look with soft or stair-stepped shadow edges: the shadow map is showing. Raise its resolution for the area in view, or soften the ramp a little.
-- Count what the picture really holds (common colors, saturation, light-dark spread): a palette look with many stray colors has something running after the `lut`.
-- Put an effect in the stage that matches what it reads: a grade for finished colors goes after the tone curve, a glow before it.
 
 ## Dropping a mesh whose material lives on
 Nothing to do: WebGPURenderer keeps a record of every mesh it drew while the material stays in use, so the engine frees the records of meshes 4 to 8 seconds out of every Scene (`webgpu-record-sweep` in `THREE.md`). Adding one back rebuilds it.

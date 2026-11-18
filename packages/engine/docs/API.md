@@ -37,7 +37,7 @@
 - [`engine.vars`](api/vars.md) story flags and counters (autosaved): flag setFlag counter bump
 - [`engine.saves`](api/saves.md) engine.saves handles saving: define putAttachment removeAttachment attachments storageKey flush collect check apply save load list remove export …
 - [`engine.assets`](api/assets.md) Assets: manifest builder paramsOf setParams preload font model lod modelNow onModel geometry gridFromImage texture useTexture …
-- [`engine.audio`](api/audio.md) buses: addBus setVolume reverb duck condition measure value matches volumeOf sfx noiseBurst tone load play
+- [`engine.audio`](api/audio.md) buses: addBus addNode setVolume reverb duck condition measure value matches volumeOf sfx noiseBurst tone load …
 - [`engine.i18n`](api/i18n.md) string tables: add setLocale has
 - [`engine.rays`](api/rays.md) engine.rays is the ray registry…: addStatic addProvider
 - [`engine.jobs`](api/jobs.md) engine.jobs queues build work in a binary heap: add run
@@ -66,7 +66,7 @@
 - [`engine.triggers`](api/triggers.md) triggers() Trigger zones: list add clear byTag fromMarkers
 - [`engine.particles`](api/particles.md) particles() Particles: define has emit attach count clear
 - [`engine.swarm`](api/swarm.md)  swarm
-- [`engine.settings`](api/settings.md) settings() Settings menu: get set preset define addSection open close toggle reset resetBindings rebind actionList …
+- [`engine.settings`](api/settings.md) settings() Settings menu: get set preset define addSection reset resetBindings rebind actionList save
 - [`engine.music`](api/music.md) music() Background music: define play stop stinger rules override pick
 - [`engine.characters`](api/characters.md) characters() Characters: findSpawn addPlayer moveInput addVehicle support removePlayer findPath findPathAsync; Character, NPC; engine.npcs: list add remove behavior tiers get character avoid (behavior and avoid: see recipes/02-npc)
 - [`engine.interactions`](api/interactions.md) interactions() Interaction prompts: add get

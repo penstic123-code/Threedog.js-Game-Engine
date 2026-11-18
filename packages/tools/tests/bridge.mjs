@@ -67,7 +67,7 @@ export async function run({ check, browser }) {
     try { mkdirSync(bsDir, { recursive: true }); writeFileSync(bsFile, JSON.stringify({ name: 'tmp', steps: [{ press: 'moveForward' }] })); bs = await threedog('scenario', 'tmp-blocked'); }
     finally { rmSync(bsHad ? bsFile : bsDir, { recursive: true, force: true }); }
     check('[guard] a blocked press says who holds input (command and scenario step), not a silent no-op',
-      /Blocked: moveForward did nothing, input is held by win-settings/.test(blockedPress.out) && bs.code === 1 && /win-settings/.test(bs.out), blockedPress.out + ' | ' + bs.out);
+      /Blocked: moveForward did nothing, input is held by ui-settings/.test(blockedPress.out) && bs.code === 1 && /ui-settings/.test(bs.out), blockedPress.out + ' | ' + bs.out);
     (await threedog('press', 'cancel'));
     check('press again: it closes', !(await threedog('describe')).out.includes('settings'));
     check('press an unknown action: lists the available actions', (await threedog('press', 'nope')).out.includes('Unknown'));
@@ -92,6 +92,9 @@ export async function run({ check, browser }) {
     check('--help on a bridge command answers and exits 0', help.code === 0 && help.out.includes('advance N real seconds'), help.out);
     check('eval: expression / statements / error', (await threedog('js', '1 + 1')).out === '✓ 2' && (await threedog('js',
       'const a = 3; return a * 2')).out === '✓ 6' && (await threedog('js', 'engine.nope.x')).code === 1);
+    // [guard] a trailing ; or // comment made 'return (…)' fail to compile, so the expression ran as a statement and printed "(no return value)"
+    check('[guard] eval: an expression with a trailing ; or // comment still prints its value', (await threedog('js', '1 + 1;')).out === '✓ 2'
+      && (await threedog('js', '1 + 1 // x')).out === '✓ 2' && (await threedog('js', 'const b = 2; b + 1')).out.includes('no return value'));
     check('eval: await works (expression and multi-line statements)', (await threedog('js',
       'await Promise.resolve(7)')).out === '✓ 7' && (await threedog('js', 'const a = await Promise.resolve(4); return a + 1')).out === '✓ 5');
     const script = join(tmpdir(), 'threedog-bridge-js-test.js');

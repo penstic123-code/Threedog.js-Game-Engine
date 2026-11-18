@@ -7,9 +7,9 @@ export const specs = [
     url: '/?threedog-headless',
     async run({ check, ev, page }) {
       const menu = () => ev(async () => {
-        engine.settings.open(); await new Promise(r => setTimeout(r, 50));
+        engine.ui.open('settings'); await new Promise(r => setTimeout(r, 50));
         const row = [...engine.settings.win.el.querySelectorAll('[data-set="bloom"]')][0], out = { shown: row?.getAttribute('aria-pressed') ?? null, running: engine.post.get('bloom')?.enabled ?? null };
-        engine.settings.close(); return out;
+        engine.ui.close('settings'); return out;
       });
       const a = await menu();
       check('a running bloom reads on in the menu', a.running !== true || a.shown === 'true', JSON.stringify(a));

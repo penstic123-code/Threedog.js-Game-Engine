@@ -613,4 +613,4 @@ export function rigid(opts = {}) {
   };
 }
 
-export const handRolled = [{ kind: 'physics', seen: 'a physics library of its own', use: 'rigid(): bodies, joints and vehicles on the engine step, shared with collision and saves (recipe 11)', quiet: /\b(engine|e|eng|ctx)\.rigid\b|\brigid\(\s*[{)]/, raw: /\bfrom\s+['"](?:cannon-es|cannon|ammo\.js|@dimforge\/rapier3d(?:-compat)?|oimo|matter-js)['"]/ }];
+export const handRolled = [{ kind: 'physics', docRef: 'recipes/11-physics.md §3', seen: 'a physics library of its own', use: 'rigid(): bodies, joints and vehicles on the engine step, shared with collision and saves', quiet: /\b(engine|e|eng|ctx)\.rigid\b|\brigid\(\s*[{)]/, raw: /\bfrom\s+['"](?:cannon-es|cannon|ammo\.js|@dimforge\/rapier3d(?:-compat)?|oimo|matter-js)['"]/ }];

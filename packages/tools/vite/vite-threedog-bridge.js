@@ -18,6 +18,9 @@ import { headlessUrl } from '../lib/page-url.mjs';
 
 const VIRTUAL = 'virtual:threedog-bridge', RESOLVED = '\0' + VIRTUAL;
 const CLIENT = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), 'threedog-bridge-client.js'), 'utf8');
+const RELOADED = 'the page reloaded or closed while the command ran; run the command again';
+// Playwright's words for the same thing happening to the server's own headless page (hot update, vite re-optimize): a navigation under a running call, or the page gone
+const PAGE_GONE = /Execution context was destroyed|Target (page, context or browser )?has been closed|frame was detached|Page closed/;
 const TIMEOUT = 120000;   // a long step under software rendering can take tens of seconds
 const MAX_BODY = 32 << 20;   // snap --width sends the whole PNG through here to scale it in the page, and a detailed full-HD canvas passes 4 MB
 
@@ -43,7 +46,7 @@ export default function threedogBridge() {
 
       /** Fail every command waiting on client (it reloaded or closed) */
       const dropClient = client => {
-        for (const [id, p] of pending) if (p.client === client) { pending.delete(id); p.reject(new Error('the page reloaded or closed while the command ran; run the command again')); }
+        for (const [id, p] of pending) if (p.client === client) { pending.delete(id); p.reject(new Error(RELOADED)); }
       };
       server.ws.on('vite:client:disconnect', (_, c) => { focus.delete(c); dropClient(c); });
       server.ws.on('threedog:hello', (d, c) => {
@@ -81,6 +84,7 @@ export default function threedogBridge() {
           const browser = await launchBrowser({ prefer: 'gpu' });
           try {
             const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
+            page.setDefaultTimeout(TIMEOUT);   // Playwright's own 30 s cut a slow software-rendered shot or evaluate short
             trackPageErrors(page);   // before goto: main.js runs during it, and an error missed there leaves waitEngine waiting on a dead page
             await page.goto(baseUrl() + headlessUrl(path, { cutscene: 'skip' }));
             return { browser, page, path };
@@ -124,7 +128,8 @@ export default function threedogBridge() {
           if (op === 'eval') return await page.evaluate(([s, a]) => (0, eval)('(' + s + ')')(a), [src, arg]);
           if (op === 'shot') return (await page.screenshot()).toString('base64');   // the headless page is captured together with the HTML UI
           await page.reload(); return null;
-        } finally { if (!--headlessBusy) { if (closeWhenIdle) { closeWhenIdle = false; closeHeadless(); } else armIdle(); } }
+        } catch (e) { throw PAGE_GONE.test(e?.message) ? new Error(RELOADED) : e; }
+        finally { if (!--headlessBusy) { if (closeWhenIdle) { closeWhenIdle = false; closeHeadless(); } else armIdle(); } }
       }
 
       // One command at a time, in arrival order: the MCP server, a session and direct command lines may all call at once, and step / op are

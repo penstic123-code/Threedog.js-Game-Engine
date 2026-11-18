@@ -42,6 +42,6 @@ export async function run({ check }) {
       (ts.stdout + ts.stderr).slice(0, 500));
   } finally {
     rmSync(dir, { recursive: true, force: true });
-    if (!hadGames || !readdirSync(games).length) rmSync(games, { recursive: true, force: true });
+    if (!hadGames && existsSync(games) && !readdirSync(games).length) rmSync(games, { recursive: true, force: true });   // only an empty games/ it made: other tests run beside this one in games/
   }
 }

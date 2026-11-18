@@ -38,7 +38,7 @@ export async function run({ check }) {
     /codedError\('asset-misuse'.*not a sound/.test(src('core/audio/audioVoice.js')) && /'rollback-incomplete'/.test(src('core/saves/saveApply.js')) && /'rollback-incomplete'/.test(src('core/ops/opsAtomic.js')));
 
   // wording that must match the behaviour
-  check('state is labelled as moving time only with wait; press says it simulates input', /unless wait/.test(label('state')) && !/real keyboard/.test(readFileSync(join(TOOLS, 'threedog/mcp.mjs'), 'utf8')));
+  check('state is labelled as moving time only with wait; press says it simulates input', /unless wait/.test(label('state')) && !/real keyboard/.test(readFileSync(join(TOOLS, 'threedog/mcp-tools.mjs'), 'utf8')));
 
   // art list: short by default, --full for all
   const tmp = mkdtempSync(join(tmpdir(), 'td-artlist-'));

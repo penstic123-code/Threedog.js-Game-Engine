@@ -102,7 +102,7 @@ export const holdMethods = {
    * state: 'loading' | 'title-frozen' (a freeze of kind 'title' is up, waiting for start) | 'halted' (the loop is stopped: a test, the bridge, a headless page)
    *   | 'frozen' (gameplay stopped by the owners in `owners`: a menu, the page, an error) | 'running';
    * owners: every halt and freeze owner, so closing one part's menu can be told from a player's;
-   * blockedBy: what keeps the player's input from driving the game: each opaque input context ('win-settings', 'ui-title', 'dialogue', 'cutscene'...),
+   * blockedBy: what keeps the player's input from driving the game: each opaque input context ('ui-settings', 'ui-title', 'dialogue', 'cutscene'...),
    *   'error' (a gameplay error froze the game) and 'loading' (the loading screen blocks).
    * @returns {{ state: 'loading' | 'title-frozen' | 'halted' | 'frozen' | 'running', owners: string[], blockedBy: string[] }}
    */

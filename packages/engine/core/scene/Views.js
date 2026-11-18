@@ -8,6 +8,7 @@ import { warnMissing } from '../base/validate.js';
 import { readParams, keysSchema } from '../base/params.js';
 import { codedError } from '../base/errorHints.js';
 import { holdFov, baseFov } from './view.js';
+import { defineOwned, dropOwned } from '../ops/owned.js';
 
 const vec3 = a => Array.isArray(a) && a.length === 3 && a.every(Number.isFinite);
 
@@ -60,10 +61,27 @@ export class Views {
     // focus: the world loads around what the view looks at, not around a player far away (the view was an empty sheet of ground without it)
     const focus = e.camera.position.clone().fromArray(v.target);
     // onTop: a newer claim (a timeline shot) that moved the camera has released, and this one is in charge again: the view is put back, not just the claim (stack hook in core/ops/holds.js)
+    // The pose is placed once and then held, so a game script that writes the camera every frame (and ignores engine.cameraOverride) undoes the view without a word:
+    // the shared "an outside write makes the engine yield, said once" check watches it each frame while this claim is the one in charge
+    this._watch(e);
     this._cam = e.takeCamera('views', { focus, onTop: () => this._put(name, v, focus) });
     this._put(name, v, focus);
     const cam = this._cam;   // this showing, not the name: a handle kept from an earlier one must not end a later one
     return { remove: () => { if (this._cam === cam) this.release(); } };
+  }
+  /** @internal Register the camera pose as owned for this showing and check it every frame while the views claim is in charge (a cutscene on top moves the camera on purpose) */
+  _watch(e) {
+    this._unwatch();
+    const c = e.camera;
+    this._owned = defineOwned(e, { id: 'views-camera', part: 'view', key: 'views-camera', objects: [c, c.position, c.quaternion],
+      read: () => { const { position: p, quaternion: q } = c; return [p.x, p.y, p.z, q.x, q.y, q.z, q.w]; },
+      levels: { manual: "engine.autoView.manual('views-camera'), or make your camera script step aside while engine.cameraOverride is set", back: "engine.autoView.manual('views-camera', false)" } });
+    this._tick = e.onFrame(() => { if (e.cameraOverride?.owner === 'views') this._owned.check(); this._owned.mark(); });
+  }
+  _unwatch() {
+    this._tick?.remove(); this._tick = null;
+    if (this._owned) dropOwned(this.engine, [this._owned]);
+    this._owned = null;
   }
   /** The view's pose and lens, on show and again each time the claim comes back on top */
   _put(name, v, focus) {
@@ -72,11 +90,12 @@ export class Views {
     c.position.fromArray(v.position); c.lookAt(...v.target);
     holdFov(e, v.fov ?? baseFov(e));   // a view without a fov shows the base lens: a shot that stood in front of it may have left its own
     c.updateMatrixWorld(true);
+    this._owned?.mark();   // what is on the camera now is the view, not an outside write
     this.current = name;
     e.events.emit('camera:shot', { name });   // a cut: what follows the camera (the light pool) settles at once instead of easing over
   }
   /** Give the camera back (to the previous holder, e.g. a running cutscene, or to the rig) */
   release() {
-    this._cam?.remove(); this._cam = null; this.current = null;
+    this._cam?.remove(); this._cam = null; this.current = null; this._unwatch();
   }
 }

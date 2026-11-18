@@ -2,12 +2,15 @@
 // a game page that collects errors, and build + preview on a free port.
 //   CHROMIUM_ARGS.software  WebGL through ANGLE's SwiftShader (--use-gl=swiftshader fails on some Windows setups): same pixels on every machine, so tests use it
 //   CHROMIUM_ARGS.gpu       WebGL through ANGLE on the real GPU (backend per platform): shot / gallery / perf / stress prefer it, it is several times faster
-import { execFile } from 'node:child_process';
-import { resolve } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { chromium } from 'playwright';
 import { trackPageErrors, trackRequests } from './wait-engine.mjs';
 import { TOOLS, viteOptions } from './paths.mjs';
 import { parseOptions } from './lib/cli-args.mjs';
+import { writeAtomic } from './lib/atomic.mjs';
+import { pidAlive } from './devinfo.mjs';
+import { reapOrphanBrowsers } from './lib/reap.mjs';
 
 const COMMON = ['--enable-webgl', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'];
 /** ANGLE backend that reaches the hardware GPU headless on this platform */
@@ -48,32 +51,6 @@ export async function probeRenderer(browser) {
       return { renderer: dbg ? g.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : 'unknown', timer: !!g.getExtension('EXT_disjoint_timer_query_webgl2') };
     });
   } finally { await page.close(); }
-}
-
-const HEADLESS_SHELL = /(?:^|[\\/])(?:chrome-headless-shell|headless_shell)(?:\.exe)?$/i;
-const LIST_PROCESSES = process.platform === 'win32'
-  ? ['powershell', ['-NoProfile', '-NonInteractive', '-Command', `Get-CimInstance Win32_Process -Filter "Name like '%headless%'" | ForEach-Object { '{0} {1} {2}' -f $_.ProcessId, $_.ParentProcessId, $_.CommandLine }`]]
-  : ['ps', ['-eo', 'pid=,ppid=,args=']];
-/** The program a command line runs: its first word, or the first quoted part (Chromium quotes its own path on Windows, for its children, and that path can hold spaces) */
-const programOf = cmd => { const m = cmd.match(/^"([^"]*)"|^\S*/); return m[1] ?? m[0]; };
-/** Child processes whose browser is gone, from the process listing (one "pid ppid command" per line). A headless shell by its program alone: an argument can name anything */
-export function orphanPids(listing) {
-  const list = listing.split(/\r?\n/).map(l => l.match(/^\s*(\d+)\s+(\d+)\s+(.*)$/)).filter(m => m && HEADLESS_SHELL.test(programOf(m[3])))
-    .map(m => ({ pid: +m[1], ppid: +m[2], cmd: m[3] }));
-  const shells = new Set(list.map(p => p.pid));
-  return list.filter(p => /--type=/.test(p.cmd) && !shells.has(p.ppid)).map(p => p.pid);
-}
-/**
- * Stops what a dead browser left behind. A page stuck in a loop does not notice its browser die when the tool that opened it is killed, and then spins a
- * core until someone stops it, unreachable by any close: six of them once ran 18 hours. Only headless shells are touched, and a live browser's children have their parent.
- */
-export function reapOrphanBrowsers() {
-  // timeout: the sweep is not awaited, so a hung WMI would hold the tool open after its work is done
-  return new Promise(done => execFile(LIST_PROCESSES[0], LIST_PROCESSES[1], { windowsHide: true, maxBuffer: 1 << 24, timeout: 10000 }, (err, out) => {
-    const pids = err ? [] : orphanPids(out);
-    for (const pid of pids) { try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ } }
-    done(pids);
-  }));
 }
 
 /** The fixes for a browser that cannot run, in the words threedog doctor reports them (doctor imports these, so a command and doctor never disagree) */
@@ -179,20 +156,58 @@ export async function newGamePage(browser, { errors = [], ...opts } = {}) {
   return page;
 }
 
-/** Where a tool's build goes and what buildAndPreview serves. Into .threedog/, not dist/: this is a test build (test pages, the real panel) and a deploy of dist/ must never ship it */
-export const TOOL_BUILD = { outDir: '.threedog/tool-build' };
-/** Build a workspace (unless build: false) and serve TOOL_BUILD (or `outDir`) with vite preview on a free 127.0.0.1 port: { base, close() } */
-export async function buildAndPreview(dir, { build: doBuild = true, outDir = TOOL_BUILD.outDir } = {}) {
+/** Where tool builds go. Into .threedog/, not dist/: this is a test build (test pages, the real panel) and a deploy of dist/ must never ship it */
+const TOOL_BUILDS = '.threedog/tool-build';
+let buildSeq = 0;
+/**
+ * Delete tool-build folders nobody needs: not named by any last-<kind>.json (what --no-build would pick) and no live serving-<pid> file in them. A folder is
+ * removed only here, never by close(): a server of another process may still be serving it, and Windows refuses to delete a folder in use.
+ */
+function sweepToolBuilds(root) {
+  if (!existsSync(root)) return;
+  const names = readdirSync(root, { withFileTypes: true });
+  const pointed = new Set(names.filter(e => /^last-.+\.json$/.test(e.name)).map(e => JSON.parse(readFileSync(join(root, e.name), 'utf8')).dir));
+  for (const e of names) {
+    if (!e.isDirectory() || !/^(plain|real-webgpu)-\d+-\d+$/.test(e.name) || pointed.has(e.name)) continue;
+    const dir = join(root, e.name);
+    if (readdirSync(dir).some(f => /^serving-\d+$/.test(f) && pidAlive(+f.slice(8)))) continue;
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+/**
+ * Build a workspace (unless build: false) and serve the build with vite preview on a free 127.0.0.1 port: { base, close() }.
+ * Every build goes into its own folder .threedog/tool-build/<kind>-<pid>-<n>/. Why: they used to share one folder that vite emptied before each build, so
+ * a second session building took the files away from a page the first one was still serving (404 on its chunks), and --no-build used whatever
+ * another session built last. `kind` keeps builds that must not mix apart (plain test pages vs real-webgpu's rewrites): --no-build reads only
+ * last-<kind>.json, written once a build succeeded. `plugins`: extra vite plugins for the build.
+ */
+export async function buildAndPreview(dir, { build: doBuild = true, kind = 'plain', plugins = [] } = {}) {
   const { build, preview } = await import('vite');
-  const out = { outDir };   // outDir: a caller that runs beside shot/test (the hub) builds into its own folder instead of fighting them over this one
-  if (doBuild) await build(await viteOptions(dir, { logLevel: 'error', build: out }));
+  const root = resolve(dir, TOOL_BUILDS), last = join(root, `last-${kind}.json`);
+  let name;
+  if (doBuild) {
+    sweepToolBuilds(root);
+    name = `${kind}-${process.pid}-${++buildSeq}`;
+    // the serving file goes in first (and emptyOutDir is off for this fresh folder): a sweep by another process during the build must not take it
+    mkdirSync(join(root, name), { recursive: true });
+    writeFileSync(join(root, name, `serving-${process.pid}`), '');
+    try { await build(await viteOptions(dir, { logLevel: 'error', plugins, build: { outDir: `${TOOL_BUILDS}/${name}`, emptyOutDir: false } })); }
+    catch (e) { rmSync(join(root, name), { recursive: true, force: true }); throw e; }
+    writeAtomic(last, JSON.stringify({ dir: name }));
+  } else {
+    if (!existsSync(last)) throw new Error(`no ${kind} tool build in ${dir}: run once without --no-build first`);
+    name = JSON.parse(readFileSync(last, 'utf8')).dir;
+    writeFileSync(join(root, name, `serving-${process.pid}`), '');
+  }
+  const out = { outDir: `${TOOL_BUILDS}/${name}` };
   // Serve without compression. vite preview gzips every response on the fly, and the physics library is one 4 MB script (its wasm inlined as
   //   base64): that was ~250 ms of CPU on the machine for every test page that loads it, and compressing over 127.0.0.1 saves nothing. The hook
   //   runs before the compression middleware, so dropping Accept-Encoding here switches it off.
   const noGzip = { name: 'threedog-preview-no-gzip', configurePreviewServer(s) { s.middlewares.use((req, _res, next) => { delete req.headers['accept-encoding']; next(); }); } };
   const server = await preview(await viteOptions(dir, { plugins: [noGzip], build: out, preview: { port: 0, host: '127.0.0.1', strictPort: false }, logLevel: 'error' }));
   const base = (server.resolvedUrls?.local?.[0] ?? `http://127.0.0.1:${server.httpServer.address().port}/`).replace(/\/$/, '');
-  return { base, close: () => new Promise(r => server.httpServer.close(() => r())) };
+  // server first, then the serving file: the folder may be swept once nobody serves it
+  return { base, close: async () => { await new Promise(r => server.httpServer.close(() => r())); rmSync(join(root, name, `serving-${process.pid}`), { force: true }); } };
 }
 
 /**

@@ -15,6 +15,7 @@ import { resolve } from 'node:path';
 import { hintText } from 'threedog/error-hints';   // the engine's hint table (plain data), through its public subpath
 import { isLocalRequest, readBody } from './local.js';
 import { oneLine } from '../lib/oneline.mjs';
+import { markReload } from '../threedog/errorlog.mjs';   // (errorlog.mjs imports recordsCut back: both are only called later, so the cycle is harmless)
 
 const ENDPOINT = '/__threedog/error', MAX_BODY = 64 * 1024, MAX_ITEMS = 200;
 /** Page-sent text marked as data in the log (an AI reading errors.log must not take it for instructions) */
@@ -95,12 +96,16 @@ export function cutLog(text, keep) {
 
 /** @param o warn: whether to forward console.warn (default true); logFile: log path (relative to vite's root, i.e. the workspace directory); maxBytes: log size cap */
 export default function errorRelay({ warn = true, logFile = '.threedog/errors.log', maxBytes = 1 << 20 } = {}) {
+  let root;
   return {
     name: 'threedog-error-relay',
     apply: 'serve',
     // Vite 8 forwards on its own when it detects it runs inside an AI tool (printing each one, no merging), which duplicates this, so turn it off unless set by hand
     config: c => c.server?.forwardConsole === undefined ? { server: { forwardConsole: false } } : undefined,
+    // A hot update replaces the code that threw: errors before it stop counting as the page's current ones (errors latest still lists them), like a reload does
+    handleHotUpdate() { if (root) markReload(root); },
     configureServer(server) {
+      root = server.config.root;
       const file = resolve(server.config.root, logFile), log = server.config.logger;
       mkdirSync(resolve(file, '..'), { recursive: true });
       writeFileSync(file, `# Browser error log (cleared when dev starts at ${new Date().toLocaleString()})\n`);

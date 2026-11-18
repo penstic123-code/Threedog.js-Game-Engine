@@ -3,7 +3,7 @@ import { injectUICSS } from '../../ui/UI.js';
 
 export function buildLetterbox(t) {
   injectUICSS(`
-.threedog-letterbox{position:fixed;left:0;right:0;height:0;background:var(--threedog-letterbox-bg,var(--threedog-loading-bg));z-index:18;pointer-events:none;transition:height var(--threedog-letterbox-speed,.5s) ease}
+.threedog-letterbox{position:fixed;left:0;right:0;height:0;background:var(--threedog-letterbox-bg,var(--threedog-loading-bg));z-index:var(--threedog-z-letterbox);pointer-events:none;transition:height var(--threedog-letterbox-speed,.5s) ease}
 .threedog-letterbox-top{top:0}.threedog-letterbox-bottom{bottom:0}
 .threedog-letterbox.is-on{height:var(--threedog-letterbox-size,11%)}
 .threedog-letterbox-skip{position:absolute;right:calc(16px + env(safe-area-inset-right,0px));bottom:12px;font:12px var(--threedog-font);color:var(--threedog-muted);

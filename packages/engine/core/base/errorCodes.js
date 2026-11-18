@@ -433,7 +433,7 @@ export const ERROR_CODES = {
     docs: ['api/settings.md'],
     fix: 'settings({ sections }) contains a built-in section that does not exist. Use a listed name, or register one with engine.settings.addSection(id, { title, render }).' },
   'time-owner-conflict': {
-    docs: ['recipes/06-clock-events.md §"The time table (the single source; other docs link here)"', 'api/calendar.md'],
+    docs: ['recipes/06-clock-events.md §"The time table: read the current game time"', 'api/calendar.md'],
     fix: 'calendar() and sky({ time }) both set the time of day. calendar owns time while it is installed: move the starting time to calendar({ time }) and remove sky({ time }).' },
   'save-provider-changed': {
     docs: ['recipes/20-content-actions-save.md §"Save failures and versions"', 'api/saves.md'],

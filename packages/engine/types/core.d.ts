@@ -413,6 +413,8 @@ export interface SaveProvider {
   notAtomic?: string;
   /** Dev only: called once start() finished with this part's data in the new-game state, to warn about what should not be there yet (world: records placed by code) */
   checkNewGame?: (data: any) => void;
+  /** Show this part in saves.list() rows (`summary[key]`), read from the stored save and migrated: a title screen's level, gold or play time without loading the slot. Keep the part small */
+  summary?: boolean;
   /** This part's format version, default 1: raise it by 1 when what save() returns changes shape. A save with a newer version is refused */
   version?: number;
   /** Upgrade steps: old version -> data => data in the next version's shape, e.g. { 1: d => ({ ...d, beds: [] }) }.

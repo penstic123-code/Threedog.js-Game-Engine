@@ -42,20 +42,20 @@ export const specs = [
     async run({ page, check, ev, frames }) {
       await ev(() => { engine.cameraRig.pointerLock = true; });
       check('a click locks the mouse', await lock(page, ev));
-      await ev(() => { engine.settings.open(); });
-      check('settings.open() lets go of the mouse', await released(ev));
-      await ev(() => { engine.settings.close(); });
+      await ev(() => { engine.ui.open('settings'); });
+      check('ui.open(settings) lets go of the mouse', await released(ev));
+      await ev(() => { engine.ui.close('settings'); });
       await frames(3);
       check('locked again', await lock(page, ev));
       await ev(() => { document.exitPointerLock(); });
       check('document.exitPointerLock() ends the lock', await released(ev));
       await frames(3);
-      check('and opens no menu', await ev(() => !engine.settings.isOpen && engine.runState.state === 'running'), JSON.stringify(await ev(() => engine.runState)));
+      check('and opens no menu', await ev(() => !engine.ui.isOpen('settings') && engine.runState.state === 'running'), JSON.stringify(await ev(() => engine.runState)));
       check('locked again', await lock(page, ev));
       await ev(() => { engine.page.releaseLock(); });
       check('engine.page.releaseLock() ends the lock', await released(ev));
       await frames(3);
-      check('and opens no menu', await ev(() => !engine.settings.isOpen));
+      check('and opens no menu', await ev(() => !engine.ui.isOpen('settings')));
     },
   },
 ];

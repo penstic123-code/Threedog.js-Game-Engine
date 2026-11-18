@@ -17,6 +17,7 @@ export const STOP = [
 export const SYNONYMS = [
   ['perf', 'performance', 'slow', 'slowdown', 'fps', 'framerate', 'lag', 'laggy', 'stutter', 'stutters', 'hitch', 'jank'],
   ['2d', 'sidescroller', 'scroller', 'platformer', 'orthographic', 'ortho', 'sprite', 'sprites'],
+  ['expectations', 'expectation', 'threshold', 'thresholds'],
   ['rigid', 'physics', 'push', 'pushing', 'shove', 'boxes', 'crate', 'crates', 'ragdoll', 'barrel', 'barrels', 'roll', 'rolling'],
   ['rain', 'rainy', 'raining', 'rainfall'],
   ['saves', 'save', 'saved', 'saving', 'savegame', 'persist', 'checkpoint'],

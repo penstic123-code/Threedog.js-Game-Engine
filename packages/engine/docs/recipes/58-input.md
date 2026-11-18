@@ -80,4 +80,7 @@ const p2 = engine.characters.addPlayer({ id: 'two', input: two, control: 'camera
 
 The seat's pad leaves `engine.input` and answers the game's pad bindings on this seat alone, so `bind('jump', ['PadA'])` works for it as written. A seat's keys are its own list: keep them out of the first player's bindings. Two seats on one pad or key, or one seat on two players, throw `input-seat`.
 
-`engine.player` stays the first player; `p2` has its own world record, saved with the world, and `removePlayer('two')` takes it away. There is one screen and one camera. Footstep sounds and NPCs giving way cover every player. A seat with its own `interact` key uses what its player stands by, as that player (`seat.actor`, set by `addPlayer`; `ctx.actor` in the op). The prompt shows `engine.actor`'s choice alone, and one hold runs at a time. A trigger zone hears every player when its `who` names them.
+`engine.player` stays the first player; `p2` has its own world record, saved with the world, and `removePlayer('two')` takes it away. There is one screen and one camera. A seat with its own `interact` key uses what its player stands by, as that player (`seat.actor`, set by `addPlayer`; `ctx.actor` in the op). The prompt shows `engine.actor`'s choice alone, and one hold runs at a time. A trigger zone hears every player when its `who` names them.
+
+## 7. Read a key while the world is frozen: a menu's own keys (`pressedRaw`, `toggleOnKey`)
+A menu reads its keys with `engine.input.pressedRaw(action)` in an `engine.onFrame` hook (it ignores input contexts). To open and close a window on one key, call `toggleOnKey(engine, win, 'menu')` there once per frame.

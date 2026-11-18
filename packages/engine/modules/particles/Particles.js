@@ -296,4 +296,4 @@ export function particles(opts = {}) {
     } };
 }
 
-export const handRolled = [{ kind: 'particles', seen: 'a particle loop of its own', use: 'engine.particles: emitters on game time, one draw call, budgets (recipe 64)', quiet: /\b(engine|e|eng|ctx)\.particles\b|\bparticles\(\s*[{)]/, code: /\bfor\s*\([^)]*\bof\s+[\w.]*(?:particles|sparks|embers)\b|\b(?:particles|sparks|embers)\.(?:forEach|filter)\s*\(/i, near: [{ re: /\.(?:life|age|ttl|vel\w*|v[xyz])\b/, lines: 5 }] }];
+export const handRolled = [{ kind: 'particles', docRef: 'recipes/64-particles.md', seen: 'a particle loop of its own', use: 'engine.particles: emitters on game time, one draw call, budgets', quiet: /\b(engine|e|eng|ctx)\.particles\b|\bparticles\(\s*[{)]/, code: /\bfor\s*\([^)]*\bof\s+[\w.]*(?:particles|sparks|embers)\b|\b(?:particles|sparks|embers)\.(?:forEach|filter)\s*\(/i, near: [{ re: /\.(?:life|age|ttl|vel\w*|v[xyz])\b/, lines: 5 }] }];

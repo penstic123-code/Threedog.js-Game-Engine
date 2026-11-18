@@ -3,7 +3,7 @@
 //   runtime = { ready, mode: 'running' | 'halted' | 'frozen' | null, tick, headless, blockedBy: string[], run: { state, owners, blockedBy } }
 //   mode null = no engine could be read (server down, page still loading). run and blockedBy are copied as-is from engine.runState (core/ops/holds.js), the
 //   one source for "why is it not advancing" (before, this file rebuilt its own list with other names): blockedBy entries are the opaque input contexts
-//   ('win-settings', 'ui-title', 'dialogue', 'cutscene'...), 'error' and 'loading'.
+//   ('ui-settings', 'ui-title', 'dialogue', 'cutscene'...), 'error' and 'loading'.
 
 /** Runs in the page (self-contained, sent as source). Reads only public engine fields, never waits, never throws. */
 const RUNTIME_FN = () => {

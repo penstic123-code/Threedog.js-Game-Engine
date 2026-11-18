@@ -348,4 +348,4 @@ export function collision(opts = {}) {
     } };
 }
 
-export const handRolled = [{ kind: 'collision', seen: 'a hand-written box overlap', use: 'engine.collision.addBox / addCircle for walls and props (movement, rays and physics read them); engine.collision.walkable to ask', quiet: /\b(engine|e|eng|ctx)\.collision\b/, code: /Math\.abs\([^)]*\)\s*<=?[^&|;]*&&\s*Math\.abs\([^)]*\)\s*<=?|[<>]=?\s*[\w.]*\bmin[XYZ]?\b[^;]*&&[^;]*[<>]=?\s*[\w.]*\bmax[XYZ]?\b/i }];
+export const handRolled = [{ kind: 'collision', seen: 'a hand-written box overlap', use: 'engine.collision.addBox / addCircle for walls and props (movement, rays and physics read them); engine.collision.walkable to ask', quiet: /\b(engine|e|eng|ctx)\.collision\b/, notRaw: /Math\.abs\([^)]*\)\s*<=?\s*\.?\d/, code: /Math\.abs\([^)]*\w\s*-\s*[\w.(][^)]*\)\s*<=?[^&|;]*&&\s*Math\.abs\([^)]*\w\s*-\s*[\w.(][^)]*\)\s*<=?|[<>]=?\s*[\w.]*\bmin[XYZ]?\b[^;]*&&[^;]*[<>]=?\s*[\w.]*\bmax[XYZ]?\b/i }];

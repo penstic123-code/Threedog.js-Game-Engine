@@ -5,7 +5,7 @@
 > **Shortest:** `engine.clock.after(seconds, fn)`.
 > **Sections:** Changing how fast time · The time table the · 1 Where to write · 1b Smooth movement between · 2 Skipping time sleep · 3 Verify
 
-## Changing how fast time runs: `engine.mod`
+## Changing how fast time runs: `engine.mod`; does a timed modifier (`for: seconds`) keep running while frozen
 ```js
 engine.time.channel('enemies');  // once: a channel of your own (world and player are built in)
 const bt = engine.mod('time.enemies', { owner: 'bullet-time', mul: 0.35, for: 2 });  // bullet time: enemies at 35% for 2 real seconds
@@ -24,7 +24,7 @@ Details, only when you need them:
   `world.remove(id)` drops that record's entries.
 - Reading: `engine.time.scale(ch, id?)`, `engine.time.now(ch)`; `describe().time.channels` lists speeds and holders. Saved: entries below `'system'`; `system` / `debug` ones (menus, debug panel) are screen state and are taken again after a load.
 
-## The time table (the single source; other docs link here)
+## The time table: read the current game time (`engine.time.now`; the single source, other docs link here)
 **One time source.** `engine.time` counts one thing, `engine.time.tick` (fixed steps run). Every other time is a
 read-only view of it, moved only by the engine, and always together: a fixed step, `engine.skip` and a new playthrough move or reset all of them.
 Read any view with `engine.time.now(name)`: `'real'`, `'ambient'`, `'calendar'` or a channel (`'world'`, `'player'`, your own).
@@ -156,10 +156,6 @@ When a game has several systems, a default that keeps this order in one place: o
   returns the describe).
   Time-window switch: after `await engine.applyState({ time: '17:50' })` read the state immediately (between has already aligned), then
   `engine.step(...)` across the boundary.
-  The length of a day is `describe().time.dayLength` (calendar seconds); with `clock.rate` 1, `step(1 clock minute)` = `step(dayLength / 1440)` (24-hour day); if the rate
-  is not 1, divide by `engine.clock.speed` as well.
-- Reproduce a scenario: `npm run shot -- / --time 17:58 --wait 10 --describe-only`, then look at the time (18:0x) and your effect (lamps, NPCs, items).
-- After `npm run map`, the "timed events" section of GAMEMAP.md lists every `calendar.at/between/daily/onSeason` and `clock.after/every`.
 - Is skip the same as living through it? `const r = await engine.checkSkip(600)` skips 600 calendar seconds, rewinds, steps the same span and compares the saved state: `{ ok, diffs: [{ path, a, b }] }`
   (a = skip, b = step; `{ ignore: ['parts.world', 'parts.rigid', 'parts.random'] }` drops paths; it refuses while frozen or with the clock stopped). Skip runs no near simulation, so a moving player/NPC
   or a settling physics body always differs: ignore those parts and read the rest. It leaves the world at the stepped state, so run it on a scratch playthrough or in a test. A diff usually means a

@@ -2,7 +2,7 @@
 // Each rule file exports default { id, title, run(), game? } (game: true = also runs in a game installed from npm); run returns [{ level: 'error'|'warn', file, line, msg, fix }],
 // and the array may carry note (a one-line summary) and verbose (an extra list shown with --verbose).
 // Default output: errors in full, warnings as one count line per rule; --verbose lists the warnings (the first WARN_LIMIT per rule), --all every one.
-// A rule with surface: N (R40) is the exception: its first N warnings print by default and runRules returns how many it found (the conclusion line says "N bypasses").
+// A rule with remind: true (R40) is the exception: its warnings are reminders, printed together through lib/remind.mjs (budget, one line each, counts) and never as plain warnings; runRules returns how many it found.
 // A crashing rule does not stop the check: it is recorded as one error for that rule.
 // scope (lib/scope.mjs, check -w <game>): only results in that workspace's files are printed and counted; the rest go to scope.other().
 import { readdirSync } from 'node:fs';
@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 import { RULES_REL } from '../paths.mjs';
 import { item } from '../lib/result.mjs';
+import { remind, BUDGET } from '../lib/remind.mjs';
 
 const DIR = dirname(fileURLToPath(import.meta.url));
 const WARN_LIMIT = 15;
@@ -26,14 +27,9 @@ export async function loadRules() {
 
 /** only: rule ids already normalized and validated by the caller (normRuleId); an id not in the list would just never match.
  *  items: an array to collect every result into (lib/result.mjs items, warnings included, code = the rule id) for --json; the printing stays as it is */
-/** One finding of each kind before a second of any: five timer hints in the first file walked must not hide the hand-made inventory in the next */
-export function kindsFirst(list) {
-  const seen = new Map(), turn = list.map(r => { const n = seen.get(r.kind) ?? 0; seen.set(r.kind, n + 1); return n; });
-  return list.map((r, i) => [r, turn[i]]).sort((a, b) => a[1] - b[1]).map(([r]) => r);
-}
-
 export async function runRules({ only = null, all = false, verbose = false, game = false, scope = null, items = null } = {}) {
-  let errors = 0, warns = 0, hidden = 0, bypasses = 0;
+  let errors = 0, warns = 0, hidden = 0;
+  const reminders = [];   // warnings of remind rules, shown together after the loop
   const summary = [];
   console.log(`\nRule checks (${RULES_REL}/, each rule's criteria and allowlist are at the top of its file)`);
   for (const { file: f, rule } of await loadRules()) {
@@ -45,17 +41,17 @@ export async function runRules({ only = null, all = false, verbose = false, game
       for (const r of res) if (!r.crashed && !scope.mine(r.file)) scope.other(r.file, r.level);
       res = res.filter(r => r.crashed || scope.mine(r.file));   // a crash counts everywhere: a rule that did not run has checked nothing. The rule's note describes the whole repo, so it is dropped with the rest
     }
-    if (rule.surface) res = Object.assign(kindsFirst(res), { note: res.note });   // before both outputs: the terminal and the JSON the MCP tool reads list the same hints
-    items?.push(...res.map(r => item({ code: rule.id, level: r.level === 'error' ? 'error' : 'warn', file: r.file, line: r.line, message: r.msg, fix: r.fix, short: r.short })));
-    const es = res.filter(r => r.level === 'error'), ws = res.filter(r => r.level !== 'error');
-    errors += es.length; warns += ws.length;
-    summary.push(`${rule.id} ${es.length}✗ ${ws.length}!`);
+    const found = res.map(r => item({ code: rule.id, level: r.level === 'error' ? 'error' : 'warn', file: r.file, line: r.line, message: r.msg, fix: r.fix, short: r.short, kind: r.kind }));
+    items?.push(...found);
+    const es = res.filter(r => r.level === 'error'), warned = res.filter(r => r.level !== 'error'), ws = rule.remind ? [] : warned;
+    errors += es.length; warns += warned.length;
+    summary.push(`${rule.id} ${es.length}✗ ${warned.length}!`);
+    if (rule.remind) reminders.push(...found.filter(i => i.level === 'warn'));
+    if (rule.remind && !es.length) { if (only && res.note) console.log(`${rule.id}: ${res.note}`); continue; }
     if (!res.length && !res.note) continue;
     // Short by default, detail on demand: errors print in full; a rule with only warnings is one line ("R1 file size: 92 warnings"), and
     // --verbose (or --all) lists them as before. Why: 90+ warning lines buried the one error an AI had to fix
-    // A rule with surface: N (R40 bypass hints) shows its first N warnings even here, and the conclusion line counts them: a hint nobody sees changes nothing.
-    // --rule <id> or --verbose lists them all (the first WARN_LIMIT; --all every one)
-    const full = verbose || all || (only && rule.surface);
+    const full = verbose || all;
     let lastFix = null;
     const show = r => {
       const at = r.line ? `${r.file}:${r.line}` : r.file;
@@ -63,14 +59,10 @@ export async function runRules({ only = null, all = false, verbose = false, game
       if (r.fix && r.fix !== lastFix) console.log(`    Fix: ${r.fix}`);
       lastFix = r.fix;
     };
-    if (rule.surface) bypasses += ws.length;
     if (!full && !es.length) {
       if (ws.length) {
         console.log(`${rule.id} ${rule.title}: ${ws.length} warning${ws.length > 1 ? 's' : ''}`);
-        if (rule.surface) {
-          ws.slice(0, rule.surface).forEach(r => show({ ...r, fix: r.short ?? r.fix }));
-          if (ws.length > rule.surface) console.log(`  …${ws.length - rule.surface} more (npm run check -- --rule ${rule.id} lists them)`);
-        } else hidden += ws.length;
+        hidden += ws.length;
       }
       continue;
     }
@@ -82,7 +74,13 @@ export async function runRules({ only = null, all = false, verbose = false, game
     if (res.note) console.log(`  (${res.note})`);
     if (verbose && res.verbose?.length) for (const v of res.verbose) console.log('    · ' + v);
   }
+  if (reminders.length) {
+    // a listing asks for more than the check's own budget (a plain check shows the budget): --rule and --all list every reminder, as the MCP check does; --verbose the first WARN_LIMIT
+    const max = all || only ? Infinity : verbose ? WARN_LIMIT : BUDGET.check;
+    console.log();
+    remind(reminders, { max, rest: `npm run check -- --rule ${[...new Set(reminders.map(i => i.code))].join(',')} --all lists them` }).lines.forEach(l => console.log(l));
+  }
   console.log(`\nRule checks: ${errors} errors, ${warns} warnings  [${summary.join(' · ')}]`);
   if (hidden) console.log(`details: --verbose (the warnings, the first ${WARN_LIMIT} per rule; --all for every one)`);
-  return { errors, bypasses };
+  return { errors, reminders: reminders.length };
 }

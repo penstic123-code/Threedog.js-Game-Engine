@@ -92,12 +92,12 @@ Fields: `cloud` cloud cover 0-1, `sun` sunlight multiplier, `fog` fog distance m
 0-1, `grey` how gray the sky turns, `lightning` lightning (a type above 0.5 strikes). A table where nothing rains or snows builds no particles.
 With openWorld the weather module is already installed; pass its options through the preset: `openWorld({ camera: 'follow', weather: { types, autoPool } })`.
 
-## 3. Changing sky colors, sun, stars: the day and night sky
+## 3. Change the sky colors, sun glow (`uSunGlow`), stars and the horizon fog band: the day and night sky
 `sky({ keyframes })`:
 `[time 0-1, zenith color, horizon color, sun color, ambient intensity]`, interpolated by time; the rows are sorted and
 run from time 0 to time 1, else the sky throws (both ends are midnight: give the last row the first row's values, or the colors jump there). What each column drives
 is on `keyframes` in `SkyPictureOptions`, `types/world.d.ts`;
-also `sunSize sunGlow starDensity clouds` (defaults and ranges there too; `hoursPerDay` is timing, so it is a
+also `sunSize sunGlow` (the glow round the sun disk; 0 = none, or paint your own with `engine.sky.layer`; the fog band at the horizon is recipe 34) `starDensity clouds` (defaults and ranges there too; `hoursPerDay` is timing, so it is a
 `calendar()` option, not a sky key). All of these are `sky({ ... })` start values; at run time use the entries at the top of this page.
 **Day and night brightness** is your `picture/` code: the sky lights nothing. Read `uDaylight` and write your own lights (recipe 62), and check with `shot --time 12:00` and
 `--time 22:00`. The keyframes only color the dome; the ambient column also dims a skybox and the weather's sky tint. `engine.sky.environment({ into: engine.scene })` builds an environment map
@@ -141,8 +141,6 @@ cave.remove();  // leave the cave
 
 ## 5. Verify
 - Text: `npm run shot -- / --time 19:30 --weather dust --wait 2 --describe-only`, then look for "Time: 19:30..." and "Weather: dust (rain 0, snow 0, fog 0.35)".
-  `describe().weather` has `name progress rain snow fog wind cloud`; `describe().time` has `clock day season isDay dayLength rate`.
-- Take a screenshot only after the picture changed: `npm run shot -- / --time 19:30 --weather dust`.
 
 ## 6. Day and night in game logic
 Gameplay reads `engine.calendar.isDay` and fades with `engine.calendar.daylight` (0-1), with or without a sky, never the clock text; things that follow the hour use `engine.calendar.between(...)` (`api/calendar.md`).

@@ -59,4 +59,4 @@ export class Random {
   }
 }
 
-export const handRolled = [{ kind: 'random', seen: 'Math.random() in game code', use: 'engine.random (seeded: next / range / int / pick / chance; replays, tests and saves get the same numbers)', code: /\bMath\.random\s*\(/, notRaw: /particle|spark|dust|confetti|debris|twinkle|flicker|jitter|smoke|puff|droplet|bubble|petal|glitter|wobble/i, gameplayOnly: true }];
+export const handRolled = [{ kind: 'random', seen: 'Math.random() in game code', use: 'engine.random (seeded: next / range / int / pick / chance; replays, tests and saves get the same numbers)', code: /\bMath\.random\s*\(/, notRaw: /particle|spark|dust|confetti|debris|twinkle|flicker|jitter|smoke|puff|droplet|bubble|petal|glitter|wobble|getChannelData/i, gameplayOnly: true }];

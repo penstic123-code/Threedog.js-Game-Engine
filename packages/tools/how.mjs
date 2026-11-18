@@ -112,7 +112,7 @@ const POINTER = /[^.|]*\(recipes? \d+[^)]*\)\.?/g;
  * ("You write (plain three.js)", "three.js idiom") gives plain three.js entries; the other tables and the numbered conventions name engine
  * APIs used with three.js (engine.rigid.addBox, engine.terrainDraw.meshes...), so they are labelled 'engine + three.js' and never get the plain-first rank.
  */
-function plainRows(file, where, out) {
+function plainRows(file, where, out, kind = 'three') {
   if (!existsSync(file)) return;
   const lines = readFileSync(file, 'utf8').split('\n');
   let adopt = false, plainTable = false, skip = false;   // adopt: inside the "You write (plain three.js) | The engine does | The one line" table; skip: the "| id |" list of changes to three.js (a reference, describe().threePatches, not a task answer)
@@ -128,7 +128,7 @@ function plainRows(file, where, out) {
     // and would make every row a tie-winning "plain three.js" hit for words that belong to an engine route
     // a sentence that sends the reader to a recipe ("On WebGPU ... write a node material (recipe 56)") is printed but does not rank: it names the other route's words, and with
     // the plain-first rank this row would answer "webgpu" and "node material" itself, and in a TSL game it would no longer count as the GLSL row it is
-    out.push({ src: plainTable ? 'plain' : 'three', plain: plainTable, title: c[0], use: c.slice(1).filter(x => x && x !== '-').join(' · '), where, text: adopt ? c[0] : c.join(' ').replace(POINTER, ' ') });
+    out.push({ src: plainTable ? 'plain' : kind, plain: plainTable, title: c[0], use: c.slice(1).filter(x => x && x !== '-').join(' · '), where, text: adopt ? c[0] : c.join(' ').replace(POINTER, ' ') });
   });
   // numbered conventions ("3. **Per-frame logic** ..."): one entry each
   for (const line of lines) {
@@ -236,6 +236,8 @@ export function docEntries(docsDir) {
     });
   }
   plainRows(join(docsDir, 'THREE.md'), 'THREE.md', out);
+  // COMMANDS.md's two tables (the command table and the dev bridge commands): a command-line question ("screenshot without a build") must reach the command's row, not a recipe title that shares one word
+  plainRows(join(docsDir, 'COMMANDS.md'), 'COMMANDS.md', out, 'cmd');
   entriesCache.set(docsDir, out);
   return out;
 }
@@ -281,7 +283,7 @@ export function search(docsDir, q, max = 5, opts = {}) {
   const qt = queryTokens(q), hits = [], all = docEntries(docsDir), sections = all.filter(e => e.src === 'recipe');
   // a word weighs by its rarity (simple IDF): words found everywhere, like game or player in a long query, count for almost nothing; rare ones like fps or sidescroller decide the order.
   // why not a plain count: the old version weighed every word the same, so game / find in "game is slow, find why fps drops" ranked action games and new-game above the performance recipe
-  const base = all.filter(e => e.src !== 'api'), N = base.length;   // rarity is counted on the rows, not on the thousands of text lines below (they would make every word look rare)
+  const base = all.filter(e => e.src !== 'api' && e.src !== 'cmd'), N = base.length;   // rarity is counted on the rows, not on the thousands of text lines below (they would make every word look rare)
   // full-text floor: every prose line of every docs file is a last-rank candidate ("docs text · file:line"). Why: rows cover tasks and api names; a word that sits only in a
   // recipe body or a COMMANDS.md table row (capture, arrangement, pixelation) must still be found, and a line that holds the rare typed word beats a row that only holds a stem
   const lines = docLines(docsDir), floor = lines.filter(l => !l.code && !/^- `/.test(l.text) && l.text.length > 24 && !/^#{1,2} /.test(l.text)).map(l => ({ src: 'line', title: l.file, where: l.file + ':' + l.n, text: l.text, use: '' }));
@@ -295,7 +297,7 @@ export function search(docsDir, q, max = 5, opts = {}) {
   all.concat(floor).forEach((e, order) => {
     if (!anyWord.test(e.text) && !anyWord.test(e.head ?? '')) return;   // one test per line: most lines hold no word of the query, and scoring them word by word took nearly all the time
     // the other renderer's text (GLSL in a TSL game) counts at 0.5: still listed when it is the only answer, but not first
-    const wrong = otherRenderer(e.text + ' ' + (e.snip ?? ''), opts.renderer) ? 0.5 : 1;
+    const wrong = otherRenderer(e.text + ' ' + (e.snip ?? ''), opts.renderer) ? 0.5 : e.src === 'cmd' ? 0.55 : 1;
     const s = score(e.text, qt) * (e.src === 'AI.md' || e.src === 'entry' ? 1.2 : 1) * wrong + (e.head ? score(e.head, qt) * 0.5 : 0);
     // cov: how much of the query's weight this entry covers by itself (its recipe's top title does not count, it only orders within s); compared in steps of 0.05, and only within one step (mostly: the same words matched)
     // does the old rule apply, "plain three.js first, then the recommended entry". Why the top title does not count: "bullet time on enemies" would beat the engine.mod line because the action recipe's title has enemy
@@ -308,7 +310,7 @@ export function search(docsDir, q, max = 5, opts = {}) {
   // A variant in the line is not enough: "the resolution climbs back" is no answer to "climb", and a row with the synonym (ladder) is
   const topRows = [...hits].sort((a, b) => b.cov - a.cov).slice(0, 5), missing = qt.concepts.map(c => !topRows.some(h => conceptHit(h.e.text, c) >= 0.9));
   const upgrade = h => +h.e.title.startsWith('MIGRATING-');   // read once when upgrading: the answer only when nothing else holds the words (how setAuto)
-  for (const h of lineHits) if (!upgrade(h) && h.cov >= Math.max(0.5, bestRow + (h.e.src === 'api' ? 0.1 : 0.3)) && qt.concepts.reduce((a, c, i) => a + (missing[i] && conceptHit(h.e.text, c) === 1 ? qt.w[i] : 0), 0) / total >= 0.6) hits.push(h);   // the missing word(s) carry 60% of the query's weight
+  for (const h of lineHits) if (!upgrade(h) && h.cov >= Math.max(0.5, bestRow + (h.e.src === 'api' || h.e.src === 'cmd' ? 0.1 : 0.3)) && qt.concepts.reduce((a, c, i) => a + (missing[i] && conceptHit(h.e.text, c) === 1 ? qt.w[i] : 0), 0) / total >= 0.6) hits.push(h);   // the missing word(s) carry 60% of the query's weight
   const entry = e => e.task ? 2 : e.src === 'AI.md' || e.src === 'entry' ? 1 : e.src === 'api' ? -1 : e.src === 'line' ? -2 : 0, band = h => Math.round(h.cov * 20);
   hits.sort((a, b) => band(b) - band(a) || (b.e.task ? 1 : 0) - (a.e.task ? 1 : 0) || (b.e.plain ? 1 : 0) - (a.e.plain ? 1 : 0) || entry(b.e) - entry(a.e) || b.s - a.s || a.order - b.order);
   // at most 3 plain three.js hits, so the engine route for the same task (coordination: time, weather, saves...) stays in the list
@@ -324,6 +326,7 @@ export function search(docsDir, q, max = 5, opts = {}) {
       : e.plain ? `plain three.js · ${clip(e.title, 60)} → ${clip(e.use, 100)} → ${e.where}`
       : e.src === 'line' ? `docs text · ${e.where} — ${clip(e.text, 150)}`
       : e.src === 'api' ? `${e.where} · ${clip(e.title, 70)} — ${clip(e.use, 110)}`
+      : e.src === 'cmd' ? `COMMANDS.md · ${clip(e.title, 80)} → ${clip(e.use, 140)}`
       : e.src === 'three' ? `engine + three.js · ${clip(e.title, 60)} → ${clip(e.use, 100)} → ${e.where}` : `${e.where} · ${clip(e.name, 60)} — ${clip(e.snip)}`,
       at: e.src === 'line' ? e.where : open?.at ?? e.where.replace(/ (§\d+\w*|§?".*")$/, ''),
       // ref: the same place in the one pointer spelling (core/base/docRef.js), which is what is printed and what --read takes
@@ -333,10 +336,13 @@ export function search(docsDir, q, max = 5, opts = {}) {
       blocks: open?.blocks ?? [], nofit: e.nofit ?? open?.nofit ?? '', task: !!e.task, skeleton: !!e.skeleton, plain: !!e.plain, text: e.text });
     if (out.length >= max) break;
   }
-  // say so when the match is weak: when the listed hits together cover less than a third of the query's weight (a long query has ten words, covering half is hard, and a half threshold calls right answers 'not found'), mark it weak; the CLI then says no good match before listing the closest, so an AI does not take a filler result as the answer
+  // say so when the match is weak: when the listed hits together cover less than 0.45 of the query's weight, mark it weak; the CLI then says no good match and lists the closest, so an AI does not take a filler result as the answer
+  // why 0.45 and no relaxed threshold for long queries (it was a third, or two words' weight in a long query): measured on the discoverability question bank (docs/testing/discoverability.md) and the spoken-query list of tests/how.mjs,
+  // the answers that are right never cover less than 0.56 of the query, while wrong ones sit anywhere from 0.29 up, and a long query is no easier to answer than a short one; coverage can only catch the clearest misses,
+  // the rest is for the docs to fix (words, headings), not for a stricter threshold, which would call right answers "not sure"
   // the verdict reads the whole list, not the first line: a query's words often sit in different rows, and judged on one row alone a small rewording of that row turned a right answer into "no match"
   const listed = hits.slice(0, max), cover = qt.concepts.reduce((s, c, i) => s + Math.max(0, ...listed.map(h => conceptHit(h.e.text, c))) * qt.w[i], 0) / total;
-  out.weak = out.length > 0 && cover < Math.min(1 / 3, 2 / qt.concepts.length); // long queries: two words' weight is already a lead
+  out.weak = out.length > 0 && cover < 0.45;
   // "unused" only after looking at every line of every docs file (not only the indexed rows)
   const used = qt.concepts.map(c => lines.some(l => conceptHit(l.text, c) > 0));
   out.unknown = qt.concepts.filter((c, i) => !used[i]).map(c => c.word);

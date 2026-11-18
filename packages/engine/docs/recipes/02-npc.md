@@ -62,7 +62,7 @@ name string is rejected): `do: { op: ['delivery.done', { parcel: 'p1' }] }` (`23
 The items used (coin, pass) must be defined in `items.js`, otherwise validation fails. A `place` name comes from `content/places.js`, `content.load(data, { places })` or
 from a level marker (such as `npc_guard`). Add a new content file to `content/index.js`.
 
-## 2. Add in code (temporary NPCs, dynamic schedules)
+## 2. Add in code: an NPC you talk to (a villager, `engine.dialogue`), temporary NPCs, dynamic schedules
 ```js
 engine.dialogue.define('passerby', { start: { text: 'Nice day.', speaker: 'Passerby' } });
 const npc = engine.npcs.add({ id: 'passerby', name: 'Passerby', position: [10, 0, 5], schedule: [{ at: '08:00', position: [20, 0, 5] }], interact: { op: 'npc.talk' } });  // at: 'HH:MM' or 0-1; without id the name is used

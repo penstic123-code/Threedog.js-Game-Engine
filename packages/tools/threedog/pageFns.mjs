@@ -201,11 +201,13 @@ const PAGE = {
       try {
         // an expression if it compiles as one, otherwise statements (multi-line needs its own return). Decided before anything runs: a SyntaxError from
         // JSON.parse inside the script is the script's own, and running it again would do its steps twice
+        // A trailing ';' is dropped for the test and the newline before ')' lets a trailing // comment end; one that still does not compile runs as the original text
+        const asExpression = 'return (' + a.src.replace(/;\s*$/, '') + '\n)';
         let expression = true;
-        try { new AsyncFunction('return (' + a.src + ')'); } catch { expression = false; }
-        v = await run(expression ? 'return (' + a.src + ')' : a.src);
+        try { new AsyncFunction(asExpression); } catch { expression = false; }
+        v = await run(expression ? asExpression : a.src);
       } catch (err) { return { logs, threw: String(err?.message ?? err) }; }
-      let text = '(no return value)';
+      let text = '(no return value: a multi-line script prints only what it returns)';
       if (v !== undefined) {
         try { text = JSON.stringify(v, (k, x) => typeof x === 'function' ? '[function]' : x, 1); } catch { text = String(v); }
       }

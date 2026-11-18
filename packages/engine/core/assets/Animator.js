@@ -318,4 +318,4 @@ export class Animator {
   dispose() { this._dropHook(); ikClear(this); this.mixer.stopAllAction(); }
 }
 
-export const handRolled = [{ kind: 'animation', seen: 'an AnimationMixer of its own', use: 'engine.assets.animate(model, { states }): states, crossfades, sync with game time and pause (recipe 13)', quiet: /\bassets\.animate\b/, code: /\bnew\s+(?:THREE\.)?AnimationMixer\s*\(|\bmixer\.update\s*\(/i }];
+export const handRolled = [{ kind: 'animation', docRef: 'recipes/13-animation.md §5', seen: 'an AnimationMixer of its own', use: 'engine.assets.animate(model, { states }): states, crossfades, sync with game time and pause', quiet: /\bassets\.animate\b/, code: /\bnew\s+(?:THREE\.)?AnimationMixer\s*\(|\bmixer\.update\s*\(/i }];

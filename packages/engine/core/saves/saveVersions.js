@@ -115,3 +115,18 @@ export function readSave(json, providers, slot) {
   for (const k of Object.keys(data.parts)) if (!providers.has(k)) { foreign.parts[k] = data.parts[k]; foreign.versions[k] = partVersion(versions, k); }
   try { return { data, foreign, list: list.map(([k, p]) => [k, p, upgradePart(k, p, data.parts[k], partVersion(versions, k), whole)]) }; } catch (e) { return { reason: 'migrate', dev: e.message }; }
 }
+
+/**
+ * The parts a game marked `summary: true`, from one stored save text, read and migrated by readSave (the same checks and steps a load runs), so an old
+ * save lists in the shape the game reads now. A save that load() would refuse (corrupt, too new, a missing step) lists with no summary; load() says why.
+ * @param {string} json
+ * @param {Map<string, any>} providers
+ * @returns {Record<string, any>}
+ * @internal
+ */
+export function summarize(json, providers) {
+  const marked = new Map([...providers].filter(([, p]) => p.summary));
+  if (!marked.size) return {};
+  const r = readSave(json, marked, 'list()');
+  return r.reason ? {} : Object.fromEntries(r.list.map(([k, , data]) => [k, data]));
+}

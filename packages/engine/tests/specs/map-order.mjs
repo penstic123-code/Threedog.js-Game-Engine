@@ -164,7 +164,7 @@ export const specs = [
         await E.session.quit();
         const out = { title0: E.ui.isOpen('title') };
         let started = false; E.events.on('session:start', () => { started = true; });
-        E.settings.open();
+        E.ui.open('settings');
         const btn = E.uiRoot.querySelector('[data-game=load]');
         out.button = !!btn;
         btn?.click();

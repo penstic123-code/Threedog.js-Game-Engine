@@ -2,7 +2,7 @@
 // covers it, and how to say "this is on purpose". Scanned: a game's own sources (games/*, or a project installed from npm, proved by pack-external), and the engine's examples; not the engine itself (R4/R19-R21 cover that).
 // Why the patterns are not here: the owner of a system knows what its hand-made copy looks like, and a table here forgets the next system. Each system declares
 // export const handRolled next to its definition, the generated metadata carries it (metadata.hints), and this file only reads it; a module with no code shape says 'none: why' (R64 checks).
-// A hint's fields, all optional but seen, use and one of code / raw:
+// A hint's fields, all optional but seen, use and one of code / raw (docRef: where the docs explain the system, one threedog/error-hints pointer, checked by metadata.mjs):
 //   code   regex on the line with comments and strings blanked   raw   regex on the line as written (a key name, a DOM id); with both, both must match
 //   orRaw  regex on the raw line, enough on its own               not / notRaw   the same two lines: a match stays quiet
 //   quiet  regex on the file's code: the file already uses the system      near  [{ re, lines, on: 'raw' }] each must match within that many lines
@@ -17,13 +17,12 @@
 //   Whole game: the game's package.json (games/<name>/package.json; the repo root's applies to every game)  "threedog": { "hints": false }  (all), or
 //   { "hints": { "random": false, "timers": false } } (named kinds); one run: THREEDOG_HINTS=off npm run check. Kinds: see KINDS.
 //   A switch that cannot work (an unknown kind, hint-off-file below line 30, a wrong hints value) is reported as its own warning, never silently ignored.
-// If you have a reason, write it in DESIGN.md under Systems (what you built by hand and why), so the next reader and the next AI see it.
 import { metadata } from 'threedog/metadata';
 import { readFileSync, existsSync } from 'node:fs';
 import { walk, lines, codeOnly, rel, ROOT, P } from './_lib.mjs';
 import { TAGS } from './R04-real-time.mjs';
 import { isArtFile } from '../paths.mjs';
-import { HINTS_SHOWN } from '../lib/result.mjs';
+import { docRefsLine, docReadCommand } from 'threedog/error-hints';
 
 /** "/source/flags", as metadata.mjs wrote it, back into a RegExp */
 const regex = s => { const m = /^\/(.*)\/(\w*)$/s.exec(s); return new RegExp(m[1], m[2]); };
@@ -31,7 +30,7 @@ const compiled = h => ({ ...h, ...Object.fromEntries(['quiet', 'code', 'raw', 'o
   ...(h.near && { near: h.near.map(n => ({ ...n, re: regex(n.re) })) }), ...(h.yields && { yields: { ...h.yields, raw: regex(h.yields.raw) } }) });
 const HINTS = Object.fromEntries(Object.entries(metadata.hints).map(([k, h]) => [k, compiled(h)]));
 export const KINDS = Object.keys(HINTS);
-const HOW = 'a reason? write it in DESIGN.md (Systems), or switch the hint off: // hint-off(KIND) on the line, // hint-off-file(KIND) at the top, or package.json "threedog": { "hints": { "KIND": false } }';
+const HOW = 'on purpose? carry on. // hint-off(KIND) hides it on the line, // hint-off-file(KIND) at the top, or package.json "threedog": { "hints": { "KIND": false } }';
 
 /** Hints that stay on for the project: package.json "threedog.hints" (false / 'off' / { kind: false }) and THREEDOG_HINTS=off. Returns a Set of kinds */
 export function activeKinds(pkgHints, env = process.env.THREEDOG_HINTS) {
@@ -73,8 +72,8 @@ export function scanText(text, active = new Set(KINDS), { art = false } = {}) {
   const tagged = i => TAGS.some(t => commentOf(L[i]).includes(t) || (wholeLineComment(L[i - 1]) && commentOf(L[i - 1]).includes(t)));
   const add = (i, kind) => {
     if (!active.has(kind) || fileOff.has(kind) || lineOff(i).has(kind)) return;
-    const { seen: what, use } = HINTS[kind];
-    out.push({ level: 'warn', line: i + 1, kind, msg: `${what}: ${L[i].trim().slice(0, 80)}`, short: `use ${use.split(/ [(;]/)[0]} · off: // hint-off(${kind})`, fix: `use ${use}. If you have a reason: ${HOW.replaceAll('KIND', kind)}` });
+    const { seen: what, use, docRef } = HINTS[kind];
+    out.push({ level: 'warn', line: i + 1, kind, msg: `${what}: ${L[i].trim().slice(0, 80)}`, short: `use ${use.split(/ [(;]/)[0]} · off: // hint-off(${kind})${docRef ? ` · ${docReadCommand(docRef)}` : ''}`, fix: `use ${use}${docRef ? ` · read ${docRefsLine([docRef])}` : ''}. ${HOW.replaceAll('KIND', kind)}` });
   };
   const code = L.map(l => (/^\s*(\/\/|\*|\/\*)/.test(l) ? '' : codeOnly(l)));
   const whole = code.join('\n');
@@ -95,7 +94,7 @@ export function scanText(text, active = new Set(KINDS), { art = false } = {}) {
 
 export default {
   id: 'R40', title: 'Bypass hints: hand-rolled versions of engine systems in game code (warnings only)', game: true,
-  surface: HINTS_SHOWN,   // plain check lists this many and counts the rest in its last line (rules/index.mjs)
+  remind: true,   // its warnings are reminders: they print through lib/remind.mjs (rules/index.mjs), never as plain warnings
   run() {
     // The switch belongs in the game's own package.json (games/<name>/): reading only the repo root's ignored it in this repository.
     // Both apply: the root's to every game, the game's to its own files. Each package.json is read once

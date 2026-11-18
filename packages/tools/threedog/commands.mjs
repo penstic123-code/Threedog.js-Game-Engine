@@ -52,7 +52,7 @@ function snapPath(dir, arg) {
 
 /** The options each command reads (lib/cli-args.mjs parseOptions spec); a command not listed takes none, so a typo fails instead of doing nothing */
 const SCRIPT = { flags: ['verbose'], values: ['max', 'file', 'wait'], passthrough: true };   // passthrough: an expression may start with a dash (js "-x")
-const OPTIONS = {
+export const OPTIONS = {
   describe: { flags: ['full', 'all'], values: ['max'] },
   press: { values: ['for'] },
   js: SCRIPT,
@@ -67,6 +67,9 @@ const OPTIONS = {
 };
 /** One command's arguments → { rest, opt }, the numbers and lists already converted */
 export function options(cmd, args) {
+  // state is the one command people reach with --time / --weather (shot has --cam): say the working form instead of a bare 'unknown option'
+  const dashed = cmd === 'state' && args.find(a => /^--[a-z]/i.test(a));
+  if (dashed) throw new Error(`unknown option ${dashed}: state takes key=value, e.g. threedog state time=18:30 weather=rain`);
   const { rest, opt } = parseOptions(args, { positional: true, ...OPTIONS[cmd] });
   for (const k of ['max', 'width']) if (k in opt) opt[k] = intOption(opt, k);
   for (const k of ['wait', 'tolerance']) if (k in opt) opt[k] = +opt[k];

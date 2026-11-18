@@ -21,7 +21,9 @@ const get = async (url, init, ms = 1500) => { try { return await fetch(url, { ..
 export async function probe(dir) {
   const info = devServerInfo(dir);
   if (info.state === 'live') {
-    const res = await get(`http://localhost:${info.port}/__threedog/cmd`, { method: 'POST', headers: { 'x-threedog-token': info.token ?? '' }, body: '{"op":"ping"}' });
+    // asked twice: a server that is only busy (compiling, a page eating the CPU) often misses one 1.5 s window and answers the next
+    const ping = () => get(`http://localhost:${info.port}/__threedog/cmd`, { method: 'POST', headers: { 'x-threedog-token': info.token ?? '' }, body: '{"op":"ping"}' });
+    const res = await ping() ?? await ping();
     // The record's process exists but the port gave no answer in time: a busy server (first compile, a software-rendered page eating the CPU) looks
     // exactly like a dead one here, and "No dev server is running" for a live pid sent people to start a second server. Say what is known instead.
     if (!res) return { state: 'none', port: info.port, busy: info.pid };

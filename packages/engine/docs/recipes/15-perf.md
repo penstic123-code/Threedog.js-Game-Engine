@@ -15,10 +15,8 @@ What this machine can carry: `threedog stress` (COMMANDS.md) prints where 16.7 /
   (`✗` with the next call; your `engine.budget` limits, else a desktop 60 fps reference, not enforced). Plain three.js: `renderer.info`. Textures: `engine.inspect.materials()`.
 - **Which materials cost**: `engine.debug.view('shaderCost')` colors materials green -> red by compiled program cost (gray = not compiled yet);
   `engine.debug.view('overdraw')` shows pixels drawn many times over. `'off'` restores. Real GPU timings: `threedog capture` (Spector.js) or the browser's GPU profiler.
-- **Other view modes**: `debug.view('triggers')` shows hidden zones (`triggers({ debugColor, debugOpacity })` colors them); modules add their own (`engine.debug.defineView(name, { what, apply })`);
-  `engine.debug.viewModes()` lists them.
-- **F3 panel** (`engine.debug.panel`; `debug()` module, dev builds, null without it; action `debugPanel`): frame rate, CPU ms, draw calls, triangles,
-  chunks, vegetation instances, time of day; with a budget set, over-limit items and startup time.
+- **F3 panel** (`engine.debug.panel`; `debug()` module, dev builds, null without it; action `debugPanel`).
+- **Other view modes**: `debug.view('triggers')` shows hidden zones; modules add their own with `engine.debug.defineView(name, { what, apply })`.
 - **Text**: `engine.describe().perf` =
   `{ fps, cpuMs, cpuFrames, cpu, apply, drawCalls, triangles, pixelRatio, gpuMemory, budget, notice, startup, stream, batching, jobs, commits, chunks?, vegetation? }`
   (`cpuMs`: median of `cpuFrames` frames, as in `inspect.perf()` and F3; `cpu`: last frame by phase);
@@ -35,6 +33,12 @@ What this machine can carry: `threedog stress` (COMMANDS.md) prints where 16.7 /
 - **Startup**: `engine.startup` = `{ totalMs, startMs, preloadMs, streamMs, compileMs, firstFrameMs, phases, modules: { name: { init, ready } } }`. `firstFrameMs` is page open to the first frame drawn after the loading screen, and `phases`
   splits it into parts that add up to it: `script` (page open until `createEngine`), `construct`, `setup` (game code until `start()`), `init` (saves,
   renderer, module init), `preload`, `world` (nearby builds), `compile` (shaders + hidden warm-up frame), `draw`. `inspect.perf().text` prints the line.
+
+## 1b. Counts and `snap` do not change while the loop is halted (a stale frame)
+A halted loop (pause, `threedog step`, a test) keeps the counts and picture of the last frame drawn; `engine.step(1 / 60)` draws a new one.
+
+## 1c. Paint a procedural texture (an async canvas texture helper) without blocking the main thread: slice it with `engine.jobs`
+`engine.jobs.add(function* () { for (let y = 0; y < h; y++) { paintRow(y); yield; } })`: `yield` once per row; the queue packs as many steps into a frame as its time budget (`budgetMs`) allows, so no row count to guess.
 
 ## 2. Set a budget (so going over reports itself)
 Off by default and costs nothing. Only the categories given are checked; `gpuMemoryMB` is three's own byte count (WebGPU only, not driver VRAM):
@@ -69,7 +73,7 @@ Browsers round time to 0.1 ms. `onFrame/onFixed` are not timed; to time one, mak
 |---|---|
 | Many draw calls | Use `vegetation` / InstancedMesh for repeated objects; install `hlod()` for a block of buildings; share geometry and materials between copies of a model (`assets.model` shares by default) |
 | Expensive shadows | `engine.shadows.budget(light, { every: 3 })` (update every 3 frames), reduce `light.shadow.mapSize` / the box's `extent`; filter `renderer.shadowMap.type`: Basic cheapest, PCF default, VSM softest and dearest (switching recompiles); vegetation `shadowRing` (default 1) is how many chunk rings cast (culled per camera: a shadow box or cascade draws only chunks inside it), `engine.vegetation.setShadowRing('tree', 0)` while playing; grass-scale species: `castShadow: false` (`content check` hints) |
-| Stutter while walking | Put generation work in `engine.jobs.add(function* () { ...; yield; })` or `engine.stream.add`; chunk upload budget `engine.terrain.applyBudgetMs` |
+| Stutter while walking | Slice generation work with `engine.jobs` (1c) or put it in `engine.stream.add`; chunk upload budget `engine.terrain.applyBudgetMs` |
 | Slow start | Look at which is slowest in `engine.startup.modules`; `npm run bake` for large models; preload only the necessary assets |
 | Slow physics | Keep dynamic rigid bodies within a few hundred (the `rigidBodies` budget); `rigid({ terrainRing: 1 })` |
 | Too much loaded at once | Each `engine.stream` source loads its own surroundings: remove sources you no longer need, give a far camera `physics: false` and a `radius`, use `detail: 'simple'` for a distant view (recipe 18 section 10) |

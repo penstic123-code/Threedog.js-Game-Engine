@@ -2024,8 +2024,7 @@ export const metadata = {
     "save",
     "values",
     "presets",
-    "sections",
-    "isOpen"
+    "sections"
    ],
    "sections": [],
    "saves": [],
@@ -3997,17 +3996,27 @@ export const metadata = {
  "hints": {
   "animation": {
    "kind": "animation",
+   "docRef": "recipes/13-animation.md §5",
    "seen": "an AnimationMixer of its own",
-   "use": "engine.assets.animate(model, { states }): states, crossfades, sync with game time and pause (recipe 13)",
+   "use": "engine.assets.animate(model, { states }): states, crossfades, sync with game time and pause",
    "quiet": "/\\bassets\\.animate\\b/",
    "code": "/\\bnew\\s+(?:THREE\\.)?AnimationMixer\\s*\\(|\\bmixer\\.update\\s*\\(/i",
    "file": "packages/engine/core/assets/Animator.js"
   },
   "audio": {
    "kind": "audio",
+   "docRef": "recipes/31-audio.md §2",
    "seen": "an AudioContext / Audio element of its own",
-   "use": "engine.audio: engine.audio.play(url, { bus, volume }) or named sounds, with buses and volume settings (recipe 31)",
+   "use": "engine.audio: engine.audio.play(url, { bus, volume }) or named sounds, with buses and volume settings",
    "code": "/\\bnew\\s+(?:window\\.)?(?:AudioContext|webkitAudioContext)\\b|\\bnew\\s+Audio\\s*\\(/",
+   "file": "packages/engine/core/audio/Audio.js"
+  },
+  "audiochain": {
+   "kind": "audiochain",
+   "docRef": "recipes/31-audio.md §2",
+   "seen": "master taken apart and rewired by hand",
+   "use": "engine.audio.addNode(bus, ctx => node): the engine puts your node in the chain and relinks it when buses change",
+   "code": "/\\bmaster\\??\\.disconnect\\s*\\(/",
    "file": "packages/engine/core/audio/Audio.js"
   },
   "collision": {
@@ -4015,13 +4024,15 @@ export const metadata = {
    "seen": "a hand-written box overlap",
    "use": "engine.collision.addBox / addCircle for walls and props (movement, rays and physics read them); engine.collision.walkable to ask",
    "quiet": "/\\b(engine|e|eng|ctx)\\.collision\\b/",
-   "code": "/Math\\.abs\\([^)]*\\)\\s*<=?[^&|;]*&&\\s*Math\\.abs\\([^)]*\\)\\s*<=?|[<>]=?\\s*[\\w.]*\\bmin[XYZ]?\\b[^;]*&&[^;]*[<>]=?\\s*[\\w.]*\\bmax[XYZ]?\\b/i",
+   "notRaw": "/Math\\.abs\\([^)]*\\)\\s*<=?\\s*\\.?\\d/",
+   "code": "/Math\\.abs\\([^)]*\\w\\s*-\\s*[\\w.(][^)]*\\)\\s*<=?[^&|;]*&&\\s*Math\\.abs\\([^)]*\\w\\s*-\\s*[\\w.(][^)]*\\)\\s*<=?|[<>]=?\\s*[\\w.]*\\bmin[XYZ]?\\b[^;]*&&[^;]*[<>]=?\\s*[\\w.]*\\bmax[XYZ]?\\b/i",
    "file": "packages/engine/modules/collision/Collision.js"
   },
   "dialogue": {
    "kind": "dialogue",
+   "docRef": "recipes/02-npc.md",
    "seen": "a dialogue box of its own",
-   "use": "engine.dialogue.define(speaker, nodes) and the dialogue part: typing on game time, choices, input lock (recipe 02, recipe 26)",
+   "use": "engine.dialogue.define(speaker, nodes) and the dialogue part: typing on game time, choices, input lock",
    "quiet": "/\\b(engine|e|eng|ctx)\\.dialogue\\b|\\bdialogue\\(\\s*[{)]/",
    "code": "/\\b(createElement|innerHTML|className|classList|getElementById|querySelector|\\.id)\\b/",
    "raw": "/(?:createElement|innerHTML|className|classList|getElementById|querySelector|\\.id\\b)[^,;{}]*(?:dialog(?:ue)?|speech|subtitle|textbox|conversation)|(?:dialog(?:ue)?|speech|subtitle|textbox|conversation)[^,;{}]*(?:createElement|innerHTML|className|classList|getElementById|querySelector|\\.id\\b)/i",
@@ -4029,8 +4040,9 @@ export const metadata = {
   },
   "follow": {
    "kind": "follow",
+   "docRef": "recipes/21-camera.md",
    "seen": "a camera follow of its own",
-   "use": "followCamera() or openWorld({ camera }): collision, smoothing and switching are handled; a shot of your own: engine.takeCamera(owner) (recipe 21)",
+   "use": "followCamera() or openWorld({ camera }): collision, smoothing and switching are handled; a shot of your own: engine.takeCamera(owner)",
    "quiet": "/\\b(?:follow|firstPerson|fixed|rts)Camera\\(|\\bopenWorld\\(|\\b(engine|e|eng|ctx)\\.(takeCamera|cameraRig|setCamera)\\b/",
    "code": "/\\bcamera\\.position\\.(?:lerp|copy|set)\\s*\\(/",
    "raw": "/player|hero|target|character|avatar/i",
@@ -4069,8 +4081,8 @@ export const metadata = {
    "code": "/\\b(?:inventory|backpack|bag|pockets|inv)(?:Items|Slots|List|Contents|Data|Map|Counts?|s)?\\s*(?:[=:]\\s*\\(?\\s*(?:\\[\\s*\\]|\\{\\s*\\}|new Map\\b|new Set\\b)|\\.(?:push|splice|unshift|reduce)\\()/i",
    "near": [
     {
-     "re": "/[<>]=?\\s*(?:[\\w$]+\\.)*(?:capacity|cap|max\\w*|slots?|limit)\\w*\\b(?!\\s*\\()/i",
-     "lines": 3,
+     "re": "/[<>]=?\\s*(?:[\\w$]+\\.)*[\\w$]*(?:capacity|cap|max|slots?|limit)\\w*\\b(?!\\s*\\()|\\b(?:sell|price|gold|coins?|shop)\\w*/i",
+     "lines": 6,
      "on": "code"
     }
    ],
@@ -4079,8 +4091,10 @@ export const metadata = {
   },
   "keys": {
    "kind": "keys",
+   "docRef": "recipes/58-input.md §1",
    "seen": "a raw keydown / keyup listener",
-   "use": "engine.input.define('jump', { label, keys }) in a module, the game binds keys with engine.input.bind (rebinding, contexts, gamepad); read engine.input.pressed(name) (recipe 58)",
+   "use": "engine.input.define('jump', { label, keys }) in a module, the game binds keys with engine.input.bind (rebinding, contexts, gamepad); read engine.input.pressed(name); a menu that must read keys while the world is frozen reads engine.input.pressedRaw(name) in a frame hook, or toggleOnKey(engine, win, action) for a window",
+   "notRaw": "/\\bcode\\s*===?\\s*['\"]F\\d+['\"]/",
    "raw": "/(?:^|[^\\w.])(?:(?:window|document|self|globalThis|canvas|document\\.body|[\\w.]*domElement)\\.)?(?:addEventListener\\s*\\(\\s*['\"]|on)key(?:down|up)\\b/",
    "yields": {
     "kind": "pause",
@@ -4105,8 +4119,9 @@ export const metadata = {
   },
   "loading": {
    "kind": "loading",
+   "docRef": "recipes/07-flow-scenes-pause.md §1b",
    "seen": "a loading screen of its own",
-   "use": "engine.loading: tracks what is loading, shows progress and has a view you can replace (recipe 07)",
+   "use": "engine.loading: tracks what is loading, shows progress and has a view you can replace",
    "quiet": "/\\bengine\\.loading\\b/",
    "code": "/\\b(createElement|innerHTML|className|classList|getElementById|querySelector|\\.id)\\b/",
    "raw": "/(?:createElement|innerHTML|className|classList|getElementById|querySelector|\\.id\\b)[^,;{}]*(?:loading|loader|load-?bar|progress-?bar)|(?:loading|loader|load-?bar|progress-?bar)[^,;{}]*(?:createElement|innerHTML|className|classList|getElementById|querySelector|\\.id\\b)/i",
@@ -4114,8 +4129,9 @@ export const metadata = {
   },
   "lock": {
    "kind": "lock",
+   "docRef": "recipes/07-flow-scenes-pause.md §2b",
    "seen": "an input lock of its own",
-   "use": "engine.input.push('ride', { owner }) takes the keys and h.remove() gives them back: no key sticks, and describe().holds.input shows who holds them (recipe 07 §2b)",
+   "use": "engine.input.push('ride', { owner }) takes the keys and h.remove() gives them back: no key sticks, and describe().holds.input shows who holds them",
    "quiet": "/\\b(engine|e|eng|ctx)\\.input\\.(push|gate)\\b|\\blockInput\\b/",
    "code": "/\\b(?:let|var)\\s+(?:input|controls?|keys)(?:Locked|Disabled|Enabled|Frozen)\\s*=/i",
    "tags": false,
@@ -4130,8 +4146,9 @@ export const metadata = {
   },
   "particles": {
    "kind": "particles",
+   "docRef": "recipes/64-particles.md",
    "seen": "a particle loop of its own",
-   "use": "engine.particles: emitters on game time, one draw call, budgets (recipe 64)",
+   "use": "engine.particles: emitters on game time, one draw call, budgets",
    "quiet": "/\\b(engine|e|eng|ctx)\\.particles\\b|\\bparticles\\(\\s*[{)]/",
    "code": "/\\bfor\\s*\\([^)]*\\bof\\s+[\\w.]*(?:particles|sparks|embers)\\b|\\b(?:particles|sparks|embers)\\.(?:forEach|filter)\\s*\\(/i",
    "near": [
@@ -4144,8 +4161,9 @@ export const metadata = {
   },
   "pause": {
    "kind": "pause",
+   "docRef": "recipes/07-flow-scenes-pause.md §1",
    "seen": "a pause or Esc handler of its own",
-   "use": "settings({ freezeWorld: true }): Esc stops every system and opens the menu (recipe 63); engine.freeze(why) for a pause with no menu",
+   "use": "settings({ freezeWorld: true }): Esc stops every system and opens the menu; engine.freeze(why) for a pause with no menu",
    "quiet": "/\\bsettings\\(|\\bengine\\.(freeze|flow|settings)\\b|\\buiFocus\\(/",
    "code": "/\\b(?:let|var)\\s+(?:is|game)?paused\\s*=/i",
    "orRaw": "/(?:\\.key|\\.code)\\s*===?\\s*['\"]Escape['\"]/",
@@ -4154,32 +4172,36 @@ export const metadata = {
   },
   "physics": {
    "kind": "physics",
+   "docRef": "recipes/11-physics.md §3",
    "seen": "a physics library of its own",
-   "use": "rigid(): bodies, joints and vehicles on the engine step, shared with collision and saves (recipe 11)",
+   "use": "rigid(): bodies, joints and vehicles on the engine step, shared with collision and saves",
    "quiet": "/\\b(engine|e|eng|ctx)\\.rigid\\b|\\brigid\\(\\s*[{)]/",
    "raw": "/\\bfrom\\s+['\"](?:cannon-es|cannon|ammo\\.js|@dimforge\\/rapier3d(?:-compat)?|oimo|matter-js)['\"]/",
    "file": "packages/engine/modules/rigid/RigidBodies.js"
   },
   "picking": {
    "kind": "picking",
+   "docRef": "recipes/19-shooting-picking.md",
    "seen": "a pointer-to-object raycast of its own",
-   "use": "engine.pick(x, y), or engine.raycast / engine.rays: colliders and moving things are in the same query (recipe 19)",
+   "use": "engine.pick(x, y), or engine.raycast / engine.rays: colliders and moving things are in the same query",
    "quiet": "/\\b(engine|e|eng|ctx)\\.(rays|raycast|pick)\\b/",
    "code": "/\\.setFromCamera\\s*\\(/",
    "file": "packages/engine/core/scene/Rays.js"
   },
   "pool": {
    "kind": "pool",
+   "docRef": "recipes/65-swarm.md",
    "seen": "a pool or list of many shots of its own",
-   "use": "engine.swarm: thousands of shots, crowds and debris in one draw, with reuse and hits (recipe 65)",
+   "use": "engine.swarm: thousands of shots, crowds and debris in one draw, with reuse and hits",
    "quiet": "/\\b(engine|e|eng|ctx)\\.swarm\\b|\\bswarm\\(\\s*[{)]/",
    "code": "/(?:\\b(?:const|let|var)\\s+|\\bthis\\.)(?:pool|\\w*(?:bullet|projectile|shot|enemy|particle|mesh|object)pool|bullets|projectiles)\\s*=\\s*(?:\\[\\s*\\]|new Map\\b|new Set\\b)/i",
    "file": "packages/engine/modules/swarm/Swarm.js"
   },
   "quests": {
    "kind": "quests",
+   "docRef": "recipes/04-quests.md §1",
    "seen": "a quest list of its own",
-   "use": "engine.quests (quests()): steps, rewards, markers and the log, saved with the game (recipe 04)",
+   "use": "engine.quests (quests()): steps, rewards, markers and the log, saved with the game",
    "quiet": "/\\b(engine|e|eng|ctx)\\.quests\\b|\\bquests\\(\\s*[{)]/",
    "code": "/(?:\\b(?:const|let|var)\\s+|\\bthis\\.)(?:quests?|questLog|missions?|objectives?)(?:List|Log|Data|s)?\\s*=\\s*(?:\\[\\s*\\]|\\{\\s*\\}|new Map\\b)/i",
    "file": "packages/engine/modules/gameplay/Quests.js"
@@ -4189,29 +4211,40 @@ export const metadata = {
    "seen": "Math.random() in game code",
    "use": "engine.random (seeded: next / range / int / pick / chance; replays, tests and saves get the same numbers)",
    "code": "/\\bMath\\.random\\s*\\(/",
-   "notRaw": "/particle|spark|dust|confetti|debris|twinkle|flicker|jitter|smoke|puff|droplet|bubble|petal|glitter|wobble/i",
+   "notRaw": "/particle|spark|dust|confetti|debris|twinkle|flicker|jitter|smoke|puff|droplet|bubble|petal|glitter|wobble|getChannelData/i",
    "gameplayOnly": true,
    "file": "packages/engine/core/base/Random.js"
   },
   "reach": {
    "kind": "reach",
+   "docRef": "recipes/03-items-pickups.md",
    "seen": "a hand-made reach check for interacting",
-   "use": "engine.interactions.add(target, { ... }): prompt, range and the interact action are handled (recipe 20)",
+   "use": "engine.interactions.add(target, { ... }): prompt, range and the interact action are handled",
    "quiet": "/\\b(engine|e|eng|ctx)\\.interactions\\b/",
    "code": "/(?:\\bdistanceTo(?:Squared)?\\(|\\bMath\\.hypot\\(|\\bdist(?:ance)?\\w*)[^;]*<=?\\s*[\\w.]/",
    "near": [
     {
      "re": "/KeyE|['\"]e['\"]|press e\\b|\\.hud\\.hint\\(/i",
-     "lines": 3,
+     "lines": 6,
      "on": "raw"
     }
    ],
    "file": "packages/engine/modules/gameplay/Interactions.js"
   },
+  "ready": {
+   "kind": "ready",
+   "docRef": "recipes/14-custom-module.md §1",
+   "seen": "a ready / flush flag of your own (read from the URL or hung on window)",
+   "use": "a module isReady(e) and engine.loading.track(name, promise): start() and shot wait for them, no flag to set",
+   "quiet": "/\\bisReady\\b|\\bloading\\.track\\b/",
+   "raw": "/URLSearchParams\\([^)]*\\)\\s*\\.get\\(\\s*['\"][^'\"]*(?:flush|ready|settle|finish)[^'\"]*['\"]|\\(?window\\)?\\.\\w+\\s*=\\s*\\{[^}]*\\b(?:finish|flush|ready|settle)\\w*\\b/i",
+   "file": "packages/engine/core/engine/Loading.js"
+  },
   "save": {
    "kind": "save",
+   "docRef": "recipes/20-content-actions-save.md §4",
    "seen": "a save of its own in localStorage",
-   "use": "engine.saves: autosave(minutes), define('game', { version: 1, save, load }), and Continue on the start screen (recipe 63); versions, slots and a corrupt save are handled",
+   "use": "engine.saves: autosave(minutes), define('game', { version: 1, save, load }), and Continue on the start screen; versions, slots and a corrupt save are handled",
    "quiet": "/\\bengine\\.saves\\b/",
    "code": "/\\blocalStorage\\.setItem\\s*\\(/",
    "notRaw": "/setItem\\s*\\(\\s*(?![^,)]*(?:save|progress))[^,)]*(?:volume|mute|lang|locale|theme|music|sfx|quality|sensitiv|brightness|fullscreen|tutorial|dismiss|setting|pref|option|keybind)/i",
@@ -4219,12 +4252,21 @@ export const metadata = {
   },
   "settings": {
    "kind": "settings",
+   "docRef": "recipes/26-ui-parts.md §6",
    "seen": "a settings menu of its own",
-   "use": "engine.settings (settings()): volume, keys, quality and language in one menu that remembers itself; engine.settings.define adds your own (recipe 26)",
+   "use": "engine.settings (settings()): volume, keys, quality and language in one menu that remembers itself; engine.settings.define adds your own",
    "quiet": "/\\bsettings\\(|\\bengine\\.settings\\b/",
    "code": "/\\b(createElement|innerHTML|className|classList|getElementById|querySelector|\\.id)\\b/",
    "raw": "/(?:createElement|innerHTML|className|classList|getElementById|querySelector|\\.id\\b)[^,;{}]*(?:settings|options-?(?:menu|panel|screen)|pause-?menu)|(?:settings|options|pause)-?(?:menu|panel|screen)[^,;{}]*(?:createElement|innerHTML|className|classList|getElementById|querySelector|\\.id\\b)/i",
    "file": "packages/engine/modules/settings/Settings.js"
+  },
+  "sounds": {
+   "kind": "sounds",
+   "docRef": "recipes/31-audio.md §8",
+   "seen": "a sound written straight into audio.config.sounds",
+   "use": "createEngine({ audio: { sounds } }) or a content pack's sounds section: engine.audio reads them once, with voices and distance",
+   "code": "/\\bconfig\\??\\.sounds\\s*(?:\\[|=(?!=))|\\bObject\\.assign\\(\\s*[\\w.?]*config\\??\\.sounds\\b/",
+   "file": "packages/engine/core/audio/Audio.js"
   },
   "timers": {
    "kind": "timers",
@@ -4236,8 +4278,9 @@ export const metadata = {
   },
   "tween": {
    "kind": "tween",
+   "docRef": "recipes/13-animation.md §5",
    "seen": "a tween of its own",
-   "use": "await engine.timeline.tween(target, to, { duration, ease }): on game time, stops with pause (recipe 07)",
+   "use": "await engine.timeline.tween(target, to, { duration, ease }): on game time, stops with pause",
    "quiet": "/\\b(engine|e|eng|ctx)\\.timeline\\b/",
    "code": "/\\b(?:elapsed|time|timer|age|t)\\s*\\/\\s*(?:\\w+\\.)?(?:dur|duration)\\b/i",
    "orRaw": "/\\bfrom\\s+['\"](?:gsap|@tweenjs\\/tween\\.js|tween\\.js|animejs)['\"]/",

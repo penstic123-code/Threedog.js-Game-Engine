@@ -51,6 +51,9 @@ export function stamina(opts = {}) {
 ```
 Install it: `engine.use(openWorld({ camera: 'follow', ...}), stamina({ max: 80 }))` (dependencies must be installed first). Or put the file in `plugins/` with `export default stamina({ max: 80 })`: plugged with `engine.use` at start, switched off by `plugins.json` `off` (THREE.md, plugins folder).
 
+## A typed place for the module's handle on `engine` (`declare module`)
+What `install` returns is `engine.<name>`; type it with `declare module 'threedog' { interface Engine { stamina: { value: number } } }` in a `.d.ts` so `check` knows the property.
+
 ## Type: what the module may own
 `type` is not when it runs (that is `stage`); it says what the module may own. It is optional: a module without one is `'rules'`, game logic. An unknown name throws with the list. Pick by what it changes:
 
@@ -71,7 +74,7 @@ A module that does two kinds of thing is two definitions returned together (`wea
 ## 2. Hooks and order cheat sheet; who frees materials and textures when a module goes
 - `install(e, ctx)` returns the public object; `init(e, ctx)` (may be async) prepares at start; `ctx.track(handle)` ties a listener or timer to
   the module (next bullet but four); while `isReady(e)` returns false the loading screen waits for it
-  (the hook is called isReady; `ready` is always a boolean property in the engine); `afterLoad(e, turn)` (may be async; recipe 20 says what `turn` is for) runs after a save loaded, to rebuild
+ ; `afterLoad(e, turn)` (may be async; recipe 20 says what `turn` is for) runs after a save loaded, to rebuild
   what the loaded state needs nearby, with gameplay frozen and ops refused (`'loading'`) until it resolves. It rebuilds by writing state directly, inside
   `e.ops.allow(...)` when the write is guarded, not through `e.ops.run`.
 - `fixed(dt, e)` movement, timing, gameplay keys (`input.pressed` read in fixed is this step's snapshot, independent of frame rate); `frame(dt, e)`

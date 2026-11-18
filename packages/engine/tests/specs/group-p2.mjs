@@ -91,7 +91,7 @@ export const specs = [
         const T = threedogThreads, E = T.mk(T.createEngine, 'p2-12');
         E.use(T.all.settings());
         E.start(); E.haltLoop();
-        const rows = () => { E.settings.open(); E.step(1 / 30, { render: false }); const n = document.querySelectorAll('[data-set="shadows"]').length; E.settings.close(); return n; };
+        const rows = () => { E.ui.open('settings'); E.step(1 / 30, { render: false }); const n = document.querySelectorAll('[data-set="shadows"]').length; E.ui.close('settings'); return n; };
         const withSun = rows();
         E.lights.sun.castShadow = false;
         const without = rows();
@@ -144,7 +144,7 @@ export const specs = [
         E.use(T.all.settings());
         E.start(); E.haltLoop();
         const glow = E.post.add(T.bloom(), { name: 'glow' });
-        const rows = () => { E.settings.open(); E.step(1 / 30, { render: false }); const n = { bloom: document.querySelectorAll('[data-set="bloom"]').length, ao: document.querySelectorAll('[data-set="ao"]').length }; E.settings.close(); return n; };
+        const rows = () => { E.ui.open('settings'); E.step(1 / 30, { render: false }); const n = { bloom: document.querySelectorAll('[data-set="bloom"]').length, ao: document.querySelectorAll('[data-set="ao"]').length }; E.ui.close('settings'); return n; };
         const shown = rows();
         E.settings.set('bloom', false);
         const off = glow.enabled;
@@ -194,8 +194,8 @@ export const specs = [
         E.use(T.all.settings(), T.all.photo());
         E.start(); E.haltLoop();
         const old = E.post.add({ name: 'bloom', slot: 'hdr', fuse: { glsl: '' } });   // written before roles existed: no about
-        E.settings.open(); E.step(1 / 30, { render: false });
-        const row = document.querySelectorAll('[data-set="bloom"]').length; E.settings.close();
+        E.ui.open('settings'); E.step(1 / 30, { render: false });
+        const row = document.querySelectorAll('[data-set="bloom"]').length; E.ui.close('settings');
         E.settings.set('bloom', false); const off = old.enabled; E.settings.set('bloom', true);
         let during = null;
         E.photo._shoot({ scale: 1, shadowMapSize: 1024, bloom: false, quality: 0.5, format: 'image/jpeg' }, 1, () => { during = old.enabled; }, true);

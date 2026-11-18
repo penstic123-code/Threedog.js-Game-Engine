@@ -18,6 +18,7 @@
 //                   a full http(s):// URL is opened as given, without building (a dev server or any page that sets window.engine)
 //   --image file    no page: read this saved picture and print the picture numbers and pixel-only hints (clipped / near-black share, near-white
 //                   spots, DESIGN.md intent, --ref). What needs the live page (which light or material glares, shadows, noon / midnight) says so
+//   --point name   shoot a point of shots.json (what threedog hub shows: the same picture), then check the game's expectations for it. Not with --time, --weather, --pos, --at, --view, --cam, --play: the point sets them
 //   --time HH:MM   set the time of day (needs the sky module)
 //   --weather name  clear / cloudy / overcast / rain / storm / snow / fog (needs the weather module)
 //   --pos x,z      put the player here (on the ground; the same pos as applyState({ pos }) and ?pos=). The camera's own spot is --view
@@ -47,19 +48,25 @@
 //   --compare before.png  after the shot, print both file names, a pixel-diff number (0 = identical) and the picture differences; take `before` with --keep
 //   --save-baseline  store this shot's draw calls, triangles and module ms in the game's .threedog/perf-baseline.json (this machine's, not committed); later shots from the same
 //                  spot say in one line when they are slower (every shot also says when it is over the game's engine.budget or the resolution was lowered)
-//   --no-build     do not rebuild, use the last tool build in .threedog/tool-build/ (saves a few seconds when code did not change)
+//   --no-build     do not rebuild, use the last successful plain tool build in .threedog/tool-build/ (saves a few seconds when code did not change; fails if there is none)
 //   --gpu / --software  force the renderer (default: the hardware GPU when headless can reach it, else SwiftShader; also THREEDOG_RENDER=gpu|software)
 //   -w name         which workspace (engine, my-game…); default the one containing the current directory, then the engine package
 process.env.THREEDOG_TEST = '1';
 import { withBrowser, newGamePage, buildAndPreview } from './browser.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { cli, rel } from './paths.mjs';
 import { intOption } from './lib/cli-args.mjs';
 import { sceneCounts } from './wait-engine.mjs';
 import { openShotPage } from './lib/shot-page.mjs';
 import { camPose, shotName, shotFile, viewSize, wrongServer } from './lib/shot-name.mjs';
 import { formatPicture, pagePicture, imagePicture, NO_PAGE } from './picture/check.mjs';
+import { findPoint, shotQuery, joined, namedPage } from './hub/points.mjs';
+import { FILE_NAME, read as readExpect } from './expect/file.mjs';
+import { PAGE_FACTS, assemble } from './expect/facts.mjs';
+import { evaluate, lines as expectLines, hintLine } from './expect/evaluate.mjs';
+import { writeLast } from './expect/last.mjs';
+import { remind } from './lib/remind.mjs';
 import { PICTURE, TITLE_COVERS } from './threedog/pageFns.mjs';
 import { drawnBy } from './lib/page-url.mjs';
 import { loadBaseline, perfNotice } from './lib/perf-baseline.mjs';
@@ -68,11 +75,12 @@ const t0 = Date.now();
 
 // switches never take a value (so `--keep /page` keeps /page as the page); an unknown option fails naming the closest one
 let { dir, page: url, pageArg, opt } = cli(process.argv.slice(2), { page: '/', flags: ['keep', 'no-picture', 'json', 'describe-only', 'no-build', 'keep-cutscene', 'gpu', 'software', 'play', 'save-baseline', 'path-trace'],
-  values: ['time', 'weather', 'pos', 'at', 'view', 'cam', 'wait', 'load-timeout', 'size', 'compare', 'out', 'ref', 'tier', 'image', 'samples'],
+  values: ['time', 'weather', 'pos', 'at', 'view', 'cam', 'wait', 'load-timeout', 'size', 'compare', 'out', 'ref', 'tier', 'image', 'samples', 'point'],
   // an option the other switches off used to be dropped without a word (--ref under --no-picture compared nothing)
   conflicts: [['ref', 'no-picture', 'the reference is compared inside the picture check'], ['cam', 'view', 'a view and a pose both place the camera'],
+    ...['time', 'weather', 'pos', 'view', 'cam', 'at', 'play', 'wait'].map(k => [k, 'point', 'the point sets the view: edit shots.json to change it']),
     ...['ref', 'compare', 'out', 'keep', 'path-trace', 'samples'].map(k => [k, 'describe-only', 'describe-only takes no screenshot']),
-    ...['time', 'weather', 'pos', 'view', 'cam', 'wait', 'size', 'out', 'keep', 'compare', 'no-picture', 'describe-only', 'tier', 'play', 'save-baseline', 'path-trace'].map(k => [k, 'image', '--image reads a saved picture, there is no page to set up'])] });
+    ...['time', 'weather', 'pos', 'view', 'cam', 'wait', 'size', 'out', 'keep', 'compare', 'no-picture', 'describe-only', 'tier', 'play', 'save-baseline', 'path-trace', 'point'].map(k => [k, 'image', '--image reads a saved picture, there is no page to set up'])] });
 const json = !!opt.json;
 if (opt.image !== undefined) process.exit(await imageOnly(opt));
 let traceSamples = 0;
@@ -103,10 +111,20 @@ async function imageOnly(opt) {
 }
 // The device tier the page renders at (core/scene/tier.js ?threedog-tier). Default high: the headless browser reports SwiftShader or an integrated GPU,
 // which detection calls low, and the shot then showed what a game gives weak devices; --tier low checks exactly that
+// --point: the point's fields become this shot's own options, so the one query builder below (shotQuery) serves the hub and the command alike
+if (opt.point !== undefined) {
+  try {
+    if (opt.point === true) throw new Error('--point needs a name from shots.json');
+    const p = findPoint(dir, opt.point);
+    for (const k of ['time', 'weather', 'pos', 'at', 'view', 'cam', 'wait', 'play']) if (p[k] !== undefined) opt[k] = k === 'pos' || k === 'cam' ? joined(p[k]) : p[k];
+    opt.size ??= p.size;
+    if (p.page !== undefined && !pageArg) url = p.page;
+  } catch (e) { console.log('✗ ' + e.message); process.exit(1); }
+}
 const tier = opt.tier === undefined ? 'high' : String(opt.tier);
 if (!['low', 'high'].includes(tier)) { console.log(`✗ --tier ${opt.tier}: use low or high`); process.exit(1); }
 const say = json ? () => {} : (...a) => console.log(...a), result = {};   // --json: stdout is the one JSON object
-if (/^[\p{L}\p{N}_-]+$/u.test(url)) url = `/${url}.html`;   // a bare name is a page: shot styletest
+url = namedPage(url);   // a bare name is a page: shot styletest
 let W, H; try { [W, H] = viewSize(opt.size); } catch (e) { console.log('✗ ' + e.message); process.exit(1); }
 let pose = null; if (opt.cam !== undefined) { try { pose = camPose(opt.cam); } catch (e) { console.log('✗ ' + e.message); process.exit(1); } }
 const wait = opt.wait !== undefined ? +opt.wait : 1;
@@ -131,12 +149,7 @@ const browser = await launch();
 const page = await newGamePage(browser, { errors, viewport: { width: W, height: H } });
 try {
   // Time, weather, position, skipping cutscenes and advancing are all left to the engine's URL parameters (engine.applyState, see packages/engine/core/inspect/UrlState.js)
-  const q = new URLSearchParams({ 'threedog-tier': tier });
-  for (const k of ['time', 'weather', 'pos', 'at', 'view']) if (opt[k]) q.set(k, opt[k]);
-  if (pose) q.set('view', String(opt.cam));   // --cam: the pose goes the way a view name does (?view=x,y,z,tx,ty,tz[,fov]); the engine shows it and loads the world around its target
-  q.set('wait', String(wait));
-  q.set('cutscene', opt['keep-cutscene'] ? 'keep' : 'skip');
-  if (opt.play) q.set('play', '');
+  const q = shotQuery({ ...opt, wait }, { tier, keepCutscene: !!opt['keep-cutscene'] });
   const { tail } = await openShotPage(page, base, url, q, { errors, loadTimeout });   // goto, wait for the engine, refuse scene keys, wait for loading, settle the UI (lib/shot-page.mjs)
   const ev = (fn, arg) => page.evaluate(fn, arg);
   result.afterStart = tail;
@@ -157,7 +170,7 @@ try {
     mkdirSync(dirname(file), { recursive: true });
     const pictured = await sceneCounts(page);
     const traced = traceSamples ? result.pathTraced = await tracedShot(page, traceSamples, file) : null;
-    if (traced) delete traced.url; else await page.screenshot({ path: file });
+    if (traced) delete traced.url; else await page.screenshot({ path: file, timeout: loadTimeout * 1000 });
     const backend = drawnBy(await ev(() => engine.describe().renderer));
     Object.assign(result, { file, size: [W, H], renderer: browser.render.kind, backend, tier });
     say(`Screenshot: ${rel(file)} (${W}×${H}, ${browser.render.kind} rendering, ${tier} tier, drawn by ${backend})`);
@@ -199,10 +212,29 @@ Pixel diff: ${diff} (0 = identical, 1 = black vs white)`);
       say(`Warning: the scene changed after this picture was taken (${late.map(k => `${k} ${pictured[k]} -> ${later[k]}`).join(', ')}): it may lack what the game added late. Add it before await engine.start()`);
     }
   }
+  // the game's expectations for this view, checked on what this shot just read. No expectations: no result line, only the one-line offer to write one
+  async function checkExpectations() {
+    const { entries, problems } = readExpect(join(dir, FILE_NAME)), point = opt.point;
+    if (problems.length) { say(`✗ ${FILE_NAME}: ${problems[0]}`); result.expectationProblems = problems; }
+    const mine = entries.filter(e => !e.point || e.point === point);   // evaluate() takes the same ones
+    let facts, results = [];
+    if (mine.length) {
+      const { describe, halted } = await ev(PAGE_FACTS);
+      // the backend is what drew it and on what: a number a GPU wrote is not judged on software rendering (shot --point <p> --software writes it there)
+      facts = assemble({ describe, halted, picture: result.picture ?? null, backend: result.backend && `${result.backend} · ${result.renderer}` });
+      results = result.expectations = evaluate(entries, facts, { point });
+      for (const l of expectLines(results, { point })) say(l);
+    }
+    // the offer (remind: one line) only under a named point that keeps nothing yet: a one-off view cannot be checked again
+    const hint = problems.length || point === undefined ? null : hintLine({ point, hasAny: entries.some(e => e.point === point) });
+    if (hint) say(remind([{ file: FILE_NAME, message: 'nothing kept for this point; a number that must stay, with your reason, is checked by every shot and test', short: hint }], { where: 'shot' }).lines.join('\n'));
+    // what `threedog expect` needs later: the backend and the numbers this view gave (expect/last.mjs); only a named point with a picture has any
+    if (point !== undefined && result.picture) writeLast(dir, point, facts ?? assemble({ describe: {}, picture: result.picture, backend: `${result.backend} · ${result.renderer}` }), results);
+  }
   result.describe = text;
   // under a picture only what bears on it (the same PICTURE lines as threedog snap); --describe-only and --json keep the whole describeText
-  if (opt['describe-only']) say('\n' + text);   // its perf line is the notice
-  else { result.pictureLines = await ev(`(${PICTURE})(window.engine)`); say('\n' + result.pictureLines.join('\n')); if (perf.notice) say(perf.notice); }   // result.picture holds the numbers
+  if (opt['describe-only']) { say('\n' + text); await checkExpectations(); }   // its perf line is the notice; no picture: shot.* entries come back unmeasured
+  else { result.pictureLines = await ev(`(${PICTURE})(window.engine)`); say('\n' + result.pictureLines.join('\n')); await checkExpectations(); if (perf.notice) say(perf.notice); }   // result.picture holds the numbers
   for (const l of perf.lines) say(l);
 } catch (e) { errors.push(String(e?.message ?? e)); }   // whole message: the wait/loading failures put the reason on the following lines
 }, { exitOnFail: true, prefer: 'gpu', server: live ? null : () => buildAndPreview(dir, { build: !opt['no-build'] }) });

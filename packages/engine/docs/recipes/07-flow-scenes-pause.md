@@ -10,7 +10,7 @@ Needs the module `flow()` (not in openWorld; add it yourself: `engine.use(openWo
 - **Scene transition** `transition(fn)`: lock input -> fade to black -> fade music out -> (with `{ autosave: 'auto' }` save slot 'auto'; off by If the world does not settle within `engine.loading.timeoutMs`, it rejects with `module-not-ready` and gives the screen and input back. Autosave waits for the end of a transition.
   default) -> run fn -> wait until every module is ready -> fade in -> unlock. Repeated calls queue up automatically.
 
-## 1. Pause / title / ending (in main.js)
+## 1. Pause, title, game over screen (when a lamp, timer or health runs out), win screen / ending (`flow`, in main.js)
 ```js
 import { flow, toast } from 'threedog';
 const titleEl = document.getElementById('title'), startBtn = document.getElementById('start');  // elements you wrote in the page html

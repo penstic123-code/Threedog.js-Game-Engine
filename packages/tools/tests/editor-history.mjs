@@ -180,7 +180,7 @@ export async function run({ check }) {
       const plugin = /** @type {any} */ (threedogEditor());
       plugin.configResolved({ root: dir });
       let handler;
-      plugin.configureServer({ middlewares: { use: (_, fn) => { handler = fn; } } });
+      plugin.configureServer({ middlewares: { use: (_, fn) => { handler = fn; } }, environments: { client: { moduleGraph: { onFileChange() {} } } } });
       const post = body => new Promise(done => {
         const res = { setHeader() {}, end: t => done(JSON.parse(t)) };
         const req = { method: 'POST', headers: { host: 'localhost:5173', origin: 'http://localhost:5173' }, socket: { remoteAddress: '127.0.0.1' },

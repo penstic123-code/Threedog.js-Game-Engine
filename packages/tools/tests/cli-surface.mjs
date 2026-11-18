@@ -1,7 +1,7 @@
 // The CLI surface an AI meets first: page arguments, options, which workspace a bridge command talks to, the art-code scope of R1, and COMMANDS.md.
 // Why a unit test: each of these failed silently in a real session (Git Bash turned "/" into "C:/Git/", `shot --out` was ignored, `threedog catalog`
 // at the repo root said "no dev server" while a game's ran, a 21 KB art generator was "too big", `threedog hold` was missing from COMMANDS.md).
-import { readFileSync, mkdirSync, mkdtempSync, writeFileSync, rmSync, existsSync, readdirSync } from 'node:fs';
+import { appendFileSync, readFileSync, mkdirSync, mkdtempSync, writeFileSync, rmSync, existsSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
@@ -13,7 +13,7 @@ import { SCRIPTS, BRIDGE, VITE, main, helpText } from '../bin/threedog.mjs';
 import { BRIEF, atPath } from '../threedog/pageFns.mjs';
 import { errorsCommand, errorMark, errorsSince, markReload, currentErrors } from '../threedog/errorlog.mjs';
 import { oneLine, ONE_LINE_MAX } from '../lib/oneline.mjs';
-import { cutLog } from '../vite/vite-error-relay.js';
+import errorRelay, { cutLog } from '../vite/vite-error-relay.js';
 import { NODE_RANGE, nodeSupported } from '../lib/node-version.mjs';
 
 export const name = 'cli surface: MSYS page paths, unknown options, live dev server pick, R1 art files, every command in COMMANDS.md, Node version preflight';
@@ -68,6 +68,16 @@ export async function run({ check }) {
   check('[guard] errors.log cut: nothing old reads as new to verify', errorsSince(elog, before).length === 0);
   wlog(cut + blk('12:03:00', 'after the cut'));
   check('[guard] errors.log cut: a new error after it is seen by verify', errorsSince(elog, before).map(r => r.id).join() === '24');
+  // [guard] a hot update (the relay's own hook) marks the log like a reload: the error before it is no longer current, errors latest still shows it
+  const relay = errorRelay();
+  relay.configureServer({ config: { root: elog, logger: {} }, middlewares: { use() {} } });
+  appendFileSync(join(elog, '.threedog/errors.log'), blk('12:05:00', 'before the hot update'));
+  const wasCurrent = currentErrors(elog).length;
+  relay.handleHotUpdate();
+  appendFileSync(join(elog, '.threedog/errors.log'), blk('12:05:09', 'after the hot update'));
+  check('[guard] errors: a hot update drops older errors from the current ones; errors latest still lists them',
+    wasCurrent === 1 && currentErrors(elog).map(r => r.message).join() === 'after the hot update' && /before the hot update/.test(errorsCommand(elog, ['latest', '2'], {}).text),
+    JSON.stringify(currentErrors(elog).map(r => r.message)));
   rmSync(elog, { recursive: true, force: true });
   }
   check('errors.log: an error about WebGPU and any other warning stay apart', mergeKey({ type: 'error', msg: 'WebGPU unavailable' }, '') !== k1 && mergeKey(warn('other'), '') !== k1);
@@ -228,8 +238,8 @@ export async function run({ check }) {
   const ps = spawnSync(process.execPath, [join(TOOLS, 'bin/threedog.mjs'), 'perf', '--size', '1280'], { encoding: 'utf8', cwd: ROOT });
   check('perf --size: a bad value fails at once with the WxH form', ps.status === 1 && /--size 1280: give WxH/.test(ps.stdout + ps.stderr), (ps.stdout + ps.stderr).slice(0, 200));
   check('doctor reports the Node version through the same check', /nodeProblem\(\)/.test(readFileSync(join(TOOLS, 'doctor.mjs'), 'utf8')));
-  // [guard] real-webgpu built into dist/ while buildAndPreview served .threedog/tool-build: the pages it opened never had its rewrites
-  check('[guard] real-webgpu builds into the folder buildAndPreview serves', /build: TOOL_BUILD/.test(readFileSync(join(TOOLS, 'real-webgpu.mjs'), 'utf8')));
+  // [guard] plain and real-webgpu builds never mix: a build with the rewrites is its own kind, so a plain --no-build cannot pick it up; --webgl has no rewrites, so it is the plain build (tests/tool-build.mjs runs it)
+  check('[guard] real-webgpu builds through buildAndPreview as its own kind', /kind: flag\('webgl'\) \? 'plain' : 'real-webgpu', plugins: flag\('webgl'\) \? \[\] : \[rewrites\]/.test(readFileSync(join(TOOLS, 'real-webgpu.mjs'), 'utf8')));
   // [guard] a mistyped option on a bridge command used to run it the default way (`play --stopp` started a server, `verify --freeze-relod x` ran without the freeze)
   const { execute } = await import('../threedog/dispatch.mjs'), { options } = await import('../threedog/commands.mjs');
   const sdir = mkdtempSync(join(tmpdir(), 'td-strict-'));
@@ -246,6 +256,8 @@ export async function run({ check }) {
     // commands.mjs run() parses the rest through its OPTIONS table: one unknown flag per group, then the real flags and positionals
     const bad = (cmd, args) => { try { options(cmd, args); return false; } catch (e) { return /unknown option/.test(e.message); } };
     for (const [cmd, flag] of [['describe', '--ful'], ['press', '--fro'], ['snap-describe', '--onlyy'], ['catalog', '--fnd'], ['scene', '--hiden'], ['state', '--x']]) check(`${cmd} ${flag}: unknown option fails`, bad(cmd, [flag]));
+    const stateMsg = (() => { try { options('state', ['--time', '18:30']); } catch (e) { return e.message; } return ''; })();
+    check('state --time: the error names the working form (key=value) and the option', /unknown option --time/.test(stateMsg) && /state takes key=value, e.g. threedog state time=18:30 weather=rain/.test(stateMsg), stateMsg);
     const o = options('describe', ['player.x', '--full', '--max', '99']);
     check('describe keeps its positional path and real options', o.rest[0] === 'player.x' && o.opt.full === true && o.opt.max === 99);
     check('press / pick / explain op keep their positionals and options', options('press', ['interact', '--for', '2']).opt.for === '2'

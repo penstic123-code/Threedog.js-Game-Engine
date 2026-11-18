@@ -1,16 +1,13 @@
 // The one JSON result shape of tool commands (`threedog check --json`, `threedog test --json`):
-//   { ok, summary, items: [{ code, level, file, line, message, fix, short }] }
+//   { ok, summary, items: [{ code, level, kind, file, line, message, fix, short }] }
 // Item fields are present only when known (no null, no empty string). level is 'error' or 'warn'; short is the one-line form of fix. stdout carries only this JSON (one line);
 // everything the command would print goes to stderr, and the exit code stays what the plain command gives.
 import { writeSync } from 'node:fs';
 
-/** Bypass hints shown by default, the same number in `check` and the MCP tool: a hint nobody sees changes nothing, and fifty read as noise */
-export const HINTS_SHOWN = 5;
-
 /** One item; unknown fields (undefined, null, '', 0) are left out */
-export const item = ({ code, level = 'error', file, line, message, fix, short }) => {
+export const item = ({ code, level = 'error', kind, file, line, message, fix, short }) => {
   const o = {};
-  for (const [k, v] of Object.entries({ code, level, file, line, message: String(message ?? ''), fix, short })) if (v !== undefined && v !== null && v !== '' && v !== 0) o[k] = v;
+  for (const [k, v] of Object.entries({ code, level, kind, file, line, message: String(message ?? ''), fix, short })) if (v !== undefined && v !== null && v !== '' && v !== 0) o[k] = v;
   return o;
 };
 

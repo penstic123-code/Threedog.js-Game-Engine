@@ -68,7 +68,7 @@ export function inspectPerf(e, { top = 5 } = {}) {
   const unit = { textureMB: ' MB', cpuMs: ' ms', compileMs: ' ms (worst stall)', lights: ' point + spot' };
   const text = [
     measured ? `frame: ${values.drawCalls} draw calls (incl. shadow + post passes), ${fmtN(values.triangles)} triangles, ${values.programs == null ? 'programs not counted (WebGPU)' : values.programs + ' programs'}, ~${mb(texBytes)} textures `
-      + `(${mats.textures}), ${e.halted ? 'JS ms and fps not measured (the loop is halted, only real-time running times them)' : `JS ${values.cpuMs ?? '-'} ms (median of ${fm?.n ?? 0} frames; last frame fixed ${r1(p.fixed ?? 0)} / frame ${r1(p.frame ?? 0)} / render ${r1(p.render ?? 0)}), fps ${Math.round(e.fps ?? 0)}`}`
+      + `(${mats.textures}), ${e.halted ? 'JS ms and fps not measured (the loop is halted, only real-time running times them; the draw counts are those of the last frame drawn, engine.step(1 / 60) draws a new one)' : `JS ${values.cpuMs ?? '-'} ms (median of ${fm?.n ?? 0} frames; last frame fixed ${r1(p.fixed ?? 0)} / frame ${r1(p.frame ?? 0)} / render ${r1(p.render ?? 0)}), fps ${Math.round(e.fps ?? 0)}`}`
       : `nothing measured yet: no draw has been counted, so draw calls, triangles, JS ms and compile stalls have no value. Draw a frame first (engine.step(1 / 60), or threedog step 1 / snap --play), then ask again. ~${mb(texBytes)} textures (${mats.textures})`,
     firstFrameLine(e.startup),
     values.gpuMemoryMB == null ? '' : `GPU memory ~${values.gpuMemoryMB} MB (${GPU_MEMORY})`,

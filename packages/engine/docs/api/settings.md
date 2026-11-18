@@ -20,12 +20,10 @@ Settings menu (settings() module)
 - `settings.rebind(action: string, code: string)` — Change the first key of an action to code
 - `settings.actionList() → any[]` — (experimental) Key list (for the UI)
 - `settings.save()` — Save to the browser
-- Also: `settings.open()`, `settings.close()`, `settings.toggle(on?: boolean)`
 - Properties:
   - `values: Record<string, any>` All current setting values, read only (set() changes one). pixelRatio is the renderer's real ratio
   - `presets: Record<string, QualityPreset>` Graphics presets
   - `sections: Map<string, any>` (experimental) Tabs
-  - `isOpen: boolean` Whether the menu is open
 
 ## Data structures
 - **SettingsSection** One settings tab

@@ -171,8 +171,10 @@ export async function answer(dir, q, { full = false } = {}) {
   if (!hits.length && !modules.length && !extra.length) return { ok: true, text: [`No match for "${q}". ${startHere()}`, ...(foreign ? [] : domains())].join('\n'), data: { query: q, recommended: null, routes: [] } };
   const tail = [...modules, ...extra];
   if (hits.weak || !hits.length && !modules.length) {   // nothing to stand behind: the closest hits, said to be that
-    const weak = (foreign ? startHere() + '\n' : '') + (hits.weak ? `No good match for "${q}": the closest hits below cover less than a third of it. ${tryNext(hits)}\n\n` : '');
-    return { ok: true, text: weak + [...hits.map(format), ...tail.map((l, i) => `${hits.length + i + 1}. ${l}`), ...(hits.weak ? domains() : [])].join('\n'), data: { query: q, weak: !!hits.weak, recommended: null, routes: [...hits.map(h => h.line), ...tail] } };
+    // not sure: the closest three, one line each (no section text, no paragraph under them): a long list of half-matches reads like an answer
+    const lines = hits.weak ? [...hits.slice(0, 3).map((h, i) => `${i + 1}. ${h.line}${h.ref && !h.line.includes(h.ref.split(/[# §]/)[0]) ? ` → ${h.ref}` : ''}`), ...tail.slice(0, Math.max(0, 3 - hits.length)).map((l, i) => `${hits.length + i + 1}. ${l}`)] : [...hits.map(format), ...tail.map((l, i) => `${hits.length + i + 1}. ${l}`)];
+    const weak = (foreign ? startHere() + '\n' : '') + (hits.weak ? `No good match for "${q}": the closest hits below cover under half of it. ${tryNext(hits)}\n\n` : '');
+    return { ok: true, text: weak + [...lines, ...(hits.weak ? domains() : [])].join('\n'), data: { query: q, weak: !!hits.weak, recommended: null, routes: [...hits.map(h => h.line), ...tail] } };
   }
   // a game that runs needs the lines to add, not a whole new file; the first three hits only, further down it is a different task
   const project = projectFacts(dir), route = firstRoute(hits, !!project) ?? { line: modules[0], at: '', para: '', blocks: [] };

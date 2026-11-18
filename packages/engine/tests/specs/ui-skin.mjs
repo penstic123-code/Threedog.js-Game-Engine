@@ -37,8 +37,8 @@ export const specs = [
         engine.dialogue.start('npc'); engine.step(0.1);
         const dlg = css('.threedog-dlg');
         engine.dialogue.end(); engine.step(0.1);
-        engine.settings.open(); engine.step(0.1);
-        const menu = css('.threedog-win'), menuButton = css('.threedog-win .threedog-btn'); engine.settings.close();
+        engine.ui.open('settings'); engine.step(0.1);
+        const menu = css('.threedog-win'), menuButton = css('.threedog-win .threedog-btn'); engine.ui.close('settings');
         return { skin: window.skin, title, ...parts, dlg, menu, menuButton };
       });
       const { skin: s, title, toast, prompt, counter, hudText, fill, dlg, menu, menuButton } = look;

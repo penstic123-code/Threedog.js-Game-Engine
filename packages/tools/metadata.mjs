@@ -11,6 +11,7 @@ import { pathToFileURL } from 'node:url';
 import { ts, parse, visit, walk, abs, P } from './rules/_lib.mjs';
 import { withDomStub } from './content-check/dom-stub.mjs';
 import { parseOptions } from './lib/cli-args.mjs';
+import { badDocRef } from './lib/doc-ref-check.mjs';
 
 const CHECK = !!parseOptions(process.argv.slice(2), { flags: ['check'] }).opt.check;
 const OUT = abs(P.METADATA_REL);
@@ -117,10 +118,18 @@ async function hintsOf(problems) {
     for (const h of said) {
       if (out[h.kind]) problems.push(`${file}: hint kind ${h.kind} is declared twice`);
       if (!h.kind || !h.seen || !h.use || !(h.code || h.raw)) problems.push(`${file}: hint ${h.kind} needs kind, seen, use and code or raw`);
+      if (/\(recipes? \d/.test(h.use)) problems.push(`${file}: hint ${h.kind} points at a recipe in free text; use the docRef field`);
+      if (h.docRef) { const bad = badDocRef(abs(P.DOCS_REL), h.docRef); if (bad) problems.push(`${file}: hint ${h.kind} docRef "${h.docRef}" ${bad}`); }
       out[h.kind] = hintData(h, file);
     }
   }
   return out;
+}
+
+/** Every pointer in an error code's docs must exist: a reworded heading would otherwise leave the code's Read: line pointing nowhere */
+async function errorDocsProblems(problems) {
+  const { ERROR_CODES } = await load('packages/engine/core/base/errorCodes.js');
+  for (const [id, v] of Object.entries(ERROR_CODES)) for (const d of v.docs ?? []) { const bad = badDocRef(abs(P.DOCS_REL), d); if (bad) problems.push(`error code ${id}: docs "${d}" ${bad}`); }
 }
 
 /** Save parts a module registers: its own file and the files it imports, by the literal name (the engine's own parts all name theirs). Why from the source: a part registers at install, and metadata never installs */
@@ -178,6 +187,7 @@ async function build() {
   }
   const fields = Object.fromEntries(Object.entries(PLACEMENT_FIELDS).map(([shape, t]) => [shape, schemaInfo(parseSchema(`fields ${shape}`, t))]));
   for (const [name, d] of Object.entries(docs)) if (!d) problems.push(`section ${name} of module ${sections[name].owner} has no desc`);
+  await errorDocsProblems(problems);
   return { problems, docs: sorted(docs), effects: sorted(effects), data: { modules: sorted(modules), members: sorted(membersOf(modules)), sections: sorted(sections), contracts: sorted(contracts), actions: actionsOf(modules), fields, skipKinds: SKIP_KINDS, hints: sorted(await hintsOf(problems)) } };
 }
 const sorted = o => Object.fromEntries(Object.entries(o).sort(([a], [b]) => a.localeCompare(b, 'en')));

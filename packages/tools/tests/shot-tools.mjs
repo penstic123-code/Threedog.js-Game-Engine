@@ -6,8 +6,10 @@ import { parseResult } from '../lib/result.mjs';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { launchBrowser, newGamePage, orphanPids } from '../browser.mjs';
+import { launchBrowser, newGamePage } from '../browser.mjs';
+import { orphanPids } from '../lib/reap.mjs';
 import { waitEngine, waitLoaded } from '../wait-engine.mjs';
+import { openShotPage } from '../lib/shot-page.mjs';
 import { camPose, shotName, shotFile, viewSize, wrongServer } from '../lib/shot-name.mjs';
 import { pictureArgs, paletteText } from '../picture.mjs';
 
@@ -38,8 +40,10 @@ export async function run({ check }) {
     '1 9 /pw/chrome-linux/headless_shell --no-sandbox', '2 1 /pw/chrome-linux/headless_shell --type=renderer', '3 77 /pw/chrome-linux/headless_shell --type=renderer', '4 8 /pw/chrome-linux/headless_shell',
     `5 77 ${win} --type=gpu-process`, '6 7 C:\\pw\\chrome-headless-shell.exe --no-sandbox', `  8 6 ${win} --type=renderer`,
     '10 77 node watch.mjs /pw/headless_shell --type=renderer', '11 77 "C:\\Program Files\\node.exe" C:\\pw\\chrome-headless-shell.exe --type=renderer', '12 77 /pw/headless_shell_notes/grep --type=x',
+    '9 0 node.exe', '7 0 node.exe',   // the tools that own browsers 1 and 6 are alive
+    '20 55 /pw/chrome-linux/headless_shell --no-sandbox', '21 20 /pw/chrome-linux/headless_shell --type=renderer', '22 21 /pw/chrome-linux/headless_shell --type=utility',   // tool 55 was killed
   ].join('\r\n') + '\r\n';
-  check('orphan sweep: only a child without its browser, by the program and not its arguments', orphanPids(shells).join() === '3,5', orphanPids(shells).join());
+  check('orphan sweep: a child without its browser and a browser without its tool (with its tree), by the program and not its arguments; live owners are left alone', orphanPids(shells).join() === '3,5,20,21,22', orphanPids(shells).join());
   // ── D3: shot file names ──
   check('[guard] two pages named in Chinese keep two shot names', shotName('/宝塔.html', {}, 1) !== shotName('/城门.html', {}, 1));
   const names = [shotName('/?grain=0&view=ref', {}, 3), shotName('/', {}, 1), shotName('/styletest.html', { time: '18:30', view: 'room' }, 1), shotName('/-x.html', {}, 1)];
@@ -50,13 +54,13 @@ export async function run({ check }) {
   check('[guard] --size: WxH (x or X), default 960x540; anything else fails naming the form', sz(undefined) === '960x540' && sz('1280X720') === '1280x720'
     && ['1280', 'axb', '0x10', '10x-5'].every(s => /--size .* WxH/.test(sz(s))), ['1280', 'axb'].map(sz).join(' | '));
   // round-2 demo: the headless page was detected low tier, so ao / bloom silently dropped out of every shot. The tool pages name their tier;
-  // this guards the one path (engine reads ?threedog-tier only when headless, before it builds the renderer; shot, gallery and capture pass it)
+  // this guards the one path (engine reads ?threedog-tier only when headless, before it builds the renderer; shot goes through shotQuery in hub/points.mjs, gallery and capture pass it)
   const { forcedTier } = await import(pathToFileURL(join(ENGINE, 'core/scene/tier.js')).href);
   const src = f => readFileSync(join(TOOLS, f), 'utf8');
   check('tier: ?threedog-tier=high|low is read, anything else ignored; Engine takes it only headless; shot / gallery / capture pass it',
     forcedTier('?threedog-headless&threedog-tier=high') === 'high' && forcedTier('?threedog-tier=low') === 'low' && forcedTier('?threedog-tier=ultra') === null && forcedTier('') === null
     && /\(headless && forcedTier\(\)\) \|\| \(owned \? tierBeforeRenderer\(\) : null\);[^]*this\._deviceTier = tierFirst \|\| detectTier\(r\)/.test(readFileSync(join(ENGINE, 'core/engine/Engine.js'), 'utf8'))
-    && /'threedog-tier': tier/.test(src('shot.mjs')) && /'threedog-tier': 'high'/.test(src('gallery.mjs')) && /'threedog-tier': 'high'/.test(src('capture.mjs')));
+    && /'threedog-tier': tier/.test(src('hub/points.mjs')) && /shotQuery\(/.test(src('shot.mjs')) && /'threedog-tier': 'high'/.test(src('gallery.mjs')) && /'threedog-tier': 'high'/.test(src('capture.mjs')));
   // content check's browser stand-in answered window.__THREE__ with a truthy stand-in: "Multiple instances of Three.js" on every check
   const { withDomStub } = await import('../content-check/dom-stub.mjs');
   check('content check DOM stand-in: "__x__" probe flags read unset (no false "Multiple instances of Three.js")',
@@ -191,6 +195,31 @@ export async function run({ check }) {
       loading: { view: () => ({ done: false, waiting: 'waiting for module terrain', counts: { pending: 1 }, pending: [{ kind: 'module', name: 'terrain' }] }) } };</script>`);
     check('waitLoaded: never done → fails naming what is pending ("waiting for module terrain: 89 chunks queued")',
       await throwsWith(() => waitLoaded(page, { timeout: 300 }), /no screenshot taken: waiting for module terrain: 89 chunks queued/));
+    // [guard] one deadline for opening the page: stateApplied arrives 2 s late, --load-timeout 1 must fail and name the option (a fixed 60 s wait let it pass)
+    const late = await newGamePage(browser);
+    await late.route('http://threedog.test/late', r => r.fulfill({ contentType: 'text/html', body: `<script>window.engine = { stateApplied: false, ready: false };
+      setTimeout(() => { engine.stateApplied = true; }, 2000);</script>` }));
+    check('[guard] openShotPage: a page slower than --load-timeout fails and names --load-timeout',
+      await throwsWith(() => openShotPage(late, 'http://threedog.test', '/late', new URLSearchParams(), { errors: [], loadTimeout: 1 }), /--load-timeout/));
+    await late.close();
+    // [guard] --cam / --view: a game camera script that rewrites the camera every frame means the picture is not the requested view, so the shot fails
+    // (the page is a stand-in for the engine's views-camera ownership: a write by the game after the view was set makes describe().owned say "yielded")
+    const cam = await newGamePage(browser);
+    await cam.route(/threedog\.test\/cam/, r => r.fulfill({ contentType: 'text/html', body: `<script>
+      const hooks = [], camera = { position: { x: 0 } }; let yielded = false, set = 0;
+      window.engine = { stateApplied: true, ready: true, stateRefused: [], camera, ui: { settled: async () => {} }, loading: { view: () => ({ done: true }) },
+        scene: { traverse() {} }, onFrame: f => hooks.push(f),
+        step() { hooks.forEach(f => f()); if (camera.position.x !== set) yielded = true; },
+        describe: () => ({ owned: { 'views-camera': { writer: yielded ? 'three (engine yielded)' : 'engine' } } }) };
+      if (location.search.includes('fight')) engine.onFrame(() => { camera.position.x = Math.random() + 1; });
+    </script>` }));
+    const withView = new URLSearchParams({ view: 'a' });
+    check('[guard] openShotPage: a view whose camera the game code rewrites every frame fails and names engine.cameraOverride',
+      await throwsWith(() => openShotPage(cam, 'http://threedog.test', '/cam?fight', withView, { errors: [], loadTimeout: 20 }), /cameraOverride/));
+    let held = true;
+    try { await openShotPage(cam, 'http://threedog.test', '/cam', withView, { errors: [], loadTimeout: 20 }); } catch { held = false; }
+    check('openShotPage: a view nothing moves opens normally', held);
+    await cam.close();
   } finally { await browser.close(); rmSync(tmp, { recursive: true, force: true }); }
 
   // ── shot / doctor / stress --json: stdout is one JSON object ──

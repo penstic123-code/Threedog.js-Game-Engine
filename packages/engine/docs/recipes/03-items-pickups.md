@@ -5,7 +5,7 @@
 > **Shortest:** `engine.interactions.add(mesh, { id, label })` on your own mesh, or items as data (§1).
 > **Sections:** Pick and count meshes · Items and pickups · 1 Write data recommended) · 2 In code dynamic · Single pieces durability, upgrade · Limits all optional, none · Using and dropping ops) · The inventory window UI · Chests / corpses / · 3 Verify
 
-## Pick and count: meshes you built, no bag
+## Pick and count: take or mine a mesh you built when the player is near it (`interactions.add`), no bag
 Shells on a beach, four kinds of flowers, letters to collect: things the player takes and a number goes up. `interactions()`, `hud()` and a key (`createEngine({ bindings: presets.bindings.interact })`: E) are enough:
 ```js fragment
 engine.hud.addCounter('shells', { label: 'Shells', value: 0, max: 4 });  // at setup, not on session:start
@@ -71,7 +71,7 @@ The default reach is `pickups({ radius: 2 })`; each pickup can set its own `radi
 interact key, auto pickups, a net client's press (sent to the host, which puts the item into that peer's bag) and tests all run it as `ctx.actor`.
 A give function is not saved data: code that spawns one spawns it again on load (content and setup code do); a runtime drop gives an item id.
 
-## Single pieces: durability, upgrade level, ammo in the magazine, freshness
+## Single pieces: unique items with their own data (`setData`): durability, upgrade level, affix rolls, ammo, freshness
 An item can carry its own data (a plain object). Pieces with different data never mix; stackable pieces with equal data share an entry; a `stack: 1`
 item with data is one entry per piece.
 Each entry has a **key**: the item id for plain items (`'arrow'`), `'<item>#<n>'` for pieces with data (`'sword#3'`). Every call that takes an item
@@ -91,8 +91,8 @@ I.setData(t.key, { quality: 1 }, 2);  // only 2 of that stack change: they split
 ```
 Data and keys are saved with the container. Which piece a player means is chosen by key (a click on a row of `list()`), so ops take `item` as an id or a key.
 
-## Limits (all optional, none by default)
-`inventory({ capacity, maxWeight })` for the player and `inventory.container(id, { capacity, maxWeight })` for others:
+## Limits: a backpack with a weight limit (all optional, none by default)
+`inventory({ capacity, maxWeight })` for the player (`engine.inventory`) and `inventory.container(id, { capacity, maxWeight })` for others:
 `capacity` = slots (an entry uses `ceil(count / stack)`), `maxWeight` = sum of item `weight` × count.
 
 ## Using and dropping (ops)
@@ -173,7 +173,6 @@ chest.on('remove', ({ id, count, actor }) => console.log(actor, 'took', id, coun
   `engine.world.query({ kind: 'pickup' })`.
 - `describe()`: `inventory.items` (key -> count, or `{ count, data }` for pieces with data), `inventory.slots`; items still on the ground appear in
   `nearby` with `kind: 'pickup'` and `id`.
-  Text version: `npm run shot -- / --pos x,z --describe-only` shows the pickup entries in "nearby" and an `inventory: {...}` line.
 - Simulate picking up (in tests): put the player next to the item with `engine.player.placeAt({ x, z })`, run `engine.ops.run('interaction.use')` (no
   id = the nearest interaction) after `engine.step(0.2)`, then check `engine.inventory.count(id)`. Auto pickups need only `engine.step(0.2)` with the
   player inside the radius.

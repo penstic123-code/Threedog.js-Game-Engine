@@ -3,7 +3,7 @@
 // Changes apply at once and autosave to the browser (localStorage), restored on the next launch.
 //
 //   engine.use(settings());                        // install after other modules (so it sees terrain, audio, etc.)
-//   engine.settings.open() / close() / toggle()
+//   engine.ui.open('settings') / close('settings')   // the menu is the 'settings' UI part
 //   engine.settings.set('shadows', false)          // change a setting in code (also saved)
 //   engine.settings.get('vol.music')               // → 0.5
 //   engine.settings.preset('low')                  // graphics preset: 'low' | 'medium' | 'high'
@@ -135,8 +135,10 @@ export class Settings extends SettingsView {
       id: 'settings', title: () => engine.t('settings.title'), hintAction: action,
       data: () => this._data(),
       render: (d, tools) => this._render(d, tools),
-      onCancel: () => this._cancel(),
     });
+    // The window is the 'settings' UI part: ui.open / ui.close own the input context, focus entry and ui:open / ui:close, so the window's own toggle (its close
+    // button calls it) must only route there. Guarded by isOpen: dispose closes the window after the part may be gone, and ui.close throws on an unknown name.
+    this.win.toggle = on => { if (!on && engine.ui.isOpen('settings')) engine.ui.close('settings'); };
     const baseRefresh = this.win.refresh;
     this.win.refresh = () => { baseRefresh(); this._afterRefresh(); };
     this._bindDOM(this.win.el);
@@ -144,8 +146,8 @@ export class Settings extends SettingsView {
     track(this.win);
     // The back key (Esc) has one entry point: with an empty focus stack it opens the menu; while the menu is open the window's onCancel handles it
     this.focus = uiFocus(engine);
-    track(this.focus.setRoot(() => this.open()));   // unloaded, the back key must not open a window that left the page and hold the input behind it
-    // The close button, the back key and code close() all go through the window's toggle, emitting ui:open / ui:close
+    track(this.focus.setRoot(() => engine.ui.open('settings')));   // unloaded, the back key must not open a window that left the page and hold the input behind it
+    // The close button, the back key and code all go through ui.close, emitting ui:open / ui:close
     track(engine.events.on('ui:open', id => { if (id === 'settings') this._pause(true); }));
     track(engine.events.on('ui:close', id => { if (id === 'settings') this._pause(false); }));
     track(engine.events.on('i18n:change', () => { if (this._ready) this.save(); }));
@@ -244,16 +246,20 @@ export class Settings extends SettingsView {
     return this;
   }
 
-  get isOpen() { return this.win.open; }
   /** Action name waiting for a key press, or null @type {string | null} */
   get capturing() { return this._capturing?.action ?? null; }
   set capturing(action) {
     this._capturing?.hold.remove();
     this._capturing = action ? { action, hold: this.focus.push('settings-key', { cancel: () => this._cancel() }) } : null;
   }
-  open() { if (!this.win.open) this.win.toggle(true); }
-  close() { this.capturing = null; if (this.win.open) this.win.toggle(false); }
-  toggle(on = !this.win.open) { on ? this.open() : this.close(); }
+  /** @internal The 'settings' UI part: ui.open shows it, ui.close hides it and drops a pending rebind from wherever it was closed */
+  _part() {
+    return {
+      show: () => { this.win.el.hidden = false; this.win.refresh(); },
+      hide: () => { this.capturing = null; this.win.el.hidden = true; },
+      el: this.win.el,
+    };
+  }
 
   /**
    * Put one setting (or, with no key, every setting) back to its default: the value the engine or the game's define() started with, before the player's saved ones.
@@ -383,7 +389,6 @@ export class Settings extends SettingsView {
   frame() {
     const inp = this.engine.input;
     if (this.capturing) {
-      if (!this.win.open) { this.capturing = null; return; }   // closed by its close button: a focus entry left here would hold the back key
       if (this._capturing.hold.fresh) return;                  // the confirm press that opened it is not the new key
       const code = [...inp.justPressed][0];
       // The back key is routed to _cancel by the UI focus stack (cancels rebinding); nothing to do here
@@ -393,13 +398,13 @@ export class Settings extends SettingsView {
     // When the menu key and the back key are the same (default Esc) the UI focus stack handles it all; with another key: close if open, open when the focus
     // stack is empty
     if (!inp.pressedRaw(this.action) || inp.pressedRaw('cancel')) return;
-    if (this.win.open) this.close();
-    else if (this.focus.top === null) this.open();
+    if (this.engine.ui.isOpen('settings')) this.engine.ui.close('settings');
+    else if (this.focus.top === null) this.engine.ui.open('settings');
   }
   /** Back key: cancel rebinding if one is in progress, otherwise close the menu */
   _cancel() {
     if (this.capturing) { this.capturing = null; this.win.refresh(); return; }
-    this.close();
+    this.engine.ui.close('settings');
   }
   /**
    * freezeWorld: gameplay pauses while the menu is open. Pausing has one entry point: with flow installed it switches to flow's 'paused' state (back to the
@@ -433,7 +438,8 @@ export function settings(opts = {}) {
     name: 'settings', skipKind: 'none', type: 'ui', params: SETTINGS_PARAMS, options: opts, label: 'Settings', optional: ['flow', 'cameraRig'], stage: 'effects',
     install(e, ctx) {
       s = new Settings(e, opts, ctx.track);
-      ctx.track(e.ui.titleItem('settings', { label: x => x.t('title.settings'), run: () => s.open() }));   // the title screen's Settings button
+      ctx.track(e.ui.titleItem('settings', { label: x => x.t('title.settings'), run: e => e.ui.open('settings') }));   // the title screen's Settings button
+      ctx.ui.define('settings', () => s._part(), { modal: { cancel: () => s._cancel() } });
       return s;
     },
     init() { s.init(); },
@@ -441,11 +447,11 @@ export function settings(opts = {}) {
     // the tracked ui:close listener went first, so what an open menu holds is given back here
     dispose() { s.capturing = null; s._pause(false); releaseLimits(s); },
     // the values the player chose (quality preset, volumes, ...) explain a picture or a sound level; open / tab / capturing say the menu holds the input
-    describe() { return { open: s.isOpen, tab: s.current, capturing: s.capturing, values: { ...s.values } }; },
+    describe() { return { open: s.engine.ui.isOpen('settings'), tab: s.current, capturing: s.capturing, values: { ...s.values } }; },
   };
 }
 
 export const handRolled = [
-  { kind: 'pause', seen: 'a pause or Esc handler of its own', use: 'settings({ freezeWorld: true }): Esc stops every system and opens the menu (recipe 63); engine.freeze(why) for a pause with no menu', quiet: /\bsettings\(|\bengine\.(freeze|flow|settings)\b|\buiFocus\(/, code: /\b(?:let|var)\s+(?:is|game)?paused\s*=/i, orRaw: /(?:\.key|\.code)\s*===?\s*['"]Escape['"]/, tags: false },
-  { kind: 'settings', seen: 'a settings menu of its own', use: 'engine.settings (settings()): volume, keys, quality and language in one menu that remembers itself; engine.settings.define adds your own (recipe 26)', quiet: /\bsettings\(|\bengine\.settings\b/, code: /\b(createElement|innerHTML|className|classList|getElementById|querySelector|\.id)\b/, raw: /(?:createElement|innerHTML|className|classList|getElementById|querySelector|\.id\b)[^,;{}]*(?:settings|options-?(?:menu|panel|screen)|pause-?menu)|(?:settings|options|pause)-?(?:menu|panel|screen)[^,;{}]*(?:createElement|innerHTML|className|classList|getElementById|querySelector|\.id\b)/i },
+  { kind: 'pause', docRef: 'recipes/07-flow-scenes-pause.md §1', seen: 'a pause or Esc handler of its own', use: 'settings({ freezeWorld: true }): Esc stops every system and opens the menu; engine.freeze(why) for a pause with no menu', quiet: /\bsettings\(|\bengine\.(freeze|flow|settings)\b|\buiFocus\(/, code: /\b(?:let|var)\s+(?:is|game)?paused\s*=/i, orRaw: /(?:\.key|\.code)\s*===?\s*['"]Escape['"]/, tags: false },
+  { kind: 'settings', docRef: 'recipes/26-ui-parts.md §6', seen: 'a settings menu of its own', use: 'engine.settings (settings()): volume, keys, quality and language in one menu that remembers itself; engine.settings.define adds your own', quiet: /\bsettings\(|\bengine\.settings\b/, code: /\b(createElement|innerHTML|className|classList|getElementById|querySelector|\.id)\b/, raw: /(?:createElement|innerHTML|className|classList|getElementById|querySelector|\.id\b)[^,;{}]*(?:settings|options-?(?:menu|panel|screen)|pause-?menu)|(?:settings|options|pause)-?(?:menu|panel|screen)[^,;{}]*(?:createElement|innerHTML|className|classList|getElementById|querySelector|\.id\b)/i },
 ];

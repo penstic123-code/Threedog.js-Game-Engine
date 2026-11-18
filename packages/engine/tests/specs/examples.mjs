@@ -11,11 +11,11 @@ export const specs = [
       check('地形区块已加载', info.loaded >= 9, `${info.loaded} 个`);
       check('开场过场正在播放', await ev(() => engine.timeline.playing && !!engine.cameraOverride));
       await page.keyboard.press('Escape'); await frames(2);
-      check('Esc 跳过过场且不打开设置菜单', await ev(() => !engine.timeline.playing && !engine.settings.isOpen && !engine.cameraOverride));
+      check('Esc 跳过过场且不打开设置菜单', await ev(() => !engine.timeline.playing && !engine.ui.isOpen('settings') && !engine.cameraOverride));
       await page.keyboard.press('Escape'); await frames(2);
-      check('再按 Esc 打开设置菜单并锁住输入', await ev(() => __t.until(() => engine.settings.isOpen && !engine.input.enabled, 5000).then(() => true, () => false)));   // input contexts apply at the next fixed step
+      check('再按 Esc 打开设置菜单并锁住输入', await ev(() => __t.until(() => engine.ui.isOpen('settings') && !engine.input.enabled, 5000).then(() => true, () => false)));   // input contexts apply at the next fixed step
       await page.keyboard.press('Escape'); await frames(2);
-      check('再按 Esc 关闭菜单', await ev(() => __t.until(() => !engine.settings.isOpen && engine.input.enabled, 5000).then(() => true, () => false)));
+      check('再按 Esc 关闭菜单', await ev(() => __t.until(() => !engine.ui.isOpen('settings') && engine.input.enabled, 5000).then(() => true, () => false)));
 
       // 起跳：暂停实时循环后按空格，再用 step 推进 0.3 游戏秒（和帧率、真实时间无关）
       await ev(() => engine.haltLoop());
@@ -27,7 +27,7 @@ export const specs = [
       await page.keyboard.press('KeyI'); await frames(2);
       check('I 打开背包', await ev(() => engine.ui.isOpen('inventory')));
       await page.keyboard.press('Escape'); await frames(2);
-      check('Esc 关闭背包', await ev(() => !engine.ui.isOpen('inventory') && !engine.settings.isOpen));
+      check('Esc 关闭背包', await ev(() => !engine.ui.isOpen('inventory') && !engine.ui.isOpen('settings')));
 
       const chop = await ev(() => {
         const p = engine.player.position, t = engine.vegetation.instanceAt(p, { radius: 60, species: '松树' });
@@ -99,9 +99,9 @@ export const specs = [
     async run({ page, check, ev, frames }) {
       await page.mouse.click(640, 360); await frames(2);
       await page.keyboard.press('Escape');
-      check('Esc 打开设置', await ev(() => __t.until(() => engine.settings.isOpen, 5000).then(() => true, () => false)));
+      check('Esc 打开设置', await ev(() => __t.until(() => engine.ui.isOpen('settings'), 5000).then(() => true, () => false)));
       await ev(() => { engine.settings.rebind('interact', 'KeyF'); engine.settings.set('vol.music', 0.25); });   // settings save to localStorage at once
-      await page.keyboard.press('Escape'); await ev(() => __t.until(() => !engine.settings.isOpen, 5000).catch(() => {}));
+      await page.keyboard.press('Escape'); await ev(() => __t.until(() => !engine.ui.isOpen('settings'), 5000).catch(() => {}));
       await page.reload(); await page.waitForFunction(() => window.engine?.stateApplied, null, { timeout: 60000 });
       check('改键在刷新后保留', await ev(() => engine.input.keysOf('interact').includes('KeyF')));
       check('音量在刷新后保留', await ev(() => Math.abs(engine.settings.get('vol.music') - 0.25) < 0.01));
@@ -174,10 +174,10 @@ export const specs = [
         out.options = html.options || '';
         out.graphicsHasLabel = (html.graphics || '').includes(engine.t('settings.shadows')) && (html.graphics || '').includes('data-set="tRowLabel"');
         out.ownOnce = drawn('tRowOwn'); out.noEnds = drawn('tRowNoEnds');
-        S.current = 'options'; S.open(); S.win.refresh();
+        S.current = 'options'; engine.ui.open('settings'); S.win.refresh();
         S.win.el.querySelector('[data-set="tRowSwitch"]')?.click(); out.after = S.get('tRowSwitch'); out.applied = applied.join();
         S.win.el.querySelector('[data-set="tRowPick"][data-value="\\"a\\""]')?.click(); out.pick = S.get('tRowPick');
-        S.close(); console.warn = warn;
+        engine.ui.close('settings'); console.warn = warn;
         return out;
       });
       check("'options' is a tab name the menu knows (sections list, addSection)", r.named === '', r.named);

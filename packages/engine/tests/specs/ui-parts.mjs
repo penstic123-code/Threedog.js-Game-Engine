@@ -58,7 +58,21 @@ export const specs = [
       check('启动后标题画面打开、冻结玩法、锁输入', r.title && r.dom && r.frozen && r.locked, JSON.stringify(r));
       check('没有存档时不显示"继续"，装了设置时有"设置"', r.items.length === 2 && !r.items.some(t => /继续|Continue/.test(t)), r.items.join(','));
       await page.keyboard.press('Escape'); await frames(2);
-      check('标题画面上按 Esc 不打开设置菜单', await ev(() => engine.ui.isOpen('title') && !engine.settings.isOpen));
+      check('标题画面上按 Esc 不打开设置菜单', await ev(() => engine.ui.isOpen('title') && !engine.ui.isOpen('settings')));
+      // [guard] the Settings button on the title opens a window ABOVE the title, ui.open/close/isOpen reach it, and the rebind wait is dropped on close
+      await page.click('.threedog-title button[data-i="1"]'); await frames(2);
+      const st = await ev(() => {
+        const r = document.querySelector('.threedog-win-settings').getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        const open = engine.ui.isOpen('settings'), onTop = !!hit?.closest('.threedog-win-settings');
+        engine.settings.capturing = 'confirm'; engine.ui.close('settings');
+        const err = (fn) => { try { fn(); return null; } catch (e) { return e.code; } };
+        return { open, onTop, closed: !engine.ui.isOpen('settings'), capturing: engine.settings.capturing, hidden: document.querySelector('.threedog-win-settings').hidden,
+          titleStill: engine.ui.isOpen('title'), closeErr: err(() => engine.ui.close('nosuch')), openErr: err(() => engine.ui.open('nosuch')), isOpenUnknown: engine.ui.isOpen('nosuch') };
+      });
+      check('[守] 标题上点"设置"：窗口在标题之上，ui.isOpen 为真', st.open && st.onTop, JSON.stringify(st));
+      check('[守] ui.close(settings) 关得掉并清掉改键状态；标题仍在', st.closed && st.hidden && st.capturing === null && st.titleStill, JSON.stringify(st));
+      check('[守] ui.open/close 不认识的名字抛 ui-misuse，ui.isOpen 返回 false', st.closeErr === 'ui-misuse' && st.openErr === 'ui-misuse' && st.isOpenUnknown === false, JSON.stringify(st));
       await page.click('.threedog-title button[data-i="0"]'); await frames(2);
       // input contexts apply at the next fixed step: wait for it instead of a fixed number of frames
       const after = await ev(() => __t.until(() => engine.input.enabled, 5000).catch(() => {}).then(() => ({ open: engine.ui.isOpen('title'), dom: !!document.querySelector('.threedog-title'), frozen: engine.stacks.get('freeze').has('ui-title'), input: engine.input.enabled })));
@@ -105,11 +119,11 @@ export const specs = [
         engine.setCamera('firstPerson');
         o.switched = { changed, kind: engine.cameraRig.kind, sens: engine.cameraRig.sensitivity, inv: engine.cameraRig.invertY, fov: engine.camera.fov };
         engine.setCamera('follow');
-        st.open(); st.current = 'game'; st.win.refresh();
+        engine.ui.open('settings'); st.current = 'game'; st.win.refresh();
         o.toTitleBtn = !!st.win.el.querySelector('[data-game="title"]');
         st.win.el.querySelector('[data-game="title"]').click();
         await new Promise(r => setTimeout(r, 0));
-        o.backToTitle = engine.ui.isOpen('title') && !st.isOpen;
+        o.backToTitle = engine.ui.isOpen('title') && !engine.ui.isOpen('settings');
         engine.ui.close('title');
         try { st.addSection('nope'); } catch (err) { o.err = err.message; }
         return o;
@@ -143,8 +157,8 @@ export const specs = [
         };
       }, DOM);
       check('没有任何引擎界面 DOM', r.dom.length === 0, r.dom.join(','));
-      // 更严：engine.uiRoot 下除了还没做成界面件的设置菜单窗口，什么都不许有（新加的界面绕开 engine.ui 也会被抓到）
-      check('engine.uiRoot 下只剩设置菜单窗口（设置菜单本身不是界面件）', r.rootKids.every(c => /threedog-win-settings/.test(c)), JSON.stringify(r.rootKids));
+      // 更严：engine.uiRoot 下除了设置菜单窗口（设置是 ui 部件 'settings'，它的窗口挂在 uiRoot 下），什么都不许有（新加的界面绕开 engine.ui 也会被抓到）
+      check('engine.uiRoot 下只剩设置菜单窗口（settings 部件的窗口）', r.rootKids.every(c => /threedog-win-settings/.test(c)), JSON.stringify(r.rootKids));
       check('关掉的标题件 open 返回 false', r.opened === false);
       check('关掉的任务日志打不开；交互提示关掉后 interaction.use 照常可用', r.logOpened === false && r.lever, JSON.stringify(r));
       check('对话关掉界面件照常走：describe 有选项，dialogue.choose 结束对话', r.dlg === 'Bye' && r.chose, JSON.stringify(r));

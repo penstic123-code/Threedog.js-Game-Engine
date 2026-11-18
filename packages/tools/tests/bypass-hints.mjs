@@ -5,11 +5,11 @@ import { join } from 'node:path';
 import { metadata } from 'threedog/metadata';
 import { scanText, activeKinds, KINDS } from '../rules/R40-bypass-hints.mjs';
 import { silent } from '../rules/R64-how-reach.mjs';
-import { kindsFirst } from '../rules/index.mjs';
 import { checkDigest } from '../threedog/mcp-extra.mjs';
-import { HINTS_SHOWN } from '../lib/result.mjs';
+import { kindsFirst, BUDGET } from '../lib/remind.mjs';
 import { ENGINE, TOOLS, isArtFile } from '../paths.mjs';
 import { walk } from '../lib/text.mjs';
+import { badDocRef } from '../lib/doc-ref-check.mjs';
 
 export const name = 'rule R40: bypass hints (positive and negative samples, switches)';
 
@@ -60,7 +60,7 @@ export async function run({ check }) {
 
   // warnings only, with the three parts of the message
   const r = scanText('setInterval(tick, 1000);\n')[0];
-  check('level is warn, message names what was seen, the system and how to switch off', r.level === 'warn' && /setInterval/.test(r.msg) && /engine\.clock/.test(r.fix) && /DESIGN\.md/.test(r.fix) && /hint-off\(timers\)/.test(r.fix));
+  check('level is warn, message names what was seen, the system and how to switch off', r.level === 'warn' && /setInterval/.test(r.msg) && /engine\.clock/.test(r.fix) && /on purpose/.test(r.fix) && !/DESIGN\.md/.test(r.fix) && /hint-off\(timers\)/.test(r.fix));
 
   // save
   check('a save written to localStorage -> save', kinds("localStorage.setItem('keeper-save-v1', JSON.stringify(state));\n") === 'save');
@@ -153,7 +153,7 @@ export async function run({ check }) {
   check('a new kind switches off like the old ones', kinds('// hint-off-file(tween)\nconst k = elapsed / duration;\n') === '' && kinds('const k = elapsed / duration;   // hint-off(tween)\n') === '' && !activeKinds({ picking: false }, undefined).has('picking'));
   check('a module with no answer is reported, an answer is enough', silent({ a: { file: 'a.js' }, b: { file: 'b.js', handRolled: 'none: no code shape' }, c: { file: 'c.js', handRolled: ['x'] } }).length === 1 && !silent(metadata.modules).length, JSON.stringify(silent(metadata.modules)).slice(0, 200));
 
-  check('a new game is told about the hints', /threedog check. hints .*hint-off/.test(readFileSync(join(TOOLS, 'templates/game/CLAUDE.md'), 'utf8')));
+  check('a new game is told about the hints', /threedog check. may print reminders .*hint-off/.test(readFileSync(join(TOOLS, 'templates/game/CLAUDE.md'), 'utf8')));
 
   // nothing false in what ships: the examples and the templates are correct engine use, so a warning there is a pattern that fires too wide
   const samples = [join(ENGINE, 'examples'), join(TOOLS, 'templates')].flatMap(d => walk(d, { unscoped: true, skip: ['tests', 'docs', 'scripts', 'node_modules', 'dist'] }));
@@ -165,8 +165,15 @@ export async function run({ check }) {
   const passed = { items: [hint(3)], summary: 'check passed: 0 errors, 1 warnings' }, digest = checkDigest(passed, 2000);
   check('MCP check keeps a hint: file, line, advice, switch', ['src/main.js:3', 'hand-made bag', 'use engine.inventory', 'hint-off(inventory)'].every(t => digest.includes(t)), digest);
   const many = checkDigest({ items: Array.from({ length: 9 }, (_, i) => hint(i + 1)), summary: 'S' }, 2000);
-  check('MCP check lists the same number as check and says how to get the rest', many.split('\n').filter(l => l.startsWith('!')).length === HINTS_SHOWN && many.includes('4 more hints: ask with hints: 9'), many);
+  check('MCP check lists the same number as check and says how to get the rest', many.split('\n').filter(l => l.startsWith('!')).length === BUDGET.check && many.includes('…4 more (ask with hints: 9)'), many);
   check('a long list of hints never cuts the summary', checkDigest({ items: Array.from({ length: 9 }, (_, i) => hint(i + 1)), summary: 'SUMMARY' }, 200, 9).endsWith('SUMMARY'));
   const order = kindsFirst([{ kind: 'timers', n: 1 }, { kind: 'timers', n: 2 }, { kind: 'inventory', n: 3 }]).map(r => r.n);
   check('one hint of each kind comes before a second of any', order.join() === '1,3,2', order.join());
+  // docRef: every hint's pointer must read back and exist (metadata.mjs reports the same), and no hint keeps a recipe number in free text
+  const docs = ENGINE + '/docs', hints = Object.values(metadata.hints);
+  check('every hint with a docRef points at a file and section that exist', hints.filter(h => h.docRef).length > 10 && hints.every(h => !h.docRef || !badDocRef(docs, h.docRef)),
+    hints.filter(h => h.docRef && badDocRef(docs, h.docRef)).map(h => h.kind + ': ' + h.docRef).join(', '));
+  check('a docRef to a missing section or file, or one that does not parse, is reported', badDocRef(docs, 'recipes/31-audio.md §99') === 'names a section that is not there'
+    && badDocRef(docs, 'recipes/99-none.md') === 'names a file that is not there' && badDocRef(docs, 'recipe 31') === 'does not parse' && badDocRef(docs, 'recipes/31-audio.md §2') === null);
+  check('no hint points at a recipe in free text', hints.every(h => !/\(recipes? \d/.test(h.use)));
 }

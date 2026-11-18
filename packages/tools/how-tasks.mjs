@@ -196,6 +196,7 @@ export const ROUTES = [
   ['save and load the game', '20-content-actions-save.md §4', { top: true }],
   ['frame budget too slow', '15-perf.md §1', { top: true }],
   ['something broke which tool tells me why', '16-dev-bridge.md §11', { top: true }],
+  ['keep a number in range', '16-dev-bridge.md §12', { top: true }],
   ['button the player presses to buy', '23-ops.md §1', { top: true }],
   ['add a mesh the save remembers', '40-scene.md §1'],
   ['webgpu or webgl renderer', '56-webgpu-tsl.md §"WebGPU or WebGL"', { top: true }],

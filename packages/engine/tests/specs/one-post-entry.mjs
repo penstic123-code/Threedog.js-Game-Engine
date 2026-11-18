@@ -82,8 +82,10 @@ export const specs = [
         out.same = p.get('gateA') === a;
         // the rollback: nothing of a wrong shape, a bad option or a failing create stays
         const n = p.list().length;
-        out.wrong = [err(() => p.add({})), err(() => p.add(a, { owner: 'x' })), err(() => p.add({ name: 'bad', create: () => { throw new Error('no'); } }))];
-        out.rolled = p.list().length === n && !p.get('bad');
+        out.wrong = [err(() => p.add({})), err(() => p.add(a, { owner: 'x' })), err(() => p.add({ name: 'bad', create: () => { throw new Error('no'); } })),
+          err(() => p.add({ name: 'badFacts', fuse: { glsl: 'color.rgb *= 0.9;' }, facts: 'x' }))];   // facts is a function: a string once made describe() throw
+        out.rolled = p.list().length === n && !p.get('bad') && !p.get('badFacts');
+        out.describes = err(() => engine.describe());
         // the settings layer of post.<name>.enabled is above the handle's game layer
         const point = engine.stacks.get('post.gateB.enabled');
         const hold = engine.mod('post.gateB.enabled', { owner: 'menu', layer: 'settings', set: false });
@@ -101,7 +103,7 @@ export const specs = [
       check('two fuse effects added with add() share one full-screen pass', r.fused.join() === 'gateA+gateB', j);
       check('the shared pass carries fxHash and uResolution; set() writes the uniform in place', r.source.includes('#define fxHash threedogHash') && r.source.includes('uniform vec2 uResolution') && Math.abs(r.uniform - 0.25) < 1e-6, j);
       check('add() and get() give the same handle', r.same, j);
-      check('a wrong shape, an unknown option and a failing create throw and add nothing', r.wrong.every(Boolean) && r.wrong[0].includes('[post-effect]') && r.wrong[1].includes('owner') && r.rolled, j);
+      check('a wrong shape, an unknown option and a failing create throw and add nothing', r.wrong.every(Boolean) && r.wrong[3].includes('[post-effect]') && r.wrong[3].includes('facts') && !r.describes && r.wrong[0].includes('[post-effect]') && r.wrong[1].includes('owner') && r.rolled, j);
       check("a settings restriction holds the effect off over the handle's enabled = true, and ending it shows the game's choice", r.held === false && r.stillHeld === false && r.released === true && r.gameEntry === 'game:game', j);
       check('own() keeps the built chain through a change, writer manual:game; own(false) rebuilds from the list', r.kept && r.writer === 'manual:game' && r.back === 1, j);
       check('remove() twice is fine and leaves the chain as it was', r.clean, j);

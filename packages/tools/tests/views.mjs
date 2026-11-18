@@ -17,6 +17,7 @@ export async function run({ check }) {
   const engine = Object.defineProperties({ camera: new THREE.PerspectiveCamera(60), focus: new THREE.Vector3() }, Object.getOwnPropertyDescriptors(holdMethods));
   engine.stacks = new Stacks(engine); defineHoldStacks(engine);
   engine.events = new Events();
+  engine.onFrame = () => ({ remove() {} });   // the owned camera pose is checked per frame (core/ops/owned.js); this test steps no frames
   engine._oFov = { check() {}, mark() {} };   // the fov owner (core/scene/view.js): a held view writes through holdFov
   const cuts = []; engine.events.on('camera:shot', c => cuts.push(c.name));
   const v = new Views(engine);

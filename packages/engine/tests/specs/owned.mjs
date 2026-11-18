@@ -140,4 +140,33 @@ export const specs = [
       check('MSAA default follows the tier detected after init (low -> off)', r.engine.msaa === (r.engine.tier !== 'low'), JSON.stringify(r.engine));
     },
   },
+  {
+    // views.show places the camera once and then holds it: a camera script that writes it every frame undid the view in silence (a shot taken from the wrong place reported success)
+    name: '[guard] views.show: a game that writes engine.camera every frame gets one owned-prop warning naming views-camera; a view left alone warns nothing',
+    url: '/tests/threads/',
+    async run({ check, ev }) {
+      const r = await ev(async () => {
+        const { mk, createEngine } = threedogThreads, out = {};
+        const E = mk(createEngine, 'views-owned');
+        E.views.define('far', { position: [200, 5, 8], target: [200, 0, 0] });
+        await E.start();
+        const warns = [], was = console.warn; console.warn = (...a) => warns.push(a.join(' '));
+        try {
+          E.views.show('far'); E.step(1 / 30); E.step(1 / 30);
+          out.quiet = warns.filter(w => w.includes('views-camera')).length;
+          out.held = E.camera.position.x;
+          E.onFrame(() => { E.camera.position.set(0, 5, 8); });   // the game's camera script, blind to engine.cameraOverride
+          for (let i = 0; i < 4; i++) E.step(1 / 30);
+          out.hits = warns.filter(w => w.includes('views-camera') && w.includes('owned-prop') && w.includes('cameraOverride'));
+          E.views.release();
+          out.dropped = !E.describe().owned?.['views-camera'];
+        } finally { console.warn = was; }
+        E.dispose();
+        return out;
+      });
+      check('a view left alone: no warning, the camera stays on the view', r.quiet === 0 && r.held === 200, JSON.stringify({ q: r.quiet, x: r.held }));
+      check('direct camera writes after views.show: one owned-prop warning naming views-camera and the cameraOverride fix', r.hits.length === 1, JSON.stringify(r.hits));
+      check('release() drops the registration', r.dropped, '');
+    },
+  },
 ];

@@ -346,4 +346,4 @@ export function timeline(opts = {}) {
   };
 }
 
-export const handRolled = [{ kind: 'tween', seen: 'a tween of its own', use: 'await engine.timeline.tween(target, to, { duration, ease }): on game time, stops with pause (recipe 07)', quiet: /\b(engine|e|eng|ctx)\.timeline\b/, code: /\b(?:elapsed|time|timer|age|t)\s*\/\s*(?:\w+\.)?(?:dur|duration)\b/i, orRaw: /\bfrom\s+['"](?:gsap|@tweenjs\/tween\.js|tween\.js|animejs)['"]/ }];
+export const handRolled = [{ kind: 'tween', docRef: 'recipes/13-animation.md §5', seen: 'a tween of its own', use: 'await engine.timeline.tween(target, to, { duration, ease }): on game time, stops with pause', quiet: /\b(engine|e|eng|ctx)\.timeline\b/, code: /\b(?:elapsed|time|timer|age|t)\s*\/\s*(?:\w+\.)?(?:dur|duration)\b/i, orRaw: /\bfrom\s+['"](?:gsap|@tweenjs\/tween\.js|tween\.js|animejs)['"]/ }];

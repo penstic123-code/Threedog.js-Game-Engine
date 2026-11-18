@@ -134,7 +134,7 @@ async function inputCase(steps) {
       if (s.t === 'key') { key('keydown', s.k); E.step(0.03 * (1 + s.hold), { describe: false }); key('keyup', s.k); }
       else if (s.t === 'click') { const el = document.elementFromPoint(s.x, s.y); el?.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: s.x, clientY: s.y })); }
       else if (s.t === 'open') { try { E.ui.open(s.what); } catch (er) { if (!(er.code || /not a modal|ui-misuse|no part/i.test(er.message))) return `${here}: ui.open threw an unexplained ${er.message}`; } }
-      else if (s.t === 'close') E.ui.close(s.what);
+      else if (s.t === 'close') { try { E.ui.close(s.what); } catch (er) { if (er.code !== 'ui-misuse' || E.ui.defs.get(s.what)?.modal) return `${here}: ui.close threw ${er.message}`; } }   // only a name that is not a full-screen part may throw
       else if (s.t === 'frames') E.step(0.05 * s.n, { describe: false });
       else if (s.t === 'dialogue') { E.dialogue.start('fz'); for (let k = 0; k < s.lines + s.choices; k++) { if (!E.dialogue.active) { E.ops.run('dialogue.choose', { index: 0 }, { source: 'test' }); break; } E.dialogue._finishTyping(); if (k >= s.lines) E.ops.run('dialogue.choose', { index: k % 3 }, { source: 'test' }); else E.dialogue._advance?.(); } }
       E.step(0.02, { describe: false });

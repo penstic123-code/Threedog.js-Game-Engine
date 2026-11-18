@@ -44,6 +44,8 @@ export function gameConfig(dir, extra = {}) {
     plugins: [errorRelay(), threedogBridge(), threedogCache(), threedogContentSrc(), threedogLive(), threedogPanel(), threedogPlugins(), threedogMap(), threedogEditor(), threedogThree()],
     optimizeDeps: { exclude: ['@threedog/tools'] },   // the dev panel imports a virtual module of threedogPanel, which the dependency pre-bundler cannot see
     define: { 'import.meta.env.THREEDOG_TEST': JSON.stringify(!!process.env.THREEDOG_TEST) },
+    // hot update only after a saved file stops changing: an editor or a tool that writes in chunks otherwise has the half-written file loaded (and its error counted)
+    server: { watch: { awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 20 } } },
     worker: { format: 'es' },
     build: { target: 'es2022', chunkSizeWarningLimit: 2000, outDir: resolve(dir, 'dist'), emptyOutDir: true, rollupOptions: { input: pagesOf(dir) } },
   }, extra));

@@ -12,7 +12,7 @@ const STRINGS = {
   en: { 'title.start': 'Start', 'title.continue': 'Continue' },
 };
 const CSS = `
-.threedog-title{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;background:var(--threedog-loading-bg);color:var(--threedog-fg);z-index:80;font-family:var(--threedog-font)}
+.threedog-title{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;background:var(--threedog-loading-bg);color:var(--threedog-fg);z-index:var(--threedog-z-title);font-family:var(--threedog-font)}
 .threedog-title-name{font-size:32px;font-weight:600;letter-spacing:.08em}
 .threedog-title-items{display:flex;flex-direction:column;gap:10px;min-width:200px}
 .threedog-title-items .threedog-btn{padding:8px 16px;font-size:16px}

@@ -28,7 +28,7 @@ A row or `threedog how` -> recipe -> `api/<module>.md`. Also: `CONVENTIONS.md`, 
 | Player actions, UI buttons (can refuse) | `engine.ops.define` | 23-ops.md §1 |
 | A value several systems change; one-holder parts | `engine.mod`, `engine.stacks`, `provides`, `wrap` | 55-mods-time-wrap.md §"The rules in full" |
 | Content: items, NPCs, places, packs; change an entry for good | `engine.content`, `threedog content set` | 20-content-actions-save.md §1b |
-| Save game, load game, autosave, story flags, counters | `engine.saves.define`, `engine.vars` | 20-content-actions-save.md §4 |
+| Save game, load game, autosave, story flags, counters | `engine.saves.define` (`summary: true`), `engine.vars` | 20-content-actions-save.md §4 |
 | Preferences outside the save; turn off my effect | `engine.settings` (`limits: 'post.x.enabled'`) | 26-ui-parts.md §6 |
 | Timers, skip time; game time: rules, AI | `engine.clock` (after, every), `engine.onFixed(dt)`, `engine.time.now(…)` | 06-clock-events.md §1 |
 | What shows: animation, camera, HUD (`engine.stepBlend`) | `engine.onFrame` | 06-clock-events.md §1 |
@@ -53,7 +53,7 @@ A row or `threedog how` -> recipe -> `api/<module>.md`. Also: `CONVENTIONS.md`, 
 | Many lights (torches); windows, signs at night | `engine.lightPool`, `uNight` | 09-materials-lights-models.md §1b |
 | Picture from a reference; judge | `threedog picture palette`, `threedog examples list` | 35-picture-from-reference.md §"The loop", 60-judge-the-picture.md |
 | Reuse effects, models of old games | `threedog lib` | 05-props-bake.md |
-| Sound, music, ambience | `engine.audio`, `engine.music`, `engine.ambience` | 31-audio.md |
+| Sound, music, ambience, bus nodes | `engine.audio`, `engine.music`, `engine.ambience` | 31-audio.md |
 
 ### Rules, state, time
 | To do | Use | Recipe |

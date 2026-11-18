@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { TOOLS, ROOT } from '../paths.mjs';
 import { PICTURE } from '../threedog/pageFns.mjs';
+import { lines as expectLines } from '../expect/evaluate.mjs';
 
 export const name = 'output budget: shot / snap print only the picture state, check prints warnings as one line per rule (--verbose lists them)';
 
@@ -23,7 +24,7 @@ export async function run({ check }) {
     && pic.some(l => /engine error onFixed/.test(l)) && /threedog describe/.test(pic.at(-1)) && !pic.some(l => /thing|Quest|Nearby/.test(l)), pic.join(' | '));
   const src = f => readFileSync(join(TOOLS, f), 'utf8');
   check('[guard] shot prints PICTURE under a picture (describeText only with --describe-only, kept in --json); snap uses the same page function',
-    /\(\$\{PICTURE\}\)\(window\.engine\)/.test(src('shot.mjs')) && /if \(opt\['describe-only'\]\) say\('\\n' \+ text\)/.test(src('shot.mjs'))
+    /\(\$\{PICTURE\}\)\(window\.engine\)/.test(src('shot.mjs')) && /if \(opt\['describe-only'\]\) \{ say\('\\n' \+ text\)/.test(src('shot.mjs'))
     && /ev\(driver, 'picture'/.test(src('threedog/commands.mjs')) && !/ev\(driver, 'brief'[^)]*\), 2\)/.test(src('threedog/commands.mjs')));
 
   // check: one rule with many warnings (R1 file size), default vs --verbose
@@ -31,6 +32,8 @@ export async function run({ check }) {
   const plain = cli('--rule', 'R1'), verbose = cli('--rule', 'R1', '--verbose');
   const warnLines = s => s.split('\n').filter(l => l.startsWith('! ')).length;
   const n = +(/R1 [^\n]*: (\d+) warnings?/.exec(plain.stdout)?.[1] ?? 0);
+  const holds = [1, 2, 3, 4].map(i => ({ entry: { value: 'v' + i }, status: 'holds', actual: i }));
+  check('[guard] expectations: all holding is one line under a shot', expectLines(holds, { point: 'p' }).length === 1);
   check('[guard] check: warnings are one count line per rule and a "details: --verbose" line; no warning listed; exit code unchanged',
     n > 0 && warnLines(plain.stdout) === 0 && /^details: --verbose/m.test(plain.stdout) && plain.status === verbose.status, plain.stdout.slice(-400));
   check('check --verbose lists the warnings as before', warnLines(verbose.stdout) > 0, verbose.stdout.slice(0, 300));

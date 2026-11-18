@@ -199,6 +199,12 @@ export async function run({ check }) {
   const spread = search(fake, 'alpha bravo charlie delta echo foxtrot golf'), thin = search(fake, 'alpha echo foxtrot golf hotel india');
   rmSync(fake, { recursive: true });
   check('[guard] weak reads the whole list: words spread over rows are a match, one word of six is not', spread.weak === false && thin.weak === true, JSON.stringify({ spread: spread.weak, thin: thin.weak }));
+  // [guard] a command-line question reaches the command's row in COMMANDS.md (its two tables are entries), not a recipe title that shares a word
+  const cmdQs = ['list art resources of one game on one page', 'count draw calls of one steady frame headless'];
+  check('[guard] how: a command-line question has the COMMANDS.md row as its first hit', cmdQs.every(q => /^COMMANDS\.md · /.test(search(docs, q)[0]?.line ?? '')), cmdQs.map(q => search(docs, q)[0]?.line.slice(0, 60)).join(' | '));
+  // [guard] a weak answer is the closest three, one line each: no section text or paragraph under them (a long list of half-matches reads like an answer)
+  const weakText = (await answer(game, 'camera boss qqzz')).text, listedLines = weakText.split('\n').filter(l => /^\d\. /.test(l));
+  check('[guard] how: "no good match" lists at most three closest hits, one line each', /^No good match/.test(weakText) && listedLines.length >= 1 && listedLines.length <= 3 && !/^\s+read: /m.test(weakText) && weakText.length < 3000, weakText.slice(0, 600));
   // [guard] a recipe's card and a section's first bullet do not rank: they name other sections and one item, not this section
   const fake2 = mkdtempSync(join(tmpdir(), 'how-rank-'));
   mkdirSync(join(fake2, 'recipes'));

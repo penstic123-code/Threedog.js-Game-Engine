@@ -10,7 +10,7 @@ const STRINGS = {
   actions: 'Can do (engine.ops): {list}',
   error: '[Error, gameplay frozen] {where}: {message}', errorAt: ' ({at})',
   errorHint: ' | Code: {code} | Fix: {fix} Read: {docs}', disabled: 'Disabled picture / ui modules (they threw): {list}', blockedModules: 'Blocked modules: {list}',
-  halted: ', halted', headless: ', headless', notReady: ', still loading',
+  halted: ', halted', frozenBy: ', frozen by {who}', headless: ', headless', notReady: ', still loading',
   waiting: 'Loading: {waiting} ({pending} pending, {done}/{total} done)', loadFailed: 'Load failed{blocked}: {list}', blocked: ' (start blocked)',
   loadWarn: 'Loaded with missing references: {list}',
   audio: 'Audio: {list}',
@@ -94,7 +94,8 @@ function atPath(d, path) {
 export function describeText(d, { full = false, path, maxLines = 30, game = [] } = {}) {
   if (path) return atPath(d, path);
   const L = [], t = d.time;
-  const flags = (t.halted ? STRINGS.halted : '') + (t.headless ? STRINGS.headless : '') + (d.loading.done ? '' : STRINGS.notReady);
+  // frozenBy comes from the describe object (not engine.runState): the freeze owners only; who halted the page is not listed, the bridge halts it always
+  const flags = (t.halted ? STRINGS.halted : '') + (t.frozenBy?.length ? fmt(STRINGS.frozenBy, { who: t.frozenBy.join(', ') }) : '') + (t.headless ? STRINGS.headless : '') + (d.loading.done ? '' : STRINGS.notReady);
   if (d.error) L.push(fmt(STRINGS.error, d.error) + (d.error.at ? fmt(STRINGS.errorAt, d.error) : '')
     + (d.error.fix ? fmt(STRINGS.errorHint, { code: d.error.code, fix: d.error.fix, docs: d.error.docs.join(', ') }) : ''));
   L.push(fmt(STRINGS.head, { s: t.real, flags }));

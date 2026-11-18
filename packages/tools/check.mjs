@@ -8,8 +8,8 @@
 //   file sizes), GAMEMAP up to date, content validation and types. The engine's own checks run in the monorepo.
 //   npm run check -- --rule R4,R8   run only these rules (R04 / r4 work too, and so does --rule R4 --rule R8; the generator checks below are skipped; an id that names no rule
 //                                   is an error that lists them all)
-//   npm run check                   errors in full, warnings as one count line per rule; the bypass hints (R40) list their first 5 and the last line
-//                                   says "check passed, N bypasses" (--rule R40 lists them all)
+//   npm run check                   errors in full, warnings as one count line per rule; the reminders (R40) list their first 5 and the last line
+//                                   says "check passed, N reminders" (--rule R40 lists them all, as the MCP check does)
 //   npm run check -- --verbose      list the warnings (the first 15 per rule) and extra rule info (for example which checkOptions R6 skipped)
 //   npm run check -- --all          list every warning
 //   npm run check -- --json         the same run as one JSON result on stdout (lib/result.mjs: { ok, summary, items }); the text goes to stderr
@@ -67,8 +67,8 @@ const runSub = ([file, ...args]) => new Promise(res => {
 });
 if (SUB.length) stage(`running beside the rules: ${SUB.map(([f]) => NAMES[f]).join(', ')}`);
 const subs = Promise.all(SUB.map(runSub));
-const { errors: ruleErrors, bypasses } = await runRules({ only: onlyRules, all: !!opt.all, verbose: !!opt.verbose, game: !MONO || !!scope, scope, items: jsonItems });
-const tail = bypasses ? `, ${bypasses} bypass${bypasses > 1 ? 'es' : ''}` : '';   // R40 hints that stay open: "passed" does not mean the engine systems were used
+const { errors: ruleErrors, reminders } = await runRules({ only: onlyRules, all: !!opt.all, verbose: !!opt.verbose, game: !MONO || !!scope, scope, items: jsonItems });
+const tail = reminders ? `, ${reminders} reminder${reminders > 1 ? 's' : ''}` : '';   // "passed" says nothing about whether engine systems were used; the `!` lines above say what the tool noticed
 let bad = ruleErrors;
 stage('rules finished');
 const mine = await subs;

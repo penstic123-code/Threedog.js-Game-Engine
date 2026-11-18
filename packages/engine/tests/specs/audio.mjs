@@ -167,10 +167,10 @@ export const specs = [
       const st = await ev(() => {
         const set = engine.settings, o = { keys: ['master', 'music', 'sfx', 'ambience', 'ui', 'voice'].every(b => set.get('vol.' + b) != null) };
         set.set('vol.voice', 0.3); o.voice = engine.audio.buses.voice.gain.value;
-        set.open(); const tab = set.win.el.querySelector('[data-tab="audio"]'); tab?.click();
+        engine.ui.open('settings'); const tab = set.win.el.querySelector('[data-tab="audio"]'); tab?.click();
         o.sliders = set.win.el.querySelectorAll('[data-range^="vol."]').length;
         o.label = set.win.el.textContent.includes(engine.t('settings.vol.master'));
-        set.close();
+        engine.ui.close('settings');
         return o;
       });
       check('settings: a slider per bus (master first, the game\'s own too), and it drives the bus', st.keys && Math.abs(st.voice - 0.3) < 1e-6 && st.sliders >= 7 && st.label, JSON.stringify(st));
@@ -262,6 +262,59 @@ export const specs = [
       check('[guard] over the budget the long sound asked for longest ago goes, the newest stays, short and preload ones are not touched', !r.budget[0] && r.budget[1] && r.budget[2] && r.budgetShort && r.budgetKept, JSON.stringify(r.budget));
       check('[guard] a sound the budget freed loads again and pushes out the next oldest', r.back > 299 && r.budgetAfter[0] && !r.budgetAfter[1] && r.budgetAfter[2], JSON.stringify(r.budgetAfter));
       check('one cache: audio.buffers is gone', r.oneCache);
+    },
+  },
+  {
+    name: '[guard] audio.addNode: a node on one bus silences that bus after master and in the reverb send, remove() gives it back; a generated music track goes through play (output is its node, stop on fade, end() ends it); generate with url is refused',
+    url: '/tests/audio/index.html',
+    async run({ page, check, ev }) {
+      await page.waitForFunction(() => window.engine?.ready, null, READY);
+      await page.mouse.click(400, 300);
+      check('audio unlocks on the first click', await ev(() => __t.until(() => engine.audio.running, 5000).then(() => true, () => false)));
+      const r = await ev(async () => {
+        const a = engine.audio, ctx = a.ctx, wait = () => new Promise(res => setTimeout(res, 600));
+        const probe = n => { const an = ctx.createAnalyser(); an.fftSize = 256; n.connect(an); return an; };
+        const level = an => { const d = new Float32Array(an.fftSize); an.getFloatTimeDomainData(d); return Math.max(...d.map(Math.abs)); };
+        engine.music.rules(null); engine.music.stop({ fade: 0 });   // the page's rules start a track: master must carry only this test's source
+        a.reverb({ sends: { sfx: 1 } });
+        const dry = probe(a.master), send = probe(a._reverb.nodes.input);
+        const src = ctx.createConstantSource(); src.connect(a.buses.sfx); src.start();
+        await __t.until(() => level(dry) > 0.1, 4000).catch(() => {}); const before = [level(dry), level(send)];
+        const mute = a.addNode('sfx', c => { const g = c.createGain(); g.gain.value = 0; return g; });
+        await wait(); const muted = [level(dry), level(send)];
+        mute.remove(); mute.remove();
+        await wait(); const back = [level(dry), level(send)];
+        let bad = null; try { a.addNode('nope', c => c.createGain()); } catch (err) { bad = err.message; }
+        src.stop();
+        return { before, muted, back, bad };
+      });
+      check('an sfx source is heard at master and in the reverb send', r.before[0] > 0.1 && r.before[1] > 0.1, JSON.stringify(r));
+      // 0.05 not 0: master also carries whatever else the page sounds faintly; a leak would be the source's 0.64
+      check('[guard] a zero-gain node on sfx: silent after master, and the reverb send is silent too', r.muted[0] < 0.05 && r.muted[1] < 1e-4, JSON.stringify(r));
+      check('remove() (twice) links the path back', r.back[0] > 0.1 && r.back[1] > 0.1, JSON.stringify(r));
+      check('an unknown bus throws and lists the buses', /nope/.test(r.bad ?? '') && /sfx/.test(r.bad ?? ''), r.bad);
+      const g = await ev(async () => {
+        const m = engine.music, calls = [], stops = [], changes = [];
+        m.rules(null);
+        let end = null;
+        m.define('gen', { generate(arg) { calls.push(arg); end = arg.end; const o = arg.ctx.createOscillator(); o.connect(arg.output); o.start(arg.start); return { stop: at => { stops.push(at); o.stop(at); } }; } });
+        engine.events.on('music:change', e => changes.push(e.to));
+        m.play('gen', { fade: 0 });
+        await __t.until(() => calls.length === 1, 5000);
+        const first = { n: calls.length, own: calls[0].output === m.playing.gain, start: typeof calls[0].start === 'number' };
+        m.play('calm', { fade: 0.1 });
+        await __t.until(() => stops.length === 1, 5000);
+        m.play('gen', { fade: 0 });
+        await __t.until(() => calls.length === 2, 5000);
+        end();
+        await __t.until(() => changes.at(-1) === null, 5000).catch(() => {});
+        let both = null; try { m.define('bad', { url: 'x.ogg', generate() {} }); } catch (err) { both = err.code; }
+        return { first, stops: stops.length, changes, both, playing: m.playing };
+      });
+      check('[guard] generate is called once with the track gain node and a start time', g.first.n === 1 && g.first.own && g.first.start, JSON.stringify(g.first));
+      check('[guard] switching to another track calls the generated track stop', g.stops === 1, JSON.stringify(g));
+      check('[guard] end() ends the track: music:change to null', g.changes.at(-1) === null && !g.playing, JSON.stringify(g.changes));
+      check('[guard] a track with url and generate is refused with music-track', g.both === 'music-track', String(g.both));
     },
   },
   {

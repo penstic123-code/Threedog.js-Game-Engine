@@ -33,11 +33,13 @@ import { packTest } from './pack-test.mjs';
 import { item, result, startJson } from './lib/result.mjs';
 import { waitEngine } from './wait-engine.mjs';
 import { scenarioSpecs } from './scenario.mjs';
+import { expectationSpecs } from './expect/spec.mjs';
 import { launchBrowser, forcedRender, newGamePage, buildAndPreview, withTimeout, collect, specContext } from './browser.mjs';
 import { cpus } from 'node:os';
 import { nearest } from './lib/text.mjs';
 import { workspaceSpecs, toolTests as findToolTests, noDuplicateNames, needsSoftware, softwareWhy } from './lib/specs.mjs';
 import { intOption } from './lib/cli-args.mjs';
+import { audioEnvLine } from './lib/audio-env.mjs';
 import { ENGINE, TOOLS, ROOT, MODE, rel, posix, cli, engineMismatch } from './paths.mjs';
 
 const SPEC_TIMEOUT = 120000;
@@ -134,7 +136,7 @@ async function specsOf(dir) {
   const found = [];
   const own = (await workspaceSpecs(dir, found)).map(x => x.spec);
   for (const p of found) loadProblems.add(p);
-  const all = [...(own.length ? own : smokeSpecs(dir)), ...scenarioSpecs(dir)];
+  const all = [...(own.length ? own : smokeSpecs(dir)), ...scenarioSpecs(dir), ...expectationSpecs(dir)];
   // A repeated name means one filter picks two items and the results cannot be told apart. Stop here, before any browser.
   noDuplicateNames(all, () => 'tests/specs or tests/scenarios', `${rel(dir) || basename(dir)}: test item`);
   return all;
@@ -258,12 +260,12 @@ async function runSpecPage(spec, dir, server, { software = false } = {}) {
   const t0 = Date.now();
   let startup = null;
   try {
-    await withTimeout((async () => {
-      await page.goto(server.base + spec.url);
-      await waitEngine(page, { timeout: 60000, errors });
-      startup = await page.evaluate(() => engine.startup);
-      await spec.run(specContext(page, check));
-    })(), spec.timeout ?? SPEC_TIMEOUT, 'spec');
+    // The spec's clock starts once the engine is up: opening the page used to count against it, so a slow start (cold cache, busy machine) failed
+    // a spec that was fast. The start has its own 60 s inside waitEngine.
+    await page.goto(server.base + spec.url, { waitUntil: 'domcontentloaded', timeout: 60000 });   // not Playwright's 30 s "load": a busy machine passed it before the engine was even asked
+    await waitEngine(page, { timeout: 60000, errors });
+    startup = await page.evaluate(() => engine.startup);
+    await withTimeout(spec.run(specContext(page, check)), spec.timeout ?? SPEC_TIMEOUT, 'spec');
   } catch (e) {
     const why = /timed out/.test(String(e)) && browser.render.kind !== 'gpu' ? softwareWhy(spec) : null;
     check('run error', false, String(e).split('\n')[0] + (why ? `; ${why}` : ''));
@@ -276,7 +278,10 @@ async function runSpecPage(spec, dir, server, { software = false } = {}) {
   const pixelReads = shots + (await page.evaluate(() => window.__t?.pixelReads ?? 0).catch(() => 0));
   const gpuPixels = !!pixelReads && browser.render.kind === 'gpu' && !needsSoftware(spec) && spec.software !== false;
   // what a failed check cannot see: "have 0" alone sent an agent hunting through pickups while an open dialogue held the input
-  const state = results.some(r => !r.ok) ? await page.evaluate(() => window.__t?.state() ?? []).catch(() => []) : [];
+  const failed = results.some(r => !r.ok);
+  const state = failed ? await page.evaluate(() => window.__t?.state() ?? []).catch(() => []) : [];
+  const audioEnv = failed ? await page.evaluate(audioEnvLine).catch(() => null) : null;   // a headless browser without an audio device fails every sound check
+  if (audioEnv) state.push(audioEnv);
   await page.close().catch(() => {});
   // Startup timing: open to playable / start() to playable, slowest modules
   const slow = startup && Object.entries(startup.modules).map(([n, t]) => [n,
