@@ -6,7 +6,7 @@ import { askRatio, askPixelSize } from './pixelRatio.js';
 import { codedError } from '../base/errorHints.js';
 import { thing } from './thingOps.js';
 import { isUnder } from '../base/util.js';
-import { freshFrame, renderOnce as drawOnce } from '../../render/backend.js';
+import { freshFrame, resetStats, renderOnce as drawOnce } from '../../render/backend.js';
 import { freeParts, partsOf as parts, copyOwns, kept } from '../base/freeParts.js';
 /**
  * How many objects in the scene use each geometry and material. Why remove asks: disposing a kit that other streamed blocks still draw makes the renderer
@@ -106,6 +106,7 @@ export const sceneMethods = {
     const own = this._ownFrame;   // an engine draw, not the game taking the canvas over (render/ownFrame.js)
     this._gameLights?.sync();   // the light watch catches up first: a RectAreaLight added since the last frame gets its tables before this draw (gameLights.js)
     if (own) own.inside++;
+    resetStats(this.renderer);   // autoReset is off: without this the counts of every renderOnce add up (same reset as _render)
     try {
       if (camera === this.camera) { freshFrame(this.renderer); this.post.render(0, target); return; }
       drawOnce(this.renderer, this.scene, camera, target);

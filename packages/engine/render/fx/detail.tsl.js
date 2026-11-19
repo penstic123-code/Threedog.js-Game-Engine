@@ -66,3 +66,6 @@ export const detailBump = Fn(/** @param {[N<'vec3'>, N<'vec3'>, N<'float'>, N<'f
   const det = dot(sx, r1).mul(faceDir);
   return normalize(abs(det).mul(surfNorm).sub(float(k).mul(sign(det)).mul(dFdx(h).mul(r1).add(dFdy(h).mul(r2)))));
 });
+
+// bumpMap() reads a texture's slope; given a height computed in a shader it bumps nothing and throws nothing. Quiet when the file already calls detailBump.
+export const handRolled = [{ kind: 'bump', docRef: 'recipes/56-webgpu-tsl.md §"The engine"', seen: 'a bumpMap() call (it does nothing for a height computed in the shader)', use: "detailBump(positionView, normal, height, strength, faceDirection) from 'threedog/tsl' turns a procedural height node into a bumped normal; bumpMap stays right for a real texture", quiet: /\bdetailBump\b/, code: /\bbumpMap\s*\(/ }];

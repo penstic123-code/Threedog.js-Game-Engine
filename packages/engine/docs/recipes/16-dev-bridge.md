@@ -50,9 +50,9 @@ Every command and its options are in `../COMMANDS.md`. What each does to the gam
 - `describe` by default gives only the 3 nearest things and the first quest; for detail use a path (`quests.active`, `nearby`, `world`) or `--full`.
 
 ## 2a. Hold a button down in a headless shot or test (`engine.input.simulate`)
-- **In your own page scripts and tests use `engine.input.simulate(action, down = true)`** (the same path as `press`): `engine.input.simulate('jump'); engine.step(1 / 60); engine.input.simulate('jump', false)`.
-- **Keys go through `engine.input` like a real keyboard**: action names are translated to keyboard keys (gamepad buttons are ignored); when a window
-  locks input, menu-type actions (`pressedRaw`) are still received.
+- **In page scripts and tests use `engine.input.simulate(action, down = true)`** (like `press`): `engine.input.simulate('jump'); engine.step(1 / 60); engine.input.simulate('jump', false)`.
+- **Hold across a picture**: `threedog js "engine.input.simulate('moveForward', true)"`, `threedog step 1`, `threedog snap`; release with `false`.
+- After changing the viewport on a headless page, `step` once before reading sizes (`step()` picks the new size up).
 
 ## 2c. Start the game from the command line: leave the title screen (`state play=1`, `--play`), open the page with URL parameters (`--page`)
 - **Start clean.** Enter on a title picks Continue when a save exists, so a rerun by keys plays the last autosave. `state fresh=1` deletes the saves and

@@ -61,4 +61,29 @@ export const specs = [
       check('the UI root sits right after the canvas and covers exactly its box, before and after the resize', r.rootAfterCanvas && r.root0 && r.root1, JSON.stringify(r));
     },
   },
+  {
+    name: 'canvas box: step() follows a viewport change with no frame in between (canvas, camera, UI root), and renderOnce does not add up draw counts',
+    url: '/tests/threads/',
+    async run({ check, ev }) {
+      const r = await ev(() => {
+        const { createEngine, THREE } = threedogThreads;
+        const host = document.createElement('div');
+        host.style.cssText = 'position:absolute;left:0;top:0;width:400px;height:300px';
+        const cv = document.createElement('canvas'); cv.style.cssText = 'width:100%;height:100%;display:block';
+        host.append(cv); document.body.append(host);
+        const E = createEngine({ canvas: cv, headless: true, urlState: false, saveKey: 'canvas-box-step', ui: { loading: false } });
+        E.scene.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1)));
+        host.style.width = '200px'; host.style.height = '100px';   // no await: no ResizeObserver callback or rAF can have run
+        E.step(1 / 60, { describe: false });
+        const v = E.renderer.getSize(new THREE.Vector2()), root = E.uiRoot.getBoundingClientRect();
+        const out = { size: [v.x, v.y], aspect: E.camera.aspect, root: [root.width, root.height] };
+        E.renderOnce(); const one = E.renderer.info.render.calls;
+        E.renderOnce(); out.calls = [one, E.renderer.info.render.calls];
+        E.dispose(); host.remove();
+        return out;
+      });
+      check('step() after a viewport change: renderer, camera aspect and UI root have the new size', r.size.join() === '200,100' && Math.abs(r.aspect - 2) < 1e-6 && r.root.join() === '200,100', JSON.stringify(r));
+      check('two renderOnce calls draw the same count (renderer.info is reset each call)', r.calls[0] > 0 && r.calls[0] === r.calls[1], JSON.stringify(r.calls));
+    },
+  },
 ];

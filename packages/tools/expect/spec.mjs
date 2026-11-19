@@ -31,6 +31,8 @@ export function checkResults(results, { point, check }) {
 /** One reading of the open page, checked against `mine` (the entries of this point, or the ones that name none); `size`: the point's view size */
 const readingRun = (mine, point, size = null) => async ({ ev, page, check }) => {
   if (size) await page.setViewportSize({ width: size[0], height: size[1] });   // the point's own size, as shot and the hub use it
+  // a new size reaches canvas, camera and UI root on the next engine.step (no frame loop to do it on a stepped page)
+  if (size) await page.evaluate(() => engine.step(1 / 60, { render: false, describe: false }));
   await waitLoaded(page);   // the same two steps as shot's openShotPage: a number read while the world is still arriving is not the game's
   await settleUi(page);
   const { describe, halted } = await ev(PAGE_FACTS);

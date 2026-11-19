@@ -16,7 +16,7 @@ const KEYS = [
 export const OFF_TABLE = {
   random: 'a correctness rule (AI.md "Common mistakes"), not a system to look for', timers: 'a correctness rule (AI.md "Common mistakes")', loop: 'a correctness rule (AI.md "Common mistakes")',
   loading: 'wired already: createEngine({ ui: { loading } }) in main.js', animation: 'per model, found by how (recipe 13)', grid: 'a helper function, found by how (recipe 29)',
-  ready: 'a wait on the way into a shot, found by check and by how (a module isReady)', particles: 'an effect, found by how (recipe 64)', picking: 'found by how (recipe 19)', pool: 'found by how (recipe 65)', tween: 'found by how (recipe 13)',
+  ready: 'a wait on the way into a shot, found by check and by how (a module isReady)', particles: 'an effect, found by how (recipe 64)', picking: 'found by how (recipe 19)', pool: 'found by how (recipe 65)', tween: 'found by how (recipe 13)', bump: 'a shader call, found by how (recipe 56)',
 };
 
 /** The install calls of the modules (followCamera, settings...), aliases too: what a hint names besides engine.<name>. @param {Record<string, { call?: string, aliases?: { call: string }[] }>} modules */

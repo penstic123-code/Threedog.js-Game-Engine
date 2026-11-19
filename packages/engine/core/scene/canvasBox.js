@@ -53,11 +53,20 @@ export function placeUI(e) {
 export const resizeMethods = {
   _resize() {
     const { w, h } = canvasBox(this);
+    this._followed = { w, h };   // the box this resize answered: step() compares with it (_followBox)
     placeUI(this);
     if (fitPixelSize(this, w, h)) return;
     const now = this.renderer.getSize(_size);
     if (now.x === w && now.y === h) return;   // ResizeObserver and the window event can both fire for one change
     this.renderer.setSize(w, h, !!this._autoSize);   // the post chain follows the renderer on its next draw (postWebGL.js follow)
     this._oAspect.drive(w / h);
+  },
+  /** step() calls this first: a frozen or stepped page has no rAF frame or ResizeObserver callback to follow a viewport change, so the box is compared here (the same path as the events).
+   *  Compared with the box the last resize answered, not the renderer size: with pixelSize the renderer is smaller than the box by design, and a
+   *  renderer the game or a test sized itself (renderer.setSize) must not be put back to the box while nothing on the page changed */
+  _followBox() {
+    const { w, h } = canvasBox(this), last = this._followed;
+    if (last && last.w === w && last.h === h) return;
+    this._resize();
   },
 };

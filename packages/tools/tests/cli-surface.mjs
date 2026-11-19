@@ -10,7 +10,7 @@ import { ROOT, ENGINE, TOOLS, workspaceFor, workspaces, isArtFile } from '../pat
 import { devServerInfo } from '../devinfo.mjs';
 import { pagePath, parseOptions } from '../lib/cli-args.mjs';
 import { SCRIPTS, BRIDGE, VITE, main, helpText } from '../bin/threedog.mjs';
-import { BRIEF, atPath } from '../threedog/pageFns.mjs';
+import { BRIEF, atPath, STEPPED } from '../threedog/pageFns.mjs';
 import { errorsCommand, errorMark, errorsSince, markReload, currentErrors } from '../threedog/errorlog.mjs';
 import { oneLine, ONE_LINE_MAX } from '../lib/oneline.mjs';
 import errorRelay, { cutLog } from '../vite/vite-error-relay.js';
@@ -91,8 +91,9 @@ export async function run({ check }) {
   check('[guard] inspect materials: its ✗ lines are problems found', !(await bridgeRun(pageSays('3 materials\n✗ map not sRGB'), 'inspect', ['materials'])).ok);
 
   // a snap that times out says what the page was doing; here the page answers nothing, so it says the main thread is busy
-  let calls = 0; const alive = setInterval(() => {}, 500);   // readRuntime's timer is unref'd: a real bridge call keeps the process up, this fake does not
-  const stuck = { evaluate: () => ++calls === 1 ? Promise.resolve(true) : new Promise(() => {}), screenshot: () => Promise.reject(new Error('page.screenshot: Timeout 30000ms exceeded.\nCall log:')) };
+  // the page answers until the screenshot (snap's loading wait and settle get `true`), then nothing more
+  let shotTried = false; const alive = setInterval(() => {}, 500);   // readRuntime's timer is unref'd: a real bridge call keeps the process up, this fake does not
+  const stuck = { evaluate: () => shotTried ? new Promise(() => {}) : Promise.resolve(true), screenshot: () => { shotTried = true; return Promise.reject(new Error('page.screenshot: Timeout 30000ms exceeded.\nCall log:')); } };
   const snapMsg = await bridgeRun(stuck, 'snap', ['x'], { dir: '.' }).then(() => '', e => e.message); clearInterval(alive);
   check('snap timeout: keeps the browser line and says the page main thread is busy', /Timeout 30000ms/.test(snapMsg) && /main thread is busy/.test(snapMsg) && !/Call log/.test(snapMsg), snapMsg);
 
@@ -258,6 +259,11 @@ export async function run({ check }) {
     for (const [cmd, flag] of [['describe', '--ful'], ['press', '--fro'], ['snap-describe', '--onlyy'], ['catalog', '--fnd'], ['scene', '--hiden'], ['state', '--x']]) check(`${cmd} ${flag}: unknown option fails`, bad(cmd, [flag]));
     const stateMsg = (() => { try { options('state', ['--time', '18:30']); } catch (e) { return e.message; } return ''; })();
     check('state --time: the error names the working form (key=value) and the option', /unknown option --time/.test(stateMsg) && /state takes key=value, e.g. threedog state time=18:30 weather=rain/.test(stateMsg), stateMsg);
+    const msgOf = (cmd, args) => { try { options(cmd, args); } catch (e) { return e.message; } return ''; };
+    check('errors --latest 3: the error names the working form (errors latest 3)', /unknown option --latest.*errors latest 3/.test(msgOf('errors', ['--latest', '3'])), msgOf('errors', ['--latest', '3']));
+    // MOVED (inside STEPPED) on a title screen: the reason says the way out
+    const moved = (0, eval)(STEPPED)({ time: { tick: 0 }, step() {}, runState: { state: 'title-frozen', owners: ['title'] }, ready: true }, 1);
+    check('step on the title screen: the reason names state play=1 and ?play', /state play=1/.test(moved.why) && /\?play/.test(moved.why), moved.why);
     const o = options('describe', ['player.x', '--full', '--max', '99']);
     check('describe keeps its positional path and real options', o.rest[0] === 'player.x' && o.opt.full === true && o.opt.max === 99);
     check('press / pick / explain op keep their positionals and options', options('press', ['interact', '--for', '2']).opt.for === '2'

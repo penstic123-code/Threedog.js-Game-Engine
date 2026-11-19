@@ -16,6 +16,7 @@ import { hintFor } from 'threedog/error-hints';
 import { errorsCommand, markReload } from './errorlog.mjs';
 import { catalogCommand, offeredEffects } from './catalog.mjs';
 import { isStepsScript, stepsReport } from './steps.mjs';
+import { waitLoaded } from '../wait-engine.mjs';
 import { parseOptions, intOption } from '../lib/cli-args.mjs';
 import { drawnBy } from '../lib/page-url.mjs';
 const num = (s, name) => {
@@ -53,12 +54,16 @@ function snapPath(dir, arg) {
 /** The options each command reads (lib/cli-args.mjs parseOptions spec); a command not listed takes none, so a typo fails instead of doing nothing */
 const SCRIPT = { flags: ['verbose'], values: ['max', 'file', 'wait'], passthrough: true };   // passthrough: an expression may start with a dash (js "-x")
 export const OPTIONS = {
-  describe: { flags: ['full', 'all'], values: ['max'] },
+  // hint: said after an unknown-option error for the commands whose MCP field name (path, seconds, latest) agents also try as a --flag
+  describe: { flags: ['full', 'all'], values: ['max'], hint: 'the path is positional, e.g. threedog describe player.position' },
+  state: { hint: 'state takes key=value, e.g. threedog state time=18:30 weather=rain' },
+  step: { hint: 'step takes seconds as a number, e.g. threedog step 2' },
+  hold: { hint: 'hold takes the key then seconds, e.g. threedog hold moveForward 1.5' },
   press: { values: ['for'] },
   js: SCRIPT,
   snap: { flags: ['play', 'no-picture', 'help'], values: ['width'], short: { h: 'help' } },
   'snap-describe': { values: ['only', 'ignore', 'tolerance'] },
-  errors: { values: ['since'] },
+  errors: { values: ['since'], hint: 'to see the last N errors: threedog errors latest 3' },
   catalog: { flags: ['full'], values: ['max', 'find'] },
   inspect: { values: ['max'] },
   scene: { flags: ['hidden', 'full'], values: ['limit'] },
@@ -67,10 +72,10 @@ export const OPTIONS = {
 };
 /** One command's arguments → { rest, opt }, the numbers and lists already converted */
 export function options(cmd, args) {
-  // state is the one command people reach with --time / --weather (shot has --cam): say the working form instead of a bare 'unknown option'
-  const dashed = cmd === 'state' && args.find(a => /^--[a-z]/i.test(a));
-  if (dashed) throw new Error(`unknown option ${dashed}: state takes key=value, e.g. threedog state time=18:30 weather=rain`);
-  const { rest, opt } = parseOptions(args, { positional: true, ...OPTIONS[cmd] });
+  const { hint, ...spec } = OPTIONS[cmd] ?? {};
+  let parsed;
+  try { parsed = parseOptions(args, { positional: true, ...spec }); } catch (e) { throw hint && /^unknown option/.test(e.message) ? new Error(`${e.message}: ${hint}`) : e; }
+  const { rest, opt } = parsed;
   for (const k of ['max', 'width']) if (k in opt) opt[k] = intOption(opt, k);
   for (const k of ['wait', 'tolerance']) if (k in opt) opt[k] = +opt[k];
   for (const k of ['only', 'ignore']) if (k in opt) opt[k] = opt[k].split(',').filter(Boolean);
@@ -176,7 +181,9 @@ export async function run(driver, cmd, args = [], { dir = process.cwd() } = {}) 
       if (rest.length > 1) throw new Error(`snap takes one name or path (got ${rest.length}: ${rest.join(' ')}). ` + usage);
       const out = snapPath(dir, rest[0]);
       if (play) await ev(driver, 'play', {});
-      await ev(driver, 'settled', {});   // like threedog shot: never capture the loading screen mid-fade
+      // like threedog shot: never capture a half-built world (waitLoaded, through the page's evaluate) or the loading screen mid-fade
+      await waitLoaded({ evaluate: (fn, arg) => driver.evaluate(String(fn), arg) });
+      await ev(driver, 'settled', {});
       const png = await driver.screenshot().catch(async e => { throw new Error(await snapFailed(driver, e)); });
       mkdirSync(dirname(out.file), { recursive: true });
       writeFileSync(out.file, png);

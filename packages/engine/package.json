@@ -1,6 +1,6 @@
 {
   "name": "threedog",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "description": "Web 3D game engine on three.js, built to be driven by an AI. Start: npm install threedog three && npm install -D @threedog/tools && npx threedog init (writes the game and its CLAUDE.md). No built-in art",
   "license": "MIT",
   "repository": {

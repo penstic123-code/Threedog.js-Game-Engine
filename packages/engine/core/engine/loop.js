@@ -329,6 +329,7 @@ export const loopMethods = {
         `engine.step(${String(seconds)}): seconds must be a finite number >= 0, e.g. engine.step(0.5) (real seconds; 1 / 60 is one fixed step)`);
     if (seconds === 0) return describe ? this.describe() : null;   // 0 advances nothing (a tiny positive value still runs one fixed step)
     if (DEV && (this._inStart || this.session._busy)) warnOnce(coded('step-during-load', this._inStart ? STRINGS.stepStart : STRINGS.stepSession), 'step-during-load');
+    this._followBox();   // a viewport change while frozen / stepped: canvas, camera and UI root follow before this step reads them
     const n = Math.max(1, Math.round(seconds / STEP));
     this.stepBlend = 1;   // step() takes the state to the end of each step, so the latest state is what cameras read and what gets drawn
     let since = 0;

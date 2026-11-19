@@ -35,6 +35,7 @@ export async function run({ check }) {
   check('a preference in browser storage is fine, a save is not', kinds("localStorage.setItem('music-volume', '1');\n") === '' && kinds("localStorage.setItem('progress', s);\n") === 'save');
   check('a native loader for a format of its own is fine', kinds("const m = await new FBXLoader().loadAsync(url);\n") === '');
   check('a hand-managed input lock -> lock; one beside engine.input.push is quiet', kinds('let inputLocked = false;\n') === 'lock' && kinds("let inputLocked = false;\nconst h = engine.input.push('ride');\n") === '');
+  check('bumpMap( -> bump; a file that already calls detailBump is quiet', kinds('const n = bumpMap(heightNode, 0.5);\n') === 'bump' && kinds('const n = bumpMap(h);\nconst m = detailBump(p, nrm, h, k, f);\n') === '' && kinds('const n = detailBump(p, nrm, h, k, f);\n') === '');
   check('a word alone does not fire lock', kinds('const controlsEnabled = true;\nlet locked = 1;\n') === '');
   check('Math.random tagged presentation is fine (line and line above)', kinds('const j = Math.random();   // presentation\n') === '' && kinds('// presentation: pitch jitter\nconst j = Math.random();\n') === '');
 
@@ -149,7 +150,7 @@ export async function run({ check }) {
   // the patterns live with their owners: R40 holds none, every kind says where it came from, and a hint-off of a new kind works like the old ones
   const src = readFileSync(join(TOOLS, 'rules/R40-bypass-hints.mjs'), 'utf8');
   check('R40 keeps no pattern of a system', !/localStorage|AudioContext|setInterval\b.*test|Math\.random\b.*test/.test(src.split('\n').filter(l => !l.startsWith('//')).join('\n')));
-  check('the first twelve kinds are all there, each from its owner', ['timers', 'random', 'inventory', 'grid', 'save', 'pause', 'keys', 'audio', 'dialogue', 'reach', 'collision', 'lock'].every(k => KINDS.includes(k)) && Object.values(metadata.hints).every(h => /packages\/engine\/(core|modules)\//.test(h.file)));
+  check('the first twelve kinds are all there, each from its owner', ['timers', 'random', 'inventory', 'grid', 'save', 'pause', 'keys', 'audio', 'dialogue', 'reach', 'collision', 'lock'].every(k => KINDS.includes(k)) && Object.values(metadata.hints).every(h => /packages\/engine\/(core|modules|render)\//.test(h.file)));
   check('a new kind switches off like the old ones', kinds('// hint-off-file(tween)\nconst k = elapsed / duration;\n') === '' && kinds('const k = elapsed / duration;   // hint-off(tween)\n') === '' && !activeKinds({ picking: false }, undefined).has('picking'));
   check('a module with no answer is reported, an answer is enough', silent({ a: { file: 'a.js' }, b: { file: 'b.js', handRolled: 'none: no code shape' }, c: { file: 'c.js', handRolled: ['x'] } }).length === 1 && !silent(metadata.modules).length, JSON.stringify(silent(metadata.modules)).slice(0, 200));
 

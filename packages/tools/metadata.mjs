@@ -112,7 +112,7 @@ const hintData = (h, file) => ({ ...h, file, ...Object.fromEntries(HINT_RE.filte
 /** Every hint in the source, by kind. A file is read only when it declares one; core systems declare here too, they have no module definition */
 async function hintsOf(problems) {
   const out = {};
-  for (const file of [P.CORE_REL, P.MODULES_REL].flatMap(d => walk(d)).filter(f => readFileSync(abs(f), 'utf8').includes('export const handRolled'))) {
+  for (const file of P.ENGINE_CODE_DIRS_REL.flatMap(d => walk(d)).filter(f => readFileSync(abs(f), 'utf8').includes('export const handRolled'))) {
     const said = (await load(file)).handRolled;
     if (typeof said === 'string') { if (!/^none: .{12,}/.test(said)) problems.push(`${file}: handRolled must be a list of hints or 'none: <why no code shape shows it>'`); continue; }
     for (const h of said) {

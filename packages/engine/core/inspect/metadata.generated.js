@@ -4019,6 +4019,15 @@ export const metadata = {
    "code": "/\\bmaster\\??\\.disconnect\\s*\\(/",
    "file": "packages/engine/core/audio/Audio.js"
   },
+  "bump": {
+   "kind": "bump",
+   "docRef": "recipes/56-webgpu-tsl.md §\"The engine\"",
+   "seen": "a bumpMap() call (it does nothing for a height computed in the shader)",
+   "use": "detailBump(positionView, normal, height, strength, faceDirection) from 'threedog/tsl' turns a procedural height node into a bumped normal; bumpMap stays right for a real texture",
+   "quiet": "/\\bdetailBump\\b/",
+   "code": "/\\bbumpMap\\s*\\(/",
+   "file": "packages/engine/render/fx/detail.tsl.js"
+  },
   "collision": {
    "kind": "collision",
    "seen": "a hand-written box overlap",

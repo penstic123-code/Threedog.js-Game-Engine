@@ -78,8 +78,8 @@ export const atPath = (obj, path) => String(path).split(/\.|(?=\[)/).filter(Bool
  */
 const MOVED = (e, before, seconds) => {
   const fixed = Math.max(1, Math.round(seconds * 60)), ticks = e.time.tick - before, moved = ticks < 0 ? seconds : Math.min(seconds, ticks / 60);
-  const short = (ticks >= 0 && ticks < fixed) || !!e.error, by = e.runState.owners, state = e.error ? 'error' : !short ? 'running' : e.ready ? 'frozen' : 'loading';
-  return { moved: +moved.toFixed(3), short, state, why: { error: `the engine stopped on an error: ${e.error?.message}`, frozen: `gameplay is frozen by ${by.join(', ') || 'a hold'}`, loading: 'the game is still loading', running: '' }[state] };
+  const short = (ticks >= 0 && ticks < fixed) || !!e.error, by = e.runState.owners, title = e.runState.state === 'title-frozen', state = e.error ? 'error' : !short ? 'running' : e.ready ? 'frozen' : 'loading';
+  return { moved: +moved.toFixed(3), short, state, why: { error: `the engine stopped on an error: ${e.error?.message}`, frozen: `gameplay is frozen by ${by.join(', ') || 'a hold'}` + (title ? ': this is the title screen; leave it with state play=1, or open the page with --page "/?play" (survives reload)' : ''), loading: 'the game is still loading', running: '' }[state] };
 };
 /** The one way a tool advances a page by seconds and reads what happened: the `step` command and a scenario's step both come here, so they cannot disagree. Self-contained */
 export const STEPPED = `(e, seconds) => { const before = e.time.tick; e.step(seconds, { render: false }); return (${MOVED})(e, before, seconds); }`;

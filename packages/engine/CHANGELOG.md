@@ -2,6 +2,15 @@
 
 What changed in each version and how a game upgrades.
 
+## 2.2.2 (2026-11-19)
+
+Upgrading from 2.2.1: nothing to change.
+
+- Fixed: `engine.step()` follows a changed viewport (canvas, camera and the UI root) even when no frame was drawn since, so a frozen or stepped page reads the new size on its next step; `engine.renderOnce()` resets `renderer.info`, so draw-call and triangle counts no longer add up across calls
+- Changed (tools): an unknown option on a dev-bridge command says the working form (`errors latest 3`, `state key=value`, `step 2`, `hold <action> <seconds>`, `describe <path>`); `step` on a title screen says how to leave it (`state play=1`, or `--page "/?play"`); `snap` waits for loading to finish, as `shot` does, before it captures
+- Changed (tools): `check` reminds when a game calls three's `bumpMap(` (rule R40): for a height computed in the shader use `detailBump` from `threedog/tsl`; `bumpMap` needs a texture
+- Docs: recipe 16 §2a shows how to hold an action across `threedog snap`, and to step once after changing the viewport on a headless page
+
 ## 2.2.1 (2026-11-19)
 
 Upgrading from 2.2.0: install `@threedog/tools@2.2.1` (the other packages only move with it). Nothing else changes.
